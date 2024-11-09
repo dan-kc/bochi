@@ -11,7 +11,7 @@ test("Create valid user", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "daniel",
+        email: "daniel",
         password: "password123",
         confirmPassword: "password123",
       },
@@ -38,7 +38,7 @@ test("Password too long", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "daniel",
+        email: "daniel",
         password: "01234567890123456789012345678901234567980123456789012345678901234",
         confirmPassword: "01234567890123456789012345678901234567980123456789012345678901234",
       },
@@ -55,7 +55,7 @@ test("Password too long", async ({ request }) => {
   expect(errorMessages).toContain("Password too long. The max password length is 64.")
 });
 
-test("Username too long", async ({ request }) => {
+test("email too long", async ({ request }) => {
   const query = {
     query: `
       mutation CreateUser($createUserInput: CreateUserInput) {
@@ -66,7 +66,7 @@ test("Username too long", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "012345678901234567890",
+        email: "012345678901234567890",
         password: "password123",
         confirmPassword: "password123",
       },
@@ -80,7 +80,7 @@ test("Username too long", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Username too long. The max username length is 20.")
+  expect(errorMessages).toContain("email too long. The max email length is 40.")
 });
 
 test("Password too short", async ({ request }) => {
@@ -94,7 +94,7 @@ test("Password too short", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "daniel",
+        email: "daniel",
         password: "passwor",
         confirmPassword: "passwor",
       },
@@ -122,7 +122,7 @@ test("Password mismatch", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "daniel",
+        email: "daniel",
         password: "password123",
         confirmPassword: "password1234",
       },
@@ -150,7 +150,7 @@ test("Incorrect createUserInput", async ({ request }) => {
     `,
     variables: {
       createUserInput: {
-        userName: "daniel",
+        email: "daniel",
         confirmPassword: "password123",
       },
     },
