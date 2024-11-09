@@ -1,0 +1,13 @@
+services:
+  db:
+    volumes:
+      - test_data:/var/lib/postgresql/data
+
+  server:
+    ports: []
+
+  test_suite:
+    build: ./test_suite
+
+volumes:
+  test_data:

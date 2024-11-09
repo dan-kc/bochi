@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: habit_market
+    volumes:
+      - data:/var/lib/postgresql/data
+
+  server:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://user:password@db/habit_market
+    ports:
+      - "3081:80"
+
+  migration:
+    build: ./migration/
+
+volumes:
+  data:
