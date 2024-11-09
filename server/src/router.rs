@@ -1,11 +1,7 @@
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
-    extract::Extension,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-    Json,
+    debug_handler, extract::Extension, http::StatusCode, response::IntoResponse, routing::{get, post}, Json
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -36,12 +32,14 @@ struct Health {
     healthy: bool,
 }
 
+#[debug_handler]
 async fn health() -> impl IntoResponse {
     let health = Health { healthy: true };
 
     (StatusCode::OK, Json(health))
 }
 
+#[debug_handler]
 async fn graphql_handler(
     Extension(schema): Extension<ServiceSchema>,
     req: GraphQLRequest,
