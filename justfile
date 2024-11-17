@@ -15,7 +15,7 @@ stop:
 
 # Starts a temporary db, then migrate, then server, then playwright
 test: stop
-  docker volume rm habit_market_test_data || true
+  docker volume rm habit_market_backend_test_data || true
   docker compose -f docker-compose.yml -f docker-compose.test.yml build
   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --remove-orphans db
   sleep 3 # Wait for db to be accepting connections
