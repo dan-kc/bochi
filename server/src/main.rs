@@ -1,5 +1,5 @@
-mod router;
 mod model;
+mod router;
 
 #[tokio::main]
 async fn main() {
