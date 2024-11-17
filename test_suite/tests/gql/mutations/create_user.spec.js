@@ -1,17 +1,22 @@
 const { test, expect } = require("@playwright/test");
 
-test("Create valid user", async ({ request }) => {
-  const query = {
-    query: `
+const createUser = `
       mutation CreateUser($createUserInput: CreateUserInput) {
           createUser(input: $createUserInput) {
-              id
+              user {
+                  id
+                  email
+              }
+              sessionId
           }
-      }
-    `,
+      }`;
+
+test("Create valid user", async ({ request }) => {
+  const query = {
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "daniel",
+        email: "daniel@test.com",
         password: "password123",
         confirmPassword: "password123",
       },
@@ -24,23 +29,21 @@ test("Create valid user", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.createUser.id).toBeDefined();
+  expect(responseBody.data.createUser.sessionId).toBeDefined();
+  expect(responseBody.data.createUser.user.id).toBeDefined();
+  expect(responseBody.data.createUser.user.email).toBeDefined();
 });
 
 test("Password too long", async ({ request }) => {
   const query = {
-    query: `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              id
-          }
-      }
-    `,
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "daniel",
-        password: "01234567890123456789012345678901234567980123456789012345678901234",
-        confirmPassword: "01234567890123456789012345678901234567980123456789012345678901234",
+        email: "daniel2@test.com",
+        password:
+          "01234567890123456789012345678901234567980123456789012345678901234",
+        confirmPassword:
+          "01234567890123456789012345678901234567980123456789012345678901234",
       },
     },
   };
@@ -51,22 +54,42 @@ test("Password too long", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map(error => error.message);
-  expect(errorMessages).toContain("Password too long. The max password length is 64.")
+  const errorMessages = responseBody.errors.map((error) => error.message);
+  expect(errorMessages).toContain(
+    "Password too long. The max password length is 64.",
+  );
 });
 
-test("email too long", async ({ request }) => {
+test("Password not ascii", async ({ request }) => {
   const query = {
-    query: `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              id
-          }
-      }
-    `,
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "012345678901234567890",
+        email: "daniel2@test.com",
+        password: "あ😊あ😊あ😊あ😊あ😊",
+        confirmPassword: "あ😊あ😊あ😊あ😊あ😊",
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+  const errorMessages = responseBody.errors.map((error) => error.message);
+  expect(errorMessages).toContain(
+    "Password must contain only standard English letters, numbers, and common punctuation.",
+  );
+});
+
+test("invalid email", async ({ request }) => {
+  const query = {
+    query: createUser,
+    variables: {
+      createUserInput: {
+        email: "[]@hh.com",
         password: "password123",
         confirmPassword: "password123",
       },
@@ -80,21 +103,39 @@ test("email too long", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("email too long. The max email length is 40.")
+  expect(errorMessages).toContain("Invalid email address.");
+});
+
+test("email too long", async ({ request }) => {
+  const query = {
+    query: createUser,
+    variables: {
+      createUserInput: {
+        email: "0123456789012345678901234567890123@hh.com",
+        password: "password123",
+        confirmPassword: "password123",
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+  const errorMessages = responseBody.errors.map((error) => error.message);
+  expect(errorMessages).toContain(
+    "Email too long. The max email length is 40.",
+  );
 });
 
 test("Password too short", async ({ request }) => {
   const query = {
-    query: `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              id
-          }
-      }
-    `,
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "daniel",
+        email: "daniel2@test.com",
         password: "passwor",
         confirmPassword: "passwor",
       },
@@ -108,21 +149,17 @@ test("Password too short", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Password too short. The min password length is 6.");
+  expect(errorMessages).toContain(
+    "Password too short. The min password length is 8.",
+  );
 });
 
 test("Password mismatch", async ({ request }) => {
   const query = {
-    query: `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              id
-          }
-      }
-    `,
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "daniel",
+        email: "daniel2@test.com",
         password: "password123",
         confirmPassword: "password1234",
       },
@@ -136,21 +173,15 @@ test("Password mismatch", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Passwords do not match.")
+  expect(errorMessages).toContain("Passwords do not match.");
 });
 
 test("Incorrect createUserInput", async ({ request }) => {
   const query = {
-    query: `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              id
-          }
-      }
-    `,
+    query: createUser,
     variables: {
       createUserInput: {
-        email: "daniel",
+        email: "daniel2@test.com",
         confirmPassword: "password123",
       },
     },
@@ -163,5 +194,5 @@ test("Incorrect createUserInput", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Incorrect variables. Missing password.")
+  expect(errorMessages).toContain("Invalid value for argument \"input\", field \"password\" of type \"String!\" is required but not provided");
 });
