@@ -76,21 +76,19 @@ impl MutationRoot {
             return Err("Passwords do not match.");
         }
 
-
         let db_pool =
             ctx.data::<Pool<Postgres>>().expect("No db pool in context");
 
         // Check if the user already exists.
-        let row: (bool,) = sqlx::query_as(
+        let (email_taken,): (bool,) = sqlx::query_as(
             "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
         )
         .bind(input.email.as_str())
         .fetch_one(&db_pool.clone())
         .await
         .expect("failed to check if user already exists");
-        let email_taken = row.0;
         if email_taken {
-            return Err("Email already exists");
+            return Err("User already exists.");
         }
 
         let salt = SaltString::generate(rand::thread_rng());
