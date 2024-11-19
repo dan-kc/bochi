@@ -35,13 +35,13 @@ nuke:
 # Shows the current state of the db against the migrations folder.
 migrate-status:
   docker compose build db migration
-  docker compose up -d db
+  docker compose up -d --remove-orphans db
   docker compose run migration info
 
 # Applys migrations to the db.
 migrate:
   docker compose build db migration
-  docker compose up -d db
+  docker compose up -d --remove-orphans db
   docker compose run migration migrate
 
 show-users:
