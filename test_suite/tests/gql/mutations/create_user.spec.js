@@ -1,4 +1,21 @@
-const { test, expect } = require("@playwright/test");
+const { test: base, expect } = require("@playwright/test");
+const { DB } = require('../../../helpers');
+
+const test = base.extend({
+  db: async ({}, use) => {
+    const database = new DB();
+    await use(database);
+  },
+});
+test.beforeEach(async ({ db }) => {
+  await db.executeQuery(`
+    INSERT INTO users (email, password, salt) VALUES
+    ('mock@email.com', '$argon2id$v=19$m=19456,t=2,p=1$M3qJL3+ctjCWEvCYFQuTGA$QUQcFKQxhQhIWP6DTBH3+iJtgmWBTMTe1DfcmljlSpw', 'M3qJL3+ctjCWEvCYFQuTGA');
+  `);
+});
+test.afterEach(async ({ db }) => {
+  await db.executeQuery("DELETE FROM users;");
+});
 
 const createUser = `
       mutation CreateUser($createUserInput: CreateUserInput) {
@@ -32,6 +49,28 @@ test("Create valid user", async ({ request }) => {
   expect(responseBody.data.createUser.sessionId).toBeDefined();
   expect(responseBody.data.createUser.user.id).toBeDefined();
   expect(responseBody.data.createUser.user.email).toBeDefined();
+});
+
+test("User already exists", async ({ request, db }) => {
+  const query = {
+    query: createUser,
+    variables: {
+      createUserInput: {
+        email: "mock@email.com",
+        password: "password123",
+        confirmPassword: "password123",
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+  const errorMessages = responseBody.errors.map((error) => error.message);
+  expect(errorMessages).toContain("User already exists.");
 });
 
 test("Password too long", async ({ request }) => {
@@ -194,5 +233,7 @@ test("Incorrect createUserInput", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Invalid value for argument \"input\", field \"password\" of type \"String!\" is required but not provided");
+  expect(errorMessages).toContain(
+    'Invalid value for argument "input", field "password" of type "String!" is required but not provided',
+  );
 });
