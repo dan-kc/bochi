@@ -1,5 +1,5 @@
 const { test: base, expect } = require("@playwright/test");
-const { DB } = require('../../../helpers');
+const { DB } = require("../../../helpers");
 
 const test = base.extend({
   db: async ({}, use) => {
@@ -92,7 +92,6 @@ test("Should return error for incorrect password", async ({ request }) => {
   expect(errorMessages).toContain("Incorrect email or password.");
 });
 
-
 test("Should return error for missing password field", async ({ request }) => {
   const query = {
     query: login,
@@ -110,5 +109,7 @@ test("Should return error for missing password field", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
   const errorMessages = responseBody.errors.map((error) => error.message);
-  expect(errorMessages).toContain("Invalid value for argument \"input\", field \"password\" of type \"String!\" is required but not provided");
+  expect(errorMessages).toContain(
+    'Invalid value for argument "input", field "password" of type "String!" is required but not provided',
+  );
 });
