@@ -44,8 +44,93 @@ struct CreateUserInput {
     confirm_password: String,
 }
 
+#[derive(InputObject)]
+struct LoginInput {
+    email: String,
+    password: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct UserRow {
+    id: i32,
+    email: String,
+    password: String,
+    salt: String,
+}
+
+impl From<UserRow> for User {
+    fn from(value: UserRow) -> Self {
+        Self {
+            id: value.id,
+            email: value.email,
+        }
+    }
+}
+
 #[Object]
 impl MutationRoot {
+    async fn login(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        input: LoginInput,
+    ) -> Result<AuthResponse, &'static str> {
+        let err = Err("Incorrect email or password.");
+        let valid_email =
+            Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$")
+                .unwrap()
+                .is_match(input.email.as_str());
+        let email_too_long = input.email.len() > 40;
+        let password_ascii = input.password.is_ascii();
+        let password_in_bounds =
+            input.password.len() < 64 && input.password.len() > 8;
+        if !valid_email
+            || email_too_long
+            || !password_ascii
+            || !password_in_bounds
+        {
+            return err;
+        }
+
+        let db_pool =
+            ctx.data::<Pool<Postgres>>().expect("No db pool in context");
+
+        let user_row: Option<UserRow> =
+            sqlx::query_as("SELECT * FROM users WHERE email = $1")
+                .bind(input.email.as_str())
+                .fetch_optional(&db_pool.clone())
+                .await
+                .expect("Failed to find user");
+
+        if let Some(row) = user_row {
+            let salt = SaltString::from_b64(&row.salt)
+                .expect("could not recreate salt");
+            let hashed_password = Argon2::default()
+                .hash_password(input.password.as_bytes(), &salt)
+                .unwrap()
+                .to_string();
+            if hashed_password != row.password {
+                return err;
+            };
+
+            // Add session
+            let session_id = Uuid::new_v4().to_string().replace('-', "_");
+            sqlx::query(
+                "INSERT INTO sessions (session_id, user_id) VALUES ($1, $2)",
+            )
+            .bind(session_id.as_str())
+            .bind(row.id)
+            .execute(&db_pool.clone())
+            .await
+            .expect("Failed to create session id");
+
+            return Ok(AuthResponse {
+                user: row.into(),
+                session_id,
+            });
+        } else {
+            return err;
+        }
+    }
     async fn create_user(
         &self,
         ctx: &async_graphql::Context<'_>,
@@ -61,7 +146,6 @@ impl MutationRoot {
         if input.email.len() > 40 {
             return Err("Email too long. The max email length is 40.");
         }
-
 
         if !input.password.is_ascii() {
             return Err("Password must contain only standard English letters, numbers, and common punctuation.");
