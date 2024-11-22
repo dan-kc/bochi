@@ -37,6 +37,11 @@ struct AuthResponse {
     session_id: String,
 }
 
+#[derive(SimpleObject)]
+struct LogoutResponse {
+    success: bool,
+}
+
 #[derive(InputObject)]
 struct CreateUserInput {
     email: String,
@@ -115,7 +120,7 @@ impl MutationRoot {
             // Add session
             let session_id = Uuid::new_v4().to_string().replace('-', "_");
             sqlx::query(
-                "INSERT INTO sessions (session_id, user_id) VALUES ($1, $2)",
+                "INSERT INTO sessions (id, user_id) VALUES ($1, $2)",
             )
             .bind(session_id.as_str())
             .bind(row.id)
@@ -131,6 +136,29 @@ impl MutationRoot {
             return err;
         }
     }
+
+    async fn logout(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        id: String,
+    ) -> Result<LogoutResponse, &'static str> {
+        let db_pool =
+            ctx.data::<Pool<Postgres>>().expect("No db pool in context");
+
+        let res = sqlx::query("DELETE FROM sessions WHERE id = $1")
+            .bind(id)
+            .execute(&db_pool.clone())
+            .await
+            .unwrap();
+
+        let success = res.rows_affected() > 0;
+        if !success {
+            return Err("Session does not exist. Already logged out.")
+        }
+
+        Ok(LogoutResponse { success })
+    }
+
     async fn create_user(
         &self,
         ctx: &async_graphql::Context<'_>,
@@ -194,7 +222,7 @@ impl MutationRoot {
         // log user in
         let session_id = Uuid::new_v4().to_string().replace('-', "_");
         sqlx::query(
-            "INSERT INTO sessions (session_id, user_id) VALUES ($1, $2)",
+            "INSERT INTO sessions (id, user_id) VALUES ($1, $2)",
         )
         .bind(session_id.clone())
         .bind(user_id)
