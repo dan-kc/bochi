@@ -49,3 +49,6 @@ show-users:
 
 show-users-schema:
   docker-compose exec db psql -U user -d habit_market -P pager=off -c "\d+ users"
+
+tables:
+  docker-compose exec db psql -U user -d habit_market -P pager=off -c "\dt"
