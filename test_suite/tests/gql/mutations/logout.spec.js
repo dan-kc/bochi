@@ -10,8 +10,8 @@ const test = base.extend({
 test.beforeEach(async ({ db }) => {
   await db.executeQuery(`
     WITH inserted_user AS (
-      INSERT INTO users (email, password, salt) VALUES
-      ('mock@email.com', '$argon2id$v=19$m=19456,t=2,p=1$M3qJL3+ctjCWEvCYFQuTGA$QUQcFKQxhQhIWP6DTBH3+iJtgmWBTMTe1DfcmljlSpw', 'M3qJL3+ctjCWEvCYFQuTGA')
+      INSERT INTO users (email, password) VALUES
+      ('mock@email.com', '$argon2id$v=19$m=19456,t=2,p=1$M3qJL3+ctjCWEvCYFQuTGA$QUQcFKQxhQhIWP6DTBH3+iJtgmWBTMTe1DfcmljlSpw')
       RETURNING id
     )
     INSERT INTO sessions (id, user_id) VALUES

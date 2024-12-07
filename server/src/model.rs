@@ -1,7 +1,10 @@
+#[allow(unused)]
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use argon2::{PasswordHash, PasswordVerifier};
 use async_graphql::{
     EmptySubscription, InputObject, Object, Schema, SimpleObject,
 };
+use chrono::NaiveDateTime;
 use regex::Regex;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -25,6 +28,22 @@ impl QueryRoot {
 
 pub struct MutationRoot;
 
+#[derive(sqlx::FromRow)]
+struct UserRow {
+    id: i32,
+    email: String,
+    password: String,
+}
+
+impl From<UserRow> for User {
+    fn from(value: UserRow) -> Self {
+        Self {
+            id: value.id,
+            email: value.email,
+        }
+    }
+}
+
 #[derive(SimpleObject)]
 struct User {
     id: i32,
@@ -42,6 +61,49 @@ struct LogoutResponse {
     success: bool,
 }
 
+#[derive(SimpleObject)]
+struct Task {
+    id: u32,
+    name: String,
+    difficulty: u8,
+    importance: u8,
+    duration: u8,
+    created_at: NaiveDateTime,
+    deleted_at: NaiveDateTime,
+    hidden_until: NaiveDateTime,
+    due_at: NaiveDateTime,
+}
+
+#[derive(SimpleObject)]
+struct Habit {
+    id: u32,
+    name: String,
+    difficulty: u8,
+    importance: u8,
+    duration: u8,
+    daily_frequency: u8,
+    created_at: NaiveDateTime,
+    deleted_at: NaiveDateTime,
+    hidden_until: NaiveDateTime,
+}
+
+#[derive(SimpleObject)]
+struct Tag {
+    id: u32,
+    name: String,
+    color_hex: String,
+}
+
+#[derive(SimpleObject)]
+struct Trade {
+    id: u32,
+    color_hex: String,
+    amount: u8,
+    created_at: NaiveDateTime,
+    task_id: u32,
+    habit_id: u32,
+}
+
 #[derive(InputObject)]
 struct CreateUserInput {
     email: String,
@@ -55,25 +117,86 @@ struct LoginInput {
     password: String,
 }
 
-#[derive(sqlx::FromRow)]
-struct UserRow {
-    id: i32,
-    email: String,
-    password: String,
-    salt: String,
+#[derive(SimpleObject)]
+struct CreateApiKeyResponse {
+    api_key: String,
 }
 
-impl From<UserRow> for User {
-    fn from(value: UserRow) -> Self {
-        Self {
-            id: value.id,
-            email: value.email,
-        }
-    }
+#[derive(InputObject)]
+struct CreateTaskInput {
+    name: String,
+    difficulty: i32,
+    importance: i32,
+    duration: i32,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+}
+
+#[derive(InputObject)]
+struct CreateHabitInput {
+    name: String,
+    difficulty: i32,
+    importance: i32,
+    duration: i32,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+}
+
+#[derive(InputObject)]
+struct CreateTagInput {
+    name: String,
+    color_hex: String,
+}
+
+#[derive(InputObject)]
+struct TradeInput {
+    id: String,
+    amount: i32,
+}
+
+#[derive(InputObject)]
+struct CreateApiKeyInput {
+    id: String,
+    amount: i32,
 }
 
 #[Object]
 impl MutationRoot {
+    async fn create_api_key(
+        &self,
+        _ctx: &async_graphql::Context<'_>,
+        _input: CreateApiKeyInput,
+    ) -> Result<CreateApiKeyResponse, &'static str> {
+        todo!()
+    }
+    async fn create_task(
+        &self,
+        _ctx: &async_graphql::Context<'_>,
+        _input: CreateTaskInput,
+    ) -> Result<Task, &'static str> {
+        todo!()
+    }
+    async fn create_habit(
+        &self,
+        _ctx: &async_graphql::Context<'_>,
+        _input: CreateHabitInput,
+    ) -> Result<Habit, &'static str> {
+        todo!()
+    }
+    async fn create_tag(
+        &self,
+        _ctx: &async_graphql::Context<'_>,
+        _input: CreateTagInput,
+    ) -> Result<Tag, &'static str> {
+        todo!()
+    }
+    async fn trade(
+        &self,
+        _ctx: &async_graphql::Context<'_>,
+        _input: TradeInput,
+    ) -> Result<Trade, &'static str> {
+        todo!()
+    }
     async fn login(
         &self,
         ctx: &async_graphql::Context<'_>,
@@ -107,26 +230,22 @@ impl MutationRoot {
                 .expect("Failed to find user");
 
         if let Some(row) = user_row {
-            let salt = SaltString::from_b64(&row.salt)
-                .expect("could not recreate salt");
-            let hashed_password = Argon2::default()
-                .hash_password(input.password.as_bytes(), &salt)
-                .unwrap()
-                .to_string();
-            if hashed_password != row.password {
+            let parsed_hash = PasswordHash::new(&row.password).unwrap();
+            if Argon2::default()
+                .verify_password(input.password.as_bytes(), &parsed_hash)
+                .is_err()
+            {
                 return err;
             };
 
             // Add session
             let session_id = Uuid::new_v4().to_string().replace('-', "_");
-            sqlx::query(
-                "INSERT INTO sessions (id, user_id) VALUES ($1, $2)",
-            )
-            .bind(session_id.as_str())
-            .bind(row.id)
-            .execute(&db_pool.clone())
-            .await
-            .expect("Failed to create session id");
+            sqlx::query("INSERT INTO sessions (id, user_id) VALUES ($1, $2)")
+                .bind(session_id.as_str())
+                .bind(row.id)
+                .execute(&db_pool.clone())
+                .await
+                .expect("Failed to create session id");
 
             return Ok(AuthResponse {
                 user: row.into(),
@@ -153,7 +272,7 @@ impl MutationRoot {
 
         let success = res.rows_affected() > 0;
         if !success {
-            return Err("Session does not exist. Already logged out.")
+            return Err("Session does not exist. Already logged out.");
         }
 
         Ok(LogoutResponse { success })
@@ -210,25 +329,22 @@ impl MutationRoot {
             .to_string();
 
         let (user_id,): (i32,) = sqlx::query_as(
-        "INSERT INTO users (email, password, salt) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
         )
         .bind(input.email.as_str())
         .bind(hashed_password)
-        .bind(salt.to_string())
         .fetch_one(&db_pool.clone())
         .await
         .expect("Failed to insert user");
 
         // log user in
         let session_id = Uuid::new_v4().to_string().replace('-', "_");
-        sqlx::query(
-            "INSERT INTO sessions (id, user_id) VALUES ($1, $2)",
-        )
-        .bind(session_id.clone())
-        .bind(user_id)
-        .execute(&db_pool.clone())
-        .await
-        .expect("Failed to create session id");
+        sqlx::query("INSERT INTO sessions (id, user_id) VALUES ($1, $2)")
+            .bind(session_id.clone())
+            .bind(user_id)
+            .execute(&db_pool.clone())
+            .await
+            .expect("Failed to create session id");
 
         let user = User {
             id: user_id,

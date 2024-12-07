@@ -100,6 +100,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-timer",
