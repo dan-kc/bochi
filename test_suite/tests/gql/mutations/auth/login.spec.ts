@@ -9,8 +9,8 @@ test.afterEach(async ({ db }) => {
   await db.deleteAllUsers();
 });
 
-const login = `
-      mutation login($loginInput: LoginInput) {
+const loginQuery = `
+      mutation Login($loginInput: LoginInput) {
           login(input: $loginInput) {
               refreshToken
               accessToken
@@ -19,7 +19,7 @@ const login = `
 
 test("Should log in user", async ({ request }) => {
   const query = {
-    query: login,
+    query: loginQuery,
     variables: {
       loginInput: {
         email: "mock@email.com",
@@ -40,7 +40,7 @@ test("Should log in user", async ({ request }) => {
 
 test("Should return error for incorrect email", async ({ request }) => {
   const query = {
-    query: login,
+    query: loginQuery,
     variables: {
       loginInput: {
         email: "mock2@email.com",
@@ -61,7 +61,7 @@ test("Should return error for incorrect email", async ({ request }) => {
 
 test("Should return error for incorrect password", async ({ request }) => {
   const query = {
-    query: login,
+    query: loginQuery,
     variables: {
       loginInput: {
         email: "mock@email.com",
@@ -82,7 +82,7 @@ test("Should return error for incorrect password", async ({ request }) => {
 
 test("Should return error for missing password field", async ({ request }) => {
   const query = {
-    query: login,
+    query: loginQuery,
     variables: {
       loginInput: {
         email: "daniel2@test.com",
