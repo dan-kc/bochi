@@ -11,14 +11,15 @@ test.afterEach(async ({ db }) => {
 
 const createUserQuery = (refreshToken: string) => `
   mutation {
-    refreshToken(input: ${refreshToken}) {
+    refreshTokens(refreshToken: "${refreshToken}") {
       refreshToken
       accessToken
     }
   }`;
 
 test("Should refresh token", async ({ db, request }) => {
-  const refreshToken = db.createRefreshToken();
+  const refreshToken = await db.createRefreshToken();
+  console.log("New refresh token in test: ", refreshToken);
   const query = {
     query: createUserQuery(refreshToken),
   };
@@ -29,12 +30,12 @@ test("Should refresh token", async ({ db, request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.createUser.refreshToken).toBeDefined();
-  expect(responseBody.data.createUser.accessToken).toBeDefined();
+  expect(responseBody.data.refreshTokens.refreshToken).toBeDefined();
+  expect(responseBody.data.refreshTokens.accessToken).toBeDefined();
 });
 
 test("Should not refresh token if expired", async ({ db, request }) => {
-  const refreshToken = db.createRefreshToken(true);
+  const refreshToken = await db.createRefreshToken(true);
   const query = {
     query: createUserQuery(refreshToken),
   };
@@ -49,7 +50,7 @@ test("Should not refresh token if expired", async ({ db, request }) => {
   expect(errorMessages).toContain("Invalid refresh token");
 });
 
-test("Should not refresh token if wrong uuid", async ({ db, request }) => {
+test("Should not refresh token if wrong uuid", async ({ request }) => {
   const query = {
     query: createUserQuery("b7eab812_9b9a_4823_930d_38c3c891ea8d"),
   };

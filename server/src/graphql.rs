@@ -1,6 +1,6 @@
 use crate::{
     database::{self, UserRow},
-    router, security,
+    security,
 };
 use async_graphql::{
     EmptySubscription, InputObject, Object, Schema, SimpleObject,
@@ -168,6 +168,32 @@ impl MutationRoot {
         _input: CreateApiKeyInput,
     ) -> Result<CreateApiKeyResponse, &'static str> {
         todo!()
+    }
+    async fn refresh_tokens(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        refresh_token: String,
+    ) -> Result<AuthResponse, &'static str> {
+        let database = &ctx
+            .data::<database::Database>()
+            .expect("No db pool in context");
+        if let Some(user) = database
+            .get_user_from_active_refresh_token(refresh_token.as_str())
+            .await
+        {
+            let (new_access_token, new_refresh_token) =
+                security::jwt::create_jwt_pair(user.id);
+            database
+                .create_refresh_token(new_refresh_token.as_str(), user.id)
+                .await;
+
+            return Ok(AuthResponse {
+                access_token: new_access_token,
+                refresh_token: new_refresh_token,
+            });
+        };
+
+        Err("Invalid refresh token")
     }
     async fn create_task(
         &self,

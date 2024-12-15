@@ -1,6 +1,6 @@
 use crate::{
     database,
-    model::{MutationRoot, QueryRoot, ServiceSchema},
+    graphql::{MutationRoot, QueryRoot, ServiceSchema},
     security::jwt::Validator,
 };
 use async_graphql::{EmptySubscription, Schema};

@@ -87,6 +87,18 @@ impl Database {
             .await
         .expect("Failed to find user")
     }
+
+    // Returns the user from active refresh token.
+    pub async fn get_user_from_active_refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Option<UserRow> {
+        sqlx::query_as("SELECT users.* FROM refresh_tokens INNER JOIN users ON refresh_tokens.user_id = users.id WHERE refresh_tokens.id = $1 AND refresh_tokens.expires_at > NOW()")
+        .bind(refresh_token)
+            .fetch_optional(&self.pool)
+            .await
+        .expect("Failed to find user")
+    }
 }
 
 #[derive(sqlx::FromRow)]

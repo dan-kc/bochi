@@ -1,4 +1,4 @@
-mod model;
+mod graphql;
 mod router;
 mod database;
 mod security;
