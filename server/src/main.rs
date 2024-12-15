@@ -1,5 +1,7 @@
 mod model;
 mod router;
+mod database;
+mod security;
 
 #[tokio::main]
 async fn main() {

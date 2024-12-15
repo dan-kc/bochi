@@ -1,5 +1,5 @@
 const { test: base, expect } = require("@playwright/test");
-const { DB } = require('../../../helpers');
+const { DB } = require("../../../helpers");
 
 const test = base.extend({
   db: async ({}, use) => {
@@ -20,11 +20,8 @@ test.afterEach(async ({ db }) => {
 const createUser = `
       mutation CreateUser($createUserInput: CreateUserInput) {
           createUser(input: $createUserInput) {
-              user {
-                  id
-                  email
-              }
-              sessionId
+              refreshToken
+              accessToken
           }
       }`;
 
@@ -46,9 +43,8 @@ test("Create valid user", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.createUser.sessionId).toBeDefined();
-  expect(responseBody.data.createUser.user.id).toBeDefined();
-  expect(responseBody.data.createUser.user.email).toBeDefined();
+  expect(responseBody.data.createUser.refreshToken).toBeDefined();
+  expect(responseBody.data.createUser.accessToken).toBeDefined();
 });
 
 test("User already exists", async ({ request, db }) => {

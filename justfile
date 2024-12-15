@@ -50,5 +50,23 @@ show-users:
 show-users-schema:
   docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ users"
 
+show-tasks:
+  docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM tasks;"
+
+show-tasks-schema:
+  docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ tasks"
+
+show-refresh-tokens:
+  docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM refresh_tokens;"
+
+show-refresh-tokens-schema:
+  docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ refresh_tokens"
+
+show-api-keys:
+  docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM api_keys;"
+
+show-api-keys-schema:
+  docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ api_keys"
+
 tables:
   docker compose exec db psql -U user -d habit_market -P pager=off -c "\dt"

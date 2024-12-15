@@ -1,40 +1,32 @@
-#[allow(unused)]
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use argon2::{PasswordHash, PasswordVerifier};
+use crate::{
+    database::{self, UserRow},
+    router, security,
+};
 use async_graphql::{
     EmptySubscription, InputObject, Object, Schema, SimpleObject,
 };
 use chrono::NaiveDateTime;
 use regex::Regex;
-use sqlx::{Pool, Postgres};
-use uuid::Uuid;
 
-pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
-
+pub struct MutationRoot;
 pub struct QueryRoot;
+pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
 #[Object]
 impl QueryRoot {
     async fn hello(&self, _ctx: &async_graphql::Context<'_>) -> &'static str {
         "Wag1"
     }
-    // async fn user(
-    //     &self,
-    //     _ctx: &async_graphql::Context<'_>,
-    // ) -> Result<User, &'static str> {
-    //     todo!();
-    // }
 }
 
-pub struct MutationRoot;
-
-#[derive(sqlx::FromRow)]
-struct UserRow {
+#[derive(SimpleObject)]
+struct User {
     id: i32,
     email: String,
-    password: String,
 }
 
+// We need a dedicated UserRow type as it needs to include password which is not present in the
+// object we return
 impl From<UserRow> for User {
     fn from(value: UserRow) -> Self {
         Self {
@@ -45,15 +37,9 @@ impl From<UserRow> for User {
 }
 
 #[derive(SimpleObject)]
-struct User {
-    id: i32,
-    email: String,
-}
-
-#[derive(SimpleObject)]
 struct AuthResponse {
-    user: User,
-    session_id: String,
+    refresh_token: String,
+    access_token: String,
 }
 
 #[derive(SimpleObject)]
@@ -61,17 +47,41 @@ struct LogoutResponse {
     success: bool,
 }
 
-#[derive(SimpleObject)]
-struct Task {
-    id: u32,
-    name: String,
-    difficulty: u8,
-    importance: u8,
-    duration: u8,
+#[derive(sqlx::FromRow)]
+struct TaskRow {
+    id: i32,
+    user_id: i32,
+    name: String, // Max 100 utf-8 chars
+    difficulty: i32,
     created_at: NaiveDateTime,
-    deleted_at: NaiveDateTime,
-    hidden_until: NaiveDateTime,
-    due_at: NaiveDateTime,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+    importance: i32,
+    duration: i32,
+}
+
+#[derive(SimpleObject)]
+struct TaskObject {
+    id: i32,
+    name: String, // Max 100 utf-8 chars
+    difficulty: i32,
+    created_at: NaiveDateTime,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+    importance: i32,
+    duration: i32,
+}
+
+#[derive(InputObject)]
+struct CreateTaskInput {
+    name: String, // Max 100 utf-8 chars
+    difficulty: i32,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+    importance: i32,
+    duration: i32,
 }
 
 #[derive(SimpleObject)]
@@ -123,16 +133,6 @@ struct CreateApiKeyResponse {
 }
 
 #[derive(InputObject)]
-struct CreateTaskInput {
-    name: String,
-    difficulty: i32,
-    importance: i32,
-    duration: i32,
-    hidden_until: Option<NaiveDateTime>,
-    due_at: Option<NaiveDateTime>,
-}
-
-#[derive(InputObject)]
 struct CreateHabitInput {
     name: String,
     difficulty: i32,
@@ -171,9 +171,41 @@ impl MutationRoot {
     }
     async fn create_task(
         &self,
-        _ctx: &async_graphql::Context<'_>,
-        _input: CreateTaskInput,
-    ) -> Result<Task, &'static str> {
+        ctx: &async_graphql::Context<'_>,
+        input: CreateTaskInput,
+    ) -> Result<TaskObject, &'static str> {
+        if input.name.as_str().len() > 10 {
+            return Err("Name is too long. Must be fewer than 100 chars.");
+        };
+        if input.difficulty > 10 || input.difficulty < 0 {
+            return Err("Difficulty can be in the range 0..=10");
+        }
+        if input.importance > 10 || input.importance < 0 {
+            return Err("Importance can be in the range 0..=10");
+        }
+        if input.duration > 10 || input.duration < 0 {
+            return Err("Duration can be in the range 0..=10");
+        }
+
+        let _database = &ctx
+            .data::<database::Database>()
+            .expect("No db pool in context");
+        //
+        // let user_id = "";
+        // let _row: TaskRow = sqlx::query_as(
+        //     "INSERT INTO tasks (user_id, name, difficulty, hidden_until, due_at, importance, duration) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        // )
+        // .bind(user_id)
+        // .bind(input.name)
+        // .bind(input.difficulty)
+        // .bind(input.hidden_until)
+        // .bind(input.due_at)
+        // .bind(input.importance)
+        // .bind(input.duration)
+        // .fetch_one(&db_pool.clone())
+        // .await
+        // .expect("Failed to insert user");
+
         todo!()
     }
     async fn create_habit(
@@ -219,63 +251,43 @@ impl MutationRoot {
             return err;
         }
 
-        let db_pool =
-            ctx.data::<Pool<Postgres>>().expect("No db pool in context");
+        let database = &ctx.data::<database::Database>().expect("No database");
 
-        let user_row: Option<UserRow> =
-            sqlx::query_as("SELECT * FROM users WHERE email = $1")
-                .bind(input.email.as_str())
-                .fetch_optional(&db_pool.clone())
-                .await
-                .expect("Failed to find user");
-
-        if let Some(row) = user_row {
-            let parsed_hash = PasswordHash::new(&row.password).unwrap();
-            if Argon2::default()
-                .verify_password(input.password.as_bytes(), &parsed_hash)
-                .is_err()
-            {
+        if let Some(user) =
+            database.get_user_from_email(input.email.as_str()).await
+        {
+            if !security::check_password(
+                user.password.as_str(),
+                input.password.as_str(),
+            ) {
                 return err;
-            };
+            }
 
-            // Add session
-            let session_id = Uuid::new_v4().to_string().replace('-', "_");
-            sqlx::query("INSERT INTO sessions (id, user_id) VALUES ($1, $2)")
-                .bind(session_id.as_str())
-                .bind(row.id)
-                .execute(&db_pool.clone())
-                .await
-                .expect("Failed to create session id");
+            let (access_token, refresh_token) =
+                security::jwt::create_jwt_pair(user.id);
 
-            return Ok(AuthResponse {
-                user: row.into(),
-                session_id,
-            });
+            database
+                .create_refresh_token(refresh_token.as_str(), user.id)
+                .await;
+
+            Ok(AuthResponse {
+                refresh_token,
+                access_token,
+            })
         } else {
-            return err;
+            err
         }
     }
 
     async fn logout(
         &self,
         ctx: &async_graphql::Context<'_>,
-        id: String,
+        refresh_token: String,
     ) -> Result<LogoutResponse, &'static str> {
-        let db_pool =
-            ctx.data::<Pool<Postgres>>().expect("No db pool in context");
+        let database = &ctx.data::<database::Database>().expect("No database");
+        database.delete_refresh_token(refresh_token.as_str()).await;
 
-        let res = sqlx::query("DELETE FROM sessions WHERE id = $1")
-            .bind(id)
-            .execute(&db_pool.clone())
-            .await
-            .unwrap();
-
-        let success = res.rows_affected() > 0;
-        if !success {
-            return Err("Session does not exist. Already logged out.");
-        }
-
-        Ok(LogoutResponse { success })
+        Ok(LogoutResponse { success: true })
     }
 
     async fn create_user(
@@ -307,50 +319,30 @@ impl MutationRoot {
             return Err("Passwords do not match.");
         }
 
-        let db_pool =
-            ctx.data::<Pool<Postgres>>().expect("No db pool in context");
+        let database = &ctx.data::<database::Database>().expect("No database");
 
-        // Check if the user already exists.
-        let (email_taken,): (bool,) = sqlx::query_as(
-            "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
-        )
-        .bind(input.email.as_str())
-        .fetch_one(&db_pool.clone())
-        .await
-        .expect("failed to check if user already exists");
-        if email_taken {
+        let user_already_exists =
+            database.check_user_exists(input.email.as_str()).await;
+        if user_already_exists {
             return Err("User already exists.");
         }
 
-        let salt = SaltString::generate(rand::thread_rng());
-        let hashed_password = Argon2::default()
-            .hash_password(input.password.as_bytes(), &salt)
-            .unwrap()
-            .to_string();
+        let hashed_password = security::hash_password(input.password.as_str());
 
-        let (user_id,): (i32,) = sqlx::query_as(
-        "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
-        )
-        .bind(input.email.as_str())
-        .bind(hashed_password)
-        .fetch_one(&db_pool.clone())
-        .await
-        .expect("Failed to insert user");
+        let user_id = database
+            .create_user(input.email.as_str(), hashed_password.as_str())
+            .await;
 
-        // log user in
-        let session_id = Uuid::new_v4().to_string().replace('-', "_");
-        sqlx::query("INSERT INTO sessions (id, user_id) VALUES ($1, $2)")
-            .bind(session_id.clone())
-            .bind(user_id)
-            .execute(&db_pool.clone())
-            .await
-            .expect("Failed to create session id");
+        let (access_token, refresh_token) =
+            security::jwt::create_jwt_pair(user_id);
 
-        let user = User {
-            id: user_id,
-            email: input.email,
-        };
+        database
+            .create_refresh_token(refresh_token.as_str(), user_id)
+            .await;
 
-        Ok(AuthResponse { user, session_id })
+        Ok(AuthResponse {
+            refresh_token,
+            access_token,
+        })
     }
 }

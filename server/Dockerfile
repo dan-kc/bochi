@@ -9,6 +9,7 @@ RUN cargo build --release
 RUN rm -rf src
 
 COPY src ./src
+COPY private_key.pem public_key.pem ./
 
 # touch src/main.rs tells docker that this file has changed.
 # Without this it builds the temp

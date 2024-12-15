@@ -20,11 +20,8 @@ test.afterEach(async ({ db }) => {
 const login = `
       mutation login($loginInput: LoginInput) {
           login(input: $loginInput) {
-              user {
-                  id
-                  email
-              }
-              sessionId
+              refreshToken
+              accessToken
           }
       }`;
 
@@ -45,9 +42,8 @@ test("Should log in user", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.login.sessionId).toBeDefined();
-  expect(responseBody.data.login.user.id).toBeDefined();
-  expect(responseBody.data.login.user.email).toBeDefined();
+  expect(responseBody.data.login.refreshToken).toBeDefined();
+  expect(responseBody.data.login.accessToken).toBeDefined();
 });
 
 test("Should return error for incorrect email", async ({ request }) => {
