@@ -1,20 +1,12 @@
-const { test: base, expect } = require("@playwright/test");
-const { DB } = require("../../../helpers");
+import { expect } from "@playwright/test";
+import { test } from "../../../../helpers";
 
-const test = base.extend({
-  db: async ({}, use) => {
-    const database = new DB();
-    await use(database);
-  },
-});
 test.beforeEach(async ({ db }) => {
-  await db.executeQuery(`
-    INSERT INTO users (email, password) VALUES
-    ('mock@email.com', '$argon2id$v=19$m=19456,t=2,p=1$M3qJL3+ctjCWEvCYFQuTGA$QUQcFKQxhQhIWP6DTBH3+iJtgmWBTMTe1DfcmljlSpw');
-  `);
+  await db.createUser();
 });
+
 test.afterEach(async ({ db }) => {
-  await db.executeQuery("DELETE FROM users;");
+  await db.deleteAllUsers();
 });
 
 const login = `
@@ -63,7 +55,7 @@ test("Should return error for incorrect email", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error) => error.message);
+  const errorMessages = responseBody.errors.map((error: any) => error.message);
   expect(errorMessages).toContain("Incorrect email or password.");
 });
 
@@ -84,7 +76,7 @@ test("Should return error for incorrect password", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error) => error.message);
+  const errorMessages = responseBody.errors.map((error: any) => error.message);
   expect(errorMessages).toContain("Incorrect email or password.");
 });
 
@@ -104,7 +96,7 @@ test("Should return error for missing password field", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error) => error.message);
+  const errorMessages = responseBody.errors.map((error: any) => error.message);
   expect(errorMessages).toContain(
     'Invalid value for argument "input", field "password" of type "String!" is required but not provided',
   );

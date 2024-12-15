@@ -1,2 +1,4 @@
 server/target
 node_modules
+private_key.pem
+public_key.pem

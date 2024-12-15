@@ -10,7 +10,14 @@ pub mod jwt {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
         exp: i64,
-        pub sub: i32,
+        sub: String,
+    }
+
+    impl Claims {
+        // access the sub (user_id). This must be a string in Claims.
+        pub fn sub(&self) -> i32 {
+            self.sub.parse::<i32>().unwrap()
+        }
     }
 
     #[derive(Clone)]
@@ -42,7 +49,7 @@ pub mod jwt {
                 &self.decoding_key,
                 &self.validation,
             ) {
-                Some(token_data.claims.sub)
+                Some(token_data.claims.sub())
             } else {
                 None
             }
@@ -58,7 +65,7 @@ pub mod jwt {
         let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
         let claims = Claims {
             exp: time_in_half_an_hour,
-            sub: user_id,
+            sub: user_id.to_string(),
         };
         let access_token = jsonwebtoken::encode(
             &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA),
@@ -76,7 +83,7 @@ pub mod jwt {
 }
 
 pub fn check_password(hashed_password: &str, raw_password: &str) -> bool {
-    let parsed_hash = PasswordHash::new(&hashed_password).unwrap();
+    let parsed_hash = PasswordHash::new(hashed_password).unwrap();
     Argon2::default()
         .verify_password(raw_password.as_bytes(), &parsed_hash)
         .is_ok()
