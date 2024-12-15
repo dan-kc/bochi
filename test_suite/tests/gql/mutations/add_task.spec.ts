@@ -45,7 +45,7 @@ const createTaskQuery = () => `
   }
 `;
 
-test("Should create task with description", async ({ request }) => {
+test("Should create task", async ({ request }) => {
   const query = {
     query: createTaskQuery,
     variables: {
@@ -195,31 +195,6 @@ test("Should not create task if difficulty < 0", async ({ request }) => {
         difficulty: -1,
         importance: 5,
         duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const responseBody = await response.json();
-
-  expectError(responseBody, "Difficulty can only be between 0 and 10");
-});
-
-test("Should not create task if difficulty < 0", async ({ request }) => {
-  const query = {
-    query: createTaskQuery,
-    variables: {
-      createTaskInput: {
-        name: "Touch grass",
-        difficulty: -1,
-        importance: 5,
-        duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
       },
     },
   };
@@ -243,7 +218,6 @@ test("Should not create task if importance < 0", async ({ request }) => {
         difficulty: 8,
         importance: -1,
         duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
       },
     },
   };
@@ -267,7 +241,6 @@ test("Should not create task if importance > 10", async ({ request }) => {
         difficulty: 8,
         importance: 11,
         duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
       },
     },
   };
@@ -291,31 +264,6 @@ test("Should not create task if duration < 0", async ({ request }) => {
         difficulty: 8,
         importance: 11,
         duration: -5,
-        due_date: "2024-12-16T00:33:08+08:00",
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const responseBody = await response.json();
-
-  expectError(responseBody, "Duration can't be negative");
-});
-
-test("Should not create task if duration < 0", async ({ request }) => {
-  const query = {
-    query: createTaskQuery,
-    variables: {
-      createTaskInput: {
-        name: "Touch grass",
-        difficulty: 8,
-        importance: 11,
-        duration: -5,
-        due_date: "2024-12-16T00:33:08+08:00",
       },
     },
   };
@@ -342,34 +290,6 @@ test("Should not create task with description if description too long.", async (
         importance: 11,
         duration: 5,
         description: createStringOfLength(10001),
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const responseBody = await response.json();
-
-  expectError(
-    responseBody,
-    "Description too long. Must be fewer that 10000 chars.",
-  );
-});
-
-test("Should not create task with description if description too long.", async ({
-  request,
-}) => {
-  const query = {
-    query: createTaskQuery,
-    variables: {
-      createTaskInput: {
-        name: "Touch grass",
-        difficulty: 8,
-        importance: 11,
-        duration: 5,
       },
     },
   };
