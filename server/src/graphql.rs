@@ -54,6 +54,7 @@ struct TaskRow {
     name: String, // Max 100 utf-8 chars
     difficulty: i32,
     created_at: NaiveDateTime,
+    description: Option<String>,
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     due_at: Option<NaiveDateTime>,
@@ -70,6 +71,7 @@ struct TaskObject {
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     due_at: Option<NaiveDateTime>,
+    description: Option<String>,
     importance: i32,
     duration: i32,
 }
@@ -80,6 +82,7 @@ struct CreateTaskInput {
     difficulty: i32,
     hidden_until: Option<NaiveDateTime>,
     due_at: Option<NaiveDateTime>,
+    description: Option<String>,
     importance: i32,
     duration: i32,
 }
@@ -204,14 +207,15 @@ impl MutationRoot {
             return Err("Name is too long. Must be fewer than 100 chars.");
         };
         if input.difficulty > 10 || input.difficulty < 0 {
-            return Err("Difficulty can be in the range 0..=10");
+            return Err("Difficulty can only be between 0 and 10");
         }
         if input.importance > 10 || input.importance < 0 {
-            return Err("Importance can be in the range 0..=10");
+            return Err("Importance can only be between 0 and 10");
         }
-        if input.duration > 10 || input.duration < 0 {
-            return Err("Duration can be in the range 0..=10");
+        if input.duration < 0 {
+            return Err("Duration can't be negative");
         }
+        // if input.
 
         let _database = &ctx
             .data::<database::Database>()
