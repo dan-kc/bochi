@@ -29,7 +29,7 @@ pub mod jwt {
     impl Validator {
         pub fn new() -> Self {
             let mut public_key_file =
-                File::open("/usr/src/app/public_key.pem").unwrap();
+                File::open("/usr/src/app/mock_public_key.pem").unwrap();
             let mut public_key = Vec::new();
             public_key_file.read_to_end(&mut public_key).unwrap();
 
@@ -58,7 +58,7 @@ pub mod jwt {
 
     pub fn create_jwt_pair(user_id: i32) -> (String, String) {
         let mut private_key_file =
-            File::open("/usr/src/app/private_key.pem").unwrap();
+            File::open("/usr/src/app/mock_private_key.pem").unwrap();
         let mut private_key = Vec::new();
         private_key_file.read_to_end(&mut private_key).unwrap();
 

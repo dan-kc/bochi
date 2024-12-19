@@ -61,7 +61,7 @@ export async function createAccessToken(
     sub: "1", // for user id = 1.
   };
 
-  const pemKey = await readFile("./private_key.pem", { encoding: "utf8" });
+  const pemKey = await readFile("./mock_private_key.pem", { encoding: "utf8" });
   const privateKey = await importPKCS8(pemKey, "EdDSA");
 
   // Create the JWT
