@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { test } from "../../../../helpers";
+import { test } from "../../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();

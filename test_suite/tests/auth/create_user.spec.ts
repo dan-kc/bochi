@@ -5,34 +5,21 @@ test.afterEach(async ({ db }) => {
   await db.deleteAllUsers();
 });
 
-const createUserQuery = `
-      mutation CreateUser($createUserInput: CreateUserInput) {
-          createUser(input: $createUserInput) {
-              refreshToken
-              accessToken
-          }
-      }`;
-
 test("Create new user", async ({ request }) => {
   const query = {
-    query: createUserQuery,
-    variables: {
-      createUserInput: {
-        email: "daniel@test.com",
-        password: "password123",
-        confirmPassword: "password123",
-      },
-    },
+    email: "daniel@test.com",
+    password: "password123",
+    confirmPassword: "password123",
   };
 
-  const response = await request.post("/graphql", {
+  const response = await request.post("/auth", {
     data: query,
   });
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.createUser.refreshToken).toBeDefined();
-  expect(responseBody.data.createUser.accessToken).toBeDefined();
+  expect(responseBody.refreshToken).toBeDefined();
+  expect(responseBody.accessToken).toBeDefined();
 });
 
 test("User already exists", async ({ request, db }) => {
