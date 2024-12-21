@@ -6,7 +6,7 @@ import { test as base } from "@playwright/test";
 export class DB {
   DBConfig: ClientConfig;
 
-  constructor() {
+  constructor()    {
     this.DBConfig = {
       user: "user",
       host: "db",
@@ -25,7 +25,7 @@ export class DB {
     } catch (error) {
       console.error("Error in connection/executing query:", error);
     } finally {
-      await client.end().catch((error) => {
+      await client.end().catch((error: any) => {
         console.error("Error ending client connection:", error);
       });
     }
@@ -74,7 +74,7 @@ export async function createAccessToken(
 }
 
 export const test = base.extend({
-  db: async ({}, use) => {
+  db: async ({}, use: any) => {
     const database = new DB();
     await use(database);
   },
