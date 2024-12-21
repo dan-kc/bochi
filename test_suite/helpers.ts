@@ -6,7 +6,7 @@ import { test as base } from "@playwright/test";
 export class DB {
   DBConfig: ClientConfig;
 
-  constructor()    {
+  constructor() {
     this.DBConfig = {
       user: "user",
       host: "db",
