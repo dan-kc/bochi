@@ -1,11 +1,14 @@
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use argon2::{PasswordHash, PasswordVerifier};
+use uuid::Uuid;
 
 pub mod jwt {
     use jsonwebtoken::{Algorithm, DecodingKey, Validation};
     use serde::{Deserialize, Serialize};
     use std::{fs::File, io::Read};
     use uuid::Uuid;
+
+    use super::generate_refresh_token;
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
@@ -76,10 +79,23 @@ pub mod jwt {
         .expect("Could not create JWT");
 
         // Add refresh token to db
-        let refresh_token = Uuid::new_v4().to_string().replace('-', "_");
+        let refresh_token = generate_refresh_token();
 
         (access_token, refresh_token)
     }
+}
+
+#[allow(unused)]
+fn generate_api_key() -> String {
+    let mut api_key = Uuid::new_v4().to_string().replace('-', "_");
+    api_key.insert_str(0, "hmak_");
+    api_key
+}
+
+fn generate_refresh_token() -> String {
+    let mut refresh_token = Uuid::new_v4().to_string().replace('-', "_");
+    refresh_token.insert_str(0, "hmrt_");
+    refresh_token
 }
 
 pub fn check_password(hashed_password: &str, raw_password: &str) -> bool {
