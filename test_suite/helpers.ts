@@ -79,3 +79,41 @@ export const test = base.extend({
     await use(database);
   },
 });
+
+export type RestApiError = {
+  code: string;
+  message: string;
+};
+
+export function createPasswordOfLength(n: number): string {
+  let pw = "";
+  for (let i = 0; i <= n; i++) {
+    pw += "a";
+  }
+  return pw;
+}
+
+export function createEmailOfLength(n: number): string {
+  if (n < 7) {
+    throw "Email too short";
+  }
+
+  let email = "@h.com";
+  for (let i = 0; i < n; i++) {
+    email = "a" + email;
+  }
+
+  return email;
+}
+
+export function findErrorByCode(
+  code: string,
+  errorMessages: RestApiError[],
+): RestApiError {
+  const error = errorMessages.find((error) => error.code === code);
+  if (error === undefined) {
+    throw (`Error with code '${code}' does not exist`);
+  }
+
+  return error;
+}

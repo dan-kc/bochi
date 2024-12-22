@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { test } from "../../../helpers";
+import { findErrorByCode, RestApiError, test } from "../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();
@@ -9,95 +9,74 @@ test.afterEach(async ({ db }) => {
   await db.deleteAllUsers();
 });
 
-const loginQuery = `
-      mutation Login($loginInput: LoginInput) {
-          login(input: $loginInput) {
-              refreshToken
-              accessToken
-          }
-      }`;
-
 test("Should log in user", async ({ request }) => {
   const query = {
-    query: loginQuery,
-    variables: {
-      loginInput: {
-        email: "mock@email.com",
-        password: "password123",
-      },
-    },
+    email: "mock@email.com",
+    password: "password123",
   };
-
-  const response = await request.post("/graphql", {
+  const response = await request.post("/auth/login", {
     data: query,
   });
-
-  expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expect(responseBody.data.login.refreshToken).toBeDefined();
-  expect(responseBody.data.login.accessToken).toBeDefined();
+
+  expect(response.status).toEqual(200);
+  expect(responseBody.refreshToken).toBeDefined();
+  expect(responseBody.accessToken).toBeDefined();
 });
 
-test("Should return error for incorrect email", async ({ request }) => {
+test("Should return error for non-existent email", async ({ request }) => {
   const query = {
-    query: loginQuery,
-    variables: {
-      loginInput: {
-        email: "mock2@email.com",
-        password: "password123",
-      },
-    },
+    email: "mock2@email.com",
+    password: "password123",
   };
 
-  const response = await request.post("/graphql", {
+  const response = await request.post("/auth/login", {
     data: query,
   });
-
-  expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error: any) => error.message);
-  expect(errorMessages).toContain("Incorrect email or password.");
+  const errorMessages = responseBody.errors as RestApiError[];
+
+  expect(response.status).toEqual(400);
+  expect(errorMessages.length).toEqual(1);
+  expect(errorMessages[1].code).toEqual("INCORRECT_EMAIL_OR_PASSWORD");
+  expect(errorMessages[1].message).toEqual("Incorrect email or password.");
 });
 
 test("Should return error for incorrect password", async ({ request }) => {
   const query = {
-    query: loginQuery,
-    variables: {
-      loginInput: {
-        email: "mock@email.com",
-        password: "password12",
-      },
-    },
+    email: "mock@email.com",
+    password: "password12",
   };
-
-  const response = await request.post("/graphql", {
+  const response = await request.post("/auth/login", {
     data: query,
   });
-
-  expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error: any) => error.message);
-  expect(errorMessages).toContain("Incorrect email or password.");
+  const errorMessages = responseBody.errors as RestApiError[];
+
+  expect(response.status).toEqual(400);
+  expect(errorMessages.length).toEqual(1);
+  expect(errorMessages[1].code).toEqual("INCORRECT_EMAIL_OR_PASSWORD");
+  expect(errorMessages[1].message).toEqual("Incorrect email or password.");
 });
 
-test("Should return error for missing password field", async ({ request }) => {
-  const query = {
-    query: loginQuery,
-    variables: {
-      loginInput: {
-        email: "daniel2@test.com",
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
+test("Should return error for missing fields", async ({ request }) => {
+  const response = await request.post("/auth/login", {
+    data: {},
   });
-
-  expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  const errorMessages = responseBody.errors.map((error: any) => error.message);
-  expect(errorMessages).toContain(
-    'Invalid value for argument "input", field "password" of type "String!" is required but not provided',
+  const errorMessages = responseBody.errors as RestApiError[];
+
+  expect(response.status).toEqual(400);
+  expect(errorMessages.length).toEqual(2);
+
+  const emailError = findErrorByCode("MISSING_EMAIL_FIELD", errorMessages);
+  expect(emailError).toBeTruthy();
+  expect(emailError).toEqual("Missing 'email' field.");
+
+  const passwordError = findErrorByCode(
+    "MISSING_PASSWORD_FIELD",
+    errorMessages,
   );
+  expect(passwordError).toBeTruthy();
+  expect(passwordError).toEqual("Missing 'password' field.");
 });
