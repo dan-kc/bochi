@@ -33,46 +33,50 @@ test: stop
 logs:
 	docker compose logs -f
 
-## migrate-status: shows the current state of the db against the migrations folder
-migrate-status:
-	docker compose build db migration
-	docker compose up -d --remove-orphans db
-	docker compose run migration info
-
 ## migrate: applys migrations to the db
 migrate:
 	docker compose build db migration
 	docker compose up -d --remove-orphans db
 	docker compose run migration migrate
 
+## migrate-status: shows the current state of the db against the migrations folder
+migrate-status:
+	docker compose build db migration
+	docker compose up -d --remove-orphans db
+	docker compose run migration info
+
 ## show-users: displays entries in the users table
 show-users:
 	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM users;"
 
-show-users-schema:
-	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ users"
-
-## show-users: displays entries in the tasks table
-show-tasks:
-	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM tasks;"
-
-show-tasks-schema:
-	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ tasks"
-
-## show-users: displays entries in the refresh_tokens table
-show-refresh-tokens:
-	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM refresh_tokens;"
-
-show-refresh-tokens-schema:
-	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ refresh_tokens"
-
-## show-users: displays entries in the api_keys table
+## show-api-keys: displays entries in the api_keys table
 show-api-keys:
 	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM api_keys;"
 
-show-api-keys-schema:
+## show-refresh-tokens: displays entries in the refresh_tokens table
+show-refresh-tokens:
+	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM refresh_tokens;"
+
+## show-tasks: displays entries in the tasks table
+show-tasks:
+	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM tasks;"
+
+## show-schema: displays entire database schema
+show-schema:
+	docker compose exec db psql -U user -d habit_market -P pager=off -c "\dt"
+
+## show-schema-users: displays all entries in the users table
+show-schema-users:
+	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ users"
+
+## show-schema-api-keys: displays all entries in the api_keys table
+show-schema-api-keys:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ api_keys"
 
-## show-users: displays entire database schema
-tables:
-	docker compose exec db psql -U user -d habit_market -P pager=off -c "\dt"
+## show-schema-refresh-tokens: displays all entries in the refresh_tokens table
+show-schema-refresh-tokens:
+	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ refresh_tokens"
+
+## show-schema-tasks: displays all entries in the tasks table
+show-schema-tasks:
+	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ tasks"
