@@ -1,7 +1,6 @@
 # TODO:
 
 - Show multiple errors in single query.
-- Let Duration be in seconds, so you can do any amount of time on frontend.
 
 # MVP:
 
@@ -11,6 +10,7 @@
 - Habits
 - Tasks
 - Rewards
+- Trades
 
 - Terraform, use nixos, k3s, nginx, aws. Buy a domain. Add ssl to k3s in a separate container.
 - Hashicorp secrets or aws??.

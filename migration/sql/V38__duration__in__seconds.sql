@@ -1,0 +1,2 @@
+ALTER TABLE habits
+ALTER COLUMN duration TYPE INT

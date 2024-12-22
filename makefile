@@ -61,6 +61,10 @@ show-refresh-tokens:
 show-tasks:
 	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM tasks;"
 
+## show-habits: displays entries in the habits table
+show-habits:
+	docker compose exec -T db psql -U user -d habit_market -P pager=off -c "SELECT * FROM habits;"
+
 ## show-schema: displays entire database schema
 show-schema:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\dt"
@@ -80,3 +84,7 @@ show-schema-refresh-tokens:
 ## show-schema-tasks: displays all entries in the tasks table
 show-schema-tasks:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ tasks"
+
+## show-schema-habits: displays all entries in the habits table
+show-schema-habits:
+	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ habits"
