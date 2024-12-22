@@ -40,7 +40,7 @@ test("Should not refresh token if expired", async ({ db, request }) => {
 test("Should not refresh token if wrong uuid", async ({ request }) => {
   const response = await request.post("/auth/refresh-tokens", {
     data: {
-      refreshToken: "b7eab812_9b9a_4823_930d_38c3c891ea8d",
+      refreshToken: "hmrt_b7eab812_9b9a_4823_930d_38c3c891ea8d",
     },
   });
   const responseBody = await response.json();
