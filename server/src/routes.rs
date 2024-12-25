@@ -132,7 +132,6 @@ pub enum ValidationError {
     InvalidEmailAddress,
     PasswordNotAscii,
     EmailTooLong,
-    EmailTooShort,
     PasswordTooLong,
     PasswordTooShort,
     PasswordMismatch,
@@ -146,9 +145,6 @@ impl Display for ValidationError {
             ),
             Self::EmailTooLong => write!(f,
                 "Email too long. The maximum email length is 40."
-            ),
-            Self::EmailTooShort => write!(f,
-                "Email too short. The mininum email length is 5."
             ),
             Self::PasswordTooLong => write!(f,
                  "Password too long. The maximum password length is 64."
