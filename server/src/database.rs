@@ -11,6 +11,7 @@ pub enum Error {
     FailedToFetchUser,
     FailedToDeleteRefreshToken,
     FailedToCreateRefreshToken,
+    FailedToCreateApiKey,
 }
 
 impl Database {
@@ -110,6 +111,26 @@ impl Database {
             .await
             .map_err(|_| Error::FailedToFetchUser)?
             .ok_or(Error::FailedToFetchUser)
+    }
+
+    /// Creates api key in the db.
+    pub async fn create_api_key(
+        &self,
+        api_key: &str,
+        user_id: i32,
+    ) -> Result<(), Error> {
+        sqlx::query("INSERT INTO api_keys (id, user_id) VALUES ($1, $2)")
+            .bind(api_key)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            // .map_err(|_| Error::FailedToCreateApiKey)?;
+            .map_err(|db_err| {
+                dbg!(db_err);
+                Error::FailedToCreateApiKey
+            })?;
+
+        Ok(())
     }
 }
 

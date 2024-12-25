@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     graphql::ServiceSchema,
-    router::{App, AuthenticatedUser},
+    router::{self, App, AuthenticatedUser},
     security,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
@@ -26,12 +26,14 @@ struct AuthResponse {
 #[derive(Debug, serde::Serialize)]
 pub enum Error {
     ValidationErrorList(Vec<ValidationError>),
-    FailedToCreateUser,
     UserAlreadyExists,
     FailedToLogin,
     FailedToCreateRefreshToken,
+    FailedToCreateUser,
+    FailedToCreateApiKey,
     InvalidRefreshToken,
     InvalidLoginCredentials,
+    InvalidAccessToken,
 }
 impl Error {
     fn status_code(&self) -> StatusCode {
@@ -44,9 +46,11 @@ impl Error {
             Self::FailedToCreateRefreshToken => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            Self::FailedToCreateApiKey => StatusCode::INTERNAL_SERVER_ERROR,
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
+            Self::InvalidAccessToken => StatusCode::UNAUTHORIZED,
         }
     }
 }
@@ -61,10 +65,16 @@ impl Display for Error {
             Self::FailedToCreateRefreshToken => {
                 write!(f, "Failed to create refresh token.")
             }
+            Self::FailedToCreateApiKey => {
+                write!(f, "Failed to create api key.")
+            }
 
             Self::InvalidRefreshToken => write!(f, "Invalid refresh token."),
             Self::InvalidLoginCredentials => {
                 write!(f, "Incorrect email or password.")
+            }
+            Self::InvalidAccessToken => {
+                write!(f, "Invalid access token.")
             }
         }
     }
@@ -159,13 +169,27 @@ impl Display for ValidationError {
     }
 }
 
-pub async fn create_api_key(State(_app): State<App>) -> Response {
-    // let headers = req.headers();
-    // let _jwt_optional = headers
-    //     .get(axum::http::header::AUTHORIZATION)
-    //     .and_then(|header_value| header_value.to_str().ok());
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiKeyResponse {
+    api_key: String,
+}
+pub async fn create_api_key(
+    State(app): State<App>,
+    Extension(auth_status): Extension<AuthenticatedUser>,
+) -> Result<Response, Error> {
+    match auth_status.method {
+        router::AuthMethod::ApiKey => Err(Error::InvalidAccessToken),
+        router::AuthMethod::Jwt => {
+            let api_key = security::generate_api_key();
+            app.database
+                .create_api_key(api_key.as_str(), auth_status.user_id)
+                .await
+                .map_err(|_| Error::FailedToCreateApiKey)?;
 
-    todo!()
+            Ok(Json(ApiKeyResponse { api_key }).into_response())
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]

@@ -86,7 +86,7 @@ pub mod jwt {
 }
 
 #[allow(unused)]
-fn generate_api_key() -> String {
+pub fn generate_api_key() -> String {
     let mut api_key = Uuid::new_v4().to_string().replace('-', "_");
     api_key.insert_str(0, "hmak_");
     api_key
