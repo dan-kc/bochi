@@ -17,7 +17,7 @@ test("Should log out user", async ({ db, request }) => {
     data: query,
   });
 
-  expect(response.ok()).toBeTruthy();
+  expect(response.status()).toEqual(200);
   const responseBody = await response.json();
   expect(responseBody.success).toBeTruthy;
 });
@@ -32,8 +32,8 @@ test("Should return success for user with expired token", async ({
   const response = await request.post("/auth/logout", {
     data: query,
   });
-
-  expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
+
+  expect(response.status()).toEqual(200);
   expect(responseBody.success).toBeTruthy;
 });

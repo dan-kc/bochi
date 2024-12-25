@@ -1,8 +1,16 @@
+use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 #[derive(Clone)]
 pub struct Database {
     pool: Pool<Postgres>,
+}
+pub enum Error {
+    UserDoesNotExist,
+    FailedToCreateUser,
+    FailedToFetchUser,
+    FailedToDeleteRefreshToken,
+    FailedToCreateRefreshToken,
 }
 
 impl Database {
@@ -18,21 +26,12 @@ impl Database {
         Database { pool }
     }
 
-    // Check if the user already exists in database.
-    pub async fn check_user_exists(&self, email: &str) -> bool {
-        let (email_taken,): (bool,) = sqlx::query_as(
-            "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
-        )
-        .bind(email)
-        .fetch_one(&self.pool)
-        .await
-        .expect("failed to check if user already exists");
-
-        email_taken
-    }
-
     /// Creates a user, returning the user id.
-    pub async fn create_user(&self, email: &str, hashed_password: &str) -> i32 {
+    pub async fn create_user(
+        &self,
+        email: &str,
+        hashed_password: &str,
+    ) -> Result<i32, Error> {
         let (user_id,): (i32,) = sqlx::query_as(
             "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
         )
@@ -40,9 +39,9 @@ impl Database {
         .bind(hashed_password)
         .fetch_one(&self.pool)
         .await
-        .expect("Failed to insert user");
+        .map_err(|_| Error::FailedToCreateUser)?;
 
-        user_id
+        Ok(user_id)
     }
 
     /// Creates refresh token in the db.
@@ -50,54 +49,67 @@ impl Database {
         &self,
         refresh_token: &str,
         user_id: i32,
-    ) {
+    ) -> Result<(), Error> {
         sqlx::query("INSERT INTO refresh_tokens (id, user_id) VALUES ($1, $2)")
             .bind(refresh_token)
             .bind(user_id)
             .execute(&self.pool)
             .await
-            .expect("Failed to create refresh token");
+            .map_err(|_| Error::FailedToCreateRefreshToken)?;
+
+        Ok(())
     }
 
-    pub async fn delete_refresh_token(&self, refresh_token: &str) {
+    pub async fn delete_refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<(), Error> {
         sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
             .bind(refresh_token)
             .execute(&self.pool)
             .await
-            .expect("Could not delete refresh token");
+            .map_err(|_| Error::FailedToDeleteRefreshToken)?;
+
+        Ok(())
     }
 
     /// Returns the user from email.
-    pub async fn get_user_from_email(&self, email: &str) -> Option<UserRow> {
+    pub async fn get_user_from_email(
+        &self,
+        email: &str,
+    ) -> Result<UserRow, Error> {
         sqlx::query_as("SELECT * FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await
-            .expect("Failed to find user")
+            .map_err(|_| Error::FailedToFetchUser)?
+            .ok_or(Error::FailedToFetchUser)
     }
 
     // Returns the user from api_key.
     pub async fn get_user_from_api_key(
         &self,
         api_key: &str,
-    ) -> Option<UserRow> {
+    ) -> Result<UserRow, Error> {
         sqlx::query_as("SELECT users.* FROM api_keys INNER JOIN users ON api_keys.user_id = users.id WHERE api_keys.id = $1")
         .bind(api_key)
             .fetch_optional(&self.pool)
             .await
-        .expect("Failed to find user")
+            .map_err(|_| Error::FailedToFetchUser)?
+            .ok_or(Error::FailedToFetchUser)
     }
 
     // Returns the user from active refresh token.
     pub async fn get_user_from_active_refresh_token(
         &self,
         refresh_token: &str,
-    ) -> Option<UserRow> {
+    ) -> Result<UserRow, Error> {
         sqlx::query_as("SELECT users.* FROM refresh_tokens INNER JOIN users ON refresh_tokens.user_id = users.id WHERE refresh_tokens.id = $1 AND refresh_tokens.expires_at > NOW()")
         .bind(refresh_token)
             .fetch_optional(&self.pool)
             .await
-        .expect("Failed to find user")
+            .map_err(|_| Error::FailedToFetchUser)?
+            .ok_or(Error::FailedToFetchUser)
     }
 }
 
@@ -106,4 +118,20 @@ pub struct UserRow {
     pub id: i32,
     pub email: String,
     pub password: String,
+}
+
+#[derive(sqlx::FromRow)]
+#[allow(unused)]
+struct TaskRow {
+    id: i32,
+    user_id: i32,
+    name: String, // Max 100 utf-8 chars
+    difficulty: i32,
+    created_at: NaiveDateTime,
+    description: Option<String>,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    due_at: Option<NaiveDateTime>,
+    importance: i32,
+    duration: i32,
 }

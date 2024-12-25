@@ -1,6 +1,7 @@
 mod database;
 mod graphql;
 mod router;
+mod routes;
 mod security;
 
 #[tokio::main]

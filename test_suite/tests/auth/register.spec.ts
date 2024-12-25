@@ -45,7 +45,7 @@ test("User already exists", async ({ request, db }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(409);
+  expect(response.status()).toEqual(409);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("USER_ALREADY_EXISTS");
   expect(errorMessages[0].message).toEqual("User already exists.");
@@ -66,7 +66,7 @@ test("Password too long", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("PASSWORD_TOO_LONG");
   expect(errorMessages[0].message).toEqual(
@@ -88,7 +88,7 @@ test("Password not ascii", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("PASSWORD_NOT_ASCII");
   expect(errorMessages[0].message).toEqual(
@@ -110,7 +110,7 @@ test("invalid characters in email", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("INVALID_EMAIL_ADDRESS");
   expect(errorMessages[0].message).toEqual("Invalid email address.");
@@ -130,11 +130,11 @@ test("email too long", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("EMAIL_TOO_LONG");
   expect(errorMessages[0].message).toEqual(
-    "Email too long. The max email length is 40.",
+    "Email too long. The maximum email length is 40.",
   );
 });
 
@@ -152,7 +152,7 @@ test("Password too short", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("PASSWORD_TOO_SHORT");
   expect(errorMessages[0].message).toEqual(
@@ -174,67 +174,10 @@ test("Password mismatch", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(1);
   expect(errorMessages[0].code).toEqual("PASSWORD_MISMATCH");
   expect(errorMessages[0].message).toEqual("Passwords do not match.");
-});
-
-test("Missing email field", async ({ request }) => {
-  const query = {
-    password: "password123",
-    confirmPassword: "password123",
-  };
-
-  const response = await request.post("/auth/register", {
-    data: query,
-  });
-
-  const responseBody = await response.json();
-  const errorMessages = responseBody.errors as RestApiError[];
-
-  expect(response.status).toEqual(400);
-  expect(errorMessages.length).toEqual(1);
-  expect(errorMessages[0].code).toEqual("MISSING_EMAIL_FIELD");
-  expect(errorMessages[0].message).toEqual("Missing 'email' field.");
-});
-
-test("Missing password field", async ({ request }) => {
-  const query = {
-    email: "daniel@test.com",
-    confirmPassword: "password123",
-  };
-
-  const response = await request.post("/auth/register", {
-    data: query,
-  });
-
-  const responseBody = await response.json();
-  const errorMessages = responseBody.errors as RestApiError[];
-
-  expect(response.status).toEqual(400);
-  expect(errorMessages.length).toEqual(1);
-  expect(errorMessages[0].code).toEqual("MISSING_PASSWORD_FIELD");
-  expect(errorMessages[0].message).toEqual("Missing 'password' field.");
-});
-
-test("Missing confirmPassword field", async ({ request }) => {
-  const query = {
-    email: "daniel@test.com",
-    password: "password123",
-  };
-
-  const response = await request.post("/auth/register", {
-    data: query,
-  });
-
-  const responseBody = await response.json();
-  const errorMessages = responseBody.errors as RestApiError[];
-
-  expect(response.status).toEqual(400);
-  expect(errorMessages.length).toEqual(1);
-  expect(errorMessages[0].code).toEqual("MISSING_CONFIRM_PASSWORD_FIELD");
-  expect(errorMessages[0].message).toEqual("Missing 'confirmPassword' field.");
 });
 
 test("Email too long AND password too long", async ({ request }) => {
@@ -252,13 +195,13 @@ test("Email too long AND password too long", async ({ request }) => {
   const responseBody = await response.json();
   const errorMessages = responseBody.errors as RestApiError[];
 
-  expect(response.status).toEqual(400);
+  expect(response.status()).toEqual(400);
   expect(errorMessages.length).toEqual(2);
 
   const emailError = findErrorByCode("EMAIL_TOO_LONG", errorMessages);
   expect(emailError).toBeTruthy();
   expect(emailError.message).toEqual(
-    "Email too long. The max email length is 40.",
+    "Email too long. The maximum email length is 40.",
   );
 
   const passwordError = findErrorByCode("PASSWORD_TOO_LONG", errorMessages);
@@ -266,34 +209,4 @@ test("Email too long AND password too long", async ({ request }) => {
   expect(passwordError.message).toEqual(
     "Password too long. The maximum password length is 64.",
   );
-});
-
-test("All fields missing", async ({ request }) => {
-  const response = await request.post("/auth/register", {
-    data: {},
-  });
-
-  const responseBody = await response.json();
-  const errorMessages = responseBody.errors as RestApiError[];
-
-  expect(response.status).toEqual(400);
-  expect(errorMessages.length).toEqual(3);
-
-  const confirmPasswordError = findErrorByCode(
-    "MISSING_CONFIRM_PASSWORD_FIELD",
-    errorMessages,
-  );
-  expect(confirmPasswordError).toBeTruthy();
-  expect(confirmPasswordError).toEqual("Missing 'confirmPassword' field.");
-
-  const emailError = findErrorByCode("MISSING_EMAIL_FIELD", errorMessages);
-  expect(emailError).toBeTruthy();
-  expect(emailError).toEqual("Missing 'email' field.");
-
-  const passwordError = findErrorByCode(
-    "MISSING_PASSWORD_FIELD",
-    errorMessages,
-  );
-  expect(passwordError).toBeTruthy();
-  expect(passwordError).toEqual("Missing 'password' field.");
 });

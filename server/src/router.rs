@@ -1,20 +1,17 @@
 use crate::{
     database,
-    graphql::{MutationRoot, QueryRoot, ServiceSchema},
+    graphql::{MutationRoot, QueryRoot},
+    routes,
     security::jwt::Validator,
 };
 use async_graphql::{EmptySubscription, Schema};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
-    debug_handler,
     extract::{Extension, Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json,
 };
-use serde::Serialize;
 use tower_http::trace::TraceLayer;
 
 /// Stuff we need in every route and all middleware. This is seperate to what we need in gql
@@ -43,24 +40,30 @@ pub async fn router() -> axum::Router {
 
     println!("connected to db");
 
-    let middleware_stack = tower::ServiceBuilder::new()
+    let graphql_middleware_stack = tower::ServiceBuilder::new()
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth))
-        .layer(Extension(schema))
-        .layer(TraceLayer::new_for_http());
+        .layer(Extension(schema));
+
+    let auth_router = axum::Router::new()
+        .route("/login", post(routes::login))
+        .route("/logout", post(routes::logout))
+        .route("/register", post(routes::register))
+        .route("/refresh-tokens", post(routes::refresh_tokens));
 
     axum::Router::new()
-        .route("/health", get(health))
-        .route("/graphql", post(graphql_handler))
-        .layer(middleware_stack)
-        .with_state(app) // TODO: See if you can delete this
+        .route("/health", get(routes::health))
+        .route(
+            "/graphql",
+            post(routes::graphql).layer(graphql_middleware_stack),
+        )
+        .nest("/auth", auth_router)
+        .layer(TraceLayer::new_for_http())
+        .with_state(app)
 }
 
-#[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub enum AuthStatus {
-    Authenticated(i32),
-    Unauthenticated,
-}
+#[derive(Clone, Debug)]
+pub struct AuthenticatedUser(i32);
 
 async fn auth(
     State(app): State<App>,
@@ -76,60 +79,27 @@ async fn auth(
         .and_then(|header_value| header_value.to_str().ok());
 
     match (jwt_optional, api_key_optional) {
-        (None, None) => {
-            req.extensions_mut().insert(AuthStatus::Unauthenticated);
-            next.run(req).await
-        }
-        (Some(jwt), None) => {
-            match app.jwt_validator.validate(jwt) {
-                Some(user_id) => {
-                    req.extensions_mut()
-                        .insert(AuthStatus::Authenticated(user_id));
-                }
-                None => {
-                    req.extensions_mut().insert(AuthStatus::Unauthenticated);
-                }
-            }
-
-            next.run(req).await
-        }
+        (None, None) => StatusCode::UNAUTHORIZED.into_response(),
         (Some(_), Some(_)) => (
             StatusCode::BAD_REQUEST,
             "Both a JWT and an API Key were supplied. You must only supply one",
         )
             .into_response(),
+        (Some(jwt), None) => match app.jwt_validator.validate(jwt) {
+            Some(user_id) => {
+                req.extensions_mut().insert(AuthenticatedUser(user_id));
+                next.run(req).await
+            }
+            None => StatusCode::UNAUTHORIZED.into_response(),
+        },
         (None, Some(api_key)) => {
             match app.database.get_user_from_api_key(api_key).await {
-                Some(user) => {
-                    req.extensions_mut()
-                        .insert(AuthStatus::Authenticated(user.id));
+                Ok(user) => {
+                    req.extensions_mut().insert(AuthenticatedUser(user.id));
+                    next.run(req).await
                 }
-                None => {
-                    req.extensions_mut().insert(AuthStatus::Unauthenticated);
-                }
-            };
-            next.run(req).await
+                Err(_) => StatusCode::UNAUTHORIZED.into_response(),
+            }
         }
     }
-}
-
-#[derive(Serialize)]
-struct Health {
-    healthy: bool,
-}
-
-#[debug_handler]
-async fn health() -> impl IntoResponse {
-    let health = Health { healthy: true };
-    (StatusCode::OK, Json(health))
-}
-
-#[debug_handler]
-async fn graphql_handler(
-    Extension(schema): Extension<ServiceSchema>,
-    Extension(auth_status): Extension<AuthStatus>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
-    let inner_req = req.into_inner();
-    schema.execute(inner_req.data(auth_status)).await.into()
 }
