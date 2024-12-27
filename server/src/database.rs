@@ -1,7 +1,5 @@
-use std::str::FromStr;
-
 use chrono::NaiveDateTime;
-use sqlx::{postgres::PgPoolOptions, Acquire, Pool, Postgres, Transaction};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 #[derive(Clone)]
 pub struct Database {
@@ -45,7 +43,7 @@ impl Database {
         user_id: i32,
         name: &str,
         is_api_key: bool,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<RefreshTokenRow, sqlx::Error> {
         // TODO: put in transaction.
         // Delete
         sqlx::query(
@@ -57,17 +55,18 @@ impl Database {
         .await?;
 
         let insert_query = match is_api_key{
-            true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL)",
-            false => "INSERT INTO refresh_tokens (key, user_id, name) VALUES ($1, $2, $3)"
+            true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL) RETURNING *",
+            false => "INSERT INTO refresh_tokens (key, user_id, name) VALUES ($1, $2, $3) RETURNING *"
         };
-        sqlx::query(insert_query)
+        let refresh_token_row: RefreshTokenRow = sqlx::query_as(insert_query)
             .bind(refresh_token)
             .bind(user_id)
             .bind(name)
-            .execute(&self.pool)
-            .await?;
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|_| sqlx::Error::RowNotFound)?;
 
-        Ok(())
+        Ok(refresh_token_row)
     }
 
     pub async fn delete_refresh_token(
@@ -112,6 +111,17 @@ impl Database {
             .await?
             .ok_or(sqlx::Error::RowNotFound)
     }
+
+    pub async fn get_user_from_user_id(
+        &self,
+        user_id: i32,
+    ) -> Result<UserRow, sqlx::Error> {
+        sqlx::query_as("SELECT * FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -124,10 +134,8 @@ pub struct UserRow {
 #[derive(sqlx::FromRow)]
 pub struct RefreshTokenRow {
     pub key: String,
-    pub name: String,
-    pub user_id: i32,
-    pub expires_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+    pub expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow)]

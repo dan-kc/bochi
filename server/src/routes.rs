@@ -32,7 +32,6 @@ pub enum Error {
     FailedToCreateUser,
     InvalidRefreshToken,
     InvalidLoginCredentials,
-    InvalidAccessToken,
 }
 impl Error {
     fn status_code(&self) -> StatusCode {
@@ -48,7 +47,6 @@ impl Error {
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
-            Self::InvalidAccessToken => StatusCode::UNAUTHORIZED,
         }
     }
 }
@@ -67,9 +65,6 @@ impl Display for Error {
             Self::InvalidRefreshToken => write!(f, "Invalid refresh token."),
             Self::InvalidLoginCredentials => {
                 write!(f, "Incorrect email or password.")
-            }
-            Self::InvalidAccessToken => {
-                write!(f, "Invalid access token.")
             }
         }
     }

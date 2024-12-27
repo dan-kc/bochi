@@ -1,4 +1,8 @@
-use crate::database::{self, UserRow};
+use crate::{
+    database::{self, UserRow},
+    router::AuthenticatedUser,
+    security,
+};
 use async_graphql::{
     EmptySubscription, InputObject, Object, Schema, SimpleObject,
 };
@@ -116,6 +120,19 @@ struct TradeInput {
     amount: i32,
 }
 
+#[derive(InputObject)]
+struct CreateApiKeyInput {
+    name: String,
+    password: String,
+}
+
+#[derive(SimpleObject)]
+struct ApiKey {
+    name: String,
+    key: String,
+    created_at: NaiveDateTime,
+}
+
 #[Object]
 impl MutationRoot {
     async fn create_task(
@@ -178,5 +195,55 @@ impl MutationRoot {
         _input: TradeInput,
     ) -> Result<Trade, &'static str> {
         todo!()
+    }
+    async fn create_api_key(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        input: CreateApiKeyInput,
+    ) -> Result<ApiKey, &'static str> {
+        let user_id = ctx
+            .data::<AuthenticatedUser>()
+            .expect("No user in context")
+            .user_id;
+        let database = ctx
+            .data::<database::Database>()
+            .expect("No db pool in context");
+
+        // Get password from user
+        let user = database
+            .get_user_from_user_id(user_id)
+            .await
+            .map_err(|_| "User does not exist")?;
+
+        // Validate password
+        if !security::check_password(
+            user.password.as_str(),
+            input.password.as_str(),
+        ) {
+            return Err("Incorrect password");
+        };
+
+        let (_, refresh_token, hashed_uuid_part) =
+            security::jwt::create_jwt(user_id, input.name.as_str());
+
+        let token_row = database
+            .create_or_overwrite_refresh_token(
+                hashed_uuid_part.as_str(),
+                user_id,
+                input.name.as_str(),
+                true,
+            )
+            .await
+            .map_err(|_| "Could not create token")?;
+
+        // database.create_or_overwrite_refresh_token(refresh_token, user_id, name, is_api_key)
+
+        //
+        // Insert then return
+        Ok(ApiKey {
+            name: input.name,
+            key: refresh_token,
+            created_at: token_row.created_at,
+        })
     }
 }
