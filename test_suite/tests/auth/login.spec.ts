@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { findErrorByCode, RestApiError, test } from "../../helpers";
+import { RestApiError, test } from "../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();

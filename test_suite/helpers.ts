@@ -42,14 +42,19 @@ export class DB {
     await this.executeQuery("DELETE FROM users;");
   }
 
-  // Creates a refresh token for the user id = 1
-  async createRefreshToken(expired: boolean = false): Promise<string> {
-    const query = expired
-      ? `INSERT INTO refresh_tokens (id, user_id, expires_at) VALUES ('c7ca5bdc_bf07_4c5a_b16f_88c3eb746087', 1, NOW() - INTERVAL '30 days')`
-      : `INSERT INTO refresh_tokens (id, user_id) VALUES ('c7ca5bdc_bf07_4c5a_b16f_88c3eb746087', 1)`;
+  // Creates a refresh token for the user id = 1. Defaults to a valid token with expiry date.
+  async createRefreshToken(
+    expiry: "valid" | "expired" | "no_expiry",
+  ): Promise<string> {
+    const query =
+      expiry === "expired"
+        ? `INSERT INTO refresh_tokens (key, name, user_id, expires_at) VALUES ('$argon2i$v=19$m=16,t=2,p=1$R3ZsWXRQck9VYU5MU3I1cQ$4psSvX0O3/Oh/AUjmv4QeQ','testname' , 1, NOW() - INTERVAL '30 days')`
+        : expiry === "no_expiry"
+          ? `INSERT INTO refresh_tokens (key, name, user_id) VALUES ('$argon2i$v=19$m=16,t=2,p=1$R3ZsWXRQck9VYU5MU3I1cQ$4psSvX0O3/Oh/AUjmv4QeQ', 'testname', 1)`
+          : `INSERT INTO refresh_tokens (key, name, user_id, expires_at) VALUES ('$argon2i$v=19$m=16,t=2,p=1$R3ZsWXRQck9VYU5MU3I1cQ$4psSvX0O3/Oh/AUjmv4QeQ', 'testname', 1, NOW() + INTERVAL '30 days')`;
     await this.executeQuery(query);
 
-    return "c7ca5bdc_bf07_4c5a_b16f_88c3eb746087";
+    return "1$testname$c7ca5bdc_bf07_4c5a_b16f_88c3eb746087";
   }
 }
 
@@ -112,7 +117,7 @@ export function findErrorByCode(
 ): RestApiError {
   const error = errorMessages.find((error) => error.code === code);
   if (error === undefined) {
-    throw (`Error with code '${code}' does not exist`);
+    throw `Error with code '${code}' does not exist`;
   }
 
   return error;

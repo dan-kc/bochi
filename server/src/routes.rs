@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use crate::{
     graphql::ServiceSchema,
-    router::{self, App, AuthenticatedUser},
-    security,
+    router::{App, AuthenticatedUser},
+    security::{self, jwt::create_random_string, parse_refresh_token},
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -30,7 +30,6 @@ pub enum Error {
     FailedToLogin,
     FailedToCreateRefreshToken,
     FailedToCreateUser,
-    FailedToCreateApiKey,
     InvalidRefreshToken,
     InvalidLoginCredentials,
     InvalidAccessToken,
@@ -46,7 +45,6 @@ impl Error {
             Self::FailedToCreateRefreshToken => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
-            Self::FailedToCreateApiKey => StatusCode::INTERNAL_SERVER_ERROR,
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
@@ -64,9 +62,6 @@ impl Display for Error {
             Self::FailedToLogin => write!(f, "Failed to login user."),
             Self::FailedToCreateRefreshToken => {
                 write!(f, "Failed to create refresh token.")
-            }
-            Self::FailedToCreateApiKey => {
-                write!(f, "Failed to create api key.")
             }
 
             Self::InvalidRefreshToken => write!(f, "Invalid refresh token."),
@@ -169,29 +164,6 @@ impl Display for ValidationError {
     }
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ApiKeyResponse {
-    api_key: String,
-}
-pub async fn create_api_key(
-    State(app): State<App>,
-    Extension(auth_status): Extension<AuthenticatedUser>,
-) -> Result<Response, Error> {
-    match auth_status.method {
-        router::AuthMethod::ApiKey => Err(Error::InvalidAccessToken),
-        router::AuthMethod::Jwt => {
-            let api_key = security::generate_api_key();
-            app.database
-                .create_api_key(api_key.as_str(), auth_status.user_id)
-                .await
-                .map_err(|_| Error::FailedToCreateApiKey)?;
-
-            Ok(Json(ApiKeyResponse { api_key }).into_response())
-        }
-    }
-}
-
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterInput {
@@ -246,12 +218,19 @@ pub async fn register(
         .await
         .map_err(|_| Error::FailedToCreateUser)?;
 
-    let (access_token, refresh_token) = security::jwt::create_jwt_pair(user_id);
+    let name = create_random_string();
+    let (access_token, refresh_token, hashed_uuid_part) =
+        security::jwt::create_jwt(user_id, name.as_str());
 
     app.database
-        .create_refresh_token(refresh_token.as_str(), user_id)
+        .create_or_overwrite_refresh_token(
+            hashed_uuid_part.as_str(),
+            user_id,
+            name.as_str(),
+            false,
+        )
         .await
-        .map_err(|_| Error::FailedToCreateUser)?;
+        .map_err(|_| Error::FailedToLogin)?;
 
     Ok(Json(AuthResponse {
         refresh_token,
@@ -271,15 +250,37 @@ pub async fn refresh_tokens(
     State(app): State<App>,
     Json(input): Json<RefreshTokenInput>,
 ) -> Result<Response, Error> {
-    if let Ok(user) = app
+    let (user_id, name, refresh_token) =
+        parse_refresh_token(input.refresh_token.as_str())
+            .map_err(|_| Error::InvalidRefreshToken)?;
+    // Check if token is valid
+    if let Ok(refresh_token_row) = app
         .database
-        .get_user_from_active_refresh_token(input.refresh_token.as_str())
+        .get_refresh_token_from_name_user(name.as_str(), user_id)
         .await
     {
-        let (new_access_token, new_refresh_token) =
-            security::jwt::create_jwt_pair(user.id);
+        if !security::check_password(
+            refresh_token_row.key.as_str(),
+            refresh_token.as_str(),
+        ) {
+            return Err(Error::InvalidRefreshToken);
+        }
+
+        let (new_name, is_api_key) = match refresh_token_row.expires_at {
+            None => (name, true),
+            Some(_) => (create_random_string(), false),
+        };
+
+        // Create new one depending on if expires_at or not
+        let (new_access_token, new_refresh_token, new_hashed_uuid_part) =
+            security::jwt::create_jwt(user_id, new_name.as_str());
         app.database
-            .create_refresh_token(new_refresh_token.as_str(), user.id)
+            .create_or_overwrite_refresh_token(
+                new_hashed_uuid_part.as_str(),
+                user_id,
+                new_name.as_str(),
+                is_api_key,
+            )
             .await
             .map_err(|_| Error::FailedToCreateRefreshToken)?;
 
@@ -348,11 +349,17 @@ pub async fn login(
             return Err(Error::InvalidLoginCredentials);
         }
 
-        let (access_token, refresh_token) =
-            security::jwt::create_jwt_pair(user.id);
+        let name = create_random_string();
+        let (access_token, refresh_token, hashed_uuid_part) =
+            security::jwt::create_jwt(user.id, name.as_str());
 
         app.database
-            .create_refresh_token(refresh_token.as_str(), user.id)
+            .create_or_overwrite_refresh_token(
+                hashed_uuid_part.as_str(),
+                user.id,
+                name.as_str(),
+                false,
+            )
             .await
             .map_err(|_| Error::FailedToLogin)?;
 

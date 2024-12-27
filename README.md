@@ -1,10 +1,13 @@
 # TODO:
 
-- Show multiple errors in single query.
+- Standardise Error format: Write an extractor for json, and add an auth format.
 
 # MVP:
 
-- All auth endpoints working and tested inc api keys (hash them in db too)
+- Hash api keys
+- 'Login' route for api_keys
+- 1231223$macbook$1trenti2htr33netierauy898wn45esers12298ees
+- make (user_id, name, is_api_key) a primary key
 
 - The following gql endpoints for CRUD on the following:
 - Habits

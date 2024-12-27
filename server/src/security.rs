@@ -1,14 +1,20 @@
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use argon2::{PasswordHash, PasswordVerifier};
+use argon2::{
+    password_hash::SaltString, Argon2, PasswordHash, PasswordHasher,
+    PasswordVerifier,
+};
 use uuid::Uuid;
+
+pub enum Error {
+    FailedToParseRefreshToken,
+}
 
 pub mod jwt {
     use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+    use rand::Rng;
     use serde::{Deserialize, Serialize};
     use std::{fs::File, io::Read};
-    use uuid::Uuid;
 
-    use super::generate_refresh_token;
+    use super::{generate_refresh_token, hash_password};
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
@@ -59,7 +65,24 @@ pub mod jwt {
         }
     }
 
-    pub fn create_jwt_pair(user_id: i32) -> (String, String) {
+    /// Generates a random 10 letter string consisting of a-z, A-Z and 0-9.
+    pub fn create_random_string() -> String {
+        let charset =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        let mut res = String::new();
+        for _ in 0..10 {
+            let mut rng = rand::thread_rng();
+            let random_char = charset[rng.gen_range(0..charset.len())] as char;
+            res.push(random_char);
+        }
+
+        res
+    }
+
+    /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
+    pub fn create_jwt(user_id: i32, name: &str) -> (String, String, String) {
+        // TODO: move this out into app right?
         let mut private_key_file =
             File::open("/usr/src/app/mock_private_key.pem").unwrap();
         let mut private_key = Vec::new();
@@ -78,24 +101,37 @@ pub mod jwt {
         )
         .expect("Could not create JWT");
 
-        // Add refresh token to db
-        let refresh_token = generate_refresh_token();
+        let (uuid_part, refresh_token) = generate_refresh_token(user_id, name);
+        let hashed_uuid_part = hash_password(uuid_part.as_str());
 
-        (access_token, refresh_token)
+        (access_token, refresh_token, hashed_uuid_part)
     }
 }
 
-#[allow(unused)]
-pub fn generate_api_key() -> String {
-    let mut api_key = Uuid::new_v4().to_string().replace('-', "_");
-    api_key.insert_str(0, "hmak_");
-    api_key
+pub fn parse_refresh_token(
+    refresh_token: &str,
+) -> Result<(i32, String, String), Error> {
+    let parts: Vec<&str> = refresh_token.split('$').collect();
+    if parts.len() != 3 {
+        return Err(Error::FailedToParseRefreshToken);
+    };
+    let user_id: i32 = parts[0]
+        .parse()
+        .map_err(|_| Error::FailedToParseRefreshToken)?;
+
+    Ok((user_id, parts[1].to_string(), parts[2].to_string()))
 }
 
-fn generate_refresh_token() -> String {
-    let mut refresh_token = Uuid::new_v4().to_string().replace('-', "_");
-    refresh_token.insert_str(0, "hmrt_");
-    refresh_token
+fn generate_refresh_token(user_id: i32, name: &str) -> (String, String) {
+    let mut refresh_token = String::with_capacity(10 + 1 + 10 + 1 + 36);
+    refresh_token.push_str(user_id.to_string().as_str());
+    refresh_token.push('$');
+    refresh_token.push_str(name);
+    refresh_token.push('$');
+    let uuid_part = Uuid::new_v4().to_string().replace('-', "_");
+    refresh_token.push_str(uuid_part.as_str());
+
+    (uuid_part, refresh_token)
 }
 
 pub fn check_password(hashed_password: &str, raw_password: &str) -> bool {

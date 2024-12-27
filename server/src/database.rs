@@ -1,17 +1,11 @@
+use std::str::FromStr;
+
 use chrono::NaiveDateTime;
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use sqlx::{postgres::PgPoolOptions, Acquire, Pool, Postgres, Transaction};
 
 #[derive(Clone)]
 pub struct Database {
     pool: Pool<Postgres>,
-}
-pub enum Error {
-    UserDoesNotExist,
-    FailedToCreateUser,
-    FailedToFetchUser,
-    FailedToDeleteRefreshToken,
-    FailedToCreateRefreshToken,
-    FailedToCreateApiKey,
 }
 
 impl Database {
@@ -32,31 +26,46 @@ impl Database {
         &self,
         email: &str,
         hashed_password: &str,
-    ) -> Result<i32, Error> {
+    ) -> Result<i32, sqlx::Error> {
         let (user_id,): (i32,) = sqlx::query_as(
             "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
         )
         .bind(email)
         .bind(hashed_password)
         .fetch_one(&self.pool)
-        .await
-        .map_err(|_| Error::FailedToCreateUser)?;
+        .await?;
 
         Ok(user_id)
     }
 
-    /// Creates refresh token in the db.
-    pub async fn create_refresh_token(
+    /// Creates refresh token in the db. Api keys have expires_at = NULL
+    pub async fn create_or_overwrite_refresh_token(
         &self,
         refresh_token: &str,
         user_id: i32,
-    ) -> Result<(), Error> {
-        sqlx::query("INSERT INTO refresh_tokens (id, user_id) VALUES ($1, $2)")
+        name: &str,
+        is_api_key: bool,
+    ) -> Result<(), sqlx::Error> {
+        // TODO: put in transaction.
+        // Delete
+        sqlx::query(
+            "DELETE FROM refresh_tokens WHERE name = $1 AND user_id = $2;",
+        )
+        .bind(name)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        let insert_query = match is_api_key{
+            true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL)",
+            false => "INSERT INTO refresh_tokens (key, user_id, name) VALUES ($1, $2, $3)"
+        };
+        sqlx::query(insert_query)
             .bind(refresh_token)
             .bind(user_id)
+            .bind(name)
             .execute(&self.pool)
-            .await
-            .map_err(|_| Error::FailedToCreateRefreshToken)?;
+            .await?;
 
         Ok(())
     }
@@ -64,73 +73,44 @@ impl Database {
     pub async fn delete_refresh_token(
         &self,
         refresh_token: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
             .bind(refresh_token)
             .execute(&self.pool)
-            .await
-            .map_err(|_| Error::FailedToDeleteRefreshToken)?;
+            .await?;
 
         Ok(())
+    }
+
+    pub async fn get_refresh_token_from_name_user(
+        &self,
+        name: &str,
+        user_id: i32,
+    ) -> Result<RefreshTokenRow, sqlx::Error> {
+        sqlx::query_as("
+            SELECT * FROM refresh_tokens
+            INNER JOIN users ON refresh_tokens.user_id = users.id
+            WHERE refresh_tokens.name = $1
+            AND refresh_tokens.user_id = $2
+            AND (refresh_tokens.expires_at > NOW() OR refresh_tokens.expires_at IS NULL);
+        ")
+        .bind(name)
+        .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await.unwrap()
+            .ok_or(sqlx::Error::RowNotFound)
     }
 
     /// Returns the user from email.
     pub async fn get_user_from_email(
         &self,
         email: &str,
-    ) -> Result<UserRow, Error> {
+    ) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as("SELECT * FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| Error::FailedToFetchUser)?
-            .ok_or(Error::FailedToFetchUser)
-    }
-
-    // Returns the user from api_key.
-    pub async fn get_user_from_api_key(
-        &self,
-        api_key: &str,
-    ) -> Result<UserRow, Error> {
-        sqlx::query_as("SELECT users.* FROM api_keys INNER JOIN users ON api_keys.user_id = users.id WHERE api_keys.id = $1")
-        .bind(api_key)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| Error::FailedToFetchUser)?
-            .ok_or(Error::FailedToFetchUser)
-    }
-
-    // Returns the user from active refresh token.
-    pub async fn get_user_from_active_refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<UserRow, Error> {
-        sqlx::query_as("SELECT users.* FROM refresh_tokens INNER JOIN users ON refresh_tokens.user_id = users.id WHERE refresh_tokens.id = $1 AND refresh_tokens.expires_at > NOW()")
-        .bind(refresh_token)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|_| Error::FailedToFetchUser)?
-            .ok_or(Error::FailedToFetchUser)
-    }
-
-    /// Creates api key in the db.
-    pub async fn create_api_key(
-        &self,
-        api_key: &str,
-        user_id: i32,
-    ) -> Result<(), Error> {
-        sqlx::query("INSERT INTO api_keys (id, user_id) VALUES ($1, $2)")
-            .bind(api_key)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await
-            // .map_err(|_| Error::FailedToCreateApiKey)?;
-            .map_err(|db_err| {
-                dbg!(db_err);
-                Error::FailedToCreateApiKey
-            })?;
-
-        Ok(())
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)
     }
 }
 
@@ -139,6 +119,15 @@ pub struct UserRow {
     pub id: i32,
     pub email: String,
     pub password: String,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct RefreshTokenRow {
+    pub key: String,
+    pub name: String,
+    pub user_id: i32,
+    pub expires_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(sqlx::FromRow)]

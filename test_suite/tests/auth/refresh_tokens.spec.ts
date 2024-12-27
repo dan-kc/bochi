@@ -12,7 +12,7 @@ test.afterEach(async ({ db }) => {
 test("Should return new tokens", async ({ db, request }) => {
   const response = await request.post("/auth/refresh-tokens", {
     data: {
-      refreshToken: await db.createRefreshToken(),
+      refreshToken: await db.createRefreshToken("valid"),
     },
   });
   const responseBody = await response.json();
@@ -25,7 +25,7 @@ test("Should return new tokens", async ({ db, request }) => {
 test("Should not refresh token if expired", async ({ db, request }) => {
   const response = await request.post("/auth/refresh-tokens", {
     data: {
-      refreshToken: await db.createRefreshToken(true),
+      refreshToken: await db.createRefreshToken("expired"),
     },
   });
   const responseBody = await response.json();
@@ -40,7 +40,7 @@ test("Should not refresh token if expired", async ({ db, request }) => {
 test("Should not refresh token if wrong uuid", async ({ request }) => {
   const response = await request.post("/auth/refresh-tokens", {
     data: {
-      refreshToken: "hmrt_b7eab812_9b9a_4823_930d_38c3c891ea8d",
+      refreshToken: "b7eab812_9b9a_4823_930d_38c3c891ea8d",
     },
   });
   const responseBody = await response.json();

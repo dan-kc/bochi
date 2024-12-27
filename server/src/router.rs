@@ -48,12 +48,7 @@ pub async fn router() -> axum::Router {
         .route("/login", post(routes::login))
         .route("/logout", post(routes::logout))
         .route("/register", post(routes::register))
-        .route("/refresh-tokens", post(routes::refresh_tokens))
-        .route(
-            "/api-key",
-            get(routes::create_api_key)
-                .layer(axum::middleware::from_fn_with_state(app.clone(), auth)),
-        );
+        .route("/refresh-tokens", post(routes::refresh_tokens));
 
     axum::Router::new()
         .route("/health", get(routes::health))
@@ -70,20 +65,7 @@ pub async fn router() -> axum::Router {
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
     pub user_id: i32,
-    pub method: AuthMethod,
 }
-impl AuthenticatedUser {
-    fn new(user_id: i32, method: AuthMethod) -> Self {
-        Self { user_id, method }
-    }
-}
-#[derive(Clone, Debug)]
-pub enum AuthMethod {
-    ApiKey,
-    Jwt,
-}
-// #[derive(serde::Serialize)]
-// struct A
 async fn auth(
     State(app): State<App>,
     mut req: Request,
@@ -93,36 +75,15 @@ async fn auth(
     let jwt_optional = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|header_value| header_value.to_str().ok());
-    let api_key_optional = headers
-        .get("x-api-key")
-        .and_then(|header_value| header_value.to_str().ok());
 
-    match (jwt_optional, api_key_optional) {
-        (None, None) => StatusCode::UNAUTHORIZED.into_response(),
-        (Some(_), Some(_)) => (
-            StatusCode::BAD_REQUEST,
-            "Both a JWT and an API Key were supplied. You must only supply one",
-        )
-            .into_response(),
-        (Some(jwt), None) => match app.jwt_validator.validate(jwt) {
+    match jwt_optional {
+        None => StatusCode::UNAUTHORIZED.into_response(),
+        Some(jwt) => match app.jwt_validator.validate(jwt) {
             Some(user_id) => {
-                req.extensions_mut()
-                    .insert(AuthenticatedUser::new(user_id, AuthMethod::Jwt));
+                req.extensions_mut().insert(AuthenticatedUser { user_id });
                 next.run(req).await
             }
             None => StatusCode::UNAUTHORIZED.into_response(),
         },
-        (None, Some(api_key)) => {
-            match app.database.get_user_from_api_key(api_key).await {
-                Ok(user) => {
-                    req.extensions_mut().insert(AuthenticatedUser::new(
-                        user.id,
-                        AuthMethod::ApiKey,
-                    ));
-                    next.run(req).await
-                }
-                Err(_) => StatusCode::UNAUTHORIZED.into_response(),
-            }
-        }
     }
 }
