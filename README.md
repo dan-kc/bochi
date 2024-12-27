@@ -1,12 +1,13 @@
 # TODO:
 
 - Standardise Error format: Write an extractor for json, and add an auth format.
+- Move file read of .pem to app global.
 
 # MVP:
 
 - The following gql endpoints for CRUD on the following:
-- Habits
 - Tasks
+- Habits
 - Rewards
 - Trades
 
