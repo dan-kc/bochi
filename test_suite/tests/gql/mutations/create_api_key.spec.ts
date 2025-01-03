@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { createAccessToken, test } from "../../helpers";
+import { createAccessToken, test } from "../../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();
@@ -38,7 +38,6 @@ test("Should return new api key", async ({ request }) => {
   });
 
   const responseBody = await response.json();
-  console.log(responseBody);
 
   expect(response.status()).toEqual(200);
   expect(responseBody.data.createApiKey.key).toBeDefined();

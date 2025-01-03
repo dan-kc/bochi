@@ -36,6 +36,27 @@ impl Database {
         Ok(user_id)
     }
 
+    /// Creates a task, returning the tasks..
+    pub async fn create_task(
+        &self,
+        create_task_options: CreateTaskOptions,
+    ) -> Result<TaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO tasks 
+            (user_id, name, diffiulty, description, hidden_until, due_at, importance, duration) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+        )
+        .bind(create_task_options.user_id)
+        .bind(create_task_options.name)
+        .bind(create_task_options.difficulty)
+        .bind(create_task_options.description)
+        .bind(create_task_options.hidden_until)
+        .bind(create_task_options.due_at)
+        .bind(create_task_options.importance)
+        .bind(create_task_options.duration)
+        .fetch_one(&self.pool)
+        .await
+    }
+
     /// Creates refresh token in the db. Api keys have expires_at = NULL
     pub async fn create_or_overwrite_refresh_token(
         &self,
@@ -124,6 +145,17 @@ impl Database {
     }
 }
 
+pub struct CreateTaskOptions {
+    pub user_id: i32,
+    pub name: String, // Max 100 utf-8 chars
+    pub difficulty: i32,
+    pub description: String,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_at: Option<NaiveDateTime>,
+    pub importance: i32,
+    pub duration: i32,
+}
+
 #[derive(sqlx::FromRow)]
 pub struct UserRow {
     pub id: i32,
@@ -140,16 +172,16 @@ pub struct RefreshTokenRow {
 
 #[derive(sqlx::FromRow)]
 #[allow(unused)]
-struct TaskRow {
-    id: i32,
-    user_id: i32,
-    name: String, // Max 100 utf-8 chars
-    difficulty: i32,
-    created_at: NaiveDateTime,
-    description: Option<String>,
-    deleted_at: Option<NaiveDateTime>,
-    hidden_until: Option<NaiveDateTime>,
-    due_at: Option<NaiveDateTime>,
-    importance: i32,
-    duration: i32,
+pub struct TaskRow {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: String, // Max 100 utf-8 chars
+    pub difficulty: i32,
+    pub created_at: NaiveDateTime,
+    pub description: String,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_at: Option<NaiveDateTime>,
+    pub importance: i32,
+    pub duration: i32,
 }

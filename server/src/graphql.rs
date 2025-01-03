@@ -1,5 +1,5 @@
 use crate::{
-    database::{self, UserRow},
+    database::{self, CreateTaskOptions, TaskRow, UserRow},
     router::AuthenticatedUser,
     security,
 };
@@ -45,9 +45,25 @@ struct TaskObject {
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     due_at: Option<NaiveDateTime>,
-    description: Option<String>,
+    description: String,
     importance: i32,
     duration: i32,
+}
+impl From<TaskRow> for TaskObject {
+    fn from(task_row: TaskRow) -> Self {
+        Self {
+            id: task_row.id,
+            name: task_row.name,
+            difficulty: task_row.difficulty,
+            created_at: task_row.created_at,
+            description: task_row.description,
+            deleted_at: task_row.deleted_at,
+            hidden_until: task_row.hidden_until,
+            due_at: task_row.due_at,
+            importance: task_row.importance,
+            duration: task_row.duration,
+        }
+    }
 }
 
 #[derive(InputObject)]
@@ -56,7 +72,7 @@ struct CreateTaskInput {
     difficulty: i32,
     hidden_until: Option<NaiveDateTime>,
     due_at: Option<NaiveDateTime>,
-    description: Option<String>,
+    description: String,
     importance: i32,
     duration: i32,
 }
@@ -144,36 +160,42 @@ impl MutationRoot {
             return Err("Name is too long. Must be fewer than 100 chars.");
         };
         if input.difficulty > 10 || input.difficulty < 0 {
-            return Err("Difficulty can only be between 0 and 10");
+            return Err("Difficulty can only be between 0 and 10.");
         }
         if input.importance > 10 || input.importance < 0 {
-            return Err("Importance can only be between 0 and 10");
+            return Err("Importance can only be between 0 and 10.");
         }
         if input.duration < 0 {
-            return Err("Duration can't be negative");
+            return Err("Duration can't be negative.");
         }
-        // if input.
+        if input.description.chars().count() > 3000 {
+            return Err("Description can't be more than 3000 characters.");
+        }
 
-        let _database = &ctx
+        let database = ctx
             .data::<database::Database>()
             .expect("No db pool in context");
-        //
-        // let user_id = "";
-        // let _row: TaskRow = sqlx::query_as(
-        //     "INSERT INTO tasks (user_id, name, difficulty, hidden_until, due_at, importance, duration) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-        // )
-        // .bind(user_id)
-        // .bind(input.name)
-        // .bind(input.difficulty)
-        // .bind(input.hidden_until)
-        // .bind(input.due_at)
-        // .bind(input.importance)
-        // .bind(input.duration)
-        // .fetch_one(&db_pool.clone())
-        // .await
-        // .expect("Failed to insert user");
+        let user_id = ctx
+            .data::<AuthenticatedUser>()
+            .expect("No user in context.")
+            .user_id;
 
-        todo!()
+        let opts = CreateTaskOptions {
+            user_id,
+            name: input.name,
+            difficulty: input.difficulty,
+            description: input.description,
+            hidden_until: input.hidden_until,
+            due_at: input.due_at,
+            importance: input.importance,
+            duration: input.duration,
+        };
+        let task_row = database
+            .create_task(opts)
+            .await
+            .expect("No task made sorry");
+
+        Ok(task_row.into())
     }
     async fn create_habit(
         &self,
