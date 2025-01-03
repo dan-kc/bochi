@@ -98,6 +98,10 @@ export function createPasswordOfLength(n: number): string {
   return pw;
 }
 
+export function createStringOfLength(n: number): string {
+  return "a".repeat(n);
+}
+
 export function createEmailOfLength(n: number): string {
   if (n < 7) {
     throw "Email too short";

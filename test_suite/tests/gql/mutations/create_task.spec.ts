@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { createAccessToken, test } from "../../../helpers";
+import { createAccessToken, createStringOfLength, test } from "../../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();
@@ -8,10 +8,6 @@ test.beforeEach(async ({ db }) => {
 test.afterEach(async ({ db }) => {
   await db.deleteAllUsers();
 });
-
-function createStringOfLength(n: number): string {
-  return "a".repeat(n);
-}
 
 function expectGoodTask(responseBody: any) {
   expect(responseBody.data.createTask.id).toBeDefined();
