@@ -168,6 +168,9 @@ impl MutationRoot {
         if input.duration < 0 {
             return Err("Duration can't be negative.");
         }
+        if input.duration > 60 * 60 * 24 {
+            return Err("Duration can't be more than 24hrs.");
+        }
         if input.description.chars().count() > 3000 {
             return Err("Description can't be more than 3000 characters.");
         }

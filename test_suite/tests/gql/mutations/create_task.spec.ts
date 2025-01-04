@@ -1,5 +1,9 @@
 import { expect } from "@playwright/test";
-import { createAccessToken, createStringOfLength, test } from "../../../helpers";
+import {
+  createAccessToken,
+  createStringOfLength,
+  test,
+} from "../../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();
@@ -302,6 +306,34 @@ test("Should not create task if duration < 0", async ({ request }) => {
   const responseBody = await response.json();
 
   expectError(responseBody, "Duration can't be negative");
+});
+
+test("Should not create task if duration longer than 24hrs", async ({
+  request,
+}) => {
+  const query = {
+    query: createTaskQuery,
+    variables: {
+      createTaskInput: {
+        name: "Touch grass",
+        difficulty: 8,
+        importance: 11,
+        duration: 60 * 60 * 24 + 1,
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+    headers: {
+      Authorization: await createAccessToken(),
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+
+  expectError(responseBody, "Duration can't be more than 24hrs.");
 });
 
 test("Should not create task with description if description too long.", async ({
