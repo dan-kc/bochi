@@ -13,43 +13,44 @@ test.afterEach(async ({ db }) => {
   await db.deleteAllUsers();
 });
 
-function expectGoodProject(responseBody: any) {
-  expect(responseBody.data.createProject.id).toBeDefined();
-  expect(responseBody.data.createProject.name).toBeDefined();
-  expect(responseBody.data.createProject.created_at).toBeDefined();
-  expect(responseBody.data.createProject.deleted_at).toBeDefined();
-  expect(responseBody.data.createProject.hidden_until).toBeDefined();
-  expect(responseBody.data.createProject.due_by).toBeDefined();
-  expect(responseBody.data.createProject.description).toBeDefined();
-  expect(responseBody.data.createProject.importance).toBeDefined();
+function expectGoodTreat(responseBody: any) {
+  expect(responseBody.data.createTreat.id).toBeDefined();
+  expect(responseBody.data.createTreat.name).toBeDefined();
+  expect(responseBody.data.createTreat.created_at).toBeDefined();
+  expect(responseBody.data.createTreat.deleted_at).toBeDefined();
+  expect(responseBody.data.createTreat.hidden_until).toBeDefined();
+  expect(responseBody.data.createTreat.description).toBeDefined();
+  expect(responseBody.data.createTreat.damage).toBeDefined();
+  expect(responseBody.data.createTreat.pleasure).toBeDefined();
 }
 function expectError(responseBody: any, message: string) {
   const errorMessages = responseBody.errors.map((error: any) => error.message);
   expect(errorMessages).toContain(message);
 }
 
-const createProjectQuery = `
-  mutation CreateProject($createProjectInput: CreateProjectInput) {
-    createProject(input: $createProjectInput) {
+const createTreatQuery = `
+  mutation CreateTreat($createTreatInput: CreateTreatInput) {
+    createTreat(input: $createTreatInput) {
       id
       name
       created_at
       deleted_at
       hidden_until
-      due_by
       description
-      importance
+      damage
+      pleasure
     }
   }
 `;
 
-test("Should create project", async ({ request }) => {
+test("Should create treat", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: 5,
+      createTreatInput: {
+        name: "Drink a cup of coffee",
+        damage: 6,
+        pleasure: 7,
       },
     },
   };
@@ -63,17 +64,18 @@ test("Should create project", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expectGoodProject(responseBody);
+  expectGoodTreat(responseBody);
 });
 
-test("Should create project with description", async ({ request }) => {
+test("Should create treat with description", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: 5,
-        description: "HI",
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: 6,
+        pleasure: 7,
+        description: "Drink 1 regular size cup of coffee",
       },
     },
   };
@@ -88,19 +90,20 @@ test("Should create project with description", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
 
-  expectGoodProject(responseBody);
-  expect(responseBody.data.createProject.description).toEqual("HI");
+  expectGoodTreat(responseBody);
+  expect(responseBody.data.createTreat.description).toEqual("HI");
 });
 
 test("Should not create treat with description if description too long.", async ({
   request,
 }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
       createTreatInput: {
-        name: "Launch Habit Market",
-        importance: 5,
+        name: "Drink Coffee",
+        damage: 6,
+        pleasure: 7,
         description: createStringOfLength(10001),
       },
     },
@@ -122,13 +125,14 @@ test("Should not create treat with description if description too long.", async 
   );
 });
 
-test("Should create hidden project", async ({ request }) => {
+test("Should create hidden treat", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: 5,
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: 6,
+        pleasure: 7,
         hidden_until: "2024-12-16T00:33:08+08:00",
       },
     },
@@ -143,39 +147,17 @@ test("Should create hidden project", async ({ request }) => {
 
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
-  expectGoodProject(responseBody);
+  expectGoodTreat(responseBody);
 });
 
-test("Should create project with due_by", async ({ request }) => {
+test("Should not create treat if name too long", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: 5,
-        due_by: "2024-12-16T00:33:08+08:00",
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
-    headers: {
-      Authorization: await createAccessToken(),
-    },
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const responseBody = await response.json();
-  expectGoodProject(responseBody);
-});
-
-test("Should not create project if name too long", async ({ request }) => {
-  const query = {
-    query: createProjectQuery,
-    variables: {
-      createProjectInput: {
+      createTreatInput: {
         name: createStringOfLength(101),
+        damage: 6,
+        pleasure: 7,
         importance: 5,
       },
     },
@@ -194,13 +176,14 @@ test("Should not create project if name too long", async ({ request }) => {
   expectError(responseBody, "Name is too long. Must be fewer than 100 chars.");
 });
 
-test("Should not create project if importance < 0", async ({ request }) => {
+test("Should not create treat if damage < 0", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: -1,
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: -1,
+        pleasure: 7,
       },
     },
   };
@@ -215,16 +198,17 @@ test("Should not create project if importance < 0", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
 
-  expectError(responseBody, "Importance can only be between 0 and 10");
+  expectError(responseBody, "damage can only be between 0 and 10");
 });
 
-test("Should not create project if importance > 10", async ({ request }) => {
+test("Should not create treat if damage > 10", async ({ request }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
-        name: "Launch Habit Market",
-        importance: 11,
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: 11,
+        pleasure: 7,
       },
     },
   };
@@ -239,16 +223,67 @@ test("Should not create project if importance > 10", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const responseBody = await response.json();
 
-  expectError(responseBody, "Importance can only be between 0 and 10");
+  expectError(responseBody, "damage can only be between 0 and 10");
 });
 
-test("Should not create project without valid access token", async ({
+test("Should not create treat if pleasure < 0", async ({ request }) => {
+  const query = {
+    query: createTreatQuery,
+    variables: {
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: 11,
+        pleasure: -1,
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+    headers: {
+      Authorization: await createAccessToken(),
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+
+  expectError(responseBody, "pleasure can only be between 0 and 10");
+});
+
+test("Should not create treat if pleasure > 10", async ({ request }) => {
+  const query = {
+    query: createTreatQuery,
+    variables: {
+      createTreatInput: {
+        name: "Drink Coffee",
+        damage: 11,
+        pleasure: 11,
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+    headers: {
+      Authorization: await createAccessToken(),
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+
+  expectError(responseBody, "pleasure can only be between 0 and 10");
+});
+
+
+test("Should not create treat without valid access token", async ({
   request,
 }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
+      createTreatInput: {
         name: "Launch Habit Market",
         importance: 5,
       },
@@ -265,13 +300,13 @@ test("Should not create project without valid access token", async ({
   expectError(responseBody, "Invalid access token");
 });
 
-test("Should not create project with expired access token", async ({
+test("Should not create treat with expired access token", async ({
   request,
 }) => {
   const query = {
-    query: createProjectQuery,
+    query: createTreatQuery,
     variables: {
-      createProjectInput: {
+      createTreatInput: {
         name: "Launch Habit Market",
         importance: 5,
       },
