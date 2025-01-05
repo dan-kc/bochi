@@ -4,7 +4,7 @@ use crate::{
     security,
 };
 use async_graphql::{
-    EmptySubscription, InputObject, Object, Schema, SimpleObject,
+    EmptySubscription, InputObject, Object, Schema, SimpleObject, Union,
 };
 use chrono::NaiveDateTime;
 
@@ -37,18 +37,91 @@ impl From<UserRow> for User {
 }
 
 #[derive(SimpleObject)]
+struct HabitObject {
+    id: u32,
+    name: String,
+    created_at: NaiveDateTime,
+    deleted_at: NaiveDateTime,
+    hidden_until: NaiveDateTime,
+    description: String,
+    difficulty: u8,
+    importance: u8,
+    duration: u8,
+    min_frequency: u8,
+}
+
+#[derive(SimpleObject)]
 struct TaskObject {
     id: i32,
     name: String, // Max 100 utf-8 chars
-    difficulty: i32,
     created_at: NaiveDateTime,
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
-    due_at: Option<NaiveDateTime>,
+    due_by: Option<NaiveDateTime>,
     description: String,
+    difficulty: i32,
     importance: i32,
     duration: i32,
 }
+
+#[derive(SimpleObject)]
+struct ProjectObject {
+    id: i32,
+    name: String, // Max 100 utf-8 chars
+    created_at: NaiveDateTime,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    due_by: Option<NaiveDateTime>,
+    description: String,
+    importance: i32,
+}
+
+#[derive(SimpleObject)]
+struct RewardObject {
+    id: i32,
+    name: String, // Max 100 utf-8 chars
+    created_at: NaiveDateTime,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    description: String,
+    damage: i32,
+    pleasure: i32,
+    max_frequency: i32,
+}
+
+#[derive(SimpleObject)]
+struct MegaRewardObject {
+    id: i32,
+    name: String, // Max 100 utf-8 chars
+    created_at: NaiveDateTime,
+    deleted_at: Option<NaiveDateTime>,
+    hidden_until: Option<NaiveDateTime>,
+    description: String,
+    damage: i32,
+    pleasure: i32,
+}
+
+#[derive(Union)]
+enum ItemUnion {
+    MegaReward(MegaRewardObject),
+    Reward(RewardObject),
+    Task(TaskObject),
+    Habit(HabitObject),
+    Project(ProjectObject),
+}
+
+#[derive(SimpleObject)]
+struct TradeObject {
+    id: i32,
+    refunded: bool,
+    amount: i32,
+    created_at: NaiveDateTime,
+    refunded_at: Option<NaiveDateTime>,
+    item: ItemUnion,
+    damage: i32,
+    pleasure: i32,
+}
+
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
         Self {
@@ -59,7 +132,7 @@ impl From<TaskRow> for TaskObject {
             description: task_row.description,
             deleted_at: task_row.deleted_at,
             hidden_until: task_row.hidden_until,
-            due_at: task_row.due_at,
+            due_by: task_row.due_by,
             importance: task_row.importance,
             duration: task_row.duration,
         }
@@ -75,19 +148,6 @@ struct CreateTaskInput {
     description: String,
     importance: i32,
     duration: i32,
-}
-
-#[derive(SimpleObject)]
-struct Habit {
-    id: u32,
-    name: String,
-    difficulty: u8,
-    importance: u8,
-    duration: u8,
-    daily_frequency: u8,
-    created_at: NaiveDateTime,
-    deleted_at: NaiveDateTime,
-    hidden_until: NaiveDateTime,
 }
 
 #[derive(SimpleObject)]
@@ -204,7 +264,7 @@ impl MutationRoot {
         &self,
         _ctx: &async_graphql::Context<'_>,
         _input: CreateHabitInput,
-    ) -> Result<Habit, &'static str> {
+    ) -> Result<HabitObject, &'static str> {
         todo!()
     }
     async fn create_tag(

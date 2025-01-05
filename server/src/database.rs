@@ -181,7 +181,7 @@ pub struct TaskRow {
     pub description: String,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_at: Option<NaiveDateTime>,
+    pub due_by: Option<NaiveDateTime>,
     pub importance: i32,
     pub duration: i32,
 }
