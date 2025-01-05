@@ -1,5 +1,9 @@
 import { expect } from "@playwright/test";
-import { createAccessToken, createStringOfLength, test } from "../../../helpers";
+import {
+  createAccessToken,
+  createStringOfLength,
+  test,
+} from "../../../helpers";
 
 test.beforeEach(async ({ db }) => {
   await db.createUser();
@@ -16,7 +20,6 @@ function expectGoodHabit(responseBody: any) {
   expect(responseBody.data.createHabit.created_at).toBeDefined();
   expect(responseBody.data.createHabit.deleted_at).toBeDefined();
   expect(responseBody.data.createHabit.hidden_until).toBeDefined();
-  expect(responseBody.data.createHabit.due_at).toBeDefined();
   expect(responseBody.data.createHabit.importance).toBeDefined();
   expect(responseBody.data.createHabit.duration).toBeDefined();
 }
@@ -34,7 +37,6 @@ const createHabitQuery = `
       created_at
       deleted_at
       hidden_until
-      due_at
       importance
       duration
     }
@@ -50,6 +52,7 @@ test("Should create habit", async ({ request }) => {
         difficulty: 8,
         importance: 5,
         duration: 600,
+        min_frequency: 365,
       },
     },
   };
@@ -76,6 +79,7 @@ test("Should create habit with description", async ({ request }) => {
         importance: 5,
         duration: 600,
         description: "HI",
+        min_frequency: 365,
       },
     },
   };
@@ -104,32 +108,7 @@ test("Should create hidden habit", async ({ request }) => {
         importance: 5,
         duration: 600,
         hidden_until: "2024-12-16T00:33:08+08:00",
-      },
-    },
-  };
-
-  const response = await request.post("/graphql", {
-    data: query,
-    headers: {
-      Authorization: await createAccessToken(),
-    },
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const responseBody = await response.json();
-  expectGoodHabit(responseBody);
-});
-
-test("Should create due habit", async ({ request }) => {
-  const query = {
-    query: createHabitQuery,
-    variables: {
-      createHabitInput: {
-        name: "Touch grass",
-        difficulty: 8,
-        importance: 5,
-        duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
+        min_frequency: 365,
       },
     },
   };
@@ -155,7 +134,7 @@ test("Should not create habit if name too long", async ({ request }) => {
         difficulty: 8,
         importance: 5,
         duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
+        min_frequency: 365,
       },
     },
   };
@@ -182,7 +161,7 @@ test("Should not create habit if difficulty > 10", async ({ request }) => {
         difficulty: 11,
         importance: 5,
         duration: 600,
-        due_date: "2024-12-16T00:33:08+08:00",
+        min_frequency: 365,
       },
     },
   };
@@ -209,6 +188,7 @@ test("Should not create habit if difficulty < 0", async ({ request }) => {
         difficulty: -1,
         importance: 5,
         duration: 600,
+        min_frequency: 365,
       },
     },
   };
@@ -235,6 +215,7 @@ test("Should not create habit if importance < 0", async ({ request }) => {
         difficulty: 8,
         importance: -1,
         duration: 600,
+        min_frequency: 365,
       },
     },
   };
@@ -261,6 +242,7 @@ test("Should not create habit if importance > 10", async ({ request }) => {
         difficulty: 8,
         importance: 11,
         duration: 600,
+        min_frequency: 365,
       },
     },
   };
@@ -287,6 +269,7 @@ test("Should not create habit if duration < 0", async ({ request }) => {
         difficulty: 8,
         importance: 11,
         duration: -5,
+        min_frequency: 365,
       },
     },
   };
@@ -315,6 +298,7 @@ test("Should not create task if duration longer than 24hrs", async ({
         difficulty: 8,
         importance: 11,
         duration: 60 * 60 * 24 + 1,
+        min_frequency: 365,
       },
     },
   };
@@ -341,9 +325,10 @@ test("Should not create habit with description if description too long.", async 
       createHabitInput: {
         name: "Touch grass",
         difficulty: 8,
-        importance: 11,
+        importance: 8,
         duration: 5,
         description: createStringOfLength(10001),
+        min_frequency: 365,
       },
     },
   };
@@ -364,6 +349,70 @@ test("Should not create habit with description if description too long.", async 
   );
 });
 
+test("Should not create habit with min frequency too high.", async ({
+  request,
+}) => {
+  const query = {
+    query: createHabitQuery,
+    variables: {
+      createHabitInput: {
+        name: "Touch grass",
+        difficulty: 8,
+        importance: 11,
+        duration: 5,
+        min_frequency: 365001,
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+    headers: {
+      Authorization: await createAccessToken(),
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+
+  expectError(
+    responseBody,
+    "Minimum frequency too high. Must be less than 365001",
+  );
+});
+
+test("Should not create habit with min frequency too low.", async ({
+  request,
+}) => {
+  const query = {
+    query: createHabitQuery,
+    variables: {
+      createHabitInput: {
+        name: "Touch grass",
+        difficulty: 8,
+        importance: 11,
+        duration: 5,
+        min_frequency: 0,
+      },
+    },
+  };
+
+  const response = await request.post("/graphql", {
+    data: query,
+    headers: {
+      Authorization: await createAccessToken(),
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+
+  expectError(
+    responseBody,
+    "Minimum frequency too low. Must be greater than 0.",
+  );
+});
+
 test("Should not create habit without valid access token", async ({
   request,
 }) => {
@@ -375,6 +424,7 @@ test("Should not create habit without valid access token", async ({
         difficulty: 8,
         importance: 11,
         duration: 5,
+        min_frequency: 365,
       },
     },
   };
@@ -400,6 +450,7 @@ test("Should not create habit with expired access token", async ({
         difficulty: 8,
         importance: 11,
         duration: 5,
+        min_frequency: 365,
       },
     },
   };

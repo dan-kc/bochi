@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        self, CreateHabitOptions, CreateMegaRewardOptions, CreateProjectOptions, CreateRewardOptions, CreateTagOptions, CreateTaskOptions, HabitRow, MegaRewardRow, ProjectRow, RewardRow, TagRow, TaskRow, UserRow
+        self, CreateHabitOptions, CreateTreatOptions, CreateProjectOptions, CreateRewardOptions, CreateTagOptions, CreateTaskOptions, HabitRow, MegaRewardRow, ProjectRow, RewardRow, TagRow, TaskRow, UserRow
     },
     router::AuthenticatedUser,
     security,
@@ -150,7 +150,7 @@ impl From<RewardRow> for RewardObject {
 }
 
 #[derive(SimpleObject)]
-struct MegaRewardObject {
+struct TreatObject {
     id: i32,
     name: String, // Max 100 utf-8 chars
     created_at: NaiveDateTime,
@@ -160,7 +160,7 @@ struct MegaRewardObject {
     damage: i32,
     pleasure: i32,
 }
-impl From<MegaRewardRow> for MegaRewardObject {
+impl From<MegaRewardRow> for TreatObject {
     fn from(mega_reward_row: MegaRewardRow) -> Self {
         Self {
             id: mega_reward_row.id,
@@ -177,7 +177,7 @@ impl From<MegaRewardRow> for MegaRewardObject {
 
 #[derive(Union)]
 enum ItemUnion {
-    MegaReward(MegaRewardObject),
+    MegaReward(TreatObject),
     Reward(RewardObject),
     Task(TaskObject),
     Habit(HabitObject),
@@ -261,7 +261,7 @@ pub struct CreateProjectInput {
     // TODO: Validate
     pub due_by: Option<NaiveDateTime>,
     #[graphql(validator(max_length = 3000))]
-    pub description: String,
+    pub description: Option<String>,
     #[graphql(validator(minimum = 0, maximum = 10))]
     pub importance: i32,
 }
@@ -283,7 +283,7 @@ pub struct CreateRewardInput {
 }
 
 #[derive(InputObject)]
-pub struct CreateMegaRewardInput {
+pub struct CreateTreatInput {
     #[graphql(validator(max_length = 100))]
     pub name: String,
     // TODO: Validate
@@ -412,11 +412,11 @@ impl MutationRoot {
 
         Ok(reward_row.into())
     }
-    async fn create_mega_reward(
+    async fn create_treat(
         &self,
         ctx: &async_graphql::Context<'_>,
-        input: CreateMegaRewardInput,
-    ) -> Result<MegaRewardObject, &'static str> {
+        input: CreateTreatInput,
+    ) -> Result<TreatObject, &'static str> {
         let database = ctx
             .data::<database::Database>()
             .expect("No db pool in context");
@@ -425,13 +425,13 @@ impl MutationRoot {
             .expect("No user in context.")
             .user_id;
 
-        let opts = CreateMegaRewardOptions::new(input, user_id);
-        let reward_row = database
-            .create_mega_reward(opts)
+        let opts = CreateTreatOptions::new(input, user_id);
+        let treat_row = database
+            .create_treat_reward(opts)
             .await
-            .expect("No reward made sorry");
+            .expect("No treat made sorry");
 
-        Ok(reward_row.into())
+        Ok(treat_row.into())
     }
     async fn create_tag(
         &self,

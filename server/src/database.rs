@@ -2,8 +2,8 @@ use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 use crate::graphql::{
-    CreateHabitInput, CreateMegaRewardInput, CreateProjectInput,
-    CreateRewardInput, CreateTagInput, CreateTaskInput,
+    CreateHabitInput, CreateProjectInput, CreateRewardInput, CreateTagInput,
+    CreateTaskInput, CreateTreatInput,
 };
 
 #[derive(Clone)]
@@ -120,9 +120,9 @@ impl Database {
     }
 
     /// Creates a mega_reward, returning the mega_reward..
-    pub async fn create_mega_reward(
+    pub async fn create_treat_reward(
         &self,
-        create_mega_reward_options: CreateMegaRewardOptions,
+        create_mega_reward_options: CreateTreatOptions,
     ) -> Result<MegaRewardRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO mega_rewards
@@ -302,12 +302,16 @@ pub struct CreateProjectOptions {
 }
 impl CreateProjectOptions {
     pub fn new(input: CreateProjectInput, user_id: i32) -> Self {
+        let description = match input.description {
+            None => "".to_string(),
+            Some(desc) => desc,
+        };
         Self {
             user_id,
             name: input.name,
             hidden_until: input.hidden_until,
             due_by: input.due_by,
-            description: input.description,
+            description,
             importance: input.importance,
         }
     }
@@ -336,7 +340,7 @@ impl CreateRewardOptions {
     }
 }
 
-pub struct CreateMegaRewardOptions {
+pub struct CreateTreatOptions {
     pub user_id: i32,
     pub name: String,
     pub hidden_until: Option<NaiveDateTime>,
@@ -344,8 +348,8 @@ pub struct CreateMegaRewardOptions {
     pub damage: i32,
     pub pleasure: i32,
 }
-impl CreateMegaRewardOptions {
-    pub fn new(input: CreateMegaRewardInput, user_id: i32) -> Self {
+impl CreateTreatOptions {
+    pub fn new(input: CreateTreatInput, user_id: i32) -> Self {
         Self {
             user_id,
             name: input.name,
