@@ -3,26 +3,39 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-      };
-    in
+  outputs =
     {
-      devShells.${system} = {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.nodejs
-            pkgs.zsh
-          ];
-        shellHook = ''
-          zsh
-        '';
+      self,
+      nixpkgs,
+      rust-overlay,
+      flake-utils,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs {
+          inherit system overlays;
         };
-      };
-    };
+      in
+      {
+        devShells.default =
+          with pkgs;
+          mkShell {
+            buildInputs = [
+              rust-bin.beta.latest.default
+              zsh
+            ];
+
+            shellHook = ''
+              exec zsh
+            '';
+          };
+      }
+    );
 }
