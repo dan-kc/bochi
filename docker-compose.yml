@@ -13,27 +13,46 @@ services:
   localstack:
     image: localstack/localstack:latest
     environment:
-      - SERVICES=secretsmanager
+      - SERVICES=secretsmanager,sts
       - DEBUG=0
-      - PERSISTENCE=/tmp/localstack/data
     ports:
       - "4566:4566"
       - "4510-4559:4510-4559"
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal secretsmanager list-secrets > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Service to provision secrets into LocalStack
+  localstack-init:
+    image: amazon/aws-cli:latest # Or any image with AWS CLI
+    command: >
+      sh -c "
+      /usr/bin/wait-for-it.sh localstack:4566 --timeout=30 --strict -- \
+      && aws --endpoint-url=http://localstack:4566 secretsmanager create-secret --name db-user --secret-string 'your_local_db_user' --region eu-west-1 \
+      && aws --endpoint-url=http://localstack:4566 secretsmanager put-secret-value --secret-id db-user --secret-string 'your_local_db_user' --region eu-west-1 \
+      && aws --endpoint-url=http://localstack:4566 secretsmanager create-secret --name db-password --secret-string 'your_local_db_password' --region eu-west-1 \
+      && aws --endpoint-url=http://localstack:4566 secretsmanager put-secret-value --secret-id db-password --secret-string 'your_local_db_password' --region eu-west-1 \
+      && echo 'Secrets provisioned successfully'
+      "
+    depends_on:
+      localstack:
+        condition: service_healthy
     volumes:
-      - localstack_data:/var/lib/localstack
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./wait-for-it.sh:/usr/bin/wait-for-it.sh
 
   server:
     build: ./server
     environment:
       DATABASE_URL: postgres://user:password@db/habit_market
+      AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
     ports:
       - "3081:80"
     depends_on:
       - db
       - localstack
-    extra_hosts:
-      - "secretsmanager.internal.aws:localstack"
+      - localstack-init
 
   migration:
     build: ./migration/
