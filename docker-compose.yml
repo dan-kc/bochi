@@ -1,7 +1,5 @@
 services:
   db:
-    # Fix this:
-    # | The database cluster will be initialized with locale "en_US.utf8".
     image: postgres:latest
     environment:
       POSTGRES_USER: user

@@ -14,6 +14,13 @@ start:
 stop:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml down
 
+## build-image: builds server docker image
+.PHONY: build-image
+build-image:
+	nix build .#server-docker
+	docker load < result
+	rm result
+
 ## test: starts a temporary db, then applies migrations, then runs server, then playwright
 .PHONY: test
 test: stop
