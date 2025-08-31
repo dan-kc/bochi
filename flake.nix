@@ -12,6 +12,7 @@
       nixpkgs,
       flake-utils,
       fenix,
+      self,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -37,6 +38,48 @@
             taplo
             docker-compose
           ];
+        };
+
+        packages.server = pkgs.rustPlatform.buildRustPackage {
+          pname = "habit-market-backend";
+          version = "0.1.0";
+          src = ./server;
+
+          cargoLock = {
+            lockFile = ./server/Cargo.lock;
+          };
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            openssl
+          ];
+
+          buildInputs = with pkgs; [
+            openssl
+          ];
+
+        };
+
+        packages.server-docker = pkgs.dockerTools.buildLayeredImage {
+          name = "habit-market-server";
+          tag = "latest";
+
+          contents = with pkgs; [
+            dockerTools.caCertificates
+            curl
+            self.packages.${system}.server
+          ];
+
+          config = {
+            Cmd = [ "${self.packages.${system}.server}/bin/habit-market-backend" ];
+            WorkingDir = "/app";
+            ExposedPorts = {
+              "80/tcp" = { };
+            };
+            Env = [
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            ];
+          };
         };
       }
     );

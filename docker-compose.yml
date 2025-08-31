@@ -38,7 +38,7 @@ services:
       start_period: 10s
 
   server:
-    build: ./server
+    image: habit-market-server:latest
     environment:
       DATABASE_URL: postgres://user:password@db/habit_market
       AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
