@@ -1,3 +1,4 @@
 .direnv
 server/target
 node_modules
+result
