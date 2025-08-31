@@ -30,9 +30,11 @@
               "clippy"
               "rustc"
               "rustfmt"
+              # "rust-analyzer"
             ])
             rust-analyzer
             # rust-analyzer-nightly # If you prefer a nightly version
+            awscli
             nil
             nixfmt-rfc-style
             taplo

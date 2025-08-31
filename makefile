@@ -4,12 +4,12 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
-## start: builds db and server, then starts db, then starts server in the background
+## start: builds db, localstack and server, then starts all services
 .PHONY: start
 start:
 	docker compose build db server
-	docker compose up -d --remove-orphans db
-	sleep 3 # Wait for db to be accepting connections
+	docker compose up -d --remove-orphans db localstack
+	sleep 3 # Wait for db and localstack to be accepting connections
 	docker compose up -d --remove-orphans server
 
 ## stop: stops and removes all containers
@@ -88,3 +88,25 @@ show-schema-tasks:
 ## show-schema-habits: displays all entries in the habits table
 show-schema-habits:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ habits"
+
+## create-secret: creates a secret in localstack (usage: make create-secret NAME=secret-name VALUE=secret-value)
+.PHONY: create-secret
+create-secret:
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager create-secret --name $(NAME) --secret-string '$(VALUE)' --region us-east-1
+
+## get-secret: retrieves a secret from localstack (usage: make get-secret NAME=secret-name)
+.PHONY: get-secret
+get-secret:
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager get-secret-value --secret-id $(NAME) --region us-east-1
+
+## list-secrets: lists all secrets in localstack
+.PHONY: list-secrets
+list-secrets:
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager list-secrets --region us-east-1
+
+## setup-local-secrets: creates example secrets in localstack for development
+.PHONY: setup-local-secrets
+setup-local-secrets:
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager create-secret --name app/database --secret-string '{"host":"db","port":"5432","database":"habit_market","username":"user","password":"password"}' --region us-east-1 || true
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager create-secret --name app/jwt --secret-string '{"private_key":"secret-jwt-key","public_key":"public-jwt-key"}' --region us-east-1 || true
+	docker compose exec localstack aws --endpoint-url=http://localhost:4566 secretsmanager create-secret --name app/api-keys --secret-string '{"service1":"api-key-1","service2":"api-key-2"}' --region us-east-1 || true

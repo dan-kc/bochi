@@ -1,5 +1,7 @@
 services:
   db:
+    # Fix this:
+    # | The database cluster will be initialized with locale "en_US.utf8".
     image: postgres:latest
     environment:
       POSTGRES_USER: user
@@ -8,15 +10,34 @@ services:
     volumes:
       - data:/var/lib/postgresql/data
 
+  localstack:
+    image: localstack/localstack:latest
+    environment:
+      - SERVICES=secretsmanager
+      - DEBUG=0
+      - PERSISTENCE=/tmp/localstack/data
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+
   server:
     build: ./server
     environment:
       DATABASE_URL: postgres://user:password@db/habit_market
     ports:
       - "3081:80"
+    depends_on:
+      - db
+      - localstack
+    extra_hosts:
+      - "secretsmanager.internal.aws:localstack"
 
   migration:
     build: ./migration/
 
 volumes:
   data:
+  localstack_data:
