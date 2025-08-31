@@ -9,6 +9,12 @@ services:
       POSTGRES_DB: habit_market
     volumes:
       - data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d habit_market"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   localstack:
     image: localstack/localstack:latest
@@ -18,45 +24,44 @@ services:
     ports:
       - "4566:4566"
       - "4510-4559:4510-4559"
+    volumes:
+      - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
     healthcheck:
-      test: ["CMD-SHELL", "awslocal secretsmanager list-secrets > /dev/null"]
+      test:
+        [
+          "CMD-SHELL",
+          "awslocal secretsmanager get-secret-value --secret-id db-user --region eu-west-1 > /dev/null 2>&1",
+        ]
       interval: 5s
       timeout: 5s
-      retries: 5
-
-  # Service to provision secrets into LocalStack
-  localstack-init:
-    image: amazon/aws-cli:latest # Or any image with AWS CLI
-    command: >
-      sh -c "
-      /usr/bin/wait-for-it.sh localstack:4566 --timeout=30 --strict -- \
-      && aws --endpoint-url=http://localstack:4566 secretsmanager create-secret --name db-user --secret-string 'your_local_db_user' --region eu-west-1 \
-      && aws --endpoint-url=http://localstack:4566 secretsmanager put-secret-value --secret-id db-user --secret-string 'your_local_db_user' --region eu-west-1 \
-      && aws --endpoint-url=http://localstack:4566 secretsmanager create-secret --name db-password --secret-string 'your_local_db_password' --region eu-west-1 \
-      && aws --endpoint-url=http://localstack:4566 secretsmanager put-secret-value --secret-id db-password --secret-string 'your_local_db_password' --region eu-west-1 \
-      && echo 'Secrets provisioned successfully'
-      "
-    depends_on:
-      localstack:
-        condition: service_healthy
-    volumes:
-      - ./wait-for-it.sh:/usr/bin/wait-for-it.sh
+      retries: 10
+      start_period: 10s
 
   server:
     build: ./server
     environment:
       DATABASE_URL: postgres://user:password@db/habit_market
       AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: eu-west-1
+      RUST_BACKTRACE: 1
     ports:
       - "3081:80"
     depends_on:
-      - db
-      - localstack
-      - localstack-init
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   migration:
     build: ./migration/
 
 volumes:
   data:
-  localstack_data:

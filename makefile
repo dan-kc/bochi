@@ -7,10 +7,7 @@ help:
 ## start: builds db, localstack and server, then starts all services
 .PHONY: start
 start:
-	docker compose build db server
-	docker compose up -d --remove-orphans db localstack
-	sleep 3 # Wait for db and localstack to be accepting connections
-	docker compose up -d --remove-orphans server
+	docker compose up -d --remove-orphans db localstack server
 
 ## stop: stops and removes all containers
 .PHONY: stop

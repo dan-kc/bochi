@@ -30,20 +30,13 @@
               "clippy"
               "rustc"
               "rustfmt"
-              # "rust-analyzer"
             ])
             rust-analyzer
-            # rust-analyzer-nightly # If you prefer a nightly version
-            awscli
             nil
             nixfmt-rfc-style
             taplo
+            docker-compose
           ];
-
-          # Optional: Set environment variables for the dev shell
-          shellHook = ''
-            export RUST_LOG=debug
-          '';
         };
       }
     );

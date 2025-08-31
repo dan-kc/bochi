@@ -7,10 +7,17 @@ pub struct SecretsManager {
 
 impl SecretsManager {
     pub async fn new() -> Self {
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region(Region::new("eu-west-1"))
-            .load()
-            .await;
+        let mut config_loader = aws_config::defaults(BehaviorVersion::latest())
+            .region(Region::new("eu-west-1"));
+
+        // Check for LocalStack endpoint
+        if let Ok(endpoint_url) =
+            std::env::var("AWS_ENDPOINT_URL_SECRETSMANAGER")
+        {
+            config_loader = config_loader.endpoint_url(endpoint_url);
+        }
+
+        let config = config_loader.load().await;
         let client = Client::new(&config);
 
         SecretsManager { client }
