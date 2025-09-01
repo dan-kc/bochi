@@ -1,8 +1,8 @@
 use crate::{
     database,
     graphql::{MutationRoot, QueryRoot},
-    routes,
-    security::jwt::Validator,
+    routes, secrets,
+    security::jwt::JWTManager,
 };
 use async_graphql::{EmptySubscription, Schema};
 use axum::{
@@ -18,25 +18,44 @@ use tower_http::trace::TraceLayer;
 /// resolvers.
 #[derive(Clone)]
 pub struct App {
-    pub jwt_validator: Validator,
+    pub jwt_manager: JWTManager,
     pub database: database::Database,
 }
 impl App {
-    fn new(jwt_validator: Validator, database: database::Database) -> Self {
+    fn new(jwt_manager: JWTManager, database: database::Database) -> Self {
         Self {
-            jwt_validator,
+            jwt_manager,
             database,
         }
     }
 }
 
 pub async fn router() -> axum::Router {
-    let database = database::Database::new().await;
-    let jwt_validator = Validator::new();
+    // Get secrets
+    let secrets_client = secrets::SecretsManager::new().await;
+    let eddsa_public_key =
+        secrets_client.get_secret("eddsa-public-key").await.unwrap();
+    let eddsa_private_key = secrets_client
+        .get_secret("eddsa-private-key")
+        .await
+        .unwrap();
+    let db_user = secrets_client.get_secret("db-user").await.unwrap();
+    let db_password = secrets_client.get_secret("db-password").await.unwrap();
+    let db_host = secrets_client.get_secret("db-host").await.unwrap();
+
+    let database = database::Database::new(
+        db_user.as_str(),
+        db_password.as_str(),
+        db_host.as_str(),
+    )
+    .await;
+    let jwt_manager =
+        JWTManager::new(eddsa_public_key.as_str(), eddsa_private_key.as_str());
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(database.clone())
+        .data(jwt_manager.clone())
         .finish();
-    let app = App::new(jwt_validator, database);
+    let app = App::new(jwt_manager, database);
 
     println!("connected to db");
 
@@ -78,7 +97,7 @@ async fn auth(
 
     match jwt_optional {
         None => StatusCode::UNAUTHORIZED.into_response(),
-        Some(jwt) => match app.jwt_validator.validate(jwt) {
+        Some(jwt) => match app.jwt_manager.validate(jwt) {
             Some(user_id) => {
                 req.extensions_mut().insert(AuthenticatedUser { user_id });
                 next.run(req).await

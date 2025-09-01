@@ -1,9 +1,11 @@
 use crate::{
     database::{
-        self, CreateHabitOptions, CreateTreatOptions, CreateProjectOptions, CreateRewardOptions, CreateTagOptions, CreateTaskOptions, HabitRow, MegaRewardRow, ProjectRow, RewardRow, TagRow, TaskRow, UserRow
+        self, CreateHabitOptions, CreateProjectOptions, CreateRewardOptions,
+        CreateTagOptions, CreateTaskOptions, CreateTreatOptions, HabitRow,
+        MegaRewardRow, ProjectRow, RewardRow, TagRow, TaskRow, UserRow,
     },
     router::AuthenticatedUser,
-    security,
+    security::{self, jwt::JWTManager},
 };
 use async_graphql::{
     EmptySubscription, InputObject, Object, Schema, SimpleObject, Union,
@@ -473,6 +475,7 @@ impl MutationRoot {
         let database = ctx
             .data::<database::Database>()
             .expect("No db pool in context");
+        let jwt_manager = ctx.data::<JWTManager>().expect("No JWT manager");
         let user = database
             .get_user_from_user_id(user_id)
             .await
@@ -486,7 +489,7 @@ impl MutationRoot {
         };
 
         let (_, refresh_token, hashed_uuid_part) =
-            security::jwt::create_jwt(user_id, input.name.as_str());
+            jwt_manager.create(user_id, input.name.as_str());
 
         let token_row = database
             .create_or_overwrite_refresh_token(

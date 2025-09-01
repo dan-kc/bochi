@@ -26,10 +26,11 @@ services:
     volumes:
       - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
     healthcheck:
-      test:
-        [
+      test: [
           "CMD-SHELL",
-          "awslocal secretsmanager get-secret-value --secret-id db-user --region eu-west-1 > /dev/null 2>&1",
+          # Use the last secret added so that server waits until then.
+          "awslocal secretsmanager get-secret-value --secret-id eddsa-private-key --region eu-west-1 > /dev/null 2>&1
+          ",
         ]
       interval: 5s
       timeout: 5s
@@ -39,7 +40,6 @@ services:
   server:
     image: habit-market-server:latest
     environment:
-      DATABASE_URL: postgres://user:password@db/habit_market
       AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test

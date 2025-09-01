@@ -12,8 +12,9 @@ pub struct Database {
 }
 
 impl Database {
-    pub async fn new() -> Self {
-        let database_url = std::env::var("DATABASE_URL").expect("Need db url");
+    pub async fn new(user: &str, password: &str, host: &str) -> Self {
+        let database_url =
+            format!("postgres://{}:{}@{}/habit_market", user, password, host);
         let pool = PgPoolOptions::new()
             .max_connections(97) // 97 is the default limit for postgres. Change this if we ever have
             // another server connecting. All pools must add up to 97.

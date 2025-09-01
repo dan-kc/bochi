@@ -215,7 +215,7 @@ pub async fn register(
 
     let name = create_random_string();
     let (access_token, refresh_token, hashed_uuid_part) =
-        security::jwt::create_jwt(user_id, name.as_str());
+        app.jwt_manager.create(user_id, name.as_str());
 
     app.database
         .create_or_overwrite_refresh_token(
@@ -268,7 +268,7 @@ pub async fn refresh_tokens(
 
         // Create new one depending on if expires_at or not
         let (new_access_token, new_refresh_token, new_hashed_uuid_part) =
-            security::jwt::create_jwt(user_id, new_name.as_str());
+            app.jwt_manager.create(user_id, new_name.as_str());
         app.database
             .create_or_overwrite_refresh_token(
                 new_hashed_uuid_part.as_str(),
@@ -346,7 +346,7 @@ pub async fn login(
 
         let name = create_random_string();
         let (access_token, refresh_token, hashed_uuid_part) =
-            security::jwt::create_jwt(user.id, name.as_str());
+            app.jwt_manager.create(user.id, name.as_str());
 
         app.database
             .create_or_overwrite_refresh_token(

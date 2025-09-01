@@ -9,10 +9,9 @@ pub enum Error {
 }
 
 pub mod jwt {
-    use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
     use rand::Rng;
     use serde::{Deserialize, Serialize};
-    use std::{fs::File, io::Read};
 
     use super::{generate_refresh_token, hash_password};
 
@@ -30,24 +29,23 @@ pub mod jwt {
     }
 
     #[derive(Clone)]
-    pub struct Validator {
+    pub struct JWTManager {
         validation: Validation,
         decoding_key: DecodingKey,
+        encoding_key: EncodingKey,
     }
 
-    impl Validator {
-        pub fn new() -> Self {
-            let mut public_key_file =
-                File::open("/usr/src/app/mock_public_key.pem").unwrap();
-            let mut public_key = Vec::new();
-            public_key_file.read_to_end(&mut public_key).unwrap();
-
+    impl JWTManager {
+        pub fn new(public_key: &str, private_key: &str) -> Self {
             let decoding_key =
-                DecodingKey::from_ed_pem(public_key.as_slice()).unwrap();
+                DecodingKey::from_ed_pem(public_key.as_bytes()).unwrap();
+            let encoding_key =
+                EncodingKey::from_ed_pem(private_key.as_bytes()).unwrap();
 
             Self {
                 validation: Validation::new(Algorithm::EdDSA),
                 decoding_key,
+                encoding_key,
             }
         }
 
@@ -62,6 +60,31 @@ pub mod jwt {
             } else {
                 None
             }
+        }
+
+        /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
+        pub fn create(
+            &self,
+            user_id: i32,
+            name: &str,
+        ) -> (String, String, String) {
+            let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
+            let claims = Claims {
+                exp: time_in_half_an_hour,
+                sub: user_id.to_string(),
+            };
+            let access_token = jsonwebtoken::encode(
+                &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA),
+                &claims,
+                &self.encoding_key,
+            )
+            .expect("Could not create JWT");
+
+            let (uuid_part, refresh_token) =
+                generate_refresh_token(user_id, name);
+            let hashed_uuid_part = hash_password(uuid_part.as_str());
+
+            (access_token, refresh_token, hashed_uuid_part)
         }
     }
 
@@ -78,33 +101,6 @@ pub mod jwt {
         }
 
         res
-    }
-
-    /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
-    pub fn create_jwt(user_id: i32, name: &str) -> (String, String, String) {
-        // TODO: move this out into app right?
-        let mut private_key_file =
-            File::open("/usr/src/app/mock_private_key.pem").unwrap();
-        let mut private_key = Vec::new();
-        private_key_file.read_to_end(&mut private_key).unwrap();
-
-        let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
-        let claims = Claims {
-            exp: time_in_half_an_hour,
-            sub: user_id.to_string(),
-        };
-        let access_token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA),
-            &claims,
-            &jsonwebtoken::EncodingKey::from_ed_pem(private_key.as_slice())
-                .unwrap(),
-        )
-        .expect("Could not create JWT");
-
-        let (uuid_part, refresh_token) = generate_refresh_token(user_id, name);
-        let hashed_uuid_part = hash_password(uuid_part.as_str());
-
-        (access_token, refresh_token, hashed_uuid_part)
     }
 }
 
