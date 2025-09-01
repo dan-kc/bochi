@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: habit_market
+      POSTGRES_INITDB_ARGS: "--locale=en_GB.utf8"
     volumes:
       - data:/var/lib/postgresql/data
     healthcheck:
