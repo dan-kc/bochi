@@ -12,6 +12,7 @@ impl SecretsManager {
 
         // Check for LocalStack endpoint
         if let Ok(endpoint_url) = std::env::var("AWS_ENDPOINT_URL_SECRETSMANAGER") {
+            dbg!(endpoint_url.clone());
             config_loader = config_loader.endpoint_url(endpoint_url);
         }
 
@@ -22,17 +23,19 @@ impl SecretsManager {
     }
 
     pub async fn get_secret(&self, secret_name: &str) -> Result<String, String> {
-        let response = self
-            .client
+        // Check for secrets prefix
+        let secrets_prefix = std::env::var("AWS_SECRETS_PREFIX").unwrap_or(String::from(""));
+        let prefixed_secret_name = secrets_prefix + secret_name;
+        dbg!(prefixed_secret_name.clone());
+
+        self.client
             .get_secret_value()
-            .secret_id(secret_name)
+            .secret_id(&prefixed_secret_name)
             .send()
             .await
-            .map_err(|e| format!("Failed to get secret '{}': {}", secret_name, e))?;
-
-        response
+            .map_err(|e| format!("Failed to get secret '{}': {}", prefixed_secret_name, e))?
             .secret_string()
             .map(|s| s.to_string())
-            .ok_or_else(|| format!("Secret '{}' has no string value", secret_name))
+            .ok_or_else(|| format!("Secret '{}' has no string value", prefixed_secret_name))
     }
 }

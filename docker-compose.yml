@@ -5,15 +5,16 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: habit_market
-      POSTGRES_INITDB_ARGS: "--locale=en_GB.utf8"
+    ports:
+      - "5432:5432"
     volumes:
       - data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d habit_market"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U user -d habit_market"]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 30s
 
   localstack:
     image: localstack/localstack:4.7
@@ -26,42 +27,48 @@ services:
       - "4510-4559:4510-4559"
     volumes:
       - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
-    healthcheck:
-      test: [
-          "CMD-SHELL",
-          # Use the last secret added so that server waits until then.
-          "awslocal secretsmanager get-secret-value --secret-id eddsa-private-key --region eu-west-1 > /dev/null 2>&1
-          ",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    # healthcheck:
+    #   test: [
+    #       "CMD-SHELL",
+    #       # Use the last secret added so that server waits until then.
+    #       "awslocal secretsmanager get-secret-value --secret-id eddsa-private-key --region eu-west-1 > /dev/null 2>&1
+    #       ",
+    #     ]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 10
+    #   start_period: 10s
 
-  server:
-    image: habit-market-server:latest
-    environment:
-      AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: eu-west-1
-      RUST_BACKTRACE: 1
-    ports:
-      - "3081:80"
-    depends_on:
-      db:
-        condition: service_healthy
-      localstack:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
+  # server:
+  #   image: habit-market-server:latest
+  #   environment:
+  #     AWS_ENDPOINT_URL_SECRETSMANAGER: http://localstack:4566
+  #     AWS_ACCESS_KEY_ID: test
+  #     AWS_SECRET_ACCESS_KEY: test
+  #     AWS_DEFAULT_REGION: eu-west-1
+  #     RUST_BACKTRACE: 1
+  #   ports:
+  #     - "3081:80"
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     localstack:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 40s
 
   migration:
     build: ./migration/
+
+  # adminer:
+  #   image: adminer
+  #   restart: always
+  #   ports:
+  #     - 8080:8080
 
 volumes:
   data:

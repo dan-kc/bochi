@@ -41,10 +41,15 @@ pub async fn router() -> axum::Router {
     let db_user = secrets_client.get_secret("db-user").await.unwrap();
     let db_password = secrets_client.get_secret("db-password").await.unwrap();
     let db_host = secrets_client.get_secret("db-host").await.unwrap();
-    println!("{}", db_host);
+    let db_name = secrets_client.get_secret("db-name").await.unwrap();
 
-    let database =
-        database::Database::new(db_user.as_str(), db_password.as_str(), db_host.as_str()).await;
+    let database = database::Database::new(
+        db_user.as_str(),
+        db_password.as_str(),
+        db_host.as_str(),
+        db_name.as_str(),
+    )
+    .await;
     let jwt_manager = JWTManager::new(eddsa_public_key.as_str(), eddsa_private_key.as_str());
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(database.clone())

@@ -7,7 +7,7 @@ help:
 ## start: builds db, localstack and server, then starts all services
 .PHONY: start
 start:
-	docker compose up -d --remove-orphans db localstack server
+	docker compose up -d --remove-orphans db localstack 
 
 ## stop: stops and removes all containers
 .PHONY: stop

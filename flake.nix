@@ -37,15 +37,21 @@
             nixfmt-rfc-style
             taplo
             docker-compose
-            flyway
-            postgresql
           ];
+          shellHook = ''
+            # If localstack and db is not running then start it
+            docker compose up -d --remove-orphans db localstack
 
-          # shell=''
-          # if localstack not running then start it
-          # If db not started then start it
+            # Init secret management for local deployment
+            export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
+            export AWS_ACCESS_KEY_ID="test"
+            export AWS_SECRET_ACCESS_KEY= "test"
+            export AWS_DEFAULT_REGION="eu-west-1"
+            export AWS_SECRETS_PREFIX="" # use "test" in test runners
+            export RUST_BACKTRACE=1
 
-          # ''
+            # Create aliases for migrate etc
+          '';
         };
 
         packages.server = pkgs.rustPlatform.buildRustPackage {
