@@ -2,8 +2,8 @@ use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 use crate::graphql::{
-    CreateHabitInput, CreateProjectInput, CreateRewardInput, CreateTagInput,
-    CreateTaskInput, CreateTreatInput,
+    CreateHabitInput, CreateProjectInput, CreateRewardInput, CreateTagInput, CreateTaskInput,
+    CreateTreatInput,
 };
 
 #[derive(Clone)]
@@ -13,8 +13,7 @@ pub struct Database {
 
 impl Database {
     pub async fn new(user: &str, password: &str, host: &str) -> Self {
-        let database_url =
-            format!("postgres://{}:{}@{}/habit_market", user, password, host);
+        let database_url = format!("postgres://{}:{}@{}/habit_market", user, password, host);
         let pool = PgPoolOptions::new()
             .max_connections(97) // 97 is the default limit for postgres. Change this if we ever have
             // another server connecting. All pools must add up to 97.
@@ -31,13 +30,12 @@ impl Database {
         email: &str,
         hashed_password: &str,
     ) -> Result<i32, sqlx::Error> {
-        let (user_id,): (i32,) = sqlx::query_as(
-            "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
-        )
-        .bind(email)
-        .bind(hashed_password)
-        .fetch_one(&self.pool)
-        .await?;
+        let (user_id,): (i32,) =
+            sqlx::query_as("INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id")
+                .bind(email)
+                .bind(hashed_password)
+                .fetch_one(&self.pool)
+                .await?;
 
         Ok(user_id)
     }
@@ -165,13 +163,11 @@ impl Database {
     ) -> Result<RefreshTokenRow, sqlx::Error> {
         // TODO: put in transaction.
         // Delete
-        sqlx::query(
-            "DELETE FROM refresh_tokens WHERE name = $1 AND user_id = $2;",
-        )
-        .bind(name)
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("DELETE FROM refresh_tokens WHERE name = $1 AND user_id = $2;")
+            .bind(name)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         let insert_query = match is_api_key{
             true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL) RETURNING *",
@@ -188,10 +184,7 @@ impl Database {
         Ok(refresh_token_row)
     }
 
-    pub async fn delete_refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<(), sqlx::Error> {
+    pub async fn delete_refresh_token(&self, refresh_token: &str) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
             .bind(refresh_token)
             .execute(&self.pool)
@@ -205,25 +198,25 @@ impl Database {
         name: &str,
         user_id: i32,
     ) -> Result<RefreshTokenRow, sqlx::Error> {
-        sqlx::query_as("
+        sqlx::query_as(
+            "
             SELECT * FROM refresh_tokens
             INNER JOIN users ON refresh_tokens.user_id = users.id
             WHERE refresh_tokens.name = $1
             AND refresh_tokens.user_id = $2
             AND (refresh_tokens.expires_at > NOW() OR refresh_tokens.expires_at IS NULL);
-        ")
+        ",
+        )
         .bind(name)
         .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await.unwrap()
-            .ok_or(sqlx::Error::RowNotFound)
+        .fetch_optional(&self.pool)
+        .await
+        .unwrap()
+        .ok_or(sqlx::Error::RowNotFound)
     }
 
     /// Returns the user from email.
-    pub async fn get_user_from_email(
-        &self,
-        email: &str,
-    ) -> Result<UserRow, sqlx::Error> {
+    pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as("SELECT * FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
@@ -231,10 +224,7 @@ impl Database {
             .ok_or(sqlx::Error::RowNotFound)
     }
 
-    pub async fn get_user_from_user_id(
-        &self,
-        user_id: i32,
-    ) -> Result<UserRow, sqlx::Error> {
+    pub async fn get_user_from_user_id(&self, user_id: i32) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as("SELECT * FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_optional(&self.pool)

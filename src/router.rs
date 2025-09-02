@@ -33,8 +33,7 @@ impl App {
 pub async fn router() -> axum::Router {
     // Get secrets
     let secrets_client = secrets::SecretsManager::new().await;
-    let eddsa_public_key =
-        secrets_client.get_secret("eddsa-public-key").await.unwrap();
+    let eddsa_public_key = secrets_client.get_secret("eddsa-public-key").await.unwrap();
     let eddsa_private_key = secrets_client
         .get_secret("eddsa-private-key")
         .await
@@ -42,15 +41,11 @@ pub async fn router() -> axum::Router {
     let db_user = secrets_client.get_secret("db-user").await.unwrap();
     let db_password = secrets_client.get_secret("db-password").await.unwrap();
     let db_host = secrets_client.get_secret("db-host").await.unwrap();
+    println!("{}", db_host);
 
-    let database = database::Database::new(
-        db_user.as_str(),
-        db_password.as_str(),
-        db_host.as_str(),
-    )
-    .await;
-    let jwt_manager =
-        JWTManager::new(eddsa_public_key.as_str(), eddsa_private_key.as_str());
+    let database =
+        database::Database::new(db_user.as_str(), db_password.as_str(), db_host.as_str()).await;
+    let jwt_manager = JWTManager::new(eddsa_public_key.as_str(), eddsa_private_key.as_str());
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(database.clone())
         .data(jwt_manager.clone())
@@ -85,11 +80,7 @@ pub async fn router() -> axum::Router {
 pub struct AuthenticatedUser {
     pub user_id: i32,
 }
-async fn auth(
-    State(app): State<App>,
-    mut req: Request,
-    next: Next,
-) -> Response {
+async fn auth(State(app): State<App>, mut req: Request, next: Next) -> Response {
     let headers = req.headers();
     let jwt_optional = headers
         .get(axum::http::header::AUTHORIZATION)

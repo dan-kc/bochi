@@ -1,7 +1,4 @@
-use argon2::{
-    password_hash::SaltString, Argon2, PasswordHash, PasswordHasher,
-    PasswordVerifier,
-};
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use uuid::Uuid;
 
 pub enum Error {
@@ -37,10 +34,8 @@ pub mod jwt {
 
     impl JWTManager {
         pub fn new(public_key: &str, private_key: &str) -> Self {
-            let decoding_key =
-                DecodingKey::from_ed_pem(public_key.as_bytes()).unwrap();
-            let encoding_key =
-                EncodingKey::from_ed_pem(private_key.as_bytes()).unwrap();
+            let decoding_key = DecodingKey::from_ed_pem(public_key.as_bytes()).unwrap();
+            let encoding_key = EncodingKey::from_ed_pem(private_key.as_bytes()).unwrap();
 
             Self {
                 validation: Validation::new(Algorithm::EdDSA),
@@ -51,11 +46,9 @@ pub mod jwt {
 
         // Validates the jwt, returning the user's id if all is well.
         pub fn validate(&self, jwt: &str) -> Option<i32> {
-            if let Ok(token_data) = jsonwebtoken::decode::<Claims>(
-                jwt,
-                &self.decoding_key,
-                &self.validation,
-            ) {
+            if let Ok(token_data) =
+                jsonwebtoken::decode::<Claims>(jwt, &self.decoding_key, &self.validation)
+            {
                 Some(token_data.claims.sub())
             } else {
                 None
@@ -63,11 +56,7 @@ pub mod jwt {
         }
 
         /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
-        pub fn create(
-            &self,
-            user_id: i32,
-            name: &str,
-        ) -> (String, String, String) {
+        pub fn create(&self, user_id: i32, name: &str) -> (String, String, String) {
             let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
             let claims = Claims {
                 exp: time_in_half_an_hour,
@@ -80,8 +69,7 @@ pub mod jwt {
             )
             .expect("Could not create JWT");
 
-            let (uuid_part, refresh_token) =
-                generate_refresh_token(user_id, name);
+            let (uuid_part, refresh_token) = generate_refresh_token(user_id, name);
             let hashed_uuid_part = hash_password(uuid_part.as_str());
 
             (access_token, refresh_token, hashed_uuid_part)
@@ -90,8 +78,7 @@ pub mod jwt {
 
     /// Generates a random 10 letter string consisting of a-z, A-Z and 0-9.
     pub fn create_random_string() -> String {
-        let charset =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
         let mut res = String::new();
         for _ in 0..10 {
@@ -104,9 +91,7 @@ pub mod jwt {
     }
 }
 
-pub fn parse_refresh_token(
-    refresh_token: &str,
-) -> Result<(i32, String, String), Error> {
+pub fn parse_refresh_token(refresh_token: &str) -> Result<(i32, String, String), Error> {
     let parts: Vec<&str> = refresh_token.split('$').collect();
     if parts.len() != 3 {
         return Err(Error::FailedToParseRefreshToken);

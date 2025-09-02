@@ -1,15 +1,13 @@
 use crate::{
     database::{
-        self, CreateHabitOptions, CreateProjectOptions, CreateRewardOptions,
-        CreateTagOptions, CreateTaskOptions, CreateTreatOptions, HabitRow,
-        MegaRewardRow, ProjectRow, RewardRow, TagRow, TaskRow, UserRow,
+        self, CreateHabitOptions, CreateProjectOptions, CreateRewardOptions, CreateTagOptions,
+        CreateTaskOptions, CreateTreatOptions, HabitRow, MegaRewardRow, ProjectRow, RewardRow,
+        TagRow, TaskRow, UserRow,
     },
     router::AuthenticatedUser,
     security::{self, jwt::JWTManager},
 };
-use async_graphql::{
-    EmptySubscription, InputObject, Object, Schema, SimpleObject, Union,
-};
+use async_graphql::{EmptySubscription, InputObject, Object, Schema, SimpleObject, Union};
 use chrono::NaiveDateTime;
 
 pub struct MutationRoot;
@@ -449,8 +447,7 @@ impl MutationRoot {
             .user_id;
 
         let opts = CreateTagOptions::new(input, user_id);
-        let tag_row =
-            database.create_tag(opts).await.expect("No tag made sorry");
+        let tag_row = database.create_tag(opts).await.expect("No tag made sorry");
 
         Ok(tag_row.into())
     }
@@ -481,15 +478,11 @@ impl MutationRoot {
             .await
             .map_err(|_| "User does not exist")?;
 
-        if !security::check_password(
-            user.password.as_str(),
-            input.password.as_str(),
-        ) {
+        if !security::check_password(user.password.as_str(), input.password.as_str()) {
             return Err("Incorrect password");
         };
 
-        let (_, refresh_token, hashed_uuid_part) =
-            jwt_manager.create(user_id, input.name.as_str());
+        let (_, refresh_token, hashed_uuid_part) = jwt_manager.create(user_id, input.name.as_str());
 
         let token_row = database
             .create_or_overwrite_refresh_token(

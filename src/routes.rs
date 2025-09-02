@@ -41,9 +41,7 @@ impl Error {
 
             Self::FailedToCreateUser => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToLogin => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::FailedToCreateRefreshToken => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::FailedToCreateRefreshToken => StatusCode::INTERNAL_SERVER_ERROR,
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
@@ -80,8 +78,7 @@ impl From<Error> for ErrorDetail {
         match value {
             Error::ValidationErrorList(_) => panic!(),
             _ => ErrorDetail {
-                code: format!("{:?}", value)
-                    .to_case(convert_case::Case::ScreamingSnake),
+                code: format!("{:?}", value).to_case(convert_case::Case::ScreamingSnake),
                 message: value.to_string(),
             },
         }
@@ -90,8 +87,7 @@ impl From<Error> for ErrorDetail {
 impl From<ValidationError> for ErrorDetail {
     fn from(value: ValidationError) -> Self {
         ErrorDetail {
-            code: format!("{:?}", value)
-                .to_case(convert_case::Case::ScreamingSnake),
+            code: format!("{:?}", value).to_case(convert_case::Case::ScreamingSnake),
             message: value.to_string(),
         }
     }
@@ -218,12 +214,7 @@ pub async fn register(
         app.jwt_manager.create(user_id, name.as_str());
 
     app.database
-        .create_or_overwrite_refresh_token(
-            hashed_uuid_part.as_str(),
-            user_id,
-            name.as_str(),
-            false,
-        )
+        .create_or_overwrite_refresh_token(hashed_uuid_part.as_str(), user_id, name.as_str(), false)
         .await
         .map_err(|_| Error::FailedToLogin)?;
 
@@ -245,19 +236,15 @@ pub async fn refresh_tokens(
     State(app): State<App>,
     Json(input): Json<RefreshTokenInput>,
 ) -> Result<Response, Error> {
-    let (user_id, name, refresh_token) =
-        parse_refresh_token(input.refresh_token.as_str())
-            .map_err(|_| Error::InvalidRefreshToken)?;
+    let (user_id, name, refresh_token) = parse_refresh_token(input.refresh_token.as_str())
+        .map_err(|_| Error::InvalidRefreshToken)?;
     // Check if token is valid
     if let Ok(refresh_token_row) = app
         .database
         .get_refresh_token_from_name_user(name.as_str(), user_id)
         .await
     {
-        if !security::check_password(
-            refresh_token_row.key.as_str(),
-            refresh_token.as_str(),
-        ) {
+        if !security::check_password(refresh_token_row.key.as_str(), refresh_token.as_str()) {
             return Err(Error::InvalidRefreshToken);
         }
 
@@ -327,20 +314,13 @@ pub async fn login(
         .is_match(input.email.as_str());
     let email_too_long = input.email.len() > 40;
     let password_ascii = input.password.is_ascii();
-    let password_in_bounds =
-        input.password.len() < 64 && input.password.len() > 8;
-    if !valid_email || email_too_long || !password_ascii || !password_in_bounds
-    {
+    let password_in_bounds = input.password.len() < 64 && input.password.len() > 8;
+    if !valid_email || email_too_long || !password_ascii || !password_in_bounds {
         return Err(Error::InvalidLoginCredentials);
     };
 
-    if let Ok(user) =
-        app.database.get_user_from_email(input.email.as_str()).await
-    {
-        if !security::check_password(
-            user.password.as_str(),
-            input.password.as_str(),
-        ) {
+    if let Ok(user) = app.database.get_user_from_email(input.email.as_str()).await {
+        if !security::check_password(user.password.as_str(), input.password.as_str()) {
             return Err(Error::InvalidLoginCredentials);
         }
 

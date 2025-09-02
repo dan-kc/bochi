@@ -37,7 +37,15 @@
             nixfmt-rfc-style
             taplo
             docker-compose
+            flyway
+            postgresql
           ];
+
+          # shell=''
+          # if localstack not running then start it
+          # If db not started then start it
+
+          # ''
         };
 
         packages.server = pkgs.rustPlatform.buildRustPackage {

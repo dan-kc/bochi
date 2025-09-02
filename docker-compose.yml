@@ -18,8 +18,9 @@ services:
   localstack:
     image: localstack/localstack:4.7
     environment:
-      - SERVICES=secretsmanager,sts
-      - DEBUG=0
+      POSTGRES_DB: habit_market
+      SERVICES: secretsmanager,sts
+      DEBUG: 0
     ports:
       - "4566:4566"
       - "4510-4559:4510-4559"
