@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:latest
+    image: postgres:17.6
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -16,7 +16,7 @@ services:
       start_period: 30s
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.7
     environment:
       - SERVICES=secretsmanager,sts
       - DEBUG=0
