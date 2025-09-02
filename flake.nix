@@ -43,10 +43,10 @@
         packages.server = pkgs.rustPlatform.buildRustPackage {
           pname = "habit-market-backend";
           version = "0.1.0";
-          src = ./server;
+          src = ./.;
 
           cargoLock = {
-            lockFile = ./server/Cargo.lock;
+            lockFile = ./Cargo.lock;
           };
 
           nativeBuildInputs = with pkgs; [

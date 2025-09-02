@@ -1,4 +1,4 @@
 .direnv
-server/target
+target
 node_modules
 result
