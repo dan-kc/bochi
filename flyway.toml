@@ -1,9 +1,9 @@
 [environments.default]
-url = "jdbc:postgresql://db:5432/habit_market"
+url = "jdbc:postgresql://localhost:5432/${env.DATABASE_NAME}"
 user = "user"
 password = "password"
 validateOnMigrate = true
 baselineOnMigrate = true
 
 [flyway]
-environment = "default"
+locations = ["./migrations"]

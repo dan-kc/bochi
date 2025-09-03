@@ -1,8 +1,13 @@
-## help: print this help message
+ARGS ?=
+
 .PHONY: help
 help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
+
+flyway:
+	@echo "Running Flyway with config: migrations/flyway.toml $(ARGS)"
+	flyway -configFiles=migrations/flyway.toml $(ARGS)
 
 ## start: builds db, localstack and server, then starts all services
 .PHONY: start
