@@ -12,7 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 /// Stuff we need in every route and all middleware. This is seperate to what we need in gql
 /// resolvers.
@@ -70,6 +70,19 @@ pub async fn router() -> axum::Router {
         .route("/logout", post(routes::logout))
         .route("/refresh-tokens", post(routes::refresh_tokens));
 
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:3000".parse::<axum::http::HeaderValue>().unwrap())
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ])
+        .allow_credentials(true);
+
     axum::Router::new()
         .route("/health", get(routes::health))
         .route(
@@ -77,6 +90,7 @@ pub async fn router() -> axum::Router {
             post(routes::graphql).layer(graphql_middleware_stack),
         )
         .nest("/auth", auth_router)
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(app)
 }
