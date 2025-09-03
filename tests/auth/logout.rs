@@ -1,54 +1,6 @@
-use crate::common::SharedTestServer;
+use crate::common::{register_and_login_user, unique_email, SharedTestServer};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-fn unique_email(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // Keep email under 40 chars: prefix + timestamp + @test.com
-    let short_prefix = if prefix.len() > 5 {
-        &prefix[..5]
-    } else {
-        prefix
-    };
-    format!("{}{}@test.com", short_prefix, timestamp)
-}
-
-fn register_and_login_user(
-    server: &SharedTestServer,
-    email: &str,
-    password: &str,
-) -> Result<String, String> {
-    // Register user
-    let register_response = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password,
-            "confirmPassword": password
-        }),
-    );
-
-    match register_response {
-        Ok(resp) => {
-            let body = resp
-                .into_string()
-                .map_err(|e| format!("Failed to read register response: {}", e))?;
-            let json: serde_json::Value = serde_json::from_str(&body)
-                .map_err(|e| format!("Failed to parse register JSON: {}", e))?;
-
-            let refresh_token = json
-                .get("refreshToken")
-                .and_then(|v| v.as_str())
-                .ok_or("No refreshToken in register response")?;
-
-            Ok(refresh_token.to_string())
-        }
-        Err(e) => Err(format!("Registration failed: {}", e)),
-    }
-}
 
 #[test]
 fn test_logout_success() {
@@ -204,4 +156,3 @@ fn test_logout_twice_with_same_token() {
         panic!("Expected error status 401");
     }
 }
-

@@ -1,14 +1,6 @@
-use crate::common::{create_password_of_length, SharedTestServer};
+use crate::common::{create_password_of_length, unique_email, SharedTestServer};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-fn unique_email(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    format!("{}{}@test.com", prefix, timestamp)
-}
 
 #[test]
 fn test_register_success() {

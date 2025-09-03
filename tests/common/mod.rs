@@ -2,7 +2,9 @@ use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use serde_json::json;
 
 static SHARED_SERVER: OnceLock<Arc<Mutex<TestServer>>> = OnceLock::new();
 
@@ -117,4 +119,84 @@ impl Drop for TestServer {
 #[allow(dead_code)]
 pub fn create_password_of_length(len: usize) -> String {
     "a".repeat(len)
+}
+
+#[allow(dead_code)]
+pub fn unique_email(prefix: &str) -> String {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    // Keep email under 40 chars: prefix + timestamp + @test.com
+    let short_prefix = if prefix.len() > 5 {
+        &prefix[..5]
+    } else {
+        prefix
+    };
+    format!("{}{}@test.com", short_prefix, timestamp)
+}
+
+#[allow(dead_code)]
+pub fn register_and_login_user(
+    server: &SharedTestServer,
+    email: &str,
+    password: &str,
+) -> Result<String, String> {
+    // Register user
+    let register_response = server.post_json(
+        "/auth/register",
+        json!({
+            "email": email,
+            "password": password,
+            "confirmPassword": password
+        }),
+    );
+
+    match register_response {
+        Ok(resp) => {
+            let body = resp
+                .into_string()
+                .map_err(|e| format!("Failed to read register response: {}", e))?;
+            let json: serde_json::Value = serde_json::from_str(&body)
+                .map_err(|e| format!("Failed to parse register JSON: {}", e))?;
+
+            let refresh_token = json
+                .get("refreshToken")
+                .and_then(|v| v.as_str())
+                .ok_or("No refreshToken in register response")?;
+
+            Ok(refresh_token.to_string())
+        }
+        Err(e) => Err(format!("Registration failed: {}", e)),
+    }
+}
+
+#[allow(dead_code)]
+pub fn register_user(
+    server: &SharedTestServer,
+    email: &str,
+    password: &str,
+) -> Result<serde_json::Value, String> {
+    let response = server.post_json(
+        "/auth/register",
+        json!({
+            "email": email,
+            "password": password,
+            "confirmPassword": password
+        }),
+    );
+
+    match response {
+        Ok(resp) => {
+            let body = resp
+                .into_string()
+                .map_err(|e| format!("Failed to read response: {}", e))?;
+            serde_json::from_str(&body).map_err(|e| format!("Failed to parse JSON: {}", e))
+        }
+        Err(ureq::Error::Status(409, _)) => {
+            // User already exists, that's ok for our test setup
+            Ok(serde_json::json!({"message": "user already exists"}))
+        }
+        Err(e) => Err(format!("Registration failed: {}", e)),
+    }
 }

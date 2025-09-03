@@ -1,20 +1,5 @@
-use crate::common::SharedTestServer;
+use crate::common::{unique_email, SharedTestServer};
 use serde_json::json;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-fn unique_email(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // Keep email under 40 chars: prefix + timestamp + @test.com
-    let short_prefix = if prefix.len() > 5 {
-        &prefix[..5]
-    } else {
-        prefix
-    };
-    format!("{}{}@test.com", short_prefix, timestamp)
-}
 
 fn register_and_login_user(
     server: &SharedTestServer,
@@ -298,4 +283,3 @@ fn test_refresh_tokens_multiple_times() {
         refresh_token = new_refresh_token.to_string();
     }
 }
-

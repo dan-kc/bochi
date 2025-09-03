@@ -1,50 +1,7 @@
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::common::SharedTestServer;
-
-fn unique_email(prefix: &str) -> String {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // Keep email under 40 chars: prefix + timestamp + @test.com
-    let short_prefix = if prefix.len() > 5 {
-        &prefix[..5]
-    } else {
-        prefix
-    };
-    format!("{}{}@test.com", short_prefix, timestamp)
-}
-
-fn register_user(
-    server: &SharedTestServer,
-    email: &str,
-    password: &str,
-) -> Result<serde_json::Value, String> {
-    let response = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password,
-            "confirmPassword": password
-        }),
-    );
-
-    match response {
-        Ok(resp) => {
-            let body = resp
-                .into_string()
-                .map_err(|e| format!("Failed to read response: {}", e))?;
-            serde_json::from_str(&body).map_err(|e| format!("Failed to parse JSON: {}", e))
-        }
-        Err(ureq::Error::Status(409, _)) => {
-            // User already exists, that's ok for our test setup
-            Ok(serde_json::json!({"message": "user already exists"}))
-        }
-        Err(e) => Err(format!("Registration failed: {}", e)),
-    }
-}
+use crate::common::{register_user, unique_email, SharedTestServer};
 
 #[test]
 fn test_login_success() {
@@ -343,4 +300,3 @@ fn test_login_boundary_password_lengths() {
         "Login with 7-character password should fail"
     );
 }
-
