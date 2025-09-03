@@ -1,6 +1,4 @@
-mod common;
-
-use common::{create_password_of_length, SharedTestServer};
+use crate::common::{create_password_of_length, SharedTestServer};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 

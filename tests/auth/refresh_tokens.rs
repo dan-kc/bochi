@@ -1,6 +1,4 @@
-mod common;
-
-use common::SharedTestServer;
+use crate::common::SharedTestServer;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
