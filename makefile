@@ -74,3 +74,18 @@ show-schema-tasks:
 ## show-schema-habits: displays all entries in the habits table
 show-schema-habits:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ habits"
+
+## db-refresh: drops and recreates databases, then applies migrations
+.PHONY: db-refresh
+db-refresh:
+	@echo "Dropping existing databases..."
+	docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS habit_market;"
+	docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS test_habit_market;"
+	@echo "Creating databases..."
+	docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE habit_market;"
+	docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
+	@echo "Applying migrations to habit_market..."
+	DATABASE_NAME=habit_market flyway -configFiles=./flyway.toml -locations=filesystem:./migrations migrate
+	@echo "Applying migrations to test_habit_market..."
+	DATABASE_NAME=test_habit_market flyway -configFiles=./flyway.toml -locations=filesystem:./migrations migrate
+	@echo "Database refresh complete!"
