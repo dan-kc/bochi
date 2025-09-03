@@ -78,6 +78,8 @@ show-schema-habits:
 ## db-refresh: drops and recreates databases, then applies migrations
 .PHONY: db-refresh
 db-refresh:
+	@echo "Killing any running habit-market-backend processes..."
+	-pkill -f habit-market-backend
 	@echo "Dropping existing databases..."
 	docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS habit_market;"
 	docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS test_habit_market;"

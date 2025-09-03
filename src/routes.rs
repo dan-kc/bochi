@@ -314,7 +314,7 @@ pub async fn login(
         .is_match(input.email.as_str());
     let email_too_long = input.email.len() > 40;
     let password_ascii = input.password.is_ascii();
-    let password_in_bounds = input.password.len() < 64 && input.password.len() > 8;
+    let password_in_bounds = input.password.len() <= 64 && input.password.len() >= 8;
     if !valid_email || email_too_long || !password_ascii || !password_in_bounds {
         return Err(Error::InvalidLoginCredentials);
     };
@@ -363,9 +363,25 @@ pub async fn logout(
     State(app): State<App>,
     Json(input): Json<LogoutInput>,
 ) -> Result<Response, Error> {
+    // Parse refresh token to get user_id, name, and uuid part
+    let (user_id, name, refresh_token) = parse_refresh_token(input.refresh_token.as_str())
+        .map_err(|_| Error::InvalidRefreshToken)?;
+
+    // Validate the refresh token exists and matches
+    let refresh_token_row = app
+        .database
+        .get_refresh_token_from_name_user(name.as_str(), user_id)
+        .await
+        .map_err(|_| Error::InvalidRefreshToken)?;
+
+    if !security::check_password(refresh_token_row.key.as_str(), refresh_token.as_str()) {
+        return Err(Error::InvalidRefreshToken);
+    }
+
+    // Delete the validated refresh token
     let _ = app
         .database
-        .delete_refresh_token(input.refresh_token.as_str())
+        .delete_refresh_token_by_user_and_name(user_id, name.as_str())
         .await;
 
     Ok(Json(LogoutResponse { success: true }).into_response())

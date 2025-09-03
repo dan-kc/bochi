@@ -184,9 +184,14 @@ impl Database {
         Ok(refresh_token_row)
     }
 
-    pub async fn delete_refresh_token(&self, refresh_token: &str) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
-            .bind(refresh_token)
+    pub async fn delete_refresh_token_by_user_and_name(
+        &self,
+        user_id: i32,
+        name: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM refresh_tokens WHERE user_id = $1 AND name = $2")
+            .bind(user_id)
+            .bind(name)
             .execute(&self.pool)
             .await?;
 
