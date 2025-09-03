@@ -237,8 +237,7 @@ fn test_login_boundary_password_lengths() {
         "/auth/register",
         json!({
             "email": &email8,
-            "password": password8,
-            "confirmPassword": password8
+            "password": password8
         }),
     );
 

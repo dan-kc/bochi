@@ -75,9 +75,9 @@ show-schema-tasks:
 show-schema-habits:
 	docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ habits"
 
-## db-refresh: drops and recreates databases, then applies migrations
-.PHONY: db-refresh
-db-refresh:
+## refresh: drops and recreates databases, then applies migrations
+.PHONY: refresh
+refresh:
 	@echo "Killing any running habit-market-backend processes..."
 	-pkill -f habit-market-backend
 	@echo "Dropping existing databases..."

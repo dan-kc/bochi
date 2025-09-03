@@ -130,7 +130,6 @@ pub enum ValidationError {
     EmailTooLong,
     PasswordTooLong,
     PasswordTooShort,
-    PasswordMismatch,
 }
 impl Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -148,9 +147,6 @@ impl Display for ValidationError {
             Self::PasswordTooShort => write!(f,
                  "Password too short. The min password length is 8."
             ),
-            Self::PasswordMismatch => write!(f,
-                 "Passwords do not match."
-            ),
         }
     }
 }
@@ -160,7 +156,6 @@ impl Display for ValidationError {
 pub struct RegisterInput {
     email: String,
     password: String,
-    confirm_password: String,
 }
 #[debug_handler]
 pub async fn register(
@@ -185,9 +180,6 @@ pub async fn register(
     }
     if input.password.len() < 8 {
         errors.push(ValidationError::PasswordTooShort);
-    }
-    if input.password != input.confirm_password {
-        errors.push(ValidationError::PasswordMismatch);
     }
     if !errors.is_empty() {
         return Err(Error::ValidationErrorList(errors));

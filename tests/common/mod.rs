@@ -147,8 +147,7 @@ pub fn register_and_login_user(
         "/auth/register",
         json!({
             "email": email,
-            "password": password,
-            "confirmPassword": password
+            "password": password
         }),
     );
 
@@ -181,8 +180,7 @@ pub fn register_user(
         "/auth/register",
         json!({
             "email": email,
-            "password": password,
-            "confirmPassword": password
+            "password": password
         }),
     );
 

@@ -11,8 +11,7 @@ fn register_and_login_user(
         "/auth/register",
         json!({
             "email": email,
-            "password": password,
-            "confirmPassword": password
+            "password": password
         }),
     );
 

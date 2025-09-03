@@ -10,8 +10,7 @@ fn test_register_success() {
         "/auth/register",
         json!({
             "email": unique_email("test"),
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
 
@@ -44,8 +43,7 @@ fn test_register_user_already_exists() {
         "/auth/register",
         json!({
             "email": &email,
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
     assert!(first_response.is_ok(), "First registration should succeed");
@@ -55,8 +53,7 @@ fn test_register_user_already_exists() {
         "/auth/register",
         json!({
             "email": &email,
-            "password": "password456",
-            "confirmPassword": "password456"
+            "password": "password456"
         }),
     );
 
@@ -97,8 +94,7 @@ fn test_register_invalid_email() {
         "/auth/register",
         json!({
             "email": "notanemail",
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
 
@@ -147,8 +143,7 @@ fn test_register_email_too_long() {
         "/auth/register",
         json!({
             "email": long_email,
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
 
@@ -204,8 +199,7 @@ fn test_register_password_too_short() {
         "/auth/register",
         json!({
             "email": unique_email("short"),
-            "password": "short",
-            "confirmPassword": "short"
+            "password": "short"
         }),
     );
 
@@ -250,8 +244,7 @@ fn test_register_password_too_long() {
         "/auth/register",
         json!({
             "email": unique_email("longpw"),
-            "password": &long_password,
-            "confirmPassword": &long_password
+            "password": &long_password
         }),
     );
 
@@ -295,8 +288,7 @@ fn test_register_password_not_ascii() {
         "/auth/register",
         json!({
             "email": unique_email("nonascii"),
-            "password": "pass😊word",
-            "confirmPassword": "pass😊word"
+            "password": "pass😊word"
         }),
     );
 
@@ -330,51 +322,6 @@ fn test_register_password_not_ascii() {
 }
 
 #[test]
-fn test_register_password_mismatch() {
-    let server = SharedTestServer::get();
-
-    let response = server.post_json(
-        "/auth/register",
-        json!({
-            "email": unique_email("mismatch"),
-            "password": "password123",
-            "confirmPassword": "password456"
-        }),
-    );
-
-    assert!(
-        response.is_err(),
-        "Registration with mismatched passwords should fail"
-    );
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(code, 400, "Expected status code 400 for password mismatch");
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("PASSWORD_MISMATCH")
-        );
-        assert_eq!(
-            error.get("message").and_then(|v| v.as_str()),
-            Some("Passwords do not match.")
-        );
-    } else {
-        panic!("Expected error status 400");
-    }
-}
-
-#[test]
 fn test_register_multiple_validation_errors() {
     let server = SharedTestServer::get();
     // Create a definitely unique email by adding timestamp
@@ -389,8 +336,7 @@ fn test_register_multiple_validation_errors() {
         "/auth/register",
         json!({
             "email": long_email,
-            "password": long_password,
-            "confirmPassword": "different"
+            "password": long_password
         }),
     );
 
@@ -441,10 +387,6 @@ fn test_register_multiple_validation_errors() {
                 error_codes.contains(&"PASSWORD_TOO_LONG"),
                 "Should have PASSWORD_TOO_LONG error"
             );
-            assert!(
-                error_codes.contains(&"PASSWORD_MISMATCH"),
-                "Should have PASSWORD_MISMATCH error"
-            );
         }
     } else {
         panic!("Expected error status 400");
@@ -460,8 +402,7 @@ fn test_register_edge_cases() {
         "/auth/register",
         json!({
             "email": unique_email("min"),
-            "password": "12345678",
-            "confirmPassword": "12345678"
+            "password": "12345678"
         }),
     );
     assert!(response.is_ok(), "8-character password should be valid");
@@ -472,8 +413,7 @@ fn test_register_edge_cases() {
         "/auth/register",
         json!({
             "email": unique_email("max"),
-            "password": &max_password,
-            "confirmPassword": &max_password
+            "password": &max_password
         }),
     );
     assert!(response.is_ok(), "64-character password should be valid");
@@ -483,8 +423,7 @@ fn test_register_edge_cases() {
         "/auth/register",
         json!({
             "email": unique_email("maxtest"),
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
     assert!(response.is_ok(), "Normal length email should be valid");
@@ -494,8 +433,7 @@ fn test_register_edge_cases() {
         "/auth/register",
         json!({
             "email": unique_email("dots.user"),
-            "password": "password123",
-            "confirmPassword": "password123"
+            "password": "password123"
         }),
     );
     assert!(response.is_ok(), "Email with dots should be valid");

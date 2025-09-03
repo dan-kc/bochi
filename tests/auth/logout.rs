@@ -19,8 +19,7 @@ fn test_logout_success() {
         "/auth/register",
         json!({
             "email": &email,
-            "password": password,
-            "confirmPassword": password
+            "password": password
         }),
     );
 
