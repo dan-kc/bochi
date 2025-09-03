@@ -41,7 +41,7 @@
           ];
           shellHook = ''
             # If localstack and db is not running then start it
-            docker compose up -d --remove-orphans db localstack
+            make start
 
             # Init secret management for local deployment
             export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
