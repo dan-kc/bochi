@@ -48,7 +48,7 @@
             export AWS_ACCESS_KEY_ID="test"
             export AWS_SECRET_ACCESS_KEY= "test"
             export AWS_DEFAULT_REGION="eu-west-1"
-            export AWS_SECRETS_PREFIX="" # use "test" in test runners
+            export AWS_SECRETS_PREFIX="" # use "test-" in test runners
             export DATABASE_NAME="habit_market" # use "test_habit_market" in test runnners
             export RUST_BACKTRACE=1
           '';

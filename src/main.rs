@@ -14,14 +14,3 @@ async fn main() {
         .await
         .unwrap();
 }
-//
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn test_something() {
-//         // let endpoint_url = std::env::var("AWS_ENDPOINT_URL_SECRETSMANAGER").unwrap();
-//         std::env::set_var("MY_TEST_VAR", "TNESTRTE");
-//         let test_var = std::env::var("MY_TEST_VAR").unwrap();
-//         println!("Endpoint URL: {}", test_var);
-//     }
-// }
