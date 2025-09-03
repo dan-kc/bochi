@@ -1,6 +1,6 @@
 mod common;
 
-use common::{create_email_of_length, create_password_of_length, TestServer};
+use common::{create_password_of_length, SharedTestServer};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,7 +14,7 @@ fn unique_email(prefix: &str) -> String {
 
 #[test]
 fn test_register_success() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = server.post_json(
         "/auth/register",
@@ -46,7 +46,7 @@ fn test_register_success() {
 
 #[test]
 fn test_register_user_already_exists() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
     let email = unique_email("duplicate");
 
     // First registration
@@ -101,7 +101,7 @@ fn test_register_user_already_exists() {
 
 #[test]
 fn test_register_invalid_email() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = server.post_json(
         "/auth/register",
@@ -146,8 +146,12 @@ fn test_register_invalid_email() {
 
 #[test]
 fn test_register_email_too_long() {
-    let server = TestServer::start();
-    let long_email = create_email_of_length(41);
+    let server = SharedTestServer::get();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let long_email = format!("test{}{}@example.com", timestamp, "x".repeat(15));
 
     let response = server.post_json(
         "/auth/register",
@@ -204,7 +208,7 @@ fn test_register_email_too_long() {
 
 #[test]
 fn test_register_password_too_short() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = server.post_json(
         "/auth/register",
@@ -249,7 +253,7 @@ fn test_register_password_too_short() {
 
 #[test]
 fn test_register_password_too_long() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
     let long_password = create_password_of_length(65);
 
     let response = server.post_json(
@@ -295,7 +299,7 @@ fn test_register_password_too_long() {
 
 #[test]
 fn test_register_password_not_ascii() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = server.post_json(
         "/auth/register",
@@ -337,7 +341,7 @@ fn test_register_password_not_ascii() {
 
 #[test]
 fn test_register_password_mismatch() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = server.post_json(
         "/auth/register",
@@ -382,7 +386,7 @@ fn test_register_password_mismatch() {
 
 #[test]
 fn test_register_multiple_validation_errors() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
     // Create a definitely unique email by adding timestamp
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -459,7 +463,7 @@ fn test_register_multiple_validation_errors() {
 
 #[test]
 fn test_register_edge_cases() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     // Test minimum valid password length (8 characters)
     let response = server.post_json(

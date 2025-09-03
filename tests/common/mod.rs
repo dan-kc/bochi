@@ -1,10 +1,17 @@
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+static SHARED_SERVER: OnceLock<Arc<Mutex<TestServer>>> = OnceLock::new();
+
 pub struct TestServer {
     pub process: Child,
+    pub base_url: String,
+}
+
+pub struct SharedTestServer {
     pub base_url: String,
 }
 
@@ -56,7 +63,7 @@ impl TestServer {
                 Ok(None) => {
                     // Process is still running, check if it's ready
                     thread::sleep(Duration::from_millis(500));
-                    
+
                     if ureq::get(&format!("{}/health", base_url)).call().is_ok() {
                         return TestServer {
                             process: server,
@@ -73,8 +80,28 @@ impl TestServer {
         server.kill().ok();
         panic!("Server did not start within timeout period");
     }
+}
 
-    pub fn post_json(&self, path: &str, json: serde_json::Value) -> Result<ureq::Response, ureq::Error> {
+impl SharedTestServer {
+    #[allow(dead_code)]
+    pub fn get() -> Self {
+        let server_arc = SHARED_SERVER.get_or_init(|| {
+            let server = TestServer::start();
+            Arc::new(Mutex::new(server))
+        });
+
+        let server = server_arc.lock().unwrap();
+        SharedTestServer {
+            base_url: server.base_url.clone(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn post_json(
+        &self,
+        path: &str,
+        json: serde_json::Value,
+    ) -> Result<ureq::Response, ureq::Error> {
         ureq::post(&format!("{}{}", self.base_url, path))
             .set("Content-Type", "application/json")
             .send_string(&json.to_string())
@@ -87,14 +114,7 @@ impl Drop for TestServer {
     }
 }
 
-pub fn create_email_of_length(len: usize) -> String {
-    if len < 7 {
-        panic!("Email must be at least 7 characters for a@b.co format");
-    }
-    let padding_needed = len - 7; // 7 chars for "a@b.co"
-    format!("a{}@b.co", "x".repeat(padding_needed))
-}
-
+#[allow(dead_code)]
 pub fn create_password_of_length(len: usize) -> String {
     "a".repeat(len)
 }

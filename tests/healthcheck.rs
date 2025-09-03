@@ -1,10 +1,10 @@
 mod common;
 
-use common::TestServer;
+use common::SharedTestServer;
 
 #[test]
 fn test_healthcheck() {
-    let server = TestServer::start();
+    let server = SharedTestServer::get();
 
     let response = ureq::get(&format!("{}/health", server.base_url))
         .call()
