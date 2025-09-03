@@ -1,6 +1,4 @@
-mod common;
-
-use common::{create_password_of_length, SharedTestServer};
+use crate::common::{create_password_of_length, SharedTestServer};
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -510,4 +508,3 @@ fn test_register_edge_cases() {
     );
     assert!(response.is_ok(), "Email with dots should be valid");
 }
-

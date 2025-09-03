@@ -23,4 +23,3 @@ fn test_healthcheck() {
         "Response should indicate healthy status"
     );
 }
-
