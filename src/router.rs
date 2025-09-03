@@ -42,6 +42,7 @@ pub async fn router() -> axum::Router {
     let db_password = secrets_client.get_secret("db-password").await.unwrap();
     let db_host = secrets_client.get_secret("db-host").await.unwrap();
     let db_name = secrets_client.get_secret("db-name").await.unwrap();
+    println!("loaded secrets");
 
     let database = database::Database::new(
         db_user.as_str(),
@@ -64,9 +65,9 @@ pub async fn router() -> axum::Router {
         .layer(Extension(schema));
 
     let auth_router = axum::Router::new()
+        .route("/register", post(routes::register))
         .route("/login", post(routes::login))
         .route("/logout", post(routes::logout))
-        .route("/register", post(routes::register))
         .route("/refresh-tokens", post(routes::refresh_tokens));
 
     axum::Router::new()
