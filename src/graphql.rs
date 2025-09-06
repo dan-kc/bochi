@@ -44,9 +44,7 @@ struct TaskObject {
     hidden_until: Option<NaiveDateTime>,
     due_by: Option<NaiveDateTime>,
     description: String,
-    difficulty: i32,
-    importance: i32,
-    duration: i32,
+    difficulty_rank: i32,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -58,9 +56,7 @@ impl From<TaskRow> for TaskObject {
             hidden_until: task_row.hidden_until,
             due_by: task_row.due_by,
             description: task_row.description,
-            difficulty: task_row.difficulty,
-            importance: task_row.importance,
-            duration: task_row.duration,
+            difficulty_rank: task_row.difficulty_rank,
         }
     }
 }
@@ -226,12 +222,8 @@ pub struct CreateTaskInput {
     pub due_by: Option<NaiveDateTime>,
     #[graphql(validator(max_length = 3000))]
     pub description: String,
-    #[graphql(validator(minimum = 0, maximum = 10))]
-    pub difficulty: i32,
-    #[graphql(validator(minimum = 0, maximum = 10))]
-    pub importance: i32,
-    #[graphql(validator(minimum = 0, maximum = 86400))]
-    pub duration: i32,
+    #[graphql(validator(minimum = 0))]
+    pub difficulty_rank: i32,
 }
 
 #[derive(InputObject)]

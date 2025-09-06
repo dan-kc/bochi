@@ -45,16 +45,14 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description, difficulty, importance, duration) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+            (user_id, name, hidden_until, due_by, description, difficulty_rank) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
         .bind(create_task_options.hidden_until)
         .bind(create_task_options.due_by)
         .bind(create_task_options.description)
-        .bind(create_task_options.difficulty)
-        .bind(create_task_options.importance)
-        .bind(create_task_options.duration)
+        .bind(create_task_options.difficulty_rank)
         .fetch_one(&self.pool)
         .await
     }
@@ -244,9 +242,7 @@ pub struct CreateTaskOptions {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
-    pub difficulty: i32,
-    pub importance: i32,
-    pub duration: i32,
+    pub difficulty_rank: i32,
 }
 impl CreateTaskOptions {
     pub fn new(input: CreateTaskInput, user_id: i32) -> Self {
@@ -256,9 +252,7 @@ impl CreateTaskOptions {
             hidden_until: input.hidden_until,
             due_by: input.due_by,
             description: input.description,
-            difficulty: input.difficulty,
-            importance: input.importance,
-            duration: input.duration,
+            difficulty_rank: input.difficulty_rank,
         }
     }
 }
@@ -396,10 +390,8 @@ pub struct TaskRow {
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
-    pub difficulty: i32,
+    pub difficulty_rank: i32,
     pub description: String,
-    pub importance: i32,
-    pub duration: i32,
 }
 
 #[derive(sqlx::FromRow)]
