@@ -290,7 +290,7 @@ pub async fn graphql(
 
     // Log the GraphQL operation details
     info!(
-        query = %inner_req.query,
+        query = %inner_req.query, // % uses Display to print
         "GraphQL operation",
     );
 
