@@ -51,6 +51,7 @@
             export AWS_SECRETS_PREFIX="" # use "test-" in test runners
             export DATABASE_NAME="habit_market" # use "test_habit_market" in test runnners
             export RUST_BACKTRACE=1
+            export RUST_LOG=trace
           '';
         };
 

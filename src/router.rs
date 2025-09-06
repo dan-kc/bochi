@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing::{info, Level};
 
 /// Stuff we need in every route and all middleware. This is seperate to what we need in gql
 /// resolvers.
@@ -42,7 +43,7 @@ pub async fn router() -> axum::Router {
     let db_password = secrets_client.get_secret("db-password").await.unwrap();
     let db_host = secrets_client.get_secret("db-host").await.unwrap();
     let db_name = secrets_client.get_secret("db-name").await.unwrap();
-    println!("loaded secrets");
+    info!("loaded secrets");
 
     let database = database::Database::new(
         db_user.as_str(),
@@ -58,7 +59,7 @@ pub async fn router() -> axum::Router {
         .finish();
     let app = App::new(jwt_manager, database);
 
-    println!("connected to db");
+    info!("connected to db");
 
     let graphql_middleware_stack = tower::ServiceBuilder::new()
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth))
@@ -71,7 +72,11 @@ pub async fn router() -> axum::Router {
         .route("/refresh-tokens", post(routes::refresh_tokens));
 
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:3000".parse::<axum::http::HeaderValue>().unwrap())
+        .allow_origin(
+            "http://localhost:3000"
+                .parse::<axum::http::HeaderValue>()
+                .unwrap(),
+        )
         .allow_methods([
             axum::http::Method::GET,
             axum::http::Method::POST,
@@ -91,7 +96,20 @@ pub async fn router() -> axum::Router {
         )
         .nest("/auth", auth_router)
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                let request_id = uuid::Uuid::new_v4().to_string();
+
+                tracing::span!(
+                    Level::DEBUG,
+                    "request",
+                    %request_id,
+                    method = ?request.method(),
+                    uri = %request.uri(),
+                    version = ?request.version(),
+                )
+            }),
+        )
         .with_state(app)
 }
 
