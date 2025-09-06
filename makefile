@@ -5,10 +5,6 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
-flyway:
-	@echo "Running Flyway with config: migrations/flyway.toml $(ARGS)"
-	flyway -configFiles=migrations/flyway.toml $(ARGS)
-
 # start: start environment
 .PHONY: start
 start:
