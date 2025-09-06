@@ -15,6 +15,7 @@ use axum::{
 };
 use convert_case::Casing;
 use regex::Regex;
+use tracing::info;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -286,6 +287,12 @@ pub async fn graphql(
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     let inner_req = req.into_inner();
+
+    // Log the GraphQL operation details
+    info!(
+        query = %inner_req.query,
+        "GraphQL operation",
+    );
 
     schema.execute(inner_req.data(auth_status)).await.into()
 }

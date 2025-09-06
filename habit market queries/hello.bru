@@ -1,0 +1,25 @@
+meta {
+  name: hello
+  type: graphql
+  seq: 2
+}
+
+post {
+  url: http://127.0.0.1:8080/graphql
+  body: graphql
+  auth: inherit
+}
+
+headers {
+  Authorization: eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJleHAiOjE3NTcxNjQ3OTksInN1YiI6IjEifQ.jaF7qQmJfNujn2AflhLDHALhN0bsHX6JMYuSFYqMKUOtcsqnNThH9lcEJas0sgC_jUPdPWfn5mG95_jK6NGmCw
+}
+
+body:graphql {
+  query {
+    hello
+  }
+}
+
+settings {
+  encodeUrl: true
+}
