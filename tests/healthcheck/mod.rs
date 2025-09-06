@@ -1,6 +1,4 @@
-mod common;
-
-use common::SharedTestServer;
+use crate::common::SharedTestServer;
 
 #[test]
 fn test_healthcheck() {

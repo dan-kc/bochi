@@ -13,17 +13,21 @@ fn make_authenticated_graphql_request(
 }
 
 fn get_access_token_for_user(server: &SharedTestServer, email: &str, password: &str) -> String {
-    let login_response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Login should succeed");
+    let login_response = server
+        .post_json(
+            "/auth/login",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Login should succeed");
 
-    let body = login_response.into_string().expect("Failed to read login response");
+    let body = login_response
+        .into_string()
+        .expect("Failed to read login response");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse login JSON");
-    
+
     json.get("accessToken")
         .and_then(|v| v.as_str())
         .expect("Login response should contain accessToken")
@@ -37,13 +41,15 @@ fn test_create_task_success() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -71,22 +77,30 @@ fn test_create_task_success() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "CreateTask mutation should succeed");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
+
     assert!(json.get("data").is_some(), "Response should have data");
     let data = json.get("data").unwrap();
     let task = data.get("createTask").unwrap();
-    
+
     assert!(task.get("id").is_some(), "Task should have id");
     assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Test Task");
-    assert_eq!(task.get("description").unwrap().as_str().unwrap(), "A test task description");
+    assert_eq!(
+        task.get("description").unwrap().as_str().unwrap(),
+        "A test task description"
+    );
     assert_eq!(task.get("difficultyRank").unwrap().as_i64().unwrap(), 5);
-    assert!(task.get("createdAt").is_some(), "Task should have createdAt");
+    assert!(
+        task.get("createdAt").is_some(),
+        "Task should have createdAt"
+    );
 }
 
 #[test]
@@ -96,13 +110,15 @@ fn test_create_task_with_optional_fields() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -129,14 +145,19 @@ fn test_create_task_with_optional_fields() {
     });
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "CreateTask with optional fields should succeed");
-    
+    assert!(
+        response.is_ok(),
+        "CreateTask with optional fields should succeed"
+    );
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
+
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert!(task.get("hiddenUntil").is_some());
     assert!(task.get("dueBy").is_some());
@@ -149,13 +170,15 @@ fn test_create_task_validation_name_too_long() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -178,14 +201,19 @@ fn test_create_task_validation_name_too_long() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "Request should be sent successfully");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
-    assert!(json.get("errors").is_some(), "Response should contain validation errors");
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
     let errors = json.get("errors").unwrap().as_array().unwrap();
     assert!(!errors.is_empty(), "Should have validation errors");
 }
@@ -197,13 +225,15 @@ fn test_create_task_validation_description_too_long() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -226,14 +256,19 @@ fn test_create_task_validation_description_too_long() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "Request should be sent successfully");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
-    assert!(json.get("errors").is_some(), "Response should contain validation errors");
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
 }
 
 #[test]
@@ -243,13 +278,15 @@ fn test_create_task_validation_difficulty_rank_negative() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -271,16 +308,24 @@ fn test_create_task_validation_difficulty_rank_negative() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "Request should be sent successfully");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
-    assert!(json.get("errors").is_some(), "Response should contain validation errors");
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.is_empty(), "Should have validation errors for negative difficulty_rank");
+    assert!(
+        !errors.is_empty(),
+        "Should have validation errors for negative difficulty_rank"
+    );
 }
 
 #[test]
@@ -306,9 +351,9 @@ fn test_create_task_without_authentication() {
     let response = ureq::post(&format!("{}/graphql", server.base_url))
         .set("Content-Type", "application/json")
         .send_string(&query.to_string());
-    
+
     assert!(response.is_err(), "Request without auth should fail");
-    
+
     if let Err(ureq::Error::Status(code, _)) = response {
         assert_eq!(code, 401, "Should return 401 Unauthorized");
     } else {
@@ -330,7 +375,7 @@ fn test_create_task_with_invalid_auth_token() {
         "variables": {
             "input": {
                 "name": "Test Task",
-                "description": "Test description", 
+                "description": "Test description",
                 "difficultyRank": 5
             }
         }
@@ -342,7 +387,7 @@ fn test_create_task_with_invalid_auth_token() {
         .send_string(&query.to_string());
 
     assert!(response.is_err(), "Request with invalid auth should fail");
-    
+
     if let Err(ureq::Error::Status(code, _)) = response {
         assert_eq!(code, 401, "Should return 401 Unauthorized");
     } else {
@@ -357,13 +402,15 @@ fn test_create_task_minimum_valid_input() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
@@ -387,13 +434,15 @@ fn test_create_task_minimum_valid_input() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "Minimal valid input should succeed");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
+
     assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("name").unwrap().as_str().unwrap(), "T");
@@ -408,19 +457,21 @@ fn test_create_task_maximum_valid_input() {
     let password = "password123";
 
     // Register user
-    let _ = server.post_json(
-        "/auth/register",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    ).expect("Registration should succeed");
+    let _ = server
+        .post_json(
+            "/auth/register",
+            json!({
+                "email": email,
+                "password": password
+            }),
+        )
+        .expect("Registration should succeed");
 
     let access_token = get_access_token_for_user(&server, &email, &password);
 
     let max_name = "a".repeat(100);
     let max_description = "b".repeat(3000);
-    
+
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
             createTask(input: $input) {
@@ -441,14 +492,19 @@ fn test_create_task_maximum_valid_input() {
 
     let response = make_authenticated_graphql_request(&server, &access_token, query);
     assert!(response.is_ok(), "Maximum valid input should succeed");
-    
+
     let response = response.unwrap();
     assert_eq!(response.status(), 200);
-    
-    let body = response.into_string().expect("Failed to read response body");
+
+    let body = response
+        .into_string()
+        .expect("Failed to read response body");
     let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-    
+
     assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();
-    assert!(task.get("id").is_some(), "Task should be created with valid max inputs");
+    assert!(
+        task.get("id").is_some(),
+        "Task should be created with valid max inputs"
+    );
 }

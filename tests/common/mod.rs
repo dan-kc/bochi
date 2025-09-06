@@ -44,6 +44,8 @@ impl TestServer {
             .spawn()
             .expect("Failed to start server");
 
+        // std::thread::sleep(std::time::Duration::from_secs(2));
+
         // Wait for server to be ready
         let start = Instant::now();
         let timeout = Duration::from_secs(30);
