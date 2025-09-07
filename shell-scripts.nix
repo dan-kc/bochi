@@ -44,7 +44,7 @@ let
     # Displays the schema of a database table in habit_market
     schema = pkgs.writeShellScriptBin "schema" ''
       if [ -z "$1" ]; then
-        echo "Usage: clean <table name>"
+        echo "Usage: schema <table name>"
         exit 1
       fi
       TABLE_NAME="$1"
@@ -52,7 +52,7 @@ let
     '';
 
     # Flyway wrapper with config
-    flyway = pkgs.writeShellScriptBin "schema" ''
+    fw = pkgs.writeShellScriptBin "fw" ''
       # Use the first argument as DATABASE_NAME if provided, otherwise default to habit_market
       # Shift removes the first argument so "$@" correctly passes remaining arguments
       if [ -n "$1" ]; then
@@ -63,13 +63,13 @@ let
       fi
 
       echo "Using database: ''${DATABASE_NAME}"
-      ${pkgs.flyway} -configFiles=./flyway.toml -locations=filesystem:./migrations -url="jdbc:postgresql://db:5432/''${DATABASE_NAME}" "$@"
+      ${pkgs.flyway}/bin/flyway -configFiles=./flyway.toml -locations=filesystem:./migrations -url="jdbc:postgresql://db:5432/''${DATABASE_NAME}" "$@"
     '';
 
     # drops and recreates the provided database, then applies migrations.
     nuke = pkgs.writeShellScriptBin "nuke" ''
       if [ -z "$1" ]; then
-        echo "Usage: clean <database_name>"
+        echo "Usage: nuke <database_name>"
         exit 1
       fi
       DB_NAME="$1"
@@ -80,7 +80,7 @@ let
       echo "Creating database..."
       docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE ''${DB_NAME};"
       echo "Applying migrations to ''${DB_NAME}..."
-      ${flyway}/bin/flyway ''${DB_NAME}
+      ${fw}/bin/flyway ''${DB_NAME}
       echo "Database refresh complete!"
     '';
 
