@@ -3,13 +3,14 @@ let
   scripts = rec {
     # Whipes all tables in the provided database.
     clean = pkgs.writeShellScriptBin "clean" ''
+      set -e 
       if [ -z "$1" ]; then
         echo "Usage: clean <database_name>"
         exit 1
       fi
       DB_NAME="$1"
       echo "Truncating all tables in ''${DB_NAME} database..."
-      docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE habits, refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
       echo "Database cleaned!"
     '';
 
@@ -25,6 +26,7 @@ let
 
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
+      set -e 
       ${clean}/bin/clean test_habit_market
       AWS_SECRETS_PREFIX="test-" DATABASE_NAME="test_habit_market" cargo test "$@"
     '';
@@ -36,6 +38,7 @@ let
 
     # build: builds server docker image
     build = pkgs.writeShellScriptBin "build" ''
+      set -e 
       nix build .#server-docker
       docker load < result
       rm result
@@ -43,6 +46,7 @@ let
 
     # Displays the schema of a database table in habit_market
     schema = pkgs.writeShellScriptBin "schema" ''
+      set -e 
       if [ -z "$1" ]; then
         echo "Usage: schema <table name>"
         exit 1
@@ -53,6 +57,7 @@ let
 
     # Flyway wrapper with config
     fw = pkgs.writeShellScriptBin "fw" ''
+      set -e 
       # Use the first argument as DATABASE_NAME if provided, otherwise default to habit_market
       # Shift removes the first argument so "$@" correctly passes remaining arguments
       if [ -n "$1" ]; then
@@ -75,6 +80,7 @@ let
 
     # drops and recreates the provided database, then applies migrations.
     nuke = pkgs.writeShellScriptBin "nuke" ''
+      set -e 
       if [ -z "$1" ]; then
         echo "Usage: nuke <database_name>"
         exit 1
