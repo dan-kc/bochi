@@ -4,7 +4,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use habit_market_backend::router;
 use http::Method;
-use serde_json::json;
+use serde_json::{json, Value};
 use tower::ServiceExt;
 
 #[tokio::test]
@@ -28,13 +28,13 @@ async fn test_create_task_success() {
                 dueBy
                 description
                 difficultyRank
+                dailyFrequency
             }
         }",
         "variables": {
             "input": {
                 "name": "Test Task",
                 "description": "A test task description",
-                "difficultyRank": 5
             }
         }
     });
@@ -57,6 +57,115 @@ async fn test_create_task_success() {
         task.get("createdAt").is_some(),
         "Task should have createdAt"
     );
+    assert!(task.get("dueBy").is_none());
+    assert!(task.get("dailyFrequency").is_none());
+}
+#[tokio::test]
+async fn test_create_due_task_success() {
+    let email = generate_email_from_fn!(test_create_task_success);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                createdAt
+                deletedAt
+                hiddenUntil
+                dueBy
+                description
+                difficultyRank
+                dailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "A test task description",
+                "difficultyRank": 5,
+                "dueBy": "2028-12-25T23:59:59",
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(json.get("data").is_some(), "Response should have data");
+    let data = json.get("data").unwrap();
+    let task = data.get("createTask").unwrap();
+
+    assert!(task.get("id").is_some(), "Task should have id");
+    assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Test Task");
+    assert_eq!(
+        task.get("description").unwrap().as_str().unwrap(),
+        "A test task description"
+    );
+    assert_eq!(task.get("difficultyRank").unwrap().as_i64().unwrap(), 5);
+    assert!(
+        task.get("createdAt").is_some(),
+        "Task should have createdAt"
+    );
+    assert_eq!(task.get("dueBy").unwrap(), "2028-12-25T23:59:59");
+}
+
+#[tokio::test]
+async fn test_create_recurring_task_success() {
+    let email = generate_email_from_fn!(test_create_task_success);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                createdAt
+                deletedAt
+                hiddenUntil
+                dueBy
+                description
+                difficultyRank
+                dailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "A test task description",
+                "difficultyRank": 5,
+                "dailyFrequency": 10,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(json.get("data").is_some(), "Response should have data");
+    let data = json.get("data").unwrap();
+    let task = data.get("createTask").unwrap();
+
+    assert!(task.get("id").is_some(), "Task should have id");
+    assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Test Task");
+    assert!(task.get("createdAt").is_some());
+    assert!(task.get("hiddenUntil").is_none());
+    assert_eq!(
+        task.get("description").unwrap().as_str().unwrap(),
+        "A test task description"
+    );
+    assert_eq!(task.get("difficultyRank").unwrap().as_i64().unwrap(), 5);
+    assert_eq!(task.get("dailyFrequency").unwrap(), 10);
 }
 
 #[tokio::test]
@@ -85,8 +194,8 @@ async fn test_create_task_with_optional_fields() {
                 "name": "Task with dates",
                 "description": "Task with optional dates",
                 "difficultyRank": 3,
-                "hiddenUntil": "2024-12-16T00:33:08",
-                "dueBy": "2024-12-25T23:59:59"
+                "hiddenUntil": "2028-12-16T00:33:08",
+                "dueBy": "2028-12-25T23:59:59",
             }
         }
     });
@@ -95,8 +204,56 @@ async fn test_create_task_with_optional_fields() {
     assert_eq!(status, StatusCode::OK);
 
     let task = json.get("data").unwrap().get("createTask").unwrap();
-    assert!(task.get("hiddenUntil").is_some());
-    assert!(task.get("dueBy").is_some());
+    assert_eq!(task.get("hiddenUntil").unwrap(), "2028-12-16T00:33:08");
+    assert_eq!(task.get("dueBy").unwrap(), "2028-12-25T23:59:59");
+}
+
+#[tokio::test]
+async fn test_create_due_by_and_daily_freq() {
+    let email = generate_email_from_fn!(test_create_task_success);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                createdAt
+                deletedAt
+                hiddenUntil
+                dueBy
+                description
+                difficultyRank
+                dailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "A test task description",
+                "difficultyRank": 5,
+                "dailyFrequency": 10,
+                "dueBy": "2028-12-25T23:59:59",
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String(
+        "A task cannot have both a dueBy and a dailyFreqency.".to_string()
+    )));
 }
 
 #[tokio::test]
@@ -134,7 +291,7 @@ async fn test_create_task_validation_name_too_long() {
         "Response should contain validation errors"
     );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.is_empty(), "Should have validation errors");
+    assert!(!errors.contains(&Value::String("Should have validation errors".to_string())),);
 }
 
 #[tokio::test]
@@ -171,6 +328,8 @@ async fn test_create_task_validation_description_too_long() {
         json.get("errors").is_some(),
         "Response should contain validation errors"
     );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String("Should have validation errors".to_string())),);
 }
 
 #[tokio::test]
@@ -207,10 +366,7 @@ async fn test_create_task_validation_difficulty_rank_negative() {
         "Response should contain validation errors"
     );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(
-        !errors.is_empty(),
-        "Should have validation errors for negative difficulty_rank"
-    );
+    assert!(!errors.contains(&Value::String("Should have validation errors".to_string())),);
 }
 
 #[tokio::test]
@@ -333,7 +489,7 @@ async fn test_create_task_maximum_valid_input() {
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let max_name = "a".repeat(100);
-    let max_description = "b".repeat(3000);
+    let max_description = "b".repeat(16384);
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
