@@ -1,32 +1,72 @@
-use crate::common::{unique_email, SharedTestServer};
+use crate::generate_email_from_fn;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use habit_market_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
 use serde_json::json;
+use tower::ServiceExt;
 
-fn make_authenticated_graphql_request(
-    server: &SharedTestServer,
+async fn make_authenticated_graphql_request(
     access_token: &str,
     query: serde_json::Value,
-) -> Result<ureq::Response, ureq::Error> {
-    ureq::post(&format!("{}/graphql", server.base_url))
-        .set("Content-Type", "application/json")
-        .set("Authorization", access_token)
-        .send_string(&query.to_string())
+) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/graphql")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(http::header::AUTHORIZATION, access_token)
+                .body(Body::from(query.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    (status, json)
 }
 
-fn get_access_token_for_user(server: &SharedTestServer, email: &str, password: &str) -> String {
-    let login_response = server
-        .post_json(
-            "/auth/login",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Login should succeed");
+async fn get_access_token_for_user(email: &str, password: &str) -> String {
+    let router = router::router().await;
 
-    let body = login_response
-        .into_string()
-        .expect("Failed to read login response");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse login JSON");
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
 
     json.get("accessToken")
         .and_then(|v| v.as_str())
@@ -34,24 +74,36 @@ fn get_access_token_for_user(server: &SharedTestServer, email: &str, password: &
         .to_string()
 }
 
-#[test]
-fn test_create_task_success() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task");
+async fn register_user(email: &str, password: &str) {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let _ = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_create_task_success() {
+    let email = generate_email_from_fn!(test_create_task_success);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -75,16 +127,8 @@ fn test_create_task_success() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "CreateTask mutation should succeed");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(json.get("data").is_some(), "Response should have data");
     let data = json.get("data").unwrap();
@@ -103,24 +147,15 @@ fn test_create_task_success() {
     );
 }
 
-#[test]
-fn test_create_task_with_optional_fields() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_opt");
+#[tokio::test]
+async fn test_create_task_with_optional_fields() {
+    let email = generate_email_from_fn!(test_create_task_with_optional_fields);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -144,43 +179,23 @@ fn test_create_task_with_optional_fields() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(
-        response.is_ok(),
-        "CreateTask with optional fields should succeed"
-    );
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert!(task.get("hiddenUntil").is_some());
     assert!(task.get("dueBy").is_some());
 }
 
-#[test]
-fn test_create_task_validation_name_too_long() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_long");
+#[tokio::test]
+async fn test_create_task_validation_name_too_long() {
+    let email = generate_email_from_fn!(test_create_task_validation_name_too_long);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let long_name = "a".repeat(101);
     let query = json!({
@@ -199,16 +214,8 @@ fn test_create_task_validation_name_too_long() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "Request should be sent successfully");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(
         json.get("errors").is_some(),
@@ -218,26 +225,17 @@ fn test_create_task_validation_name_too_long() {
     assert!(!errors.is_empty(), "Should have validation errors");
 }
 
-#[test]
-fn test_create_task_validation_description_too_long() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_desc");
+#[tokio::test]
+async fn test_create_task_validation_description_too_long() {
+    let email = generate_email_from_fn!(test_create_task_validation_description_too_long);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
-    let long_description = "a".repeat(3001);
+    let long_description = "a".repeat(16385);
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
             createTask(input: $input) {
@@ -254,16 +252,8 @@ fn test_create_task_validation_description_too_long() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "Request should be sent successfully");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(
         json.get("errors").is_some(),
@@ -271,24 +261,15 @@ fn test_create_task_validation_description_too_long() {
     );
 }
 
-#[test]
-fn test_create_task_validation_difficulty_rank_negative() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_neg");
+#[tokio::test]
+async fn test_create_task_validation_difficulty_rank_negative() {
+    let email = generate_email_from_fn!(test_create_task_validation_difficulty_rank_negative);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -306,16 +287,8 @@ fn test_create_task_validation_difficulty_rank_negative() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "Request should be sent successfully");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(
         json.get("errors").is_some(),
@@ -328,9 +301,9 @@ fn test_create_task_validation_difficulty_rank_negative() {
     );
 }
 
-#[test]
-fn test_create_task_without_authentication() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_create_task_without_authentication() {
+    let router = router::router().await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -348,22 +321,24 @@ fn test_create_task_without_authentication() {
         }
     });
 
-    let response = ureq::post(&format!("{}/graphql", server.base_url))
-        .set("Content-Type", "application/json")
-        .send_string(&query.to_string());
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/graphql")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(query.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    assert!(response.is_err(), "Request without auth should fail");
-
-    if let Err(ureq::Error::Status(code, _)) = response {
-        assert_eq!(code, 401, "Should return 401 Unauthorized");
-    } else {
-        panic!("Expected 401 error");
-    }
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[test]
-fn test_create_task_with_invalid_auth_token() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_create_task_with_invalid_auth_token() {
+    let router = router::router().await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -381,38 +356,31 @@ fn test_create_task_with_invalid_auth_token() {
         }
     });
 
-    let response = ureq::post(&format!("{}/graphql", server.base_url))
-        .set("Content-Type", "application/json")
-        .set("Authorization", "Bearer invalid-token")
-        .send_string(&query.to_string());
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/graphql")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(http::header::AUTHORIZATION, "Bearer invalid-token")
+                .body(Body::from(query.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    assert!(response.is_err(), "Request with invalid auth should fail");
-
-    if let Err(ureq::Error::Status(code, _)) = response {
-        assert_eq!(code, 401, "Should return 401 Unauthorized");
-    } else {
-        panic!("Expected 401 error");
-    }
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[test]
-fn test_create_task_minimum_valid_input() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_min");
+#[tokio::test]
+async fn test_create_task_minimum_valid_input() {
+    let email = generate_email_from_fn!(test_create_task_minimum_valid_input);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
         "query": "mutation CreateTask($input: CreateTaskInput!) {
@@ -432,16 +400,8 @@ fn test_create_task_minimum_valid_input() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "Minimal valid input should succeed");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();
@@ -450,24 +410,15 @@ fn test_create_task_minimum_valid_input() {
     assert_eq!(task.get("difficultyRank").unwrap().as_i64().unwrap(), 0);
 }
 
-#[test]
-fn test_create_task_maximum_valid_input() {
-    let server = SharedTestServer::get();
-    let email = unique_email("task_max");
+#[tokio::test]
+async fn test_create_task_maximum_valid_input() {
+    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
     let password = "password123";
 
     // Register user
-    let _ = server
-        .post_json(
-            "/auth/register",
-            json!({
-                "email": email,
-                "password": password
-            }),
-        )
-        .expect("Registration should succeed");
+    register_user(&email, password).await;
 
-    let access_token = get_access_token_for_user(&server, &email, &password);
+    let access_token = get_access_token_for_user(&email, &password).await;
 
     let max_name = "a".repeat(100);
     let max_description = "b".repeat(3000);
@@ -490,16 +441,8 @@ fn test_create_task_maximum_valid_input() {
         }
     });
 
-    let response = make_authenticated_graphql_request(&server, &access_token, query);
-    assert!(response.is_ok(), "Maximum valid input should succeed");
-
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200);
-
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
 
     assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();

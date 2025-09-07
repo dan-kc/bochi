@@ -1,11 +1,55 @@
-use crate::common::{register_and_login_user, unique_email, SharedTestServer};
+use crate::generate_email_from_fn;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use habit_market_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tower::ServiceExt;
 
-#[test]
-fn test_logout_success() {
-    let server = SharedTestServer::get();
+async fn register_and_get_refresh_token(email: &str, password: &str) -> Result<String, String> {
+    let router = router::router().await;
 
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| format!("Failed to register: {}", e))?;
+
+    if response.status() != StatusCode::OK && response.status() != StatusCode::CONFLICT {
+        return Err(format!("Registration failed with status: {}", response.status()));
+    }
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?
+        .to_bytes();
+    
+    let json: serde_json::Value = serde_json::from_slice(&response_body_bytes)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+    json.get("refreshToken")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "No refreshToken in response".to_string())
+}
+
+#[tokio::test]
+async fn test_logout_success() {
     // Use a known working email pattern
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -14,42 +58,40 @@ fn test_logout_success() {
     let email = format!("user{}@example.com", timestamp);
     let password = "password123";
 
-    // Register user
-    let register_response = server.post_json(
-        "/auth/register",
-        json!({
-            "email": &email,
-            "password": password
-        }),
-    );
-
-    let refresh_token = register_response
-        .expect("Registration should succeed with fresh email")
-        .into_string()
-        .expect("Failed to read register response")
-        .parse::<serde_json::Value>()
-        .expect("Failed to parse register JSON")
-        .get("refreshToken")
-        .and_then(|v| v.as_str())
-        .expect("No refreshToken")
-        .to_string();
+    // Register user and get refresh token
+    let refresh_token = register_and_get_refresh_token(&email, password)
+        .await
+        .expect("Failed to register and get refresh token");
 
     // Test logout
-    let response = server.post_json(
-        "/auth/logout",
-        json!({
-            "refreshToken": refresh_token
-        }),
-    );
+    let router = router::router().await;
 
-    assert!(response.is_ok(), "Logout should succeed");
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200, "Expected status code 200");
+    let request_body = json!({
+        "refreshToken": refresh_token
+    });
 
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/logout")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
 
     assert_eq!(
         json.get("success").and_then(|v| v.as_bool()),
@@ -58,100 +100,124 @@ fn test_logout_success() {
     );
 }
 
-#[test]
-fn test_logout_with_invalid_token() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_logout_with_invalid_token() {
+    let router = router::router().await;
 
-    let response = server.post_json(
-        "/auth/logout",
-        json!({
-            "refreshToken": "invalid.token.here"
-        }),
+    let request_body = json!({
+        "refreshToken": "invalid.token.here"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/logout")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_REFRESH_TOKEN")
     );
-
-    // Logout should now fail with invalid token
-    assert!(response.is_err(), "Logout with invalid token should fail");
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(code, 401, "Expected status code 401 for invalid token");
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_REFRESH_TOKEN")
-        );
-        assert_eq!(
-            error.get("message").and_then(|v| v.as_str()),
-            Some("Invalid refresh token.")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
+    assert_eq!(
+        error.get("message").and_then(|v| v.as_str()),
+        Some("Invalid refresh token.")
+    );
 }
 
-#[test]
-fn test_logout_twice_with_same_token() {
-    let server = SharedTestServer::get();
-    let email = unique_email("logout2x");
+#[tokio::test]
+async fn test_logout_twice_with_same_token() {
+    let email = generate_email_from_fn!(test_logout_twice_with_same_token);
     let password = "password123";
 
-    // Register and get refresh token using existing pattern
-    let refresh_token = register_and_login_user(&server, &email, password)
-        .unwrap_or_else(|e| panic!("Failed to get user with email {}: {}", email, e));
+    // Register and get refresh token
+    let refresh_token = register_and_get_refresh_token(&email, password)
+        .await
+        .expect("Failed to register and get refresh token");
 
     // First logout should succeed
-    let response1 = server.post_json(
-        "/auth/logout",
-        json!({
-            "refreshToken": &refresh_token
-        }),
-    );
+    let router = router::router().await;
 
-    assert!(response1.is_ok(), "First logout should succeed");
-    assert_eq!(response1.unwrap().status(), 200, "Expected status code 200");
+    let request_body = json!({
+        "refreshToken": &refresh_token
+    });
+
+    let response1 = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/logout")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response1.status(), StatusCode::OK);
 
     // Second logout with same token should fail (token already invalidated)
-    let response2 = server.post_json(
-        "/auth/logout",
-        json!({
-            "refreshToken": refresh_token
-        }),
+    let router2 = router::router().await;
+
+    let request_body2 = json!({
+        "refreshToken": refresh_token
+    });
+
+    let response2 = router2
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/logout")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body2.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response2.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response2
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_REFRESH_TOKEN")
     );
-
-    assert!(
-        response2.is_err(),
-        "Second logout should fail - token already invalidated"
-    );
-    if let Err(ureq::Error::Status(code, response)) = response2 {
-        assert_eq!(code, 401, "Expected status code 401 for invalidated token");
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_REFRESH_TOKEN")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
 }

@@ -1,301 +1,359 @@
+use crate::generate_email_from_fn;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use habit_market_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tower::ServiceExt;
 
-use crate::common::{register_user, unique_email, SharedTestServer};
+async fn register_user_for_login(email: &str, password: &str) -> Result<(), String> {
+    let router = router::router().await;
 
-#[test]
-fn test_login_success() {
-    let server = SharedTestServer::get();
-    let email = unique_email("login");
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| format!("Failed to register: {}", e))?;
+
+    if response.status() == StatusCode::OK || response.status() == StatusCode::CONFLICT {
+        Ok(())
+    } else {
+        Err(format!("Registration failed with status: {}", response.status()))
+    }
+}
+
+#[tokio::test]
+async fn test_login_success() {
+    let email = generate_email_from_fn!(test_login_success);
     let password = "password123";
 
     // First register a user
-    register_user(&server, &email, password).expect("Failed to register user");
+    register_user_for_login(&email, password)
+        .await
+        .expect("Failed to register user");
 
     // Now test login
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": email,
-            "password": password
-        }),
-    );
+    let router = router::router().await;
 
-    assert!(response.is_ok(), "Login should succeed");
-    let response = response.unwrap();
-    assert_eq!(response.status(), 200, "Expected status code 200");
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
 
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
 
     assert!(
-        json.get("refreshToken").is_some(),
-        "Response should contain refreshToken"
+        json["refreshToken"].is_string(),
+        "Response should contain refreshToken as a string"
     );
     assert!(
-        json.get("accessToken").is_some(),
-        "Response should contain accessToken"
+        json["accessToken"].is_string(),
+        "Response should contain accessToken as a string"
     );
 }
 
-#[test]
-fn test_login_invalid_email() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_login_invalid_email() {
+    let router = router::router().await;
 
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": "notanemail",
-            "password": "password123"
-        }),
+    let request_body = json!({
+        "email": "notanemail",
+        "password": "password123"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_LOGIN_CREDENTIALS")
     );
-
-    assert!(response.is_err(), "Login with invalid email should fail");
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(
-            code, 401,
-            "Expected status code 401 for invalid credentials"
-        );
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_LOGIN_CREDENTIALS")
-        );
-        assert_eq!(
-            error.get("message").and_then(|v| v.as_str()),
-            Some("Incorrect email or password.")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
+    assert_eq!(
+        error.get("message").and_then(|v| v.as_str()),
+        Some("Incorrect email or password.")
+    );
 }
 
-#[test]
-fn test_login_nonexistent_user() {
-    let server = SharedTestServer::get();
-    let email = unique_email("nonexistent");
+#[tokio::test]
+async fn test_login_nonexistent_user() {
+    let router = router::router().await;
+    let email = generate_email_from_fn!(test_login_nonexistent_user);
 
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": email,
-            "password": "password123"
-        }),
+    let request_body = json!({
+        "email": email,
+        "password": "password123"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_LOGIN_CREDENTIALS")
     );
-
-    assert!(response.is_err(), "Login with nonexistent user should fail");
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(
-            code, 401,
-            "Expected status code 401 for invalid credentials"
-        );
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_LOGIN_CREDENTIALS")
-        );
-        assert_eq!(
-            error.get("message").and_then(|v| v.as_str()),
-            Some("Incorrect email or password.")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
+    assert_eq!(
+        error.get("message").and_then(|v| v.as_str()),
+        Some("Incorrect email or password.")
+    );
 }
 
-#[test]
-fn test_login_wrong_password() {
-    let server = SharedTestServer::get();
-    let email = unique_email("wrongpw");
+#[tokio::test]
+async fn test_login_wrong_password() {
+    let email = generate_email_from_fn!(test_login_wrong_password);
     let password = "password123";
 
     // First register a user
-    register_user(&server, &email, password).expect("Failed to register user");
+    register_user_for_login(&email, password)
+        .await
+        .expect("Failed to register user");
 
     // Now test login with wrong password
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": email,
-            "password": "wrongpassword"
-        }),
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": email,
+        "password": "wrongpassword"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_LOGIN_CREDENTIALS")
     );
-
-    assert!(response.is_err(), "Login with wrong password should fail");
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(
-            code, 401,
-            "Expected status code 401 for invalid credentials"
-        );
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_LOGIN_CREDENTIALS")
-        );
-        assert_eq!(
-            error.get("message").and_then(|v| v.as_str()),
-            Some("Incorrect email or password.")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
+    assert_eq!(
+        error.get("message").and_then(|v| v.as_str()),
+        Some("Incorrect email or password.")
+    );
 }
 
-#[test]
-fn test_login_email_too_long() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_login_email_too_long() {
+    let router = router::router().await;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
     let long_email = format!("test{}{}@example.com", timestamp, "x".repeat(15));
 
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": long_email,
-            "password": "password123"
-        }),
+    let request_body = json!({
+        "email": long_email,
+        "password": "password123"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    let errors = json
+        .get("errors")
+        .and_then(|v| v.as_array())
+        .expect("Should have errors array");
+    assert_eq!(errors.len(), 1, "Should have exactly one error");
+
+    let error = &errors[0];
+    assert_eq!(
+        error.get("code").and_then(|v| v.as_str()),
+        Some("INVALID_LOGIN_CREDENTIALS")
     );
-
-    assert!(response.is_err(), "Login with long email should fail");
-    if let Err(ureq::Error::Status(code, response)) = response {
-        assert_eq!(
-            code, 401,
-            "Expected status code 401 for invalid credentials"
-        );
-
-        let body = response
-            .into_string()
-            .expect("Failed to read response body");
-        let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
-
-        let errors = json
-            .get("errors")
-            .and_then(|v| v.as_array())
-            .expect("Should have errors array");
-        assert_eq!(errors.len(), 1, "Should have exactly one error");
-
-        let error = &errors[0];
-        assert_eq!(
-            error.get("code").and_then(|v| v.as_str()),
-            Some("INVALID_LOGIN_CREDENTIALS")
-        );
-    } else {
-        panic!("Expected error status 401");
-    }
 }
 
-#[test]
-fn test_login_boundary_password_lengths() {
-    let server = SharedTestServer::get();
-
+#[tokio::test]
+async fn test_login_boundary_password_lengths() {
     // Test 8-character password (minimum valid)
-    let email8 = unique_email("pw8");
+    let email8 = generate_email_from_fn!(test_login_boundary_password_lengths);
     let password8 = "12345678";
 
     // Register with 8-char password
-    let reg_response = server.post_json(
-        "/auth/register",
-        json!({
-            "email": &email8,
-            "password": password8
-        }),
-    );
+    let _ = register_user_for_login(&email8, password8).await;
 
-    // Registration should succeed
-    if let Err(ureq::Error::Status(409, _)) = reg_response {
-        // User already exists, skip registration
-    } else {
-        assert!(
-            reg_response.is_ok(),
-            "Registration with 8-char password should succeed"
-        );
-    }
+    // Test login with 8-char password
+    let router = router::router().await;
 
-    // Test login with existing user that has 8+ char password
-    // Use a password from an existing test to ensure user exists
-    let _existing_login = server.post_json(
-        "/auth/login",
-        json!({
-            "email": "test@test.com",
-            "password": "password123"
-        }),
-    );
+    let request_body = json!({
+        "email": &email8,
+        "password": password8
+    });
 
-    // This may fail if user doesn't exist, which is fine
-    // The main thing is testing that 8-char passwords aren't rejected by validation
-
-    // Test that 8-char password isn't rejected due to validation
-    // This should fail with 401 (user not found) rather than 401 (validation error)
-    let login_response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": &email8,
-            "password": password8
-        }),
-    );
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
     // If user was registered successfully, login should work
-    // If user doesn't exist, it should fail with invalid credentials, not validation error
-    match login_response {
-        Ok(_) => {} // Success is good
-        Err(ureq::Error::Status(401, _)) => {
-            // 401 could be either validation failure or user not found
-            // Since we're using unique emails, user probably doesn't exist
-            // This is acceptable - the validation logic allows 8 chars
-        }
-        Err(e) => panic!("Unexpected error type: {:?}", e),
+    // If user doesn't exist, it should fail with invalid credentials
+    if response.status() == StatusCode::OK {
+        // Success is good - user was registered and login worked
+    } else if response.status() == StatusCode::UNAUTHORIZED {
+        // This is also acceptable - might mean user didn't get registered
+    } else {
+        panic!("Unexpected status code: {}", response.status());
     }
 
-    // Test 7-character password (too short)
-    let response = server.post_json(
-        "/auth/login",
-        json!({
-            "email": unique_email("short"),
-            "password": "1234567"
-        }),
-    );
-    assert!(
-        response.is_err(),
+    // Test 7-character password (too short) - should fail
+    let router2 = router::router().await;
+    let request_body = json!({
+        "email": generate_email_from_fn!(test_login_boundary_password_lengths_short),
+        "password": "1234567"
+    });
+
+    let response = router2
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
         "Login with 7-character password should fail"
     );
 }

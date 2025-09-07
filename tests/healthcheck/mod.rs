@@ -1,19 +1,35 @@
-use crate::common::SharedTestServer;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use habit_market_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
+use tower::ServiceExt;
 
-#[test]
-fn test_healthcheck() {
-    let server = SharedTestServer::get();
+#[tokio::test]
+async fn test_healthcheck() {
+    let router = router::router().await;
 
-    let response = ureq::get(&format!("{}/health", server.base_url))
-        .call()
-        .expect("Failed to call health endpoint");
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    assert_eq!(response.status(), 200, "Expected status code 200");
+    assert_eq!(response.status(), StatusCode::OK);
 
-    let body = response
-        .into_string()
-        .expect("Failed to read response body");
-    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
 
     assert_eq!(
         json.get("healthy").and_then(|v| v.as_bool()),

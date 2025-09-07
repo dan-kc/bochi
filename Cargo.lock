@@ -1446,6 +1446,8 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "convert_case",
+ "http 1.3.1",
+ "http-body-util",
  "jsonwebtoken",
  "rand 0.8.5",
  "regex",
