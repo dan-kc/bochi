@@ -220,7 +220,7 @@ pub struct CreateTaskInput {
     pub hidden_until: Option<NaiveDateTime>,
     // TODO: Validate
     pub due_by: Option<NaiveDateTime>,
-    #[graphql(validator(max_length = 3000))]
+    #[graphql(validator(max_length = 16384))]
     pub description: String,
     #[graphql(validator(minimum = 0))]
     pub difficulty_rank: i32,

@@ -140,7 +140,7 @@ impl Display for ValidationError {
                  "Password must contain only standard English letters, numbers, and common punctuation."
             ),
             Self::EmailTooLong => write!(f,
-                "Email too long. The maximum email length is 40."
+                "Email too long. The maximum email length is 254."
             ),
             Self::PasswordTooLong => write!(f,
                  "Password too long. The maximum password length is 64."
@@ -170,7 +170,7 @@ pub async fn register(
     if !is_valid_email {
         errors.push(ValidationError::InvalidEmailAddress);
     }
-    if input.email.len() > 40 {
+    if input.email.len() > 254 {
         errors.push(ValidationError::EmailTooLong);
     }
     if !input.password.is_ascii() {
@@ -311,7 +311,7 @@ pub async fn login(
     let valid_email = Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$")
         .unwrap()
         .is_match(input.email.as_str());
-    let email_too_long = input.email.len() > 40;
+    let email_too_long = input.email.len() > 254;
     let password_ascii = input.password.is_ascii();
     let password_in_bounds = input.password.len() <= 64 && input.password.len() >= 8;
     if !valid_email || email_too_long || !password_ascii || !password_in_bounds {
