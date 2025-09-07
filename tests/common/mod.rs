@@ -1,3 +1,11 @@
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use habit_market_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
+use serde_json::json;
+use tower::ServiceExt;
+
 #[allow(dead_code)]
 pub fn create_password_of_length(len: usize) -> String {
     "a".repeat(len)
@@ -16,4 +24,92 @@ macro_rules! generate_email_from_fn {
         let full_name = stringify!($fn_name);
         format!("{}@test.com", full_name)
     }};
+}
+
+pub async fn register_user(email: &str, password: &str) {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let _ = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+}
+
+pub async fn make_authenticated_graphql_request(
+    access_token: &str,
+    query: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/graphql")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(http::header::AUTHORIZATION, access_token)
+                .body(Body::from(query.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    (status, json)
+}
+
+pub async fn get_access_token_for_user(email: &str, password: &str) -> String {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/login")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    json.get("accessToken")
+        .and_then(|v| v.as_str())
+        .expect("Login response should contain accessToken")
+        .to_string()
 }
