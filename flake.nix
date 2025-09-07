@@ -22,6 +22,27 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+
+        cleanScript = pkgs.writeShellScriptBin "clean" ''
+          if [ -z "$1" ]; then
+            echo "Usage: clean <database_name>"
+            exit 1
+          fi
+          DB_NAME="$1"
+          echo "Truncating all tables in ''${DB_NAME} database..."
+          docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE habits, refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+          echo "Database cleaned!"
+        '';
+
+        testScript = pkgs.writeShellScriptBin "t" ''
+          export AWS_SECRETS_PREFIX="test-" 
+          export DATABASE_NAME="test_habit_market" 
+          make clean-test-db
+          cargo test "$@"
+          export AWS_SECRETS_PREFIX="" 
+          export DATABASE_NAME="habit_market" 
+        '';
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -37,6 +58,8 @@
             nixfmt-rfc-style
             taplo
             flyway
+            cleanScript
+            testScript
           ];
           shellHook = ''
             # If localstack and db is not running then start it
@@ -52,6 +75,9 @@
             export RUST_BACKTRACE=1
             export RUST_LOG=info
             export LOG_DESTINATION=logs # If unset then it will be stdout only
+
+            # cargo doc
+            # xdg-open ./target/doc/habit_market_backend/index.html
           '';
         };
 
