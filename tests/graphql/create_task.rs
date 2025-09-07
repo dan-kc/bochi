@@ -35,15 +35,18 @@ async fn test_create_task_success() {
             "input": {
                 "name": "Test Task",
                 "description": "A test task description",
+                "difficultyRank": 5
             }
         }
     });
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    dbg!(&json);
     assert_eq!(status, StatusCode::OK);
 
     assert!(json.get("data").is_some(), "Response should have data");
     let data = json.get("data").unwrap();
+    dbg!(&data);
     let task = data.get("createTask").unwrap();
 
     assert!(task.get("id").is_some(), "Task should have id");
@@ -57,8 +60,11 @@ async fn test_create_task_success() {
         task.get("createdAt").is_some(),
         "Task should have createdAt"
     );
-    assert!(task.get("dueBy").is_none());
-    assert!(task.get("dailyFrequency").is_none());
+    assert_eq!(task.get("dueBy").unwrap(), &serde_json::Value::Null);
+    assert_eq!(
+        task.get("dailyFrequency").unwrap(),
+        &serde_json::Value::Null
+    );
 }
 #[tokio::test]
 async fn test_create_due_task_success() {
@@ -159,7 +165,7 @@ async fn test_create_recurring_task_success() {
     assert!(task.get("id").is_some(), "Task should have id");
     assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Test Task");
     assert!(task.get("createdAt").is_some());
-    assert!(task.get("hiddenUntil").is_none());
+    assert_eq!(task.get("hiddenUntil").unwrap(), &serde_json::Value::Null);
     assert_eq!(
         task.get("description").unwrap().as_str().unwrap(),
         "A test task description"
@@ -252,7 +258,7 @@ async fn test_create_due_by_and_daily_freq() {
     );
     let errors = json.get("errors").unwrap().as_array().unwrap();
     assert!(!errors.contains(&Value::String(
-        "A task cannot have both a dueBy and a dailyFreqency.".to_string()
+        "A task cannot have both a `dueBy` and a `dailyFreqency`.".to_string()
     )));
 }
 
@@ -518,4 +524,170 @@ async fn test_create_task_maximum_valid_input() {
         task.get("id").is_some(),
         "Task should be created with valid max inputs"
     );
+}
+
+#[tokio::test]
+async fn test_create_task_hidden_until_in_past() {
+    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                description
+                difficultyRank
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "difficultyRank": 5,
+                "hiddenUntil": "2022-12-25T23:59:59"
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String(
+        "`hidden_until` must be in the future.".to_string()
+    )),);
+}
+
+#[tokio::test]
+async fn test_create_task_due_by_in_past() {
+    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                description
+                difficultyRank
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "difficultyRank": 5,
+                "dueBy": "2022-12-25T23:59:59"
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String("`dueBy` must be in the future.".to_string())),);
+}
+
+#[tokio::test]
+async fn test_create_task_daily_frequency_negative() {
+    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                description
+                difficultyRank
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "difficultyRank": 5,
+                "dailyFrequency": -10,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String(
+        "`daily_frequency` must be between 0 and 1000.".to_string()
+    )),);
+}
+
+#[tokio::test]
+async fn test_create_task_daily_frequency_too_large() {
+    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                description
+                difficultyRank
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "difficultyRank": 5,
+                "dailyFrequency": 1001,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert!(
+        json.get("errors").is_some(),
+        "Response should contain validation errors"
+    );
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.contains(&Value::String(
+        "`daily_frequency` must be between 0 and 1000.".to_string()
+    )),);
 }

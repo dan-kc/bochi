@@ -6,6 +6,51 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
+pub async fn register_and_get_refresh_token(email: &str, password: &str) -> Result<String, String> {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": email,
+        "password": password
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| format!("Failed to register: {}", e))?;
+
+    if response.status() != StatusCode::OK && response.status() != StatusCode::CONFLICT {
+        return Err(format!(
+            "Registration failed with status: {}",
+            response.status()
+        ));
+    }
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?
+        .to_bytes();
+
+    let json: serde_json::Value = serde_json::from_slice(&response_body_bytes)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+    dbg!(&json);
+
+    json.get("refreshToken")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "No refreshToken in response".to_string())
+}
+
 #[allow(dead_code)]
 pub fn create_password_of_length(len: usize) -> String {
     "a".repeat(len)
