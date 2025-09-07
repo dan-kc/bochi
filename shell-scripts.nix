@@ -63,7 +63,14 @@ let
       fi
 
       echo "Using database: ''${DATABASE_NAME}"
-      ${pkgs.flyway}/bin/flyway -configFiles=./flyway.toml -locations=filesystem:./migrations -url="jdbc:postgresql://db:5432/''${DATABASE_NAME}" "$@"
+      ${pkgs.flyway}/bin/flyway \
+        -url="jdbc:postgresql://localhost:5432/''${DATABASE_NAME}" \
+        -user="user" \
+        -password="password" \
+        -locations="filesystem:./migrations" \
+        -validateOnMigrate=true \
+        -baselineOnMigrate=true \
+        "$@"
     '';
 
     # drops and recreates the provided database, then applies migrations.

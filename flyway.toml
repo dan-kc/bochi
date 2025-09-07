@@ -1,9 +1,0 @@
-[environments.default]
-url = "jdbc:postgresql://localhost:5432/${env.DATABASE_NAME}"
-user = "user"
-password = "password"
-validateOnMigrate = true
-baselineOnMigrate = true
-
-[flyway]
-locations = ["./migrations"]
