@@ -1,22 +1,89 @@
 { pkgs }:
-[
-  (pkgs.writeShellScriptBin "clean" ''
-    if [ -z "$1" ]; then
-      echo "Usage: clean <database_name>"
-      exit 1
-    fi
-    DB_NAME="$1"
-    echo "Truncating all tables in ''${DB_NAME} database..."
-    docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE habits, refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
-    echo "Database cleaned!"
-  '')
+let
+  scripts = rec {
+    # Whipes all tables in the provided database.
+    clean = pkgs.writeShellScriptBin "clean" ''
+      if [ -z "$1" ]; then
+        echo "Usage: clean <database_name>"
+        exit 1
+      fi
+      DB_NAME="$1"
+      echo "Truncating all tables in ''${DB_NAME} database..."
+      docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE habits, refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      echo "Database cleaned!"
+    '';
 
-  (pkgs.writeShellScriptBin "t" ''
-    export AWS_SECRETS_PREFIX="test-" 
-    export DATABASE_NAME="test_habit_market" 
-    make clean-test-db
-    cargo test "$@"
-    export AWS_SECRETS_PREFIX="" 
-    export DATABASE_NAME="habit_market" 
-  '')
-]
+    # Start development environment
+    start = pkgs.writeShellScriptBin "start" ''
+      	docker compose up -d --remove-orphans 
+    '';
+
+    # Stop development environment
+    stop = pkgs.writeShellScriptBin "stop" ''
+      	docker compose -f docker-compose.yml -f docker-compose-server.yml down
+    '';
+
+    # Sets up and tears down the test environment. Wraps `cargo test`.
+    t = pkgs.writeShellScriptBin "t" ''
+      ${clean}/bin/clean test_habit_market
+      AWS_SECRETS_PREFIX="test-" DATABASE_NAME="test_habit_market" cargo test "$@"
+    '';
+
+    # Kills all habit_market processes
+    kp = pkgs.writeShellScriptBin "kp" ''
+      	-pkill -f habit-market-backend
+    '';
+
+    # build: builds server docker image
+    build = pkgs.writeShellScriptBin "build" ''
+      nix build .#server-docker
+      docker load < result
+      rm result
+    '';
+
+    # Displays the schema of a database table in habit_market
+    schema = pkgs.writeShellScriptBin "schema" ''
+      if [ -z "$1" ]; then
+        echo "Usage: clean <table name>"
+        exit 1
+      fi
+      TABLE_NAME="$1"
+      docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ ''${TABLE_NAME}"
+    '';
+
+    # Flyway wrapper with config
+    flyway = pkgs.writeShellScriptBin "schema" ''
+      # Use the first argument as DATABASE_NAME if provided, otherwise default to habit_market
+      # Shift removes the first argument so "$@" correctly passes remaining arguments
+      if [ -n "$1" ]; then
+        DATABASE_NAME="$1"
+        shift
+      else
+        DATABASE_NAME="habit_market" # Default database name
+      fi
+
+      echo "Using database: ''${DATABASE_NAME}"
+      ${pkgs.flyway} -configFiles=./flyway.toml -locations=filesystem:./migrations -url="jdbc:postgresql://db:5432/''${DATABASE_NAME}" "$@"
+    '';
+
+    # drops and recreates the provided database, then applies migrations.
+    nuke = pkgs.writeShellScriptBin "nuke" ''
+      if [ -z "$1" ]; then
+        echo "Usage: clean <database_name>"
+        exit 1
+      fi
+      DB_NAME="$1"
+      echo "Killing any running habit-market-backend processes..."
+      ${kp}/bin/kp
+      echo "Dropping existing database..."
+      docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
+      echo "Creating database..."
+      docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE ''${DB_NAME};"
+      echo "Applying migrations to ''${DB_NAME}..."
+      ${flyway}/bin/flyway ''${DB_NAME}
+      echo "Database refresh complete!"
+    '';
+
+  };
+in
+builtins.attrValues scripts

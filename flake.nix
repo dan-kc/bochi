@@ -22,9 +22,7 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-
         scripts = import ./shell-scripts.nix { inherit pkgs; };
-
       in
       {
         devShells.default = pkgs.mkShell {
@@ -43,7 +41,7 @@
           ] ++ scripts;
           shellHook = ''
             # If localstack and db is not running then start it
-            make start
+            start
 
             # Init secret management for local deployment
             export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
