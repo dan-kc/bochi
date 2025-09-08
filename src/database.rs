@@ -42,15 +42,13 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description, difficulty_rank, daily_frequency) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+            (user_id, name, hidden_until, due_by, description) VALUES ($1, $2, $3, $4, $5) RETURNING *",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
         .bind(create_task_options.hidden_until)
         .bind(create_task_options.due_by)
         .bind(create_task_options.description)
-        .bind(create_task_options.difficulty_rank)
-        .bind(create_task_options.daily_frequency)
         .fetch_one(&self.pool)
         .await
     }
@@ -145,9 +143,7 @@ pub struct CreateTaskOptions {
     pub name: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
-    pub daily_frequency: Option<i32>,
     pub description: String,
-    pub difficulty_rank: i32,
 }
 impl CreateTaskOptions {
     pub fn new(input: CreateTaskInput, user_id: i32) -> Self {
@@ -156,9 +152,7 @@ impl CreateTaskOptions {
             name: input.name,
             hidden_until: input.hidden_until,
             due_by: input.due_by,
-            daily_frequency: input.daily_frequency,
             description: input.description,
-            difficulty_rank: input.difficulty_rank,
         }
     }
 }
@@ -271,7 +265,5 @@ pub struct TaskRow {
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
-    pub daily_frequency: Option<i32>,
-    pub difficulty_rank: i32,
     pub description: String,
 }

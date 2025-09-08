@@ -10,15 +10,12 @@ pub struct MutationRoot;
 
 #[derive(InputObject)]
 pub struct CreateTaskInput {
-    #[graphql(validator(max_length = 100))]
+    #[graphql(validator(min_length = 1, max_length = 100))]
     pub name: String, // Max 100 utf-8 chars
-    pub hidden_until: Option<NaiveDateTime>, // Must be in future if exists
-    pub due_by: Option<NaiveDateTime>,       // Must be in future if exists
-    pub daily_frequency: Option<i32>,        // Min 0, max 1000
     #[graphql(validator(max_length = 16384))]
     pub description: String,
-    #[graphql(validator(minimum = 0))]
-    pub difficulty_rank: i32,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_by: Option<NaiveDateTime>, // Must be in future if exists
 }
 
 #[Object]
@@ -41,17 +38,6 @@ impl MutationRoot {
                 return Err("`due_by` must be in the future.");
             }
         }
-
-        if let Some(frequency) = input.daily_frequency {
-            if frequency < 0 || frequency > 1000 {
-                return Err("`daily_frequency` must be between 0 and 1000.");
-            }
-        }
-
-        if input.daily_frequency.is_some() && input.due_by.is_some() {
-            return Err("A task cannot have both a `dueBy` and a `dailyFreqency`.");
-        }
-
         let database = ctx
             .data::<database::Database>()
             .expect("No db pool in context");

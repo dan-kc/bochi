@@ -24,9 +24,7 @@ pub struct TaskObject {
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     due_by: Option<NaiveDateTime>,
-    daily_frequency: Option<i32>,
     description: String,
-    difficulty_rank: i32,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -36,10 +34,8 @@ impl From<TaskRow> for TaskObject {
             created_at: task_row.created_at,
             deleted_at: task_row.deleted_at,
             hidden_until: task_row.hidden_until,
-            daily_frequency: task_row.daily_frequency,
             due_by: task_row.due_by,
             description: task_row.description,
-            difficulty_rank: task_row.difficulty_rank,
         }
     }
 }

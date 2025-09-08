@@ -12,6 +12,6 @@
 ### Todo:
 
 - [x] Tasks
-- Rewards
+- Rewards (No ranking yet)
 - Trades
 - Infra: Terraform, aws, cloudflare domain
