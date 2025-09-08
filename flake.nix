@@ -22,7 +22,7 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        scripts = import ./shell-scripts.nix { inherit pkgs; };
+        scripts = import ./scripts.nix { inherit pkgs; };
       in
       {
         devShells.default = pkgs.mkShell {

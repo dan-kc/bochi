@@ -1,9 +1,7 @@
 ## Local development:
 
-- No docker (except for localstack)
-- No nix build
-- Nix for local env and test env only and building final image only
-- Shell script as soon as you arrive in the CWD you run the db and localstack if it is not running already.
+- Docker compose sets up the local environment. Nix shell. The server is the only thing run locally.
+- Useful commands in scripts.nix
 
 ## Testing
 
@@ -11,10 +9,9 @@
 
 ## MVP:
 
-- The following gql endpoints for CRUD on the following:
-- Tasks
-- Habits
+### Todo:
+
+- [x] Tasks
 - Rewards
 - Trades
-- Graphql playground
-- Terraform, nginx, aws, cloudflare
+- Infra: Terraform, aws, cloudflare domain
