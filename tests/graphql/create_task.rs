@@ -478,10 +478,16 @@ async fn test_create_task_no_description() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
+    let errors: Vec<&Value> = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .into_iter()
+        .map(|x| x.get("message").unwrap())
+        .collect();
+
+    assert!(errors.contains(&&Value::String("Invalid value for argument \"input\", field \"description\" of type \"String!\" is required but not provided".to_string())));
 }
 
 #[tokio::test]
@@ -511,8 +517,14 @@ async fn test_create_task_name_empty_string() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
+    let errors: Vec<&Value> = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .into_iter()
+        .map(|x| x.get("message").unwrap())
+        .collect();
+
+    assert!(errors.contains(&&Value::String("Failed to parse \"String\": the string length is 0, must be greater than or equal to 1 (occurred while parsing \"CreateTaskInput\")".to_string())));
 }
