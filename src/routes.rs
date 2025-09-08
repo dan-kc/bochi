@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
 use crate::{
-    graphql::ServiceSchema,
+    graphql::{mutations::MutationRoot, queries::QueryRoot},
     router::{App, AuthenticatedUser},
     security::{self, jwt::create_random_string, parse_refresh_token},
 };
+use async_graphql::{EmptySubscription, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     debug_handler,
@@ -280,6 +281,7 @@ pub async fn health() -> Response {
     (StatusCode::OK, Json(health)).into_response()
 }
 
+pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 #[debug_handler]
 pub async fn graphql(
     Extension(schema): Extension<ServiceSchema>,

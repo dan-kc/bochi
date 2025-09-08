@@ -6,7 +6,6 @@ use habit_market_backend::router;
 use http::Method;
 use http_body_util::BodyExt;
 use serde_json::json;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tower::ServiceExt;
 
 #[tokio::test]

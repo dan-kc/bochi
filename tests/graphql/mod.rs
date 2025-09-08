@@ -1,3 +1,2 @@
 pub mod create_task;
-pub mod create_trade;
 pub mod introspection;

@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
-use crate::graphql::CreateTaskInput;
+use crate::graphql::mutations::CreateTaskInput;
 
 #[derive(Clone)]
 pub struct Database {
@@ -275,53 +275,3 @@ pub struct TaskRow {
     pub difficulty_rank: i32,
     pub description: String,
 }
-
-// #[derive(sqlx::FromRow)]
-// pub struct ProjectRow {
-//     pub id: i32,
-//     pub user_id: i32,
-//     pub name: String,
-//     pub created_at: NaiveDateTime,
-//     pub deleted_at: Option<NaiveDateTime>,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub due_by: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub importance: i32,
-// }
-//
-// #[derive(sqlx::FromRow)]
-// pub struct RewardRow {
-//     pub id: i32,
-//     pub user_id: i32,
-//     pub name: String,
-//     pub created_at: NaiveDateTime,
-//     pub deleted_at: Option<NaiveDateTime>,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub damage: i32,
-//     pub pleasure: i32,
-//     pub max_frequency: i32,
-// }
-//
-// #[derive(sqlx::FromRow)]
-// pub struct MegaRewardRow {
-//     pub id: i32,
-//     pub user_id: i32,
-//     pub name: String,
-//     pub created_at: NaiveDateTime,
-//     pub deleted_at: Option<NaiveDateTime>,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub damage: i32,
-//     pub pleasure: i32,
-// }
-//
-// #[derive(sqlx::FromRow)]
-// pub struct TagRow {
-//     pub id: i32,
-//     pub user_id: i32,
-//     pub name: String,
-//     pub created_at: NaiveDateTime,
-//     pub deleted_at: Option<NaiveDateTime>,
-//     pub color_hex: String,
-// }

@@ -1,9 +1,4 @@
-use crate::{
-    database,
-    graphql::{MutationRoot, QueryRoot},
-    routes, secrets,
-    security::jwt::JWTManager,
-};
+use crate::{database, graphql::{mutations::MutationRoot, queries::QueryRoot}, routes, secrets, security::jwt::JWTManager};
 use async_graphql::{EmptySubscription, Schema};
 use axum::{
     extract::{Extension, Request, State},
