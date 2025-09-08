@@ -43,8 +43,6 @@ pub async fn register_and_get_refresh_token(email: &str, password: &str) -> Resu
     let json: serde_json::Value = serde_json::from_slice(&response_body_bytes)
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
-    dbg!(&json);
-
     json.get("refreshToken")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())

@@ -59,7 +59,6 @@ async fn test_register_success() {
 #[tokio::test]
 async fn test_register_user_already_exists() {
     let email = generate_email_from_fn!(test_register_user_already_exists);
-    dbg!(email.clone());
 
     // First registration
     let router = router::router().await;

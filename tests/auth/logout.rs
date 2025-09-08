@@ -112,7 +112,6 @@ async fn test_logout_with_invalid_token() {
 #[tokio::test]
 async fn test_logout_twice_with_same_token() {
     let email = generate_email_from_fn!(test_logout_twice_with_same_token);
-    dbg!(&email);
     let password = "password123";
 
     // Register and get refresh token

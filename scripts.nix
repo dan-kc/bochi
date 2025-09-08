@@ -33,7 +33,7 @@ let
 
     # Kills all habit_market processes
     kp = pkgs.writeShellScriptBin "kp" ''
-      	-pkill -f habit-market-backend
+      	pkill -f habit-market-backend
     '';
 
     # build: builds server docker image

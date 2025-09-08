@@ -437,10 +437,19 @@ async fn test_create_task_no_name() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
+    let errors: Vec<&Value> = json
+        .get("errors")
+        .expect("Response should contain validation errors")
+        .as_array()
+        .expect("errors field should be an array")
+        .iter()
+        .map(|x| {
+            x.get("message")
+                .expect("each entry in errors should have a 'message' field")
+        })
+        .collect();
+
+    assert!(errors.contains(&&Value::String("Invalid value for argument \"input\", field \"name\" of type \"String!\" is required but not provided".to_string())))
 }
 
 #[tokio::test]
