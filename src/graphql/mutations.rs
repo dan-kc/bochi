@@ -1,22 +1,62 @@
+use std::{any::Any, sync::Arc};
+use tracing::error;
+
+use super::objects::TaskObject;
 use crate::{
     database::{self, CreateTaskOptions},
     router::AuthenticatedUser,
 };
-use async_graphql::{InputObject, Object};
+use async_graphql::{ErrorExtensionValues, InputObject, Object};
 use chrono::{NaiveDateTime, Utc};
 
-use super::objects::TaskObject;
 pub struct MutationRoot;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Validation Error: {0}")]
+    Validation(String),
+    #[error("An unexpected internal server error occurred.")]
+    Internal,
+}
+// Implement an `into_graphql_error` method directly on AppError
+impl Error {
+    pub fn into_graphql_error(self) -> async_graphql::Error {
+        let mut extensions = ErrorExtensionValues::default();
+        let message = self.to_string();
+
+        match &self {
+            Error::Validation(_) => {
+                extensions.set("code", "BAD_USER_INPUT");
+                extensions.set("details", &message);
+            }
+            Error::Internal => {
+                extensions.set("code", "INTERNAL_SERVER_ERROR");
+                extensions.set("details", Error::Internal.to_string());
+            }
+        }
+
+        async_graphql::Error {
+            message,
+            extensions: Some(extensions),
+            source: Some(Arc::new(self) as Arc<dyn Any + Send + Sync>),
+        }
+    }
+}
 
 #[derive(InputObject)]
 pub struct CreateTaskInput {
-    #[graphql(validator(min_length = 1, max_length = 100))]
     pub name: String, // Max 100 utf-8 chars
-    #[graphql(validator(max_length = 16384))]
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>, // Must be in future if exists
+    pub due_by: Option<NaiveDateTime>,
 }
+
+// #[derive(InputObject)]
+// pub struct CreateTradeInput {
+//     // Must have EITHER one or the other
+//     task_id: Option<String>,
+//     reward_id: Option<String>,
+// }
 
 #[Object]
 impl MutationRoot {
@@ -24,41 +64,67 @@ impl MutationRoot {
         &self,
         ctx: &async_graphql::Context<'_>,
         input: CreateTaskInput,
-    ) -> Result<TaskObject, &'static str> {
+    ) -> Result<TaskObject, async_graphql::Error> {
         let now = Utc::now().naive_utc();
+        if input.name.len() > 100 || input.name.len() < 1 {
+            return Err(Error::Validation(format!(
+                "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
+                input.name.len()
+            ))
+            .into_graphql_error());
+        }
+
+        if input.description.len() > 16384 {
+            return Err(Error::Validation(format!(
+                "Description is too long ({} characters), max 16384.",
+                input.description.len()
+            ))
+            .into_graphql_error());
+        }
 
         if let Some(hidden_at) = input.hidden_until {
             if hidden_at <= now {
-                return Err("`hidden_until` must be in the future.");
+                return Err(
+                    Error::Validation(format!(
+                        "The 'hidden until' date ({}) has already passed or is the current moment. Please select a future date.",
+                            input.hidden_until.unwrap() 
+                        ))
+                        .into_graphql_error(),
+                );
             }
         }
 
         if let Some(due_at) = input.due_by {
             if due_at <= now {
-                return Err("`due_by` must be in the future.");
+                return Err(
+                    Error::Validation(format!(
+                        "The 'due_by' date ({}) has already passed or is the current moment. Please select a future date.",
+                            input.due_by.unwrap() 
+                        ))
+                        .into_graphql_error(),
+                );
             }
         }
-        let database = ctx
-            .data::<database::Database>()
-            .expect("No db pool in context");
+
+        let database = ctx.data::<database::Database>().map_err(|e| {
+            error!("Database pool not found in context: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
+
         let user_id = ctx
             .data::<AuthenticatedUser>()
-            .expect("No user in context.")
+            .map_err(|e| {
+                error!("User not found in context: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?
             .user_id;
 
         let opts = CreateTaskOptions::new(input, user_id);
-        let task_row = database
-            .create_task(opts)
-            .await
-            .expect("No task made sorry");
+        let task_row = database.create_task(opts).await.map_err(|e| {
+            error!("User not found in context: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
 
         Ok(task_row.into())
     }
-}
-
-#[derive(InputObject)]
-pub struct CreateTradeInput {
-    // Must have EITHER one or the other
-    task_id: Option<String>,
-    reward_id: Option<String>,
 }

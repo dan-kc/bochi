@@ -38,13 +38,10 @@ async fn test_create_task_success() {
     });
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
-
     assert_eq!(status, StatusCode::OK);
-    assert!(json.get("data").is_some(), "Response should have data");
+    assert!(json.get("data").is_some());
 
-    let data = json.get("data").unwrap();
-    let task = data.get("createTask").unwrap();
-
+    let task = json.get("data").unwrap().get("createTask").unwrap();
     assert!(task.get("id").is_some());
     assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Test Task");
     assert!(task.get("createdAt").is_some());
@@ -59,7 +56,7 @@ async fn test_create_task_success() {
 
 #[tokio::test]
 async fn test_create_due_task_success() {
-    let email = generate_email_from_fn!(test_create_task_success);
+    let email = generate_email_from_fn!(test_create_due_task_success);
     let password = "password123";
 
     // Register user
@@ -84,8 +81,8 @@ async fn test_create_due_task_success() {
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
-    let task = json.get("data").unwrap().get("createTask").unwrap();
 
+    let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("dueBy").unwrap(), "2028-12-25T23:59:59");
 }
 
@@ -151,13 +148,20 @@ async fn test_create_task_validation_name_too_long() {
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some(),);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.contains(&Value::String("Should have validation errors".to_string())),);
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(error.get("message").unwrap(), &Value::String("Validation Error: Please provide a name between 1 and 100 characters long. Your current name is 101 characters.".to_string()));
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(extensions.get("details").unwrap(), &Value::String("Validation Error: Please provide a name between 1 and 100 characters long. Your current name is 101 characters.".to_string()));
 }
 
 #[tokio::test]
@@ -187,13 +191,28 @@ async fn test_create_task_validation_description_too_long() {
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some());
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.contains(&Value::String("Should have validation errors".to_string())),);
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String("Validation Error: Description is too long (16385 characters), max 16384.".to_string())
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: Description is too long (16385 characters), max 16384.".to_string()
+        )
+    );
 }
 
 #[tokio::test]
@@ -290,8 +309,8 @@ async fn test_create_task_minimum_valid_input() {
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
 
-    assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("name").unwrap().as_str().unwrap(), "T");
     assert_eq!(task.get("description").unwrap().as_str().unwrap(), "");
@@ -327,8 +346,8 @@ async fn test_create_task_maximum_valid_input() {
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
 
-    assert!(json.get("data").is_some(), "Response should have data");
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("name").unwrap(), &Value::String(max_name));
     assert_eq!(
@@ -339,7 +358,7 @@ async fn test_create_task_maximum_valid_input() {
 
 #[tokio::test]
 async fn test_create_task_hidden_until_in_past() {
-    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let email = generate_email_from_fn!(test_create_task_hidden_until_in_past);
     let password = "password123";
 
     // Register user
@@ -365,19 +384,33 @@ async fn test_create_task_hidden_until_in_past() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
+    assert!(json.get("errors").is_some(),);
+
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.contains(&Value::String(
-        "`hidden_until` must be in the future.".to_string()
-    )),);
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String("Validation Error: The 'hidden until' date (2022-12-25 23:59:59) has already passed or is the current moment. Please select a future date.".to_string())
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: The 'hidden until' date (2022-12-25 23:59:59) has already passed or is the current moment. Please select a future date.".to_string()
+        )
+    );
 }
 
 #[tokio::test]
 async fn test_create_task_due_by_in_past() {
-    let email = generate_email_from_fn!(test_create_task_maximum_valid_input);
+    let email = generate_email_from_fn!(test_create_task_due_by_in_past);
     let password = "password123";
 
     // Register user
@@ -403,12 +436,27 @@ async fn test_create_task_due_by_in_past() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    assert!(
-        json.get("errors").is_some(),
-        "Response should contain validation errors"
-    );
     let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert!(!errors.contains(&Value::String("`dueBy` must be in the future.".to_string())),);
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String("Validation Error: The 'due_by' date (2022-12-25 23:59:59) has already passed or is the current moment. Please select a future date.".to_string())
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    dbg!(extensions.clone());
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: The 'due_by' date (2022-12-25 23:59:59) has already passed or is the current moment. Please select a future date.".to_string()
+        )
+    );
 }
 
 #[tokio::test]
@@ -517,14 +565,24 @@ async fn test_create_task_name_empty_string() {
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
 
-    let errors: Vec<&Value> = json
-        .get("errors")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .into_iter()
-        .map(|x| x.get("message").unwrap())
-        .collect();
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
 
-    assert!(errors.contains(&&Value::String("Failed to parse \"String\": the string length is 0, must be greater than or equal to 1 (occurred while parsing \"CreateTaskInput\")".to_string())));
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String("Validation Error: Please provide a name between 1 and 100 characters long. Your current name is 0 characters.".to_string())
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: Please provide a name between 1 and 100 characters long. Your current name is 0 characters.".to_string()
+        )
+    );
 }

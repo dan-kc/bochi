@@ -22,6 +22,7 @@ regex = "1.11.1"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.134"
 sqlx = { version = "0.8.2", features = ["chrono", "runtime-tokio", "postgres"] }
+thiserror = "2.0.16"
 tokio = { version = "1.41.1", features = ["full"] }
 tower = "0.5.1"
 tower-http = { version = "0.6.2", features = ["trace", "cors"] }

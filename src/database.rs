@@ -16,7 +16,7 @@ impl Database {
             // another server connecting. All pools must add up to 97.
             .connect(&database_url)
             .await
-            .expect("Unable to create database pool");
+            .expect("Unable to create database pool.");
 
         Database { pool }
     }

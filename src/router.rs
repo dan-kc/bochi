@@ -1,4 +1,9 @@
-use crate::{database, graphql::{mutations::MutationRoot, queries::QueryRoot}, routes, secrets, security::jwt::JWTManager};
+use crate::{
+    database,
+    graphql::{mutations::MutationRoot, queries::QueryRoot},
+    routes, secrets,
+    security::jwt::JWTManager,
+};
 use async_graphql::{EmptySubscription, Schema};
 use axum::{
     extract::{Extension, Request, State},
@@ -113,6 +118,7 @@ pub async fn router() -> axum::Router {
 pub struct AuthenticatedUser {
     pub user_id: i32,
 }
+
 async fn auth(State(app): State<App>, mut req: Request, next: Next) -> Response {
     let headers = req.headers();
     let jwt_optional = headers
