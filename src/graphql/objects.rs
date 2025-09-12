@@ -1,4 +1,4 @@
-use crate::database::{TaskRow, UserRow};
+use crate::database::{RewardRow, TaskRow, UserRow};
 use async_graphql::{SimpleObject, Union};
 use chrono::NaiveDateTime;
 
@@ -48,8 +48,20 @@ pub struct RewardObject {
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     description: String,
-    max_frequency: i32,
-    pleasure_rank: i32,
+    max_daily_frequency: Option<f32>, // Max 100 / day
+}
+impl From<RewardRow> for RewardObject {
+    fn from(reward_row: RewardRow) -> Self {
+        Self {
+            id: reward_row.id,
+            name: reward_row.name,
+            created_at: reward_row.created_at,
+            deleted_at: reward_row.deleted_at,
+            hidden_until: reward_row.hidden_until,
+            description: reward_row.description,
+            max_daily_frequency: reward_row.max_daily_frequency, 
+        }
+    }
 }
 
 #[derive(Union)]

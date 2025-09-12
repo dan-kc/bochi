@@ -1,7 +1,6 @@
+use crate::graphql::mutations::{CreateRewardInput, CreateTaskInput};
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
-
-use crate::graphql::mutations::CreateTaskInput;
 
 #[derive(Clone)]
 pub struct Database {
@@ -36,6 +35,7 @@ impl Database {
 
         Ok(user_id)
     }
+
     pub async fn create_task(
         &self,
         create_task_options: CreateTaskOptions,
@@ -49,6 +49,23 @@ impl Database {
         .bind(create_task_options.hidden_until)
         .bind(create_task_options.due_by)
         .bind(create_task_options.description)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn create_reward(
+        &self,
+        create_reward_options: CreateRewardOptions,
+    ) -> Result<RewardRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO rewards
+            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        )
+        .bind(create_reward_options.user_id)
+        .bind(create_reward_options.name)
+        .bind(create_reward_options.description)
+        .bind(create_reward_options.hidden_until)
+        .bind(create_reward_options.max_daily_frequency)
         .fetch_one(&self.pool)
         .await
     }
@@ -157,89 +174,24 @@ impl CreateTaskOptions {
     }
 }
 
-// pub struct CreateProjectOptions {
-//     pub user_id: i32,
-//     pub name: String,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub due_by: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub importance: i32,
-// }
-// impl CreateProjectOptions {
-//     pub fn new(input: CreateProjectInput, user_id: i32) -> Self {
-//         let description = match input.description {
-//             None => "".to_string(),
-//             Some(desc) => desc,
-//         };
-//         Self {
-//             user_id,
-//             name: input.name,
-//             hidden_until: input.hidden_until,
-//             due_by: input.due_by,
-//             description,
-//             importance: input.importance,
-//         }
-//     }
-// }
-//
-// pub struct CreateRewardOptions {
-//     pub user_id: i32,
-//     pub name: String,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub damage: i32,
-//     pub pleasure: i32,
-//     pub max_frequency: i32,
-// }
-// impl CreateRewardOptions {
-//     pub fn new(input: CreateRewardInput, user_id: i32) -> Self {
-//         Self {
-//             user_id,
-//             name: input.name,
-//             hidden_until: input.hidden_until,
-//             description: input.description,
-//             damage: input.damage,
-//             pleasure: input.pleasure,
-//             max_frequency: input.max_frequency,
-//         }
-//     }
-// }
-//
-// pub struct CreateTreatOptions {
-//     pub user_id: i32,
-//     pub name: String,
-//     pub hidden_until: Option<NaiveDateTime>,
-//     pub description: String,
-//     pub damage: i32,
-//     pub pleasure: i32,
-// }
-// impl CreateTreatOptions {
-//     pub fn new(input: CreateTreatInput, user_id: i32) -> Self {
-//         Self {
-//             user_id,
-//             name: input.name,
-//             hidden_until: input.hidden_until,
-//             description: input.description,
-//             damage: input.damage,
-//             pleasure: input.pleasure,
-//         }
-//     }
-// }
-//
-// pub struct CreateTagOptions {
-//     pub user_id: i32,
-//     pub name: String,
-//     pub color_hex: String,
-// }
-// impl CreateTagOptions {
-//     pub fn new(input: CreateTagInput, user_id: i32) -> Self {
-//         Self {
-//             user_id,
-//             name: input.name,
-//             color_hex: input.color_hex,
-//         }
-//     }
-// }
+pub struct CreateRewardOptions {
+    pub user_id: i32,
+    pub name: String,
+    pub description: String,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub max_daily_frequency: Option<f32>,
+}
+impl CreateRewardOptions {
+    pub fn new(input: CreateRewardInput, user_id: i32) -> Self {
+        Self {
+            user_id,
+            name: input.name,
+            hidden_until: input.hidden_until,
+            description: input.description,
+            max_daily_frequency: input.max_daily_frequency,
+        }
+    }
+}
 
 #[derive(sqlx::FromRow)]
 pub struct UserRow {
@@ -256,7 +208,6 @@ pub struct RefreshTokenRow {
 }
 
 #[derive(sqlx::FromRow)]
-#[allow(unused)]
 pub struct TaskRow {
     pub id: i32,
     pub user_id: i32,
@@ -266,4 +217,16 @@ pub struct TaskRow {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct RewardRow {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub max_daily_frequency: Option<f32>,
 }
