@@ -112,7 +112,7 @@ impl MutationRoot {
 
         let opts = CreateTaskOptions::new(input, user_id);
         let task_row = database.create_task(opts).await.map_err(|e| {
-            error!("User not found in context: {:?}", e);
+            error!("Database Error: {:?}", e);
             Error::Internal.into_graphql_error()
         })?;
 
@@ -126,10 +126,9 @@ impl MutationRoot {
     ) -> Result<RewardObject, async_graphql::Error> {
         let now = Utc::now().naive_utc();
         if input.name.len() > 100 || input.name.len() < 1 {
-            // let msg = format!("Please provide a name between 1 and 100 characters long. Your current name is {} characters.", input.name.len());
-            // return Err(Error::Validation(msg).into_graphql_error());
+            let msg = format!("Please provide a name between 1 and 100 characters long. Your current name is {} characters.", input.name.len());
+            return Err(Error::Validation(msg).into_graphql_error());
         }
-        //
         if input.description.len() > 16384 {
             let msg = format!(
                 "Description is too long ({} characters), max 16384.",
@@ -173,7 +172,7 @@ impl MutationRoot {
 
         let opts = CreateRewardOptions::new(input, user_id);
         let task_row = database.create_reward(opts).await.map_err(|e| {
-            error!("User not found in context: {:?}", e);
+            error!("Database Error: {:?}", e);
             Error::Internal.into_graphql_error()
         })?;
 
