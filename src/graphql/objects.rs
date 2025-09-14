@@ -1,20 +1,6 @@
-use crate::database::{RewardRow, TaskRow, UserRow};
-use async_graphql::{SimpleObject, Union};
+use crate::database::{RewardRow, TaskRow, TradeWithRewardRow, TradeWithTaskRow};
+use async_graphql::{Interface, SimpleObject};
 use chrono::NaiveDateTime;
-
-#[derive(SimpleObject)]
-struct User {
-    id: i32,
-    email: String,
-}
-impl From<UserRow> for User {
-    fn from(value: UserRow) -> Self {
-        Self {
-            id: value.id,
-            email: value.email,
-        }
-    }
-}
 
 #[derive(SimpleObject)]
 pub struct TaskObject {
@@ -59,12 +45,19 @@ impl From<RewardRow> for RewardObject {
             deleted_at: reward_row.deleted_at,
             hidden_until: reward_row.hidden_until,
             description: reward_row.description,
-            max_daily_frequency: reward_row.max_daily_frequency, 
+            max_daily_frequency: reward_row.max_daily_frequency,
         }
     }
 }
-
-#[derive(Union)]
+#[derive(Interface)]
+#[graphql(
+    field(name = "id", ty = "&i32"),
+    field(name = "name", ty = "String"),
+    field(name = "created_at", ty = "&NaiveDateTime"),
+    field(name = "deleted_at", ty = "&Option<NaiveDateTime>"),
+    field(name = "hidden_until", ty = "&Option<NaiveDateTime>"),
+    field(name = "description", ty = "String")
+)]
 pub enum TradableItem {
     Reward(RewardObject),
     Task(TaskObject),
@@ -76,4 +69,44 @@ pub struct TradeObject {
     amount: i32,
     created_at: NaiveDateTime,
     tradable_item: TradableItem,
+}
+impl From<TradeWithTaskRow> for TradeObject {
+    fn from(trade_row: TradeWithTaskRow) -> Self {
+        let item = TradableItem::Task(TaskObject {
+            id: trade_row.task_id,
+            name: trade_row.task_name,
+            created_at: trade_row.task_created_at,
+            deleted_at: trade_row.task_deleted_at,
+            hidden_until: trade_row.task_hidden_until,
+            due_by: trade_row.task_due_by,
+            description: trade_row.task_description,
+        });
+
+        return TradeObject {
+            id: trade_row.task_id,
+            amount: trade_row.amount,
+            created_at: trade_row.created_at,
+            tradable_item: item,
+        };
+    }
+}
+impl From<TradeWithRewardRow> for TradeObject {
+    fn from(trade_row: TradeWithRewardRow) -> Self {
+        let item = TradableItem::Reward(RewardObject {
+            id: trade_row.reward_id,
+            name: trade_row.reward_name,
+            created_at: trade_row.reward_created_at,
+            deleted_at: trade_row.reward_deleted_at,
+            hidden_until: trade_row.reward_hidden_until,
+            description: trade_row.reward_description,
+            max_daily_frequency: trade_row.reward_max_daily_frequency,
+        });
+
+        return TradeObject {
+            id: trade_row.id,
+            amount: trade_row.amount,
+            created_at: trade_row.created_at,
+            tradable_item: item,
+        };
+    }
 }

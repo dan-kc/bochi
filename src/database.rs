@@ -70,6 +70,82 @@ impl Database {
         .await
     }
 
+    pub async fn create_trade_with_task(
+        &self,
+        create_trade_options: CreateTradeWithTaskOptions,
+    ) -> Result<TradeWithTaskRow, sqlx::Error> {
+        sqlx::query_as(
+            // We `SELECT $1, $2` here instead of `SELECT column names`. This is valid SQL.
+            // We do this because we can only do a where claude if we SELECT. We don't want
+            // to use any of the values from the tasks table for the insert, so we just provide
+            // literal values that, after the validation is done, gets used by the insert 
+            // statment.
+            "WITH new_trade AS (
+                INSERT INTO trades (task_id, amount)
+                SELECT $1, $2
+                FROM tasks
+                WHERE tasks.id = $1 AND tasks.user_id = $3
+                RETURNING *
+            )
+            SELECT
+                nt.*,
+                t.name AS task_name, t.created_at AS task_created_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description
+            FROM new_trade nt
+            JOIN tasks t ON nt.task_id = t.id",
+        )
+        .bind(create_trade_options.task_id)
+        .bind(create_trade_options.amount)
+        .bind(create_trade_options.user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn create_trade_with_reward(
+        &self,
+        create_trade_options: CreateTradeWithRewardOptions,
+    ) -> Result<TradeWithRewardRow, sqlx::Error> {
+        sqlx::query_as(
+            "WITH new_trade AS (
+                INSERT INTO trades (reward_id, amount)
+                SELECT $1, $2
+                FROM rewards
+                WHERE rewards.id = $1 AND rewards.user_id = $3
+                RETURNING *
+            )
+            SELECT
+                nt.*,
+                r.name AS reward_name, r.created_at AS reward_created_at, r.deleted_at AS reward_deleted_at, r.hidden_until AS reward_hidden_until, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
+            FROM new_trade nt
+            JOIN rewards r ON nt.reward_id = r.id",
+        )
+        .bind(create_trade_options.reward_id)
+        .bind(create_trade_options.amount)
+        .bind(create_trade_options.user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    // (None, Some(reward_id)) => {
+    //     return sqlx::query_as(
+    //         "WITH new_trade AS (
+    //             INSERT INTO trades (reward_id, amount)
+    //             SELECT $1, $2
+    //             FROM rewards
+    //             WHERE rewards.id = $1 AND rewards.user_id = $3
+    //             RETURNING *
+    //         )
+    //         SELECT
+    //             nt.*,
+    //             r.name AS reward_name, r.created_at AS reward_created_at, r.deleted_at AS reward_deleted_at, r.hidden_until AS reward_hidden_until, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
+    //         FROM new_trade nt
+    //         JOIN rewards r ON nt.reward_id = r.id",
+    //     )
+    //     .bind(reward_id)
+    //     .bind(create_trade_options.amount)
+    //     .bind(create_trade_options.user_id)
+    //     .fetch_one(&self.pool)
+    //     .await
+
     /// Creates refresh token in the db. Api keys have expires_at = NULL
     pub async fn create_or_overwrite_refresh_token(
         &self,
@@ -174,6 +250,36 @@ impl CreateTaskOptions {
     }
 }
 
+pub struct CreateTradeWithTaskOptions {
+    user_id: i32,
+    task_id: i32,
+    amount: i32,
+}
+impl CreateTradeWithTaskOptions {
+    pub fn new(user_id: i32, task_id: i32, amount: i32) -> Self {
+        Self {
+            user_id: user_id,
+            task_id: task_id,
+            amount: amount,
+        }
+    }
+}
+
+pub struct CreateTradeWithRewardOptions {
+    user_id: i32,
+    reward_id: i32,
+    amount: i32,
+}
+impl CreateTradeWithRewardOptions {
+    pub fn new(user_id: i32, reward_id: i32, amount: i32) -> Self {
+        Self {
+            user_id: user_id,
+            reward_id: reward_id,
+            amount: amount,
+        }
+    }
+}
+
 pub struct CreateRewardOptions {
     pub user_id: i32,
     pub name: String,
@@ -196,6 +302,7 @@ impl CreateRewardOptions {
 #[derive(sqlx::FromRow)]
 pub struct UserRow {
     pub id: i32,
+    #[allow(dead_code)]
     pub email: String,
     pub password: String,
 }
@@ -203,6 +310,7 @@ pub struct UserRow {
 #[derive(sqlx::FromRow)]
 pub struct RefreshTokenRow {
     pub key: String,
+    #[allow(dead_code)]
     pub created_at: NaiveDateTime,
     pub expires_at: Option<NaiveDateTime>,
 }
@@ -210,7 +318,6 @@ pub struct RefreshTokenRow {
 #[derive(sqlx::FromRow)]
 pub struct TaskRow {
     pub id: i32,
-    pub user_id: i32,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -222,11 +329,42 @@ pub struct TaskRow {
 #[derive(sqlx::FromRow)]
 pub struct RewardRow {
     pub id: i32,
-    pub user_id: i32,
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TradeWithTaskRow {
+    pub id: i32,
+    pub created_at: NaiveDateTime,
+    pub amount: i32,
+    pub task_id: i32,
+
+    // Task join
+    pub task_name: String,
+    pub task_created_at: NaiveDateTime,
+    pub task_deleted_at: Option<NaiveDateTime>,
+    pub task_hidden_until: Option<NaiveDateTime>,
+    pub task_due_by: Option<NaiveDateTime>,
+    pub task_description: String,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TradeWithRewardRow {
+    pub id: i32,
+    pub created_at: NaiveDateTime,
+    pub amount: i32,
+    pub reward_id: i32,
+
+    // Task join
+    pub reward_name: String,
+    pub reward_created_at: NaiveDateTime,
+    pub reward_deleted_at: Option<NaiveDateTime>,
+    pub reward_hidden_until: Option<NaiveDateTime>,
+    pub reward_description: String,
+    pub reward_max_daily_frequency: Option<f32>,
 }

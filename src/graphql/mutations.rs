@@ -1,9 +1,12 @@
 use std::{any::Any, sync::Arc};
 use tracing::error;
 
-use super::objects::{RewardObject, TaskObject};
+use super::objects::{RewardObject, TaskObject, TradeObject};
 use crate::{
-    database::{self, CreateRewardOptions, CreateTaskOptions},
+    database::{
+        self, CreateRewardOptions, CreateTaskOptions, CreateTradeWithRewardOptions,
+        CreateTradeWithTaskOptions,
+    },
     router::AuthenticatedUser,
 };
 use async_graphql::{ErrorExtensionValues, InputObject, Object};
@@ -57,6 +60,12 @@ pub struct CreateRewardInput {
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
+}
+
+#[derive(InputObject)]
+pub struct CreateTradeInput {
+    pub task_id: Option<i32>,
+    pub reward_id: Option<i32>,
 }
 
 #[Object]
@@ -177,5 +186,49 @@ impl MutationRoot {
         })?;
 
         Ok(task_row.into())
+    }
+
+    async fn create_trade(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        input: CreateTradeInput,
+    ) -> Result<TradeObject, async_graphql::Error> {
+        if (input.task_id.is_some() && input.reward_id.is_some())
+            || input.task_id.is_none() && input.reward_id.is_none()
+        {
+            let msg = "Must have exactly one of either `task_id` or `reward_id`".to_string();
+            return Err(Error::Validation(msg).into_graphql_error());
+        };
+
+        let database = ctx.data::<database::Database>().map_err(|e| {
+            error!("Database pool not found in context: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
+
+        let user_id = ctx
+            .data::<AuthenticatedUser>()
+            .map_err(|e| {
+                error!("User not found in context: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?
+            .user_id;
+
+        if input.task_id.is_some() {
+            let opts = CreateTradeWithTaskOptions::new(user_id, input.task_id.unwrap(), 1000);
+            let trade_row = database.create_trade_with_task(opts).await.map_err(|e| {
+                error!("Database Error: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?;
+
+            Ok(trade_row.into())
+        } else {
+            let opts = CreateTradeWithRewardOptions::new(user_id, input.reward_id.unwrap(), 1000);
+            let trade_row = database.create_trade_with_reward(opts).await.map_err(|e| {
+                error!("Database Error: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?;
+
+            Ok(trade_row.into())
+        }
     }
 }

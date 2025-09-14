@@ -1,7 +1,7 @@
 meta {
-  name: create task
+  name: create trade
   type: graphql
-  seq: 3
+  seq: 5
 }
 
 post {
@@ -15,10 +15,20 @@ headers {
 }
 
 body:graphql {
-  mutation CreateTask($input: CreateTaskInput!) {
-    createTask(input: $input) {
-      name
+  mutation CreateTrade($input: CreateTradeInput!) {
+    createTrade(input: $input) {
       id
+      amount
+      createdAt
+      tradableItem {
+        __typename
+        id
+        description
+        hiddenUntil
+        ... on TaskObject {
+          dueBy
+        }
+      }
     }
   }
   
@@ -27,8 +37,7 @@ body:graphql {
 body:graphql:vars {
   {
     "input": {
-      "name":"et",
-      "description":""
+      "taskId": 20
     }
   }
 }
