@@ -43,8 +43,13 @@
             ]
             ++ scripts;
           shellHook = ''
+            if [ -z "$CI_ENVIRONMENT" ]; then
+              echo "Running local-dev shellHook setup..."
+              start
+            else
+              echo "CI environment detected, skipping local dev setup."
+            fi
             # If localstack and db is not running then start it
-            start
 
             # Init secret management for local deployment
             export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"

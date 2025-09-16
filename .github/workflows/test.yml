@@ -5,9 +5,12 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    env:
+      CI_ENVIRONMENT: "true"
     steps:
-    - uses: actions/checkout@v5
-    - uses: cachix/install-nix-action@v31
-      with:
-        github_access_token: ${{ secrets.GITHUB_TOKEN }}
-    - run: nix flake check
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: nix flake develop
+      - run: nix flake check
