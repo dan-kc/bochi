@@ -81,7 +81,7 @@
           ];
 
         };
-        packages.default = self.packages.server;
+        # packages.default = self.packages.${system}.server;
 
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-server";
