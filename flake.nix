@@ -26,19 +26,22 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            (fenix.packages.${system}.complete.withComponents [
-              "cargo"
-              "clippy"
-              "rustc"
-              "rustfmt"
-            ])
-            rust-analyzer
-            nil
-            nixfmt-rfc-style
-            taplo
-            flyway
-          ] ++ scripts;
+          buildInputs =
+            with pkgs;
+            [
+              (fenix.packages.${system}.complete.withComponents [
+                "cargo"
+                "clippy"
+                "rustc"
+                "rustfmt"
+              ])
+              rust-analyzer
+              nil
+              nixfmt-rfc-style
+              taplo
+              flyway
+            ]
+            ++ scripts;
           shellHook = ''
             # If localstack and db is not running then start it
             start
@@ -78,6 +81,7 @@
           ];
 
         };
+        packages.default = self.packages.server;
 
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-server";
