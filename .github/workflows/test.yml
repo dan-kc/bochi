@@ -27,7 +27,10 @@ jobs:
           # sleep 10 # Wait for secrets to load into localstack
 
       - name: Migrate db
-        run: nix develop --command fw habit_market_test migrate
+        run: |
+          echo "Creating database..."
+          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE habit_market_test;"
+          nix develop --command fw habit_market_test migrate
 
       - name: Run tests
-      - run: nix develop --command t
+        run: nix develop --command t
