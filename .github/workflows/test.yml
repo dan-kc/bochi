@@ -8,9 +8,10 @@ jobs:
     env:
       CI_ENVIRONMENT: "true"
     steps:
-      - name: Install nix
       - uses: actions/checkout@v5
-      - uses: cachix/install-nix-action@v31
+      
+      - name: Install Nix 
+        uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -21,7 +22,7 @@ jobs:
           install-awslocal: 'true'
 
       - name: Initialise LocalStack
-        run: ./init-aws.sh
+        run: ./init-aws.sh 
 
       - run: nix develop
       - run: nix flake check
