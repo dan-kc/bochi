@@ -45,27 +45,23 @@
             ]
             ++ scripts;
           shellHook = ''
-            if ! [ -z "$CI_ENVIRONMENT" ]; then
-              echo "CI ENVIRONMENT DETECTED, SKIPPING LOCAL DEV SETUP."
-              return 0
-            fi
-            echo "LOCAL ENV"
-            # start
-            # If localstack and db is not running then start it
-
-            # Init secret management for local deployment
-            export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
             export AWS_ACCESS_KEY_ID="test"
             export AWS_SECRET_ACCESS_KEY= "test"
             export AWS_DEFAULT_REGION="eu-west-1"
-            export AWS_SECRETS_PREFIX="" # use "test-" in test runners
-            export DATABASE_NAME="habit_market" # use "test_habit_market" in test runnners
-            # export RUST_BACKTRACE=1
+            export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
             export RUST_LOG=info
-            export LOG_DESTINATION=logs # If unset then it will be stdout only
 
-            # cargo doc
-            # xdg-open ./target/doc/habit_market_backend/index.html
+            if ! [ -z "$CI_ENVIRONMENT" ]; then # z tests if the length of the string is 0
+              echo "CI ENVIRONMENT DETECTED, SKIPPING LOCAL DEV SETUP."
+              export AWS_SECRETS_PREFIX="test"
+              export DATABASE_NAME="test_habit_market"
+            else
+              echo "LOCAL ENV"
+              export AWS_SECRETS_PREFIX="" 
+              export DATABASE_NAME="habit_market" 
+              export LOG_DESTINATION=logs # If unset then it will be stdout only
+            fi
+            # export RUST_BACKTRACE=1
           '';
         };
 
