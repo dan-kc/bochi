@@ -15,15 +15,6 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Start LocalStack
-      #   uses: LocalStack/setup-localstack@v0.2.3
-      #   with:
-      #     image-tag: 'latest'
-      #     install-awslocal: 'true'
-
-      # - name: Initialise LocalStack
-      #   run: ./init-aws.sh
-
       - name: Start services with Docker Compose
         run: docker compose up db localstack -d
 
@@ -33,5 +24,10 @@ jobs:
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
           docker compose ps
+          # sleep 10 # Wait for secrets to load into localstack
 
-      - run: nix develop --command nix flake check
+      - name: Migrate db
+        run: nix develop --command fw habit_market_test migrate
+
+      - name: Run tests
+      - run: nix develop --command t
