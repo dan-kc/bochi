@@ -29,8 +29,8 @@ jobs:
       - name: Migrate db
         run: |
           echo "Creating database..."
-          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE habit_market_test;"
-          nix develop --command fw habit_market_test migrate
+          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
+          nix develop --command fw test_habit_market migrate
 
       - name: Run tests
         run: nix develop --command t
