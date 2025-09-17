@@ -24,5 +24,4 @@ jobs:
       - name: Initialise LocalStack
         run: ./init-aws.sh 
 
-      - run: nix develop
-      - run: nix flake check
+      - run: nix develop --command nix flake check

@@ -40,15 +40,17 @@
               nixfmt-rfc-style
               taplo
               flyway
+              # localstack
+              # act
             ]
             ++ scripts;
           shellHook = ''
-            if [ -z "$CI_ENVIRONMENT" ]; then
-              echo "Running local-dev shellHook setup..."
-              start
-            else
-              echo "CI environment detected, skipping local dev setup."
+            if ! [ -z "$CI_ENVIRONMENT" ]; then
+              echo "CI ENVIRONMENT DETECTED, SKIPPING LOCAL DEV SETUP."
+              return 0
             fi
+            echo "LOCAL ENV"
+            # start
             # If localstack and db is not running then start it
 
             # Init secret management for local deployment
