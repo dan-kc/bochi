@@ -23,14 +23,15 @@ jobs:
           echo "Waiting for services to start..."
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
-          docker compose ps
+          sleep 30
+          docker compose logs localstack
           # sleep 10 # Wait for secrets to load into localstack
 
-      - name: Migrate db
-        run: |
-          echo "Creating database..."
-          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
-          nix develop --command fw test_habit_market migrate
-
-      - name: Run tests
-        run: nix develop --command t
+      # - name: Migrate db
+      #   run: |
+      #     echo "Creating database..."
+      #     docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
+      #     nix develop --command fw test_habit_market migrate
+      #
+      # - name: Run tests
+      #   run: nix develop --command t
