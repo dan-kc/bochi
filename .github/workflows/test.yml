@@ -15,24 +15,28 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Start services with Docker Compose
-        run: docker compose up db localstack -d
-
-      - name: Wait for services to be ready
-        run: |
-          echo "Waiting for services to start..."
-          timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
-          timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
-          sleep 20
-          docker compose logs localstack
-
-      - name: Migrate db
-        run: |
-          echo "Creating database..."
-          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
-          nix develop --command fw test_habit_market migrate
+      # - name: Start services with Docker Compose
+      #   run: docker compose up db localstack -d
+      #
+      # - name: Wait for services to be ready
+      #   run: |
+      #     echo "Waiting for services to start..."
+      #     timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
+      #     timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
+      #     sleep 20
+      #     docker compose logs localstack
+      #
+      # - name: Migrate db
+      #   run: |
+      #     echo "Creating database..."
+      #     docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
+      #     nix develop --command fw test_habit_market migrate
 
       - name: Run tests
         run: |
-          nix develop --command echo $AWS_ENDPOINT_URL_SECRETSMANAGER
-          nix develop --command t
+          nix develop --command echo $AWS_ACCESS_KEY_ID
+          nix develop --command echo $AWS_SECRET_ACCESS_KEY
+          nix develop --command echo $AWS_DEFAULT_REGION
+          nix develop --command echo $AWS_SECRETS_PREFIX
+          nix develop --command echo $DATABASE_NAME
+          # nix develop --command t
