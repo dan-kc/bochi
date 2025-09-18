@@ -41,27 +41,29 @@
               taplo
               flyway
               # localstack
-              # act
+              act
+              ra-multiplex
             ]
             ++ scripts;
           shellHook = ''
+            # localstack setup.
             export AWS_ACCESS_KEY_ID="test"
             export AWS_SECRET_ACCESS_KEY= "test"
             export AWS_DEFAULT_REGION="eu-west-1"
             export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
-            export RUST_LOG=info
 
-            if ! [ -z "$CI_ENVIRONMENT" ]; then # z tests if the length of the string is 0
+            export RUST_LOG=info
+            # export RUST_BACKTRACE=1
+
+            if ! [ -z "$CI_ENVIRONMENT" ]; then # -z checks if the length of the string is 0
               echo "CI ENVIRONMENT DETECTED, SKIPPING LOCAL DEV SETUP."
               export AWS_SECRETS_PREFIX="test"
               export DATABASE_NAME="test_habit_market"
             else
               export RA_MULTIPLEX_PORT=27632
-              export AWS_SECRETS_PREFIX="" 
               export DATABASE_NAME="habit_market" 
               export LOG_DESTINATION=logs # If unset then it will be stdout only
             fi
-            # export RUST_BACKTRACE=1
           '';
         };
 

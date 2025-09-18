@@ -23,9 +23,8 @@ jobs:
           echo "Waiting for services to start..."
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
           timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
-          sleep 30
+          sleep 20
           docker compose logs localstack
-          # sleep 10 # Wait for secrets to load into localstack
 
       - name: Migrate db
         run: |
@@ -34,4 +33,6 @@ jobs:
           nix develop --command fw test_habit_market migrate
 
       - name: Run tests
-        run: nix develop --command t
+        run: |
+          nix develop --command echo $AWS_ENDPOINT_URL_SECRETSMANAGER
+          nix develop --command t

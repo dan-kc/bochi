@@ -1,6 +1,5 @@
 #!/bin/bash
 echo "Initializing LocalStack secrets..."
-# Todo: run in parrallell
 
 awslocal secretsmanager create-secret --name db-user --secret-string 'user' --region eu-west-1 2>/dev/null || true &
 awslocal secretsmanager create-secret --name db-password --secret-string 'password' --region eu-west-1 2>/dev/null || true &

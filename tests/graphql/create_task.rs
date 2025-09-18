@@ -450,7 +450,6 @@ async fn test_create_task_due_by_in_past() {
         extensions.get("code").unwrap(),
         &Value::String("BAD_USER_INPUT".to_string())
     );
-    dbg!(extensions.clone());
     assert_eq!(
         extensions.get("details").unwrap(),
         &Value::String(

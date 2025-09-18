@@ -23,7 +23,7 @@ impl SecretsManager {
 
     pub async fn get_secret(&self, secret_name: &str) -> Result<String, String> {
         // Check for secrets prefix
-        let secrets_prefix = std::env::var("AWS_SECRETS_PREFIX").unwrap_or(String::from(""));
+        let secrets_prefix = std::env::var("AWS_SECRETS_PREFIX").unwrap_or("".to_string());
         let prefixed_secret_name = secrets_prefix + secret_name;
 
         self.client
