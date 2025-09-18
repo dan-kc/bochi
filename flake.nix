@@ -56,7 +56,7 @@
               export AWS_SECRETS_PREFIX="test"
               export DATABASE_NAME="test_habit_market"
             else
-              echo "LOCAL ENV"
+              export RA_MULTIPLEX_PORT=27632
               export AWS_SECRETS_PREFIX="" 
               export DATABASE_NAME="habit_market" 
               export LOG_DESTINATION=logs # If unset then it will be stdout only
