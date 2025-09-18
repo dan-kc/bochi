@@ -34,9 +34,11 @@ jobs:
 
       - name: Run tests
         run: |
-          nix develop --command echo "$AWS_ACCESS_KEY_ID"
-          nix develop --command echo "$AWS_SECRET_ACCESS_KEY"
-          nix develop --command echo "$AWS_DEFAULT_REGION"
-          nix develop --command echo "$AWS_SECRETS_PREFIX"
-          nix develop --command echo "$DATABASE_NAME"
-          # nix develop --command t
+          nix develop --command bash -c '
+            echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
+            echo "AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY"
+            echo "AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION"
+            echo "AWS_SECRETS_PREFIX: $AWS_SECRETS_PREFIX"
+            echo "DATABASE_NAME: $DATABASE_NAME"
+            echo "AWS_ENDPOINT_URL_SECRETSMANAGER: $AWS_ENDPOINT_URL_SECRETSMANAGER"
+          '
