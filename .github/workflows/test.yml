@@ -36,13 +36,12 @@ jobs:
         run: |
           # Apparently you need bash -c in a github action context to inherit env vars
 
-          # nix develop --command bash -c '
-          #   echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
-          #   echo "AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY"
-          #   echo "AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION"
-          #   echo "AWS_SECRETS_PREFIX: $AWS_SECRETS_PREFIX"
-          #   echo "DATABASE_NAME: $DATABASE_NAME"
-          #   echo "AWS_ENDPOINT_URL_SECRETSMANAGER: $AWS_ENDPOINT_URL_SECRETSMANAGER"
-          # '
-
-          nix develop --command bash -c 't'
+          nix develop --command bash -c '
+            echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
+            echo "AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY"
+            echo "AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION"
+            echo "AWS_SECRETS_PREFIX: $AWS_SECRETS_PREFIX"
+            echo "DATABASE_NAME: $DATABASE_NAME"
+            echo "AWS_ENDPOINT_URL_SECRETSMANAGER: $AWS_ENDPOINT_URL_SECRETSMANAGER"
+            t
+          '
