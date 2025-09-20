@@ -85,6 +85,7 @@ resource "aws_iam_policy" "ecr_upload_policy" {
           "ecr:InitiateLayerUpload",
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
+          "ecr:DescribeRepositories",
         ],
         Resource = aws_ecr_repository.habit_market.arn
       },
