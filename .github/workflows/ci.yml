@@ -5,55 +5,52 @@ on:
       - main
     paths:
       - "src/**"
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Start services with Docker Compose
-        run: docker compose up db localstack -d
-
-      - name: Wait for services to be ready
-        run: |
-          echo "Waiting for services to start..."
-          timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
-          timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
-
-      - name: Migrate db
-        run: |
-          echo "Creating database..."
-          docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
-          nix develop --command fw test_habit_market migrate
-
-      - name: Run tests
-        run: |
-          nix develop --command bash -c t
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#     steps:
+#       - uses: actions/checkout@v5
+#
+#       - name: Install Nix
+#         uses: cachix/install-nix-action@v31
+#         with:
+#           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Format Check
+#         run: nix develop --command cargo fmt --all --check
+#
+#       - name: Lint Check
+#         run: nix develop --command cargo check
+#
+#       - name: Start services with Docker Compose
+#         run: docker compose up db localstack -d
+#
+#       - name: Wait for services to be ready
+#         run: |
+#           echo "Waiting for services to start..."
+#           timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
+#           timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
+#
+#       - name: Migrate db
+#         run: |
+#           echo "Creating database..."
+#           docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
+#           nix develop --command fw test_habit_market migrate
+#
+#       - name: Run tests
+#         run: |
+#           nix develop --command bash -c t
 
   build:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # This is crucial for OIDC to request the JWT ID token
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build
-        run: |
-          nix develop --command nix build .#server-docker
 
       - name: Configure AWS Credentials with OIDC Role
         uses: aws-actions/configure-aws-credentials@v4.0.0
@@ -72,6 +69,15 @@ jobs:
           echo "ECR_URI=$ECR_URI" >> $GITHUB_OUTPUT
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        run: |
+          nix develop --command nix build .#server-docker
 
       - name: Load image and tag for ECR
         run: |

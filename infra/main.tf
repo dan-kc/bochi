@@ -71,6 +71,13 @@ resource "aws_iam_policy" "ecr_upload_policy" {
       {
         Effect = "Allow",
         Action = [
+          "ecr:GetAuthorizationToken" # This specific action requires "*" resource
+        ],
+        Resource = "*" # MUST be "*" for GetAuthorizationToken
+      },
+      {
+        Effect = "Allow",
+        Action = [
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability",
@@ -78,7 +85,6 @@ resource "aws_iam_policy" "ecr_upload_policy" {
           "ecr:InitiateLayerUpload",
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
-          "ecr:GetAuthorizationToken"
         ],
         Resource = aws_ecr_repository.habit_market.arn
       },
