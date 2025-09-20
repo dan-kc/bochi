@@ -22,8 +22,8 @@ provider "aws" {
 }
 
 # Define ECR repo
-resource "aws_ecr_repository" "habit_market" {
-  name                 = "habit-market"
+resource "aws_ecr_repository" "habit_market_backend" {
+  name                 = "habit-market-backend"
   image_tag_mutability = "MUTABLE" # Because we want to update "Latest"
 
   image_scanning_configuration {
@@ -87,7 +87,7 @@ resource "aws_iam_policy" "ecr_upload_policy" {
           "ecr:CompleteLayerUpload",
           "ecr:DescribeRepositories",
         ],
-        Resource = aws_ecr_repository.habit_market.arn
+        Resource = aws_ecr_repository.habit_market_backend.arn
       },
     ]
   })
