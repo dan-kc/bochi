@@ -37,33 +37,19 @@
               ])
               rust-analyzer
               nil
+              openssl
               nixfmt-rfc-style
               taplo
               flyway
-              # localstack
-              act
+              opentofu
+              awscli2
               ra-multiplex
             ]
             ++ scripts;
           shellHook = ''
-            # localstack setup.
-            export AWS_ACCESS_KEY_ID="test"
-            export AWS_SECRET_ACCESS_KEY="test"
-            export AWS_DEFAULT_REGION="eu-west-1"
-            export AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566"
-
             export RUST_LOG=info
             # export RUST_BACKTRACE=1
-
-            if ! [ -z "$CI_ENVIRONMENT" ]; then # -z checks if the length of the string is 0
-              echo "CI ENVIRONMENT DETECTED, SKIPPING LOCAL DEV SETUP."
-              export AWS_SECRETS_PREFIX="test"
-              export DATABASE_NAME="test_habit_market"
-            else
-              export RA_MULTIPLEX_PORT=27632
-              export DATABASE_NAME="habit_market" 
-              export LOG_DESTINATION=logs # If unset then it will be stdout only
-            fi
+            export RA_MULTIPLEX_PORT=27632
           '';
         };
 
@@ -71,6 +57,7 @@
           pname = "habit-market-backend";
           version = "0.1.0";
           src = ./.;
+          doCheck = false; # Run tests seperately
 
           cargoLock = {
             lockFile = ./Cargo.lock;
@@ -89,7 +76,7 @@
         # packages.default = self.packages.${system}.server;
 
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
-          name = "habit-market-server";
+          name = "backend";
           tag = "latest";
 
           contents = with pkgs; [

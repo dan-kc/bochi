@@ -24,11 +24,33 @@ let
       	docker compose -f docker-compose.yml -f docker-compose-server.yml down
     '';
 
+    # Wraps `cargo run` with env vars for localstack.
+    run = pkgs.writeShellScriptBin "run" ''
+      AWS_ACCESS_KEY_ID="test" \
+      AWS_SECRET_ACCESS_KEY="test" \
+      AWS_DEFAULT_REGION="eu-west-1" \
+      AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566" \
+      AWS_SECRETS_PREFIX="" \
+      DATABASE_NAME="habit_market" \
+      LOG_DESTINATION=logs \
+      AWS_PROFILE="" \
+      AWS_DEFAULT_PROFILE="" \
+      cargo run "$@"
+    '';
+
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
       set -e 
       ${clean}/bin/clean test_habit_market
-      AWS_SECRETS_PREFIX="test-" DATABASE_NAME="test_habit_market" cargo test "$@"
+      AWS_ACCESS_KEY_ID="test" \
+      AWS_SECRET_ACCESS_KEY="test" \
+      AWS_DEFAULT_REGION="eu-west-1" \
+      AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566" \
+      AWS_SECRETS_PREFIX="test-" \
+      DATABASE_NAME="test_habit_market" \
+      AWS_PROFILE="" \
+      AWS_DEFAULT_PROFILE="" \
+      cargo test "$@"
     '';
 
     # Kills all habit_market processes
@@ -76,6 +98,10 @@ let
         -validateOnMigrate=true \
         -baselineOnMigrate=true \
         "$@"
+    '';
+
+    tf = pkgs.writeShellScriptBin "tf" ''
+      tofu -chdir=./infra "$@"
     '';
 
     # drops and recreates the provided database, then applies migrations.
