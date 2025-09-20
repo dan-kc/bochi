@@ -30,17 +30,10 @@
 
 ## CI
 
+- [ ] Lint/Format (conditional if ./src changes)
 - [x] Test (conditional if ./src changes)
-- Build (conditional if ./src changes) (dep on test)
-  - Install nix environment
-  - 'nix build' docker container
-  - upload to aws containers registry
-- Provision (conditional if ./infra changes)
-  - Install nix
-  - auth with aws
-  - tofu plan
-  - manuall step
-- Migrate (conditional if ./migrations changes) (dep on Build, Provision)
+- [x] Build/Upload (conditional if ./src changes) (dep on test)
+- Migrate (conditional if ./migrations changes) (dep on Build)
   - Install nix
   - auth with aws
   - touch server to stop prepared statments

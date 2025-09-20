@@ -7,10 +7,7 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
-async fn register_and_login_user(
-    email: &str,
-    password: &str,
-) -> Result<(String, String), String> {
+async fn register_and_login_user(email: &str, password: &str) -> Result<(String, String), String> {
     let router = router::router().await;
 
     // Try to register user first
@@ -53,7 +50,10 @@ async fn register_and_login_user(
             .await
             .map_err(|e| format!("Login failed: {}", e))?
     } else {
-        return Err(format!("Registration failed with status: {}", register_response.status()));
+        return Err(format!(
+            "Registration failed with status: {}",
+            register_response.status()
+        ));
     };
 
     let response_body_bytes = response
@@ -340,7 +340,12 @@ async fn test_refresh_tokens_multiple_times() {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK, "Token refresh {} should succeed", i + 1);
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "Token refresh {} should succeed",
+            i + 1
+        );
 
         let response_body_bytes = response
             .into_body()
@@ -348,8 +353,8 @@ async fn test_refresh_tokens_multiple_times() {
             .await
             .expect("Failed to read response body")
             .to_bytes();
-        let json: serde_json::Value =
-            serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+        let json: serde_json::Value = serde_json::from_slice(&response_body_bytes)
+            .expect("Failed to parse JSON response body");
 
         let new_refresh_token = json
             .get("refreshToken")

@@ -199,7 +199,9 @@ async fn test_create_task_validation_description_too_long() {
     let error = errors.first().unwrap();
     assert_eq!(
         error.get("message").unwrap(),
-        &Value::String("Validation Error: Description is too long (16385 characters), max 16384.".to_string())
+        &Value::String(
+            "Validation Error: Description is too long (16385 characters), max 16384.".to_string()
+        )
     );
 
     let extensions = error.get("extensions").unwrap();

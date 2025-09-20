@@ -8,4 +8,3 @@ impl QueryRoot {
         "Wag1"
     }
 }
-

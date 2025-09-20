@@ -31,4 +31,3 @@ pub fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
         }
     }
 }
-

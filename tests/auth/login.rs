@@ -31,7 +31,10 @@ async fn register_user_for_login(email: &str, password: &str) -> Result<(), Stri
     if response.status() == StatusCode::OK || response.status() == StatusCode::CONFLICT {
         Ok(())
     } else {
-        Err(format!("Registration failed with status: {}", response.status()))
+        Err(format!(
+            "Registration failed with status: {}",
+            response.status()
+        ))
     }
 }
 

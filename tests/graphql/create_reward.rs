@@ -717,4 +717,3 @@ async fn test_create_reward_max_daily_frequency_boundary() {
     let reward = json.get("data").unwrap().get("createReward").unwrap();
     assert_eq!(reward.get("maxDailyFrequency").unwrap(), 100.0);
 }
-
