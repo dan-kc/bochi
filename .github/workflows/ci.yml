@@ -3,62 +3,62 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "src/**"
-  jobs:
-    build:
-      runs-on: ubuntu-latest
-      permissions:
-        id-token: write
-        contents: read
-      steps:
-        - uses: actions/checkout@v5
+    # paths:
+    #   - "src/**"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
 
-        - name: Configure AWS Credentials with OIDC Role
-          uses: aws-actions/configure-aws-credentials@v4.0.0
-          with:
-            role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-            aws-region: ${{ secrets.AWS_REGION }}
+      - name: Configure AWS Credentials with OIDC Role
+        uses: aws-actions/configure-aws-credentials@v4.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-        - name: Login to Amazon ECR
-          id: login-ecr
-          uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-        - name: Get ECR repository URI
-          id: get-repository-uri
-          run: |
-            ECR_URI=$(aws ecr describe-repositories --repository-names habit-market --query "repositories[0].repositoryUri" --output text)
-            echo "ECR_URI=$ECR_URI" >> $GITHUB_OUTPUT
-          env:
-            AWS_REGION: ${{ secrets.AWS_REGION }}
+      - name: Get ECR repository URI
+        id: get-repository-uri
+        run: |
+          ECR_URI=$(aws ecr describe-repositories --repository-names habit-market --query "repositories[0].repositoryUri" --output text)
+          echo "ECR_URI=$ECR_URI" >> $GITHUB_OUTPUT
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
 
-        - name: Install Nix
-          uses: cachix/install-nix-action@v31
-          with:
-            github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Build
-          run: |
-            nix develop --command nix build .#server-docker
+      - name: Build
+        run: |
+          nix develop --command nix build .#server-docker
 
-        - name: Load image and tag for ECR
-          run: |
-            docker load --input ./result
+      - name: Load image and tag for ECR
+        run: |
+          docker load --input ./result
 
-            IMAGE_NAME="backend" 
-            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-            IMAGE_TAG="latest"
-            VERSION_TAG="${GITHUB_SHA::7}"
-            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+          IMAGE_NAME="backend" 
+          ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+          IMAGE_TAG="latest"
+          VERSION_TAG="${GITHUB_SHA::7}"
+          docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+          docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
 
-        - name: Push image to Amazon ECR
-          run: |
-            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-            IMAGE_TAG="latest"
-            VERSION_TAG="${GITHUB_SHA::7}"
-            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+      - name: Push image to Amazon ECR
+        run: |
+          ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+          IMAGE_TAG="latest"
+          VERSION_TAG="${GITHUB_SHA::7}"
+          docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+          docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
 
     # test:
     #   runs-on: ubuntu-latest
