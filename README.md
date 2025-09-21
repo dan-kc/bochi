@@ -30,7 +30,7 @@
 
 ## CI
 
-- [ ] Lint/Format (conditional if ./src changes)
+- [x] Lint/Format (conditional if ./src changes)
 - [x] Test (conditional if ./src changes)
 - [x] Build/Upload (conditional if ./src changes) (dep on test)
 - Migrate (conditional if ./migrations changes) (dep on Build)

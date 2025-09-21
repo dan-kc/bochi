@@ -76,7 +76,7 @@
         # packages.default = self.packages.${system}.server;
 
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
-          name = "backend";
+          name = "habit-market-backend";
           tag = "latest";
 
           contents = with pkgs; [
