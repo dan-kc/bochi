@@ -21,7 +21,7 @@ provider "aws" {
   region = "eu-west-2"
 }
 
-# Define ECR repo
+# Define ECR repo for server
 resource "aws_ecr_repository" "habit_market_backend" {
   name                 = "habit-market-backend"
   image_tag_mutability = "MUTABLE" # Because we want to update "Latest"
@@ -31,6 +31,17 @@ resource "aws_ecr_repository" "habit_market_backend" {
   }
 }
 
+# Define ECR repo for flyway image.
+resource "aws_ecr_repository" "habit_market_migration" {
+  name                 = "habit-market-migration"
+  image_tag_mutability = "MUTABLE" # Because we want to update "Latest"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+# Unique per AWS account. Already defined in keone.dev.
 data "aws_iam_openid_connect_provider" "github_actions" {
   url = "https://token.actions.githubusercontent.com"
 }
@@ -87,7 +98,10 @@ resource "aws_iam_policy" "ecr_upload_policy" {
           "ecr:CompleteLayerUpload",
           "ecr:DescribeRepositories",
         ],
-        Resource = aws_ecr_repository.habit_market_backend.arn
+        Resource = [
+          aws_ecr_repository.habit_market_backend.arn,
+          aws_ecr_repository.habit_market_migration.arn
+        ]
       },
     ]
   })
