@@ -23,6 +23,33 @@
           inherit system overlays;
         };
         scripts = import ./scripts.nix { inherit pkgs; };
+
+        ra-multiplex-port = "27632";
+        ra-config = ''
+          instance_timeout = false 
+          gc_interval = 10
+          listen = ["127.0.0.1", ${ra-multiplex-port}]
+          connect = ["127.0.0.1", ${ra-multiplex-port}]
+          log_filters = "info"
+          pass_environment = []
+        '';
+        ra = pkgs.writeShellScriptBin "ra" ''
+          RA_MULTIPLEX_DIR="/tmp/ra-${ra-multiplex-port}"
+          CONFIG_DIR="$RA_MULTIPLEX_DIR/ra-multiplex"  
+          CONFIG_FILE="$CONFIG_DIR/config.toml"
+          LOG_DIR="/tmp/ra-multiplex"
+          LOG_FILE="$LOG_DIR/$RA_MULTIPLEX_PORT.log"
+
+          mkdir -p "$LOG_DIR"
+          mkdir -p "$CONFIG_DIR"
+          cat > "$CONFIG_FILE" <<EOF
+          ${ra-config}
+          EOF
+
+          XDG_CONFIG_HOME=$RA_MULTIPLEX_DIR ra-multiplex server &> "$LOG_FILE" & disown
+          echo "Listening"
+        '';
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -35,6 +62,7 @@
                 "rustc"
                 "rustfmt"
               ])
+              ra
               rust-analyzer
               nil
               openssl
@@ -49,7 +77,7 @@
           shellHook = ''
             export RUST_LOG=info
             # export RUST_BACKTRACE=1
-            export RA_MULTIPLEX_PORT=27632
+            export RA_MULTIPLEX_PORT="${ra-multiplex-port}"
           '';
         };
 
@@ -73,8 +101,7 @@
           ];
 
         };
-        # packages.default = self.packages.${system}.server;
-
+        packages.default = self.packages.${system}.server;
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-backend";
           tag = "latest";

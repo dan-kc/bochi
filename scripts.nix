@@ -122,17 +122,6 @@ let
       ${fw}/bin/flyway ''${DB_NAME}
       echo "Database refresh complete!"
     '';
-
-    ra = pkgs.writeShellScriptBin "ra" ''
-      # checks if RA_MULTIPLEX_PORT is set if not then error
-      if [ -z ''${RA_MULTIPLEX_PORT} ]; then
-        echo "Error: RA_MULTIPLEX_PORT is not set. Please export it before running." >&2
-        exit 1
-      fi
-      echo "Successfully running"
-      XDG_CONFIG_HOME=/home/daniel/projects/habit-market-backend ra-multiplex server &> /tmp/ra-multiplex.log & disown
-    '';
-
   };
 in
 builtins.attrValues scripts
