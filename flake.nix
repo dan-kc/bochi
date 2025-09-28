@@ -64,6 +64,7 @@
               ])
               ra
               rust-analyzer
+              terraform-ls
               nil
               openssl
               nixfmt-rfc-style
