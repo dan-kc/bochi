@@ -1,6 +1,6 @@
 variable "container_registry_arn_list" {
   description = "A list of ARNs for container registries."
-  type = list(string)
+  type        = list(string)
 }
 
 # Unique per AWS account. Already defined in keone.dev.

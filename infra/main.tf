@@ -41,6 +41,21 @@ resource "aws_ecr_repository" "habit_market_migration" {
   }
 }
 
+# ECS Cluster
+resource "aws_ecs_cluster" "habit_market" {
+  name = "habit_market_cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+}
+
+
+module "database" {
+  source = "./services/database"
+}
+
 module "ci" {
   source = "./services/ci"
   container_registry_arn_list = [
