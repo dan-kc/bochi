@@ -42,7 +42,7 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            (user_id, name, hidden_until, due_by, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, created_at, deleted_at, hidden_until, due_by, description",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
@@ -59,7 +59,7 @@ impl Database {
     ) -> Result<RewardRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO rewards
-            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, deleted_at, hidden_until, max_daily_frequency",
         )
         .bind(create_reward_options.user_id)
         .bind(create_reward_options.name)
@@ -85,7 +85,7 @@ impl Database {
                 SELECT $1, $2
                 FROM tasks
                 WHERE tasks.id = $1 AND tasks.user_id = $3
-                RETURNING *
+                RETURNING id, task_id, reward_id, amount, created_at
             )
             SELECT
                 nt.*,
@@ -110,7 +110,7 @@ impl Database {
                 SELECT $1, $2
                 FROM rewards
                 WHERE rewards.id = $1 AND rewards.user_id = $3
-                RETURNING *
+                RETURNING id, task_id, reward_id, amount, created_at
             )
             SELECT
                 nt.*,
@@ -124,27 +124,6 @@ impl Database {
         .fetch_one(&self.pool)
         .await
     }
-
-    // (None, Some(reward_id)) => {
-    //     return sqlx::query_as(
-    //         "WITH new_trade AS (
-    //             INSERT INTO trades (reward_id, amount)
-    //             SELECT $1, $2
-    //             FROM rewards
-    //             WHERE rewards.id = $1 AND rewards.user_id = $3
-    //             RETURNING *
-    //         )
-    //         SELECT
-    //             nt.*,
-    //             r.name AS reward_name, r.created_at AS reward_created_at, r.deleted_at AS reward_deleted_at, r.hidden_until AS reward_hidden_until, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
-    //         FROM new_trade nt
-    //         JOIN rewards r ON nt.reward_id = r.id",
-    //     )
-    //     .bind(reward_id)
-    //     .bind(create_trade_options.amount)
-    //     .bind(create_trade_options.user_id)
-    //     .fetch_one(&self.pool)
-    //     .await
 
     /// Creates refresh token in the db. Api keys have expires_at = NULL
     pub async fn create_or_overwrite_refresh_token(
@@ -163,8 +142,8 @@ impl Database {
             .await?;
 
         let insert_query = match is_api_key{
-            true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL) RETURNING *",
-            false => "INSERT INTO refresh_tokens (key, user_id, name) VALUES ($1, $2, $3) RETURNING *"
+            true => "INSERT INTO refresh_tokens (key, user_id, name, expires_at) VALUES ($1, $2, $3, NULL) RETURNING key, created_at, expires_at",
+            false => "INSERT INTO refresh_tokens (key, user_id, name) VALUES ($1, $2, $3) RETURNING key, created_at, expires_at"
         };
         let refresh_token_row: RefreshTokenRow = sqlx::query_as(insert_query)
             .bind(refresh_token)
@@ -198,7 +177,8 @@ impl Database {
     ) -> Result<RefreshTokenRow, sqlx::Error> {
         sqlx::query_as(
             "
-            SELECT * FROM refresh_tokens
+            SELECT refresh_tokens.key, refresh_tokens.created_at, refresh_tokens.expires_at 
+            FROM refresh_tokens
             INNER JOIN users ON refresh_tokens.user_id = users.id
             WHERE refresh_tokens.name = $1
             AND refresh_tokens.user_id = $2
@@ -215,20 +195,12 @@ impl Database {
 
     /// Returns the user from email.
     pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as("SELECT * FROM users WHERE email = $1")
+        sqlx::query_as("SELECT id, email, password FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?
             .ok_or(sqlx::Error::RowNotFound)
     }
-
-    // pub async fn get_user_from_user_id(&self, user_id: i32) -> Result<UserRow, sqlx::Error> {
-    //     sqlx::query_as("SELECT * FROM users WHERE id = $1")
-    //         .bind(user_id)
-    //         .fetch_optional(&self.pool)
-    //         .await?
-    //         .ok_or(sqlx::Error::RowNotFound)
-    // }
 }
 
 pub struct CreateTaskOptions {
