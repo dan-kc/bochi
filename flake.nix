@@ -73,6 +73,7 @@
               opentofu
               awscli2
               ra-multiplex
+              circleci-cli
             ]
             ++ scripts;
           shellHook = ''
