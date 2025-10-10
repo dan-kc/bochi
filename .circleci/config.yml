@@ -3,24 +3,30 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: nixos/nix:latest
+      - image: cimg/base:2025.10
     resource_class: medium
     steps:
-      - run:
-          name: Fix git ownership
-          command: git config --global --add safe.directory '*'
       - checkout
       - run:
-          name: Configure Nix
+          name: Install & Configure Nix
           command: |
+            sh <(curl -L https://nixos.org/nix/install) --no-daemon
             mkdir -p ~/.config/nix
-            echo "experimental-features = nix-command flakes" > ~/.config/nix/nix.conf
+            echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+            echo 'export USER=${USER:-circleci}' >> $BASH_ENV
+            echo '. $HOME/.nix-profile/etc/profile.d/nix.sh' >> $BASH_ENV
       - run:
           name: Format Check
-          command: nix develop --command cargo fmt --all --check
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command cargo fmt --all --check
       - run:
           name: Lint Check
-          command: nix develop --command cargo check
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command cargo check
       - setup_remote_docker:
           version: default
           docker_layer_caching: true
@@ -36,12 +42,17 @@ jobs:
       - run:
           name: Migrate db
           command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             echo "Creating database..."
             docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
             nix develop --command fw test_habit_market migrate
       - run:
           name: Run tests
-          command: nix develop --command bash -c t
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command bash -c t
 
   # build:
   #   machine:
