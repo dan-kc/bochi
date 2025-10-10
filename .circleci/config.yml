@@ -23,6 +23,7 @@ jobs:
           command: nix develop --command cargo check
       - setup_remote_docker:
           version: default
+          docker_layer_caching: true
       - run:
           name: Start services with Docker Compose
           command: docker compose up db localstack -d
