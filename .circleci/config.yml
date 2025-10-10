@@ -34,6 +34,15 @@ jobs:
           name: Start services with Docker Compose
           command: docker compose up db localstack -d
       - run:
+          name: Check Docker Container Status
+          command: |
+            echo "Checking container status..."
+            docker compose ps
+            echo -e "\n=== PostgreSQL Container Logs ==="
+            docker compose logs db
+            echo -e "\n=== LocalStack Container Logs ==="
+            docker compose logs localstack
+      - run:
           name: Wait for services to be ready
           command: |
             echo "Waiting for services to start..."
