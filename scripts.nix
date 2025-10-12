@@ -16,12 +16,18 @@ let
 
     # Start development environment
     start = pkgs.writeShellScriptBin "start" ''
-      	docker compose up -d --remove-orphans 
+      docker compose up -d --remove-orphans && \
+      (nohup adminer &> /dev/null &)
+    '';
+
+    adminer = pkgs.writeShellScriptBin "adminer" ''
+      ${pkgs.php83}/bin/php -S localhost:8081 ${pkgs.adminer}/adminer.php
     '';
 
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
       	docker compose -f docker-compose.yml -f docker-compose-server.yml down
+        pkill -f "php -S localhost:8081"
     '';
 
     # Wraps `cargo run` with env vars for localstack.

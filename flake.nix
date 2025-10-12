@@ -65,6 +65,8 @@
               ra
               rust-analyzer
               terraform-ls
+              adminer
+              php83Extensions.pgsql
               nil
               openssl
               nixfmt-rfc-style
