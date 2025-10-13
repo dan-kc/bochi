@@ -11,8 +11,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    needs: [check_changes]
-    if: needs.check_changes.outputs.src_changed == 'true' || needs.check_changes.outputs.src_changed == 'true'
     permissions:
       contents: read
     steps:

@@ -76,6 +76,8 @@
               awscli2
               ra-multiplex
               circleci-cli
+              grafana-loki
+              grafana
             ]
             ++ scripts;
           shellHook = ''

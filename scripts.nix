@@ -17,17 +17,64 @@ let
     # Start development environment
     start = pkgs.writeShellScriptBin "start" ''
       docker compose up -d --remove-orphans && \
-      (nohup adminer &> /dev/null &)
+      (nohup adminer &> /dev/null &) && \
+      ${start-loki}/bin/start-loki && \
+      sleep 2 && \
+      ${start-promtail}/bin/start-promtail && \
+      ${start-grafana}/bin/start-grafana
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
       ${pkgs.php83}/bin/php -S localhost:8081 ${pkgs.adminer}/adminer.php
     '';
 
+    # Start loki
+    start-loki = pkgs.writeShellScriptBin "start-loki" ''
+      set -e
+      LOKI_DATA_DIR="/tmp/loki-data"
+      mkdir -p "$LOKI_DATA_DIR/chunks"
+      mkdir -p "$LOKI_DATA_DIR/rules"
+      mkdir -p "$LOKI_DATA_DIR/compactor"
+      echo "Starting Loki..."
+      nohup ${pkgs.grafana-loki}/bin/loki -config.file=./observability/local/loki-config.yaml &> /tmp/loki.log & disown
+      echo "Loki started"
+    '';
+
+    # Start promtail
+    start-promtail = pkgs.writeShellScriptBin "start-promtail" ''
+      set -e
+      mkdir -p ./logs
+      echo "Starting Promtail..."
+      CURRENT_DIR=$(pwd)
+      APP_LOG_PATH="$CURRENT_DIR/logs/server.log*"
+      nohup ${pkgs.grafana-loki}/bin/promtail -config.file=./observability/local/promtail-config.yaml &> /tmp/promtail.log & disown
+      echo "Promtail started"
+    '';
+
+    # Start grafana
+    start-grafana = pkgs.writeShellScriptBin "start-grafana" ''
+      set -e
+      GRAFANA_DATA_DIR="/tmp/grafana-storage"
+      mkdir -p "$GRAFANA_DATA_DIR"
+      echo "Starting Grafana..."
+      GF_SECURITY_ADMIN_PASSWORD=admin \
+      GF_SECURITY_ADMIN_USER=admin \
+      GF_AUTH_ANONYMOUS_ENABLED=true \
+      GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
+      GF_AUTH_DISABLE_LOGIN_FORM=true \
+      GF_AUTH_DISABLE_SIGNOUT_MENU=true \
+      GF_PATHS_DATA="$GRAFANA_DATA_DIR" \
+      nohup ${pkgs.grafana}/bin/grafana-server --homepath ${pkgs.grafana}/share/grafana &> /tmp/grafana.log & disown
+      echo "Grafana started"
+    '';
+
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
       	docker compose -f docker-compose.yml -f docker-compose-server.yml down
-        pkill -f "php -S localhost:8081"
+        pkill -f "php -S localhost:8081" || true
+        pkill -f "loki -config.file" || true
+        pkill -f "promtail -config.file" || true
+        pkill -f "grafana-server" || true
     '';
 
     # Wraps `cargo run` with env vars for localstack.
