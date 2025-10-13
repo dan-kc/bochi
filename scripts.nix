@@ -144,7 +144,7 @@ let
         pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
         
         echo "Stopping Promtail..."
-        pkill -f "promtail -config.file" && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
+        pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
         
         echo "Stopping Grafana..."
         pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
