@@ -1,5 +1,15 @@
 { pkgs }:
 let
+  ra-multiplex-port = "27632";
+  ra-config = ''
+    instance_timeout = false 
+    gc_interval = 10
+    listen = ["127.0.0.1", ${ra-multiplex-port}]
+    connect = ["127.0.0.1", ${ra-multiplex-port}]
+    log_filters = "info"
+    pass_environment = []
+  '';
+
   scripts = rec {
     # Whipes all tables in the provided database.
     clean = pkgs.writeShellScriptBin "clean" ''
@@ -12,6 +22,23 @@ let
       echo "Truncating all tables in ''${DB_NAME} database..."
       docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
       echo "Database cleaned!"
+    '';
+
+    ra = pkgs.writeShellScriptBin "ra" ''
+      RA_MULTIPLEX_DIR="/tmp/ra-${ra-multiplex-port}"
+      CONFIG_DIR="$RA_MULTIPLEX_DIR/ra-multiplex"  
+      CONFIG_FILE="$CONFIG_DIR/config.toml"
+      LOG_DIR="/tmp/ra-multiplex"
+      LOG_FILE="$LOG_DIR/$RA_MULTIPLEX_PORT.log"
+
+      mkdir -p "$LOG_DIR"
+      mkdir -p "$CONFIG_DIR"
+      cat > "$CONFIG_FILE" <<EOF
+      ${ra-config}
+      EOF
+
+      XDG_CONFIG_HOME=$RA_MULTIPLEX_DIR ra-multiplex server &> "$LOG_FILE" & disown
+      echo "Listening"
     '';
 
     # Start development environment
