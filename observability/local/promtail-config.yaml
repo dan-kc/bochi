@@ -5,6 +5,7 @@
 # used for ingesting logs from other sources.
 server:
   http_listen_port: 9080
+  grpc_listen_port: 0
 
 # Promtail uses a "positions file" to
 # keep track of how much of each log file it has already processed.
@@ -25,7 +26,7 @@ scrape_configs:
         labels:
           # Adds a label job="habit-market" to all logs. This is useful for filtering in Grafana.
           job: habit-market
-          __path__: env:APP_LOG_PATH # This is the path of the logs dir made from the server.
+          __path__: ${PROMTAIL_LOG_PATH:-./logs/server.log*}
     pipeline_stages:
       # In Loki, the most efficient and fundamental way to filter and query your logs is by labels.
       # We define labels here for some of the extracted fields.

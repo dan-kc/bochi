@@ -16,12 +16,18 @@ let
 
     # Start development environment
     start = pkgs.writeShellScriptBin "start" ''
+      set -e
+      echo "Stopping any existing services..."
+      ${stop}/bin/stop || true
+      sleep 1
+      echo "Starting services..."
       docker compose up -d --remove-orphans && \
       (nohup adminer &> /dev/null &) && \
       ${start-loki}/bin/start-loki && \
       sleep 2 && \
       ${start-promtail}/bin/start-promtail && \
       ${start-grafana}/bin/start-grafana
+      echo "All services started successfully!"
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
@@ -36,8 +42,15 @@ let
       mkdir -p "$LOKI_DATA_DIR/rules"
       mkdir -p "$LOKI_DATA_DIR/compactor"
       echo "Starting Loki..."
-      nohup ${pkgs.grafana-loki}/bin/loki -config.file=./observability/local/loki-config.yaml &> /tmp/loki.log & disown
-      echo "Loki started"
+      ${pkgs.grafana-loki}/bin/loki -config.file=./observability/local/loki-config.yaml &> /tmp/loki.log &
+      LOKI_PID=$!
+      sleep 2
+      if ! kill -0 $LOKI_PID 2>/dev/null; then
+        echo "Failed to start Loki. Check /tmp/loki.log for details"
+        cat /tmp/loki.log | tail -20
+        exit 1
+      fi
+      echo "Loki started (PID: $LOKI_PID)"
     '';
 
     # Start promtail
@@ -45,10 +58,16 @@ let
       set -e
       mkdir -p ./logs
       echo "Starting Promtail..."
-      CURRENT_DIR=$(pwd)
-      APP_LOG_PATH="$CURRENT_DIR/logs/server.log*"
-      nohup ${pkgs.grafana-loki}/bin/promtail -config.file=./observability/local/promtail-config.yaml &> /tmp/promtail.log & disown
-      echo "Promtail started"
+      export PROMTAIL_LOG_PATH="$(pwd)/logs/server.log*"
+      ${pkgs.grafana-loki}/bin/promtail -config.expand-env=true -config.file=./observability/local/promtail-config.yaml &> /tmp/promtail.log &
+      PROMTAIL_PID=$!
+      sleep 2
+      if ! kill -0 $PROMTAIL_PID 2>/dev/null; then
+        echo "Failed to start Promtail. Check /tmp/promtail.log for details"
+        cat /tmp/promtail.log | tail -20
+        exit 1
+      fi
+      echo "Promtail started (PID: $PROMTAIL_PID)"
     '';
 
     # Start grafana
@@ -64,17 +83,35 @@ let
       GF_AUTH_DISABLE_LOGIN_FORM=true \
       GF_AUTH_DISABLE_SIGNOUT_MENU=true \
       GF_PATHS_DATA="$GRAFANA_DATA_DIR" \
-      nohup ${pkgs.grafana}/bin/grafana-server --homepath ${pkgs.grafana}/share/grafana &> /tmp/grafana.log & disown
-      echo "Grafana started"
+      ${pkgs.grafana}/bin/grafana-server --homepath ${pkgs.grafana}/share/grafana &> /tmp/grafana.log &
+      GRAFANA_PID=$!
+      sleep 2
+      if ! kill -0 $GRAFANA_PID 2>/dev/null; then
+        echo "Failed to start Grafana. Check /tmp/grafana.log for details"
+        cat /tmp/grafana.log | tail -20
+        exit 1
+      fi
+      echo "Grafana started (PID: $GRAFANA_PID)"
     '';
 
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
+        echo "Stopping Docker services..."
       	docker compose -f docker-compose.yml -f docker-compose-server.yml down
-        pkill -f "php -S localhost:8081" || true
-        pkill -f "loki -config.file" || true
-        pkill -f "promtail -config.file" || true
-        pkill -f "grafana-server" || true
+        
+        echo "Stopping Adminer..."
+        pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
+        
+        echo "Stopping Loki..."
+        pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
+        
+        echo "Stopping Promtail..."
+        pkill -f "promtail -config.file" && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
+        
+        echo "Stopping Grafana..."
+        pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
+        
+        echo "All services stopped."
     '';
 
     # Wraps `cargo run` with env vars for localstack.
