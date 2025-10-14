@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-old.url = "github:NixOS/nixpkgs/886bdc4543438773a6fb50ea3f6ac48e72517a54";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -11,7 +10,6 @@
   outputs =
     {
       nixpkgs,
-      nixpkgs-old,
       flake-utils,
       fenix,
       self,
@@ -23,9 +21,6 @@
         overlays = [ fenix.overlays.default ];
         pkgs = import nixpkgs {
           inherit system overlays;
-        };
-        pkgs-old = import nixpkgs-old {
-          inherit system;
         };
         scripts = import ./scripts.nix { inherit pkgs; };
 
@@ -57,7 +52,6 @@
               grafana-loki
               postgresql
               grafana
-              pkgs-old.localstack
             ]
             ++ scripts;
           shellHook = ''
