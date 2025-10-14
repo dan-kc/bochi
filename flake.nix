@@ -55,6 +55,7 @@
               ra-multiplex
               circleci-cli
               grafana-loki
+              postgresql
               grafana
               pkgs-old.localstack
             ]

@@ -20,7 +20,7 @@ let
       fi
       DB_NAME="$1"
       echo "Truncating all tables in ''${DB_NAME} database..."
-      docker compose exec -T db psql -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      PGPASSWORD=password psql -h localhost -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
       echo "Database cleaned!"
     '';
 
@@ -48,6 +48,8 @@ let
       ${stop}/bin/stop || true
       sleep 1
       echo "Starting services..."
+      echo "Starting PostgreSQL..."
+      ${start-postgres}/bin/start-postgres
       echo "Starting LocalStack..."
       localstack start -d
       echo "Waiting for LocalStack to be ready..."
@@ -67,6 +69,26 @@ let
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
       ${pkgs.php83}/bin/php -S localhost:8081 ${pkgs.adminer}/adminer.php
+    '';
+
+    # Start PostgreSQL
+    start-postgres = pkgs.writeShellScriptBin "start-postgres" ''
+      set -e
+      PGDATA="/tmp/postgres-data"
+      if [ ! -d "$PGDATA" ]; then
+        echo "Initializing PostgreSQL database..."
+        initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
+      fi
+      echo "Starting PostgreSQL..."
+      pg_ctl -D "$PGDATA" -l /tmp/postgres.log -o "-k /tmp" start
+      sleep 2
+      # Create user and databases if they don't exist
+      export PGHOST=localhost
+      createuser -U $USER user 2>/dev/null || echo "  ✓ User 'user' already exists"
+      psql -U $USER -d postgres -c "ALTER USER \"user\" WITH PASSWORD 'password';" 2>/dev/null || true
+      createdb -U $USER -O user habit_market 2>/dev/null || echo "  ✓ Database 'habit_market' already exists"
+      createdb -U $USER -O user test_habit_market 2>/dev/null || echo "  ✓ Database 'test_habit_market' already exists"
+      echo "PostgreSQL started successfully"
     '';
 
     # Start loki
@@ -131,8 +153,8 @@ let
 
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
-        echo "Stopping Docker services..."
-      	docker compose -f docker-compose.yml -f docker-compose-server.yml down
+        echo "Stopping PostgreSQL..."
+        pg_ctl -D /tmp/postgres-data stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
 
         echo "Stopping LocalStack..."
         localstack stop && echo "✓ LocalStack stopped" || echo "✗ LocalStack not running"
@@ -202,7 +224,7 @@ let
         exit 1
       fi
       TABLE_NAME="$1"
-      docker compose exec db psql -U user -d habit_market -P pager=off -c "\d+ ''${TABLE_NAME}"
+      PGPASSWORD=password psql -h localhost -U user -d habit_market -P pager=off -c "\d+ ''${TABLE_NAME}"
     '';
 
     # Flyway wrapper with config
@@ -272,11 +294,11 @@ let
       echo "Killing any running habit-market-backend processes..."
       ${kp}/bin/kp
       echo "Dropping existing database..."
-      docker compose exec -T db psql -U user -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
+      PGPASSWORD=password psql -h localhost -U user -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
       echo "Creating database..."
-      docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE ''${DB_NAME};"
+      PGPASSWORD=password psql -h localhost -U user -d postgres -c "CREATE DATABASE ''${DB_NAME};"
       echo "Applying migrations to ''${DB_NAME}..."
-      ${fw}/bin/flyway ''${DB_NAME}
+      ${fw}/bin/fw ''${DB_NAME} migrate
       echo "Database refresh complete!"
     '';
   };
