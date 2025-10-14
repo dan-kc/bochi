@@ -27,43 +27,12 @@ jobs:
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command cargo check
-      - setup_remote_docker:
-          version: default
-          docker_layer_caching: true
       - run:
-          name: Start services with Docker Compose
-          command: docker compose up db localstack -d
-      - run:
-          name: Check Docker Container Status
-          command: |
-            echo "Waiting 20 seconds for containers to initialize..."
-            sleep 20
-            echo "Checking container status..."
-            docker compose ps
-            echo -e "\n=== PostgreSQL Container Logs ==="
-            docker compose logs db
-            echo -e "\n=== LocalStack Container Logs ==="
-            docker compose logs localstack
-      - run:
-          name: Wait for services to be ready
-          command: |
-            echo "Waiting for services to start..."
-            timeout 60 bash -c 'until echo > /dev/tcp/localhost/5432; do sleep 5; done'
-            timeout 60 bash -c 'until echo > /dev/tcp/localhost/4566; do sleep 5; done'
-      - run:
-          name: Migrate db
+          name: Test
           command: |
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            echo "Creating database..."
-            docker compose exec -T db psql -U user -d postgres -c "CREATE DATABASE test_habit_market;"
-            nix develop --command fw test_habit_market migrate
-      - run:
-          name: Run tests
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command bash -c t
+            nix develop --command "start; fw test_habit_market migrate ; t"
 
   # build:
   #   machine:
