@@ -50,15 +50,6 @@ let
       echo "Starting services..."
       echo "Starting PostgreSQL..."
       ${start-postgres}/bin/start-postgres
-      echo "Starting LocalStack..."
-      localstack start -d
-      echo "Waiting for LocalStack to be ready..."
-      while ! localstack wait -t 30; do
-        sleep 1
-      done
-      echo "Initializing LocalStack secrets..."
-      ${localstack-init}/bin/localstack-init
-      echo "LocalStack fully initialized"
       (nohup adminer &> /dev/null &) && \
       ${start-loki}/bin/start-loki && \
       sleep 2 && \
@@ -153,38 +144,29 @@ let
 
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
-        echo "Stopping PostgreSQL..."
-        pg_ctl -D /tmp/postgres-data stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
+      echo "Stopping PostgreSQL..."
+      pg_ctl -D /tmp/postgres-data stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
 
-        echo "Stopping LocalStack..."
-        localstack stop && echo "✓ LocalStack stopped" || echo "✗ LocalStack not running"
+      echo "Stopping Adminer..."
+      pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
 
-        echo "Stopping Adminer..."
-        pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
-        
-        echo "Stopping Loki..."
-        pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
-        
-        echo "Stopping Promtail..."
-        pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
-        
-        echo "Stopping Grafana..."
-        pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
-        
-        echo "All services stopped."
+      echo "Stopping Loki..."
+      pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
+
+      echo "Stopping Promtail..."
+      pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
+
+      echo "Stopping Grafana..."
+      pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
+
+      echo "All services stopped."
     '';
 
-    # Wraps `cargo run` with env vars for localstack.
+    # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
-      AWS_ACCESS_KEY_ID="test" \
-      AWS_SECRET_ACCESS_KEY="test" \
-      AWS_DEFAULT_REGION="eu-west-1" \
-      AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566" \
-      AWS_SECRETS_PREFIX="" \
       DATABASE_NAME="habit_market" \
       LOG_DESTINATION=logs \
-      AWS_PROFILE="" \
-      AWS_DEFAULT_PROFILE="" \
+      STATE="DEV" \
       cargo run "$@"
     '';
 
@@ -192,14 +174,8 @@ let
     t = pkgs.writeShellScriptBin "t" ''
       set -e 
       ${clean}/bin/clean test_habit_market
-      AWS_ACCESS_KEY_ID="test" \
-      AWS_SECRET_ACCESS_KEY="test" \
-      AWS_DEFAULT_REGION="eu-west-1" \
-      AWS_ENDPOINT_URL_SECRETSMANAGER="http://localhost:4566" \
-      AWS_SECRETS_PREFIX="test-" \
       DATABASE_NAME="test_habit_market" \
-      AWS_PROFILE="" \
-      AWS_DEFAULT_PROFILE="" \
+      STATE="TEST" \
       cargo test "$@"
     '';
 
@@ -248,35 +224,6 @@ let
         -validateOnMigrate=true \
         -baselineOnMigrate=true \
         "$@"
-    '';
-
-    # Initialize LocalStack secrets
-    localstack-init = pkgs.writeShellScriptBin "localstack-init" ''
-      set -e
-      echo "Initializing LocalStack secrets..."
-
-      export AWS_ACCESS_KEY_ID="test"
-      export AWS_SECRET_ACCESS_KEY="test"
-      export AWS_DEFAULT_REGION="eu-west-1"
-      ENDPOINT="--endpoint-url http://localhost:4566"
-
-      # Create regular secrets
-      aws $ENDPOINT secretsmanager create-secret --name db-user --secret-string 'user' --region eu-west-1 2>/dev/null || echo "  ✓ db-user already exists"
-      aws $ENDPOINT secretsmanager create-secret --name db-password --secret-string 'password' --region eu-west-1 2>/dev/null || echo "  ✓ db-password already exists"
-      aws $ENDPOINT secretsmanager create-secret --name db-host --secret-string 'localhost' --region eu-west-1 2>/dev/null || echo "  ✓ db-host already exists"
-      aws $ENDPOINT secretsmanager create-secret --name db-name --secret-string 'habit_market' --region eu-west-1 2>/dev/null || echo "  ✓ db-name already exists"
-      aws $ENDPOINT secretsmanager create-secret --name eddsa-public-key --secret-string $'-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----' --region eu-west-1 2>/dev/null || echo "  ✓ eddsa-public-key already exists"
-      aws $ENDPOINT secretsmanager create-secret --name eddsa-private-key --secret-string $'-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----' --region eu-west-1 2>/dev/null || echo "  ✓ eddsa-private-key already exists"
-
-      # Create test secrets
-      aws $ENDPOINT secretsmanager create-secret --name test-db-user --secret-string 'user' --region eu-west-1 2>/dev/null || echo "  ✓ test-db-user already exists"
-      aws $ENDPOINT secretsmanager create-secret --name test-db-password --secret-string 'password' --region eu-west-1 2>/dev/null || echo "  ✓ test-db-password already exists"
-      aws $ENDPOINT secretsmanager create-secret --name test-db-host --secret-string 'localhost' --region eu-west-1 2>/dev/null || echo "  ✓ test-db-host already exists"
-      aws $ENDPOINT secretsmanager create-secret --name test-db-name --secret-string 'test_habit_market' --region eu-west-1 2>/dev/null || echo "  ✓ test-db-name already exists"
-      aws $ENDPOINT secretsmanager create-secret --name test-eddsa-public-key --secret-string $'-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----' --region eu-west-1 2>/dev/null || echo "  ✓ test-eddsa-public-key already exists"
-      aws $ENDPOINT secretsmanager create-secret --name test-eddsa-private-key --secret-string $'-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----' --region eu-west-1 2>/dev/null || echo "  ✓ test-eddsa-private-key already exists"
-
-      echo "LocalStack secrets initialized"
     '';
 
     tf = pkgs.writeShellScriptBin "tf" ''

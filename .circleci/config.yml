@@ -28,11 +28,23 @@ jobs:
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command cargo check
       - run:
-          name: Test
+          name: Start Services
           command: |
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command "start; fw test_habit_market migrate ; t"
+            nix develop --command start
+      - run:
+          name: Run Migrations
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command fw test_habit_market migrate
+      - run:
+          name: Run Tests
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command t
 
   # build:
   #   machine:
