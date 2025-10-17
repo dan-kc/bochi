@@ -1,7 +1,7 @@
 version: 2.1
 
 jobs:
-  test:
+  ci:
     docker:
       - image: cimg/base:2025.10
     resource_class: medium
@@ -45,55 +45,42 @@ jobs:
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command t
+      - run:
+          name: Build Image
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command nix build .#server-docker
 
-  # build:
-  #   machine:
-  #     image: ubuntu-2404:current
-  #   resource_class: medium
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Install Nix
-  #         command: |
-  #           sh <(curl -L https://nixos.org/nix/install) --daemon
-  #           echo 'source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' >> $BASH_ENV
-  #     - run:
-  #         name: Build
-  #         command: |
-  #           source $BASH_ENV
-  #           nix develop --command nix build .#server-docker
-  #     - run:
-  #         name: Load and tag image
-  #         command: |
-  #           docker load --input ./result
-  #           IMAGE_NAME="habit-market-backend"
-  #           ECR_REPOSITORY_URI="${AWS_ECR_REGISTRY_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/habit-market-backend"
-  #           IMAGE_TAG="latest"
-  #           VERSION_TAG="${CIRCLE_SHA1:0:7}"
-  #           docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-  #           docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
-  #     - aws-ecr/ecr_login:
-  #         role_arn: ${AWS_DEPLOY_ROLE_ARN}
-  #         region: ${AWS_REGION}
-  #     - run:
-  #         name: Push image to Amazon ECR
-  #         command: |
-  #           ECR_REPOSITORY_URI="${AWS_ECR_REGISTRY_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/habit-market-backend"
-  #           IMAGE_TAG="latest"
-  #           VERSION_TAG="${CIRCLE_SHA1:0:7}"
-  #           docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-  #           docker push "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
-  #
-  # migrate:
-  #   docker:
-  #     - image: cimg/base:current
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Configure AWS Credentials
-  #         command: |
-  #           # TODO: Configure AWS credentials and run migrations
-  #           echo "Migration job placeholder"
+      - persist_to_workspace:
+          root: .
+          paths:
+            - result
+
+  cd:
+    docker:
+      - image: cimg/base:2025.10
+    resource_class: medium
+    steps:
+      - attach_workspace:
+          at: /tmp
+      - run:
+          name: Build Image
+          command: |
+            docker load --input /tmp/result
+
+            IMAGE_NAME="habit-market-backend" 
+            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+            IMAGE_TAG="latest"
+            VERSION_TAG="${GITHUB_SHA::7}"
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+
+            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+            IMAGE_TAG="latest"
+            VERSION_TAG="${GITHUB_SHA::7}"
+            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
 
 workflows:
   ci:
