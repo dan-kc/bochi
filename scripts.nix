@@ -184,14 +184,6 @@ let
       	pkill -f habit-market-backend
     '';
 
-    # build: builds server docker image
-    build = pkgs.writeShellScriptBin "build" ''
-      set -e 
-      nix build .#server-docker
-      docker load < result
-      rm result
-    '';
-
     # Displays the schema of a database table in habit_market
     schema = pkgs.writeShellScriptBin "schema" ''
       set -e 
