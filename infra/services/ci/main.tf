@@ -297,14 +297,19 @@ resource "aws_iam_policy" "circleci_ecs_run_task_policy" {
         Effect = "Allow"
         Action = [
           "ecs:RunTask",
-          "ecs:DescribeTasks",
-          "ecs:StopTask",
           "ecs:DescribeTaskDefinition"
         ]
         Resource = [
-          aws_ecs_task_definition.migration.arn,
-          "arn:aws:ecs:eu-west-2:*:task/${var.ecs_cluster_id}/*"
+          aws_ecs_task_definition.migration.arn
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTasks",
+          "ecs:StopTask"
+        ]
+        Resource = "*"
       },
       {
         Effect = "Allow"
