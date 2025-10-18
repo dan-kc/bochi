@@ -74,28 +74,33 @@ jobs:
       - aws-cli/setup:
           role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
-          name: Check Image is there and Load
+          name: Login to ECR
           command: |
-            ls -la /tmp
+            #!/bin/bash -eo pipefail
+            echo "Logging in to ECR..."
+            aws ecr get-login-password --region "${AWS_REGION}" \
+              | docker login \
+                  --username AWS \
+                  --password-stdin "${ECR_REPOSITORY_URI}" 2>&1 || {
+              echo "Error: ECR login failed!"
+              exit 1
+            }
+            echo "ECR login successful."
+      - run:
+          name: Upload Image
+          command: |
+            #!/bin/bash -eo pipefail
             docker load --input /tmp/image.tar.gz
+            docker images
 
-      # - run:
-      #     name: Build Image
-      #     command: |
-      #       docker load --input /tmp/result
-      #
-      #       IMAGE_NAME="habit-market-backend"
-      #       ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-      #       IMAGE_TAG="latest"
-      #       VERSION_TAG="${GITHUB_SHA::7}"
-      #       docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-      #       docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
-      #
-      #       ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-      #       IMAGE_TAG="latest"
-      #       VERSION_TAG="${GITHUB_SHA::7}"
-      #       docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-      #       docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            IMAGE_NAME="habit-market-backend" # As defined in the flake.nix
+            IMAGE_TAG="latest"
+            VERSION_TAG="${CIRCLE_SHA1::7}"
+
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker push "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
 
 workflows:
   ci:
