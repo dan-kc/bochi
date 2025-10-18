@@ -104,6 +104,30 @@
             ];
           };
         };
+        
+        packages.flyway-docker = pkgs.dockerTools.buildLayeredImage {
+          name = "habit-market-migrations";
+          tag = "latest";
+          
+          contents = with pkgs; [
+            dockerTools.caCertificates
+            flyway
+          ];
+          
+          extraCommands = ''
+            mkdir -p sql
+            cp -r ${./migrations}/* sql/
+          '';
+          
+          config = {
+            Cmd = [ "${pkgs.flyway}/bin/flyway" ];
+            WorkingDir = "/";
+            Env = [
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              "FLYWAY_LOCATIONS=filesystem:/sql"
+            ];
+          };
+        };
       }
     );
 }
