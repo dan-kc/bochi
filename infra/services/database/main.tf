@@ -17,17 +17,19 @@ resource "aws_security_group" "database" {
   description = "Security group for RDS PostgreSQL"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [var.private_subnet_cidr]
-    description = "Allow PostgreSQL from private subnet"
-  }
-
   tags = {
     Name = "habit-market-database-sg"
   }
+}
+
+resource "aws_security_group_rule" "database_from_private_subnet" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = [var.private_subnet_cidr]
+  security_group_id = aws_security_group.database.id
+  description       = "Allow PostgreSQL from private subnet"
 }
 
 resource "aws_db_instance" "habit_market" {
