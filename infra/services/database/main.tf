@@ -2,7 +2,7 @@ resource "aws_db_subnet_group" "habit_market" {
   name = "habit-market-db-subnet-group"
 
   # The second subnet in eu-west-2b is essentially unused - it's 
-  # just there to satisfy AWS's requirement. Your database will
+  # just there to satisfy AWS's requirement. The database will
   # only ever run in eu-west-2a unless you manually change it or 
   # upgrade to Multi-AZ later.
   subnet_ids = [var.private_subnet_id, var.private_subnet_b_id]

@@ -52,14 +52,14 @@ resource "aws_ecs_cluster" "habit_market" {
 }
 
 
-# module "database" {
-#   source = "./services/database"
-#   vpc_id              = aws_vpc.habit_market.id
-#   private_subnet_id   = aws_subnet.private.id
-#   private_subnet_b_id = aws_subnet.private_b.id
-#   private_subnet_cidr = aws_subnet.private.cidr_block
-# }
-#
+module "database" {
+  source = "./services/database"
+  vpc_id              = aws_vpc.habit_market.id
+  private_subnet_id   = aws_subnet.private.id
+  private_subnet_b_id = aws_subnet.private_b.id
+  private_subnet_cidr = aws_subnet.private.cidr_block
+}
+
 module "ci" {
   source = "./services/ci"
   container_registry_arn_list = [
