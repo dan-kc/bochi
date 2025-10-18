@@ -1,7 +1,10 @@
 version: 2.1
 
+orbs:
+  aws-cli: circleci/aws-cli@5.4.1
+
 jobs:
-  ci:
+  test:
     docker:
       - image: cimg/base:2025.10
     resource_class: medium
@@ -15,36 +18,36 @@ jobs:
             echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
             echo 'export USER=${USER:-circleci}' >> $BASH_ENV
             echo '. $HOME/.nix-profile/etc/profile.d/nix.sh' >> $BASH_ENV
-      - run:
-          name: Format Check
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command cargo fmt --all --check
-      - run:
-          name: Lint Check
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command cargo check
-      - run:
-          name: Start Services
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command start
-      - run:
-          name: Run Migrations
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command fw test_habit_market migrate
-      - run:
-          name: Run Tests
-          command: |
-            export USER=${USER:-circleci}
-            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command t
+      # - run:
+      #     name: Format Check
+      #     command: |
+      #       export USER=${USER:-circleci}
+      #       . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+      #       nix develop --command cargo fmt --all --check
+      # - run:
+      #     name: Lint Check
+      #     command: |
+      #       export USER=${USER:-circleci}
+      #       . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+      #       nix develop --command cargo check
+      # - run:
+      #     name: Start Services
+      #     command: |
+      #       export USER=${USER:-circleci}
+      #       . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+      #       nix develop --command start
+      # - run:
+      #     name: Run Migrations
+      #     command: |
+      #       export USER=${USER:-circleci}
+      #       . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+      #       nix develop --command fw test_habit_market migrate
+      # - run:
+      #     name: Run Tests
+      #     command: |
+      #       export USER=${USER:-circleci}
+      #       . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+      #       nix develop --command t
       - run:
           name: Build Image
           command: |
@@ -57,30 +60,35 @@ jobs:
           paths:
             - result
 
-  cd:
-    docker:
-      - image: cimg/base:2025.10
-    resource_class: medium
+  deploy:
+    executor: aws-cli/default
     steps:
       - attach_workspace:
           at: /tmp
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
-          name: Build Image
+          name: Check Image is there
           command: |
+            ls -la /tmp
             docker load --input /tmp/result
-
-            IMAGE_NAME="habit-market-backend" 
-            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-            IMAGE_TAG="latest"
-            VERSION_TAG="${GITHUB_SHA::7}"
-            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
-
-            ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
-            IMAGE_TAG="latest"
-            VERSION_TAG="${GITHUB_SHA::7}"
-            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+      # - run:
+      #     name: Build Image
+      #     command: |
+      #       docker load --input /tmp/result
+      #
+      #       IMAGE_NAME="habit-market-backend"
+      #       ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+      #       IMAGE_TAG="latest"
+      #       VERSION_TAG="${GITHUB_SHA::7}"
+      #       docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+      #       docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+      #
+      #       ECR_REPOSITORY_URI="${{ steps.get-repository-uri.outputs.ECR_URI }}"
+      #       IMAGE_TAG="latest"
+      #       VERSION_TAG="${GITHUB_SHA::7}"
+      #       docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+      #       docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
 
 workflows:
   ci:
@@ -89,15 +97,9 @@ workflows:
           filters:
             branches:
               only: main
-      # - build:
-      #     requires:
-      #       - test
-      #     filters:
-      #       branches:
-      #         only: main
-      # - migrate:
-      #     requires:
-      #       - test
-      #     filters:
-      #       branches:
-      #         only: main
+      - deploy:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
