@@ -112,19 +112,27 @@
           contents = with pkgs; [
             dockerTools.caCertificates
             flyway
+            awscli2
+            bash
+            coreutils
+            gnugrep
+            jq
           ];
           
           extraCommands = ''
-            mkdir -p sql
+            mkdir -p sql scripts
             cp -r ${./migrations}/* sql/
+            cp ${./flyway-entrypoint.sh} scripts/flyway-entrypoint.sh
+            chmod +x scripts/flyway-entrypoint.sh
           '';
           
           config = {
-            Cmd = [ "${pkgs.flyway}/bin/flyway" ];
+            Entrypoint = [ "/scripts/flyway-entrypoint.sh" ];
             WorkingDir = "/";
             Env = [
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "FLYWAY_LOCATIONS=filesystem:/sql"
+              "AWS_DEFAULT_REGION=eu-west-2"
             ];
           };
         };
