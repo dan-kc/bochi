@@ -66,4 +66,10 @@ module "ci" {
     aws_ecr_repository.habit_market_backend.arn,
     aws_ecr_repository.habit_market_migration.arn
   ]
+  ecs_cluster_id              = aws_ecs_cluster.habit_market.id
+  vpc_id                      = aws_vpc.habit_market.id
+  private_subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  database_security_group_id  = module.database.database_security_group_id
+  migration_repository_url    = aws_ecr_repository.habit_market_migration.repository_url
+  database_secret_arn         = module.database.database_secret_arn
 }

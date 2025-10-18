@@ -100,3 +100,13 @@ output "database_endpoint" {
   value       = aws_db_instance.habit_market.endpoint
   description = "Database connection endpoint"
 }
+
+output "database_security_group_id" {
+  value       = aws_security_group.database.id
+  description = "Security group ID for the database"
+}
+
+output "database_secret_arn" {
+  value       = aws_db_instance.habit_market.master_user_secret[0].secret_arn
+  description = "ARN of the secret containing database credentials"
+}
