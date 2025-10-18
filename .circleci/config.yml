@@ -55,11 +55,13 @@ jobs:
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command nix build .#server-docker
+            ACTUAL_IMAGE_PATH=$(readlink -f result)
+            cp "${ACTUAL_TAR_PATH}" image.tar.gz
 
       - persist_to_workspace:
           root: .
           paths:
-            - result
+            - image.tar.gz
 
   deploy:
     executor: aws-cli/default
@@ -72,10 +74,8 @@ jobs:
           name: Check Image is there and Load
           command: |
             ls -la /tmp
-            # Resolve the symlink to the actual file path
-            ACTUAL_IMAGE_PATH=$(readlink -f /tmp/result)
-            echo "Attempting to load image from: ${ACTUAL_IMAGE_PATH}"
-            docker load --input "${ACTUAL_IMAGE_PATH}"
+            docker load --input image.tar.gz
+
       # - run:
       #     name: Build Image
       #     command: |
