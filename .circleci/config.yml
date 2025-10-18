@@ -50,6 +50,7 @@ jobs:
       #       nix develop --command t
       - run:
           name: Build Image
+          no_output_timeout: 30m
           command: |
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
