@@ -84,7 +84,8 @@
         packages.default = self.packages.${system}.server;
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-backend";
-          tag = "latest";
+          # This tag is only used locally. ECR doesn't know about this.
+          tag = "latest"; 
 
           contents = with pkgs; [
             dockerTools.caCertificates
