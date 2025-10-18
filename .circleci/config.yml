@@ -56,7 +56,7 @@ jobs:
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command nix build .#server-docker
             ACTUAL_IMAGE_PATH=$(readlink -f result)
-            cp "${ACTUAL_TAR_PATH}" image.tar.gz
+            cp "${ACTUAL_IMAGE_PATH}" image.tar.gz
 
       - persist_to_workspace:
           root: .
