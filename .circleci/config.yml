@@ -69,10 +69,13 @@ jobs:
       - aws-cli/setup:
           role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
-          name: Check Image is there
+          name: Check Image is there and Load
           command: |
             ls -la /tmp
-            docker load --input /tmp/result
+            # Resolve the symlink to the actual file path
+            ACTUAL_IMAGE_PATH=$(readlink -f /tmp/result)
+            echo "Attempting to load image from: ${ACTUAL_IMAGE_PATH}"
+            docker load --input "${ACTUAL_IMAGE_PATH}"
       # - run:
       #     name: Build Image
       #     command: |
