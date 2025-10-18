@@ -66,6 +66,7 @@ resource "aws_iam_policy" "circleci_ecr_upload_policy" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
           "ecr:DescribeRepositories",
+          "ec2:DescribeSubnets",
         ],
         Resource = var.container_registry_arn_list
       },

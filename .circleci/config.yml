@@ -116,6 +116,7 @@ jobs:
             echo '. $HOME/.nix-profile/etc/profile.d/nix.sh' >> $BASH_ENV
       - run:
           name: Build Flyway Docker Image
+          no_output_timeout: 30m
           command: |
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
