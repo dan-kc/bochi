@@ -74,7 +74,7 @@ jobs:
           name: Check Image is there and Load
           command: |
             ls -la /tmp
-            docker load --input image.tar.gz
+            docker load --input /tmp/image.tar.gz
 
       # - run:
       #     name: Build Image
