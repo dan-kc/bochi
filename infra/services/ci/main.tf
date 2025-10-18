@@ -66,7 +66,6 @@ resource "aws_iam_policy" "circleci_ecr_upload_policy" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
           "ecr:DescribeRepositories",
-          "ec2:DescribeSubnets",
         ],
         Resource = var.container_registry_arn_list
       },
@@ -323,6 +322,14 @@ resource "aws_iam_policy" "circleci_ecs_run_task_policy" {
           "logs:GetLogEvents"
         ]
         Resource = "${aws_cloudwatch_log_group.migration.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups"
+        ]
+        Resource = "*"
       }
     ]
   })
