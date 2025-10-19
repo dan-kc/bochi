@@ -1,5 +1,5 @@
 resource "aws_vpc" "habit_market" {
-  cidr_block = "10.1.0.0/16"
+  cidr_block           = "10.1.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
@@ -8,9 +8,26 @@ resource "aws_vpc" "habit_market" {
 }
 
 resource "aws_subnet" "public" {
-  vpc_id            = aws_vpc.habit_market.id
-  cidr_block        = "10.1.2.0/24"
-  availability_zone = "eu-west-2a"
+  vpc_id                  = aws_vpc.habit_market.id
+  cidr_block              = "10.1.2.0/24"
+  availability_zone       = "eu-west-2a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "habit-market-public-subnet-a"
+  }
+}
+
+# Additional public subnet for ALB (requires 2 AZs)
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.habit_market.id
+  cidr_block              = "10.1.4.0/24"
+  availability_zone       = "eu-west-2b"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "habit-market-public-subnet-b"
+  }
 }
 
 resource "aws_subnet" "private" {
@@ -34,9 +51,45 @@ resource "aws_subnet" "private_b" {
   }
 }
 
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.habit_market.id
+
+  tags = {
+    Name = "habit-market-igw"
+  }
+}
+
+# Route table for public subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.habit_market.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "habit-market-public-rt"
+  }
+}
+
+resource "aws_route_table_association" "public_a" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
 # Route table for private subnets
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.habit_market.id
+
+  # No default route - private subnets have no internet access
+  # AWS services are accessed via VPC endpoints
 
   tags = {
     Name = "habit-market-private-rt"
@@ -146,5 +199,3 @@ resource "aws_vpc_endpoint" "s3" {
     Name = "habit-market-s3-endpoint"
   }
 }
-
-
