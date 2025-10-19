@@ -22,21 +22,38 @@ fi
 echo "Found secret: $SECRET_ARN"
 
 # Retrieve the secret value
+echo "Attempting to retrieve secret value..."
 SECRET_JSON=$(aws secretsmanager get-secret-value \
     --region eu-west-2 \
     --secret-id "$SECRET_ARN" \
     --query 'SecretString' \
-    --output text)
+    --output text 2>&1)
+
+if [ $? -ne 0 ]; then
+    echo "Error retrieving secret: $SECRET_JSON"
+    exit 1
+fi
+
+echo "Successfully retrieved secret value"
 
 # Parse the JSON to get credentials
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
 DB_NAME=habit-market
 DB_PORT=5432
+echo "Attempting to get database host..."
 DB_HOST=$(aws rds describe-db-instances \
+    --region eu-west-2 \
     --db-instance-identifier habit-market \
     --query 'DBInstances[0].Endpoint.Address' \
-    --output text)
+    --output text 2>&1)
+
+if [ $? -ne 0 ]; then
+    echo "Error retrieving database host: $DB_HOST"
+    exit 1
+fi
+
+echo "Successfully retrieved database host"
 
 echo "Database host: $DB_HOST"
 echo "Database port: $DB_PORT"
