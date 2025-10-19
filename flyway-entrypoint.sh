@@ -9,7 +9,6 @@ echo "Starting Flyway migration process..."
 echo "Retrieving database credentials from Secrets Manager..."
 
 # Get the secret containing the RDS credentials
-# The secret is auto-created by RDS when using manage_master_user_password
 SECRET_ARN=$(aws secretsmanager list-secrets \
     --region eu-west-2 \
     --query "SecretList[?contains(Name, 'rds')].ARN | [0]" \
@@ -27,14 +26,17 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
     --region eu-west-2 \
     --secret-id "$SECRET_ARN" \
     --query 'SecretString' \
-    --output text)
+    --output text | sed 's/!/\\!/g')
 
 # Parse the JSON to get credentials
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
-DB_HOST=$(echo "$SECRET_JSON" | grep -o '"host":"[^"]*' | cut -d'"' -f4)
-DB_PORT=$(echo "$SECRET_JSON" | grep -o '"port":[^,}]*' | cut -d':' -f2)
-DB_NAME=$(echo "$SECRET_JSON" | grep -o '"dbname":"[^"]*' | cut -d'"' -f4)
+DB_NAME=habit-market
+DB_PORT=5432
+DB_HOST=$(aws rds describe-db-instances \
+    --db-instance-identifier habit-market \
+    --query 'DBInstances[0].Endpoint.Address' \
+    --output text)
 
 echo "Database host: $DB_HOST"
 echo "Database port: $DB_PORT"
@@ -51,7 +53,7 @@ flyway \
     -user="$DB_USERNAME" \
     -password="$DB_PASSWORD" \
     -locations="filesystem:/sql" \
-    -connectRetries=60 \
+    -connectRetries=0 \
     -schemas=public \
     -validateMigrationNaming=true \
     -baselineOnMigrate=true \
