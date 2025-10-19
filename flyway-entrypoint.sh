@@ -12,7 +12,7 @@ echo "Retrieving database credentials from Secrets Manager..."
 SECRET_ARN=$(aws secretsmanager list-secrets \
     --region eu-west-2 \
     --query "SecretList[?contains(Name, 'rds')].ARN | [0]" \
-    --output text)
+    --output text | sed 's/!/\\!/g')
 
 if [ -z "$SECRET_ARN" ] || [ "$SECRET_ARN" = "None" ]; then
     echo "Error: Could not find secret for RDS instance"
@@ -26,7 +26,7 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
     --region eu-west-2 \
     --secret-id "$SECRET_ARN" \
     --query 'SecretString' \
-    --output text | sed 's/!/\\!/g')
+    --output text)
 
 # Parse the JSON to get credentials
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
