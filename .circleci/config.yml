@@ -9,8 +9,11 @@ workflows:
   setup-workflow:
     jobs:
       - path-filtering/filter:
-          base-revision: main # Assuming this handles merge requests fine
+          base-revision: main
           config-path: .circleci/continue-config.yml
           mapping: |
             src/.* server-change true
             migrations/.* migration true
+          filters:
+            branches:
+              only: main

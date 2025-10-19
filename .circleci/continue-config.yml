@@ -128,10 +128,10 @@ jobs:
 
             FLYWAY_IMAGE_NAME="habit-market-migrations" # As defined in the flake.nix
             FLYWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/habit-market-migration"
-            
+
             docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:latest"
             docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:${CIRCLE_SHA1::7}"
-            
+
             # Push to ECR
             docker push "${FLYWAY_ECR_URI}:latest"
             docker push "${FLYWAY_ECR_URI}:${CIRCLE_SHA1::7}"
@@ -144,25 +144,25 @@ jobs:
           name: Run Database Migrations via ECS Fargate
           command: |
             #!/bin/bash -eo pipefail
-            
+
             # Define ECS cluster and task definition
             CLUSTER_NAME="habit_market_cluster"
             TASK_DEFINITION="habit-market-migrations"
-            
+
             # Get subnet IDs from AWS (you could also hardcode or use parameter store)
             SUBNET_IDS=$(aws ec2 describe-subnets \
               --region ${AWS_REGION} \
               --filters "Name=tag:Name,Values=habit-market-private-subnet*" \
               --query "Subnets[*].SubnetId" \
               --output text | tr '\t' ',')
-            
+
             # Get security group for migration tasks
             SECURITY_GROUP=$(aws ec2 describe-security-groups \
               --region ${AWS_REGION} \
               --filters "Name=group-name,Values=habit-market-migration-task-sg" \
               --query "SecurityGroups[0].GroupId" \
               --output text)
-            
+
             echo "Running migration task in ECS..."
             TASK_ARN=$(aws ecs run-task \
               --cluster ${CLUSTER_NAME} \
@@ -172,16 +172,16 @@ jobs:
               --region ${AWS_REGION} \
               --query "tasks[0].taskArn" \
               --output text)
-            
+
             echo "Task started: ${TASK_ARN}"
-            
+
             # Wait for task to complete
             echo "Waiting for migration task to complete..."
             aws ecs wait tasks-stopped \
               --cluster ${CLUSTER_NAME} \
               --tasks ${TASK_ARN} \
               --region ${AWS_REGION}
-            
+
             # Check if task succeeded
             EXIT_CODE=$(aws ecs describe-tasks \
               --cluster ${CLUSTER_NAME} \
@@ -189,7 +189,7 @@ jobs:
               --region ${AWS_REGION} \
               --query "tasks[0].containers[0].exitCode" \
               --output text)
-            
+
             if [ "${EXIT_CODE}" != "0" ]; then
               echo "Migration failed with exit code: ${EXIT_CODE}"
               
@@ -208,38 +208,35 @@ jobs:
               
               exit 1
             fi
-            
+
             echo "Migration completed successfully!"
 
 workflows:
   check-workflow:
-    when: 
-      or: 
+    when:
+      or:
         - << pipeline.parameters.server-change >>
-        - << pipeline.parameters.migration >> 
+        - << pipeline.parameters.migration >>
     jobs:
       - check
-  build-upload-server-image-workflow:
-    when: 
-      or: 
-        - << pipeline.parameters.server-change >>
-    jobs:
-      - build_upload_server_image
 
-workflows:
-  ci:
-    jobs:
-      - test:
-          filters:
-            branches:
-              only: main
-      - deploy:
-          requires:
-            - test
-          filters:
-            branches:
-              only: main
-      - migrate:
-          filters:
-            branches:
-              only: main
+      - build_upload_server_image:
+        requires:
+          - check
+        when:
+          - << pipeline.parameters.server-change >>
+
+      - build_upload_migration_image:
+        requires:
+          - check
+        when:
+          - << pipeline.parameters.migration >>
+
+      - deploy_migration_image:
+        requires:
+          - build_upload_migration_image
+
+      # - deploy_server_image: # TODO: This should only run if deploy_migration_image && build_upload_server_image ran OR build_upload_server_image and (deploy_migration_image never ran in the first place)
+      #   requires:
+      #     - build_upload_server_image
+      #     - deploy_migration_image
