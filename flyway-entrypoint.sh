@@ -41,19 +41,10 @@ DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
 DB_NAME=habit-market
 DB_PORT=5432
-echo "Attempting to get database host..."
-DB_HOST=$(aws rds describe-db-instances \
-    --region eu-west-2 \
-    --db-instance-identifier habit-market \
-    --query 'DBInstances[0].Endpoint.Address' \
-    --output text 2>&1)
 
-if [ $? -ne 0 ]; then
-    echo "Error retrieving database host: $DB_HOST"
-    exit 1
-fi
-
-echo "Successfully retrieved database host"
+# Hardcode the database host to avoid VPC endpoint issues
+DB_HOST="habit-market.c96way2g09hd.eu-west-2.rds.amazonaws.com"
+echo "Using hardcoded database host: $DB_HOST"
 
 echo "Database host: $DB_HOST"
 echo "Database port: $DB_PORT"
