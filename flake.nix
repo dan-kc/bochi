@@ -133,6 +133,7 @@
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "FLYWAY_LOCATIONS=filesystem:/sql"
               "AWS_DEFAULT_REGION=eu-west-2"
+              "PATH=${pkgs.awscli2}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.jq}/bin:${pkgs.flyway}/bin"
             ];
           };
         };
