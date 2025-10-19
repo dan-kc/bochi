@@ -93,3 +93,57 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   }
 }
 
+# VPC Endpoint for ECR API
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-ecr-api-endpoint"
+  }
+}
+
+# VPC Endpoint for ECR Docker Registry
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-ecr-dkr-endpoint"
+  }
+}
+
+# VPC Endpoint for CloudWatch Logs
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-logs-endpoint"
+  }
+}
+
+# VPC Endpoint for S3 (Gateway endpoint - required for ECR image layers)
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.habit_market.id
+  service_name      = "com.amazonaws.eu-west-2.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = {
+    Name = "habit-market-s3-endpoint"
+  }
+}
+
