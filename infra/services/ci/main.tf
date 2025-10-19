@@ -170,6 +170,26 @@ resource "aws_iam_role_policy" "migration_task_execution_ecr" {
   })
 }
 
+# CloudWatch Logs permissions for execution role
+resource "aws_iam_role_policy" "migration_task_execution_logs" {
+  name = "migration-task-execution-logs-policy"
+  role = aws_iam_role.migration_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.migration.arn}:*"
+      }
+    ]
+  })
+}
+
 # IAM role for ECS task (runtime)
 resource "aws_iam_role" "migration_task" {
   name = "habit-market-migration-task-role"
