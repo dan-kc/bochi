@@ -7,10 +7,6 @@ echo "Starting Flyway migration process..."
 if [ -n "$ECS_CONTAINER_METADATA_URI_V4" ]; then
     echo "Detected ECS/Fargate environment"
     
-    # Get the RDS instance identifier from environment or use default
-    RDS_INSTANCE_ID="habit-market"
-    echo "Using RDS instance: $RDS_INSTANCE_ID"
-    
     # Get the secret ARN for the RDS master credentials
     # AWS automatically creates a secret with the pattern: rds!db-<resource-id>
     # But we need to get the actual secret ARN
@@ -20,11 +16,11 @@ if [ -n "$ECS_CONTAINER_METADATA_URI_V4" ]; then
     # The secret is auto-created by RDS when using manage_master_user_password
     SECRET_ARN=$(aws secretsmanager list-secrets \
         --region eu-west-2 \
-        --query "SecretList[?contains(Name, '${RDS_INSTANCE_ID}')].ARN | [0]" \
+        --query "SecretList[?contains(Name, 'rds')].ARN | [0]" \
         --output text)
     
     if [ -z "$SECRET_ARN" ] || [ "$SECRET_ARN" = "None" ]; then
-        echo "Error: Could not find secret for RDS instance ${RDS_INSTANCE_ID}"
+        echo "Error: Could not find secret for RDS instance"
         exit 1
     fi
     
