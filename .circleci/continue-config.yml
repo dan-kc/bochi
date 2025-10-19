@@ -1,0 +1,245 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@5.4.1
+  path-filtering: circleci/path-filtering@2.1.0
+
+parameters:
+  server-change:
+    type: boolean
+    default: false
+  migration:
+    type: boolean
+    default: false
+
+commands:
+  install_nix:
+    description: "Installs and configures nix"
+    steps:
+      - run:
+          name: Install & Configure Nix
+          command: |
+            sh <(curl -L https://nixos.org/nix/install) --no-daemon
+            mkdir -p ~/.config/nix
+            echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+            echo 'export USER=${USER:-circleci}' >> $BASH_ENV
+            echo '. $HOME/.nix-profile/etc/profile.d/nix.sh' >> $BASH_ENV
+  login_ecr:
+    description: "Logs in to AWS ECR"
+    steps:
+      - run:
+          name: Login to ECR
+          command: |
+            #!/bin/bash -eo pipefail
+            echo "Logging in to ECR..."
+            aws ecr get-login-password --region "${AWS_REGION}" \
+              | docker login \
+                  --username AWS \
+                  --password-stdin "${ECR_REPOSITORY_URI}" 2>&1 || {
+              echo "Error: ECR login failed!"
+              exit 1
+            }
+            echo "ECR login successful."
+
+jobs:
+  check:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Format | Lint | Test
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command bash -c "
+              set -e
+              cargo fmt --all --check
+              cargo check
+              start
+              fw test_habit_market migrate
+              t
+            "
+
+  build_upload_server_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Build | Upload
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command bash -c "
+              set -e
+              nix build .#server-docker
+              ACTUAL_IMAGE_PATH=$(readlink -f result)
+              cp "${ACTUAL_IMAGE_PATH}" server.tar.gz
+            "
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - login_ecr
+      - run:
+          name: Upload Image
+          command: |
+            #!/bin/bash -eo pipefail
+            docker load --input server.tar.gz
+            docker images
+
+            IMAGE_NAME="habit-market-backend" # As defined in the flake.nix
+            IMAGE_TAG="latest"
+            VERSION_TAG="${CIRCLE_SHA1::7}"
+
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker tag ${IMAGE_NAME} "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+            docker push "${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker push "${ECR_REPOSITORY_URI}:${VERSION_TAG}"
+
+  build_upload_migration_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Build Flyway Docker Image
+          no_output_timeout: 30m
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command nix build .#flyway-docker
+            ACTUAL_IMAGE_PATH=$(readlink -f result)
+            cp "${ACTUAL_IMAGE_PATH}" flyway-image.tar.gz
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - login_ecr
+      - run:
+          name: Upload Flyway Image to ECR
+          command: |
+            #!/bin/bash -eo pipefail
+            docker load --input flyway-image.tar.gz
+
+            FLYWAY_IMAGE_NAME="habit-market-migrations" # As defined in the flake.nix
+            FLYWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/habit-market-migration"
+            
+            docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:latest"
+            docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:${CIRCLE_SHA1::7}"
+            
+            # Push to ECR
+            docker push "${FLYWAY_ECR_URI}:latest"
+            docker push "${FLYWAY_ECR_URI}:${CIRCLE_SHA1::7}"
+
+  deploy_migration_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - run:
+          name: Run Database Migrations via ECS Fargate
+          command: |
+            #!/bin/bash -eo pipefail
+            
+            # Define ECS cluster and task definition
+            CLUSTER_NAME="habit_market_cluster"
+            TASK_DEFINITION="habit-market-migrations"
+            
+            # Get subnet IDs from AWS (you could also hardcode or use parameter store)
+            SUBNET_IDS=$(aws ec2 describe-subnets \
+              --region ${AWS_REGION} \
+              --filters "Name=tag:Name,Values=habit-market-private-subnet*" \
+              --query "Subnets[*].SubnetId" \
+              --output text | tr '\t' ',')
+            
+            # Get security group for migration tasks
+            SECURITY_GROUP=$(aws ec2 describe-security-groups \
+              --region ${AWS_REGION} \
+              --filters "Name=group-name,Values=habit-market-migration-task-sg" \
+              --query "SecurityGroups[0].GroupId" \
+              --output text)
+            
+            echo "Running migration task in ECS..."
+            TASK_ARN=$(aws ecs run-task \
+              --cluster ${CLUSTER_NAME} \
+              --task-definition ${TASK_DEFINITION} \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_IDS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=DISABLED}" \
+              --region ${AWS_REGION} \
+              --query "tasks[0].taskArn" \
+              --output text)
+            
+            echo "Task started: ${TASK_ARN}"
+            
+            # Wait for task to complete
+            echo "Waiting for migration task to complete..."
+            aws ecs wait tasks-stopped \
+              --cluster ${CLUSTER_NAME} \
+              --tasks ${TASK_ARN} \
+              --region ${AWS_REGION}
+            
+            # Check if task succeeded
+            EXIT_CODE=$(aws ecs describe-tasks \
+              --cluster ${CLUSTER_NAME} \
+              --tasks ${TASK_ARN} \
+              --region ${AWS_REGION} \
+              --query "tasks[0].containers[0].exitCode" \
+              --output text)
+            
+            if [ "${EXIT_CODE}" != "0" ]; then
+              echo "Migration failed with exit code: ${EXIT_CODE}"
+              
+              # Get logs
+              LOG_GROUP="/ecs/habit-market-migrations"
+              TASK_ID=$(echo ${TASK_ARN} | awk -F/ '{print $NF}')
+              LOG_STREAM="flyway/flyway/${TASK_ID}"
+              
+              echo "Fetching logs from CloudWatch..."
+              aws logs get-log-events \
+                --log-group-name ${LOG_GROUP} \
+                --log-stream-name ${LOG_STREAM} \
+                --region ${AWS_REGION} \
+                --query "events[*].message" \
+                --output text
+              
+              exit 1
+            fi
+            
+            echo "Migration completed successfully!"
+
+workflows:
+  check-workflow:
+    when: 
+      or: 
+        - << pipeline.parameters.server-change >>
+        - << pipeline.parameters.migration >> 
+    jobs:
+      - check
+  build-upload-server-image-workflow:
+    when: 
+      or: 
+        - << pipeline.parameters.server-change >>
+    jobs:
+      - build_upload_server_image
+
+workflows:
+  ci:
+    jobs:
+      - test:
+          filters:
+            branches:
+              only: main
+      - deploy:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
+      - migrate:
+          filters:
+            branches:
+              only: main
