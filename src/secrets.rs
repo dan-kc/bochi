@@ -1,5 +1,6 @@
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_secretsmanager::Client;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy)]
 pub enum State {
@@ -34,12 +35,20 @@ pub struct SecretsManager {
     state: State,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct JwtKeys {
+    pub private_key: String,
+    pub public_key: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("An unexpected internal server error occurred. {0}")]
     Internal(String),
     #[error("Unknown secret requested {0}")]
     UnknownSecret(String),
+    #[error("Failed to parse JSON secret: {0}")]
+    JsonParse(String),
 }
 
 impl SecretsManager {
@@ -69,8 +78,7 @@ impl SecretsManager {
                     "db-password" => Ok("password".to_string()),
                     "db-host" => Ok("localhost".to_string()),
                     "db-name" => Ok("habit_market".to_string()),
-                    "eddsa-public-key" => Ok("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----".to_string()),
-                    "eddsa-private-key" => Ok("-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----".to_string()),
+                    "server/jwt" => Ok(r#"{"private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----","public_key":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----"}"#.to_string()),
                     _ => { Err(Error::UnknownSecret(secret_name.to_string()))}
                 }
             }
@@ -81,8 +89,7 @@ impl SecretsManager {
                     "db-password" => Ok("password".to_string()),
                     "db-host" => Ok("localhost".to_string()),
                     "db-name" => Ok("test_habit_market".to_string()),
-                    "eddsa-public-key" => Ok("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----".to_string()),
-                    "eddsa-private-key" => Ok("-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----".to_string()),
+                    "server/jwt" => Ok(r#"{"private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd\n-----END PRIVATE KEY-----","public_key":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=\n-----END PUBLIC KEY-----"}"#.to_string()),
                     _ => { Err(Error::UnknownSecret(secret_name.to_string()))}
                 }
             }
@@ -110,5 +117,11 @@ impl SecretsManager {
                 }
             }
         }
+    }
+
+    pub async fn get_jwt_keys(&self) -> Result<JwtKeys, Error> {
+        let jwt_secret = self.get_secret("server/jwt").await?;
+        serde_json::from_str(&jwt_secret)
+            .map_err(|e| Error::JsonParse(format!("Failed to parse JWT keys: {}", e)))
     }
 }

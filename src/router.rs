@@ -34,11 +34,7 @@ impl App {
 pub async fn router() -> axum::Router {
     // Get secrets
     let secrets_client = secrets::SecretsManager::new().await;
-    let eddsa_public_key = secrets_client.get_secret("eddsa-public-key").await.unwrap();
-    let eddsa_private_key = secrets_client
-        .get_secret("eddsa-private-key")
-        .await
-        .unwrap();
+    let jwt_keys = secrets_client.get_jwt_keys().await.unwrap();
     let db_user = secrets_client.get_secret("db-user").await.unwrap();
     let db_password = secrets_client.get_secret("db-password").await.unwrap();
     let db_host = secrets_client.get_secret("db-host").await.unwrap();
@@ -52,7 +48,7 @@ pub async fn router() -> axum::Router {
         db_name.as_str(),
     )
     .await;
-    let jwt_manager = JWTManager::new(eddsa_public_key.as_str(), eddsa_private_key.as_str());
+    let jwt_manager = JWTManager::new(jwt_keys.public_key.as_str(), jwt_keys.private_key.as_str());
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(database.clone())
         .data(jwt_manager.clone())
