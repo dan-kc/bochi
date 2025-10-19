@@ -72,4 +72,5 @@ module "ci" {
   database_security_group_id  = module.database.database_security_group_id
   migration_repository_url    = aws_ecr_repository.habit_market_migration.repository_url
   database_secret_arn         = module.database.database_secret_arn
+  database_kms_key_arn        = module.database.database_kms_key_arn
 }

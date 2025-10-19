@@ -243,6 +243,31 @@ resource "aws_iam_role_policy" "migration_task_secrets" {
   })
 }
 
+# Policy for task to decrypt secrets with KMS
+resource "aws_iam_role_policy" "migration_task_kms" {
+  name = "migration-task-kms-policy"
+  role = aws_iam_role.migration_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = var.database_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.eu-west-2.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # Policy for task to write logs
 resource "aws_iam_role_policy" "migration_task_logs" {
   name = "migration-task-logs-policy"

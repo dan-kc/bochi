@@ -112,3 +112,8 @@ output "database_secret_arn" {
   value       = aws_db_instance.habit_market.master_user_secret[0].secret_arn
   description = "ARN of the secret containing database credentials"
 }
+
+output "database_kms_key_arn" {
+  value       = aws_kms_key.database.arn
+  description = "ARN of the KMS key used to encrypt database secrets"
+}

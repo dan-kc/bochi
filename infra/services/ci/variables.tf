@@ -32,3 +32,8 @@ variable "database_secret_arn" {
   description = "ARN of the secret containing database credentials"
   type        = string
 }
+
+variable "database_kms_key_arn" {
+  description = "ARN of the KMS key used to encrypt database secrets"
+  type        = string
+}
