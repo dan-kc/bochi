@@ -12,7 +12,7 @@ echo "Retrieving database credentials from Secrets Manager..."
 SECRET_ARN=$(aws secretsmanager list-secrets \
     --region eu-west-2 \
     --query "SecretList[?contains(Name, 'rds')].ARN | [0]" \
-    --output text | sed 's/!/\\!/g')
+    --output text)
 
 if [ -z "$SECRET_ARN" ] || [ "$SECRET_ARN" = "None" ]; then
     echo "Error: Could not find secret for RDS instance"
