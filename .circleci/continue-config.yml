@@ -212,7 +212,7 @@ jobs:
             echo "Migration completed successfully!"
 
 workflows:
-  check-workflow:
+  ci:
     when:
       or:
         - << pipeline.parameters.server-change >>
@@ -221,20 +221,20 @@ workflows:
       - check
 
       - build_upload_server_image:
-        requires:
-          - check
-        when:
-          - << pipeline.parameters.server-change >>
+          requires:
+            - check
+          when:
+            - << pipeline.parameters.server-change >>
 
       - build_upload_migration_image:
-        requires:
-          - check
-        when:
-          - << pipeline.parameters.migration >>
+          requires:
+            - check
+          when:
+            - << pipeline.parameters.migration >>
 
       - deploy_migration_image:
-        requires:
-          - build_upload_migration_image
+          requires:
+            - build_upload_migration_image
 
       # - deploy_server_image: # TODO: This should only run if deploy_migration_image && build_upload_server_image ran OR build_upload_server_image and (deploy_migration_image never ran in the first place)
       #   requires:
