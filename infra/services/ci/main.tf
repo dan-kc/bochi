@@ -288,24 +288,6 @@ resource "aws_iam_role_policy" "migration_task_logs" {
   })
 }
 
-# Policy for task to describe RDS instances
-resource "aws_iam_role_policy" "migration_task_rds" {
-  name = "migration-task-rds-policy"
-  role = aws_iam_role.migration_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "rds:DescribeDBInstances"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
 
 # ECS Task Definition for Flyway migrations
 resource "aws_ecs_task_definition" "migration" {

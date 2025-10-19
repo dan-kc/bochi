@@ -147,17 +147,4 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-# VPC Endpoint for RDS
-resource "aws_vpc_endpoint" "rds" {
-  vpc_id              = aws_vpc.habit_market.id
-  service_name        = "com.amazonaws.eu-west-2.rds"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "habit-market-rds-endpoint"
-  }
-}
 
