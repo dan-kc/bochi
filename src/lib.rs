@@ -4,5 +4,4 @@ pub mod graphql;
 pub mod observability;
 pub mod router;
 pub mod routes;
-pub mod secrets;
 pub mod security;

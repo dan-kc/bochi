@@ -1,7 +1,7 @@
 use crate::{
     database,
     graphql::{mutations::MutationRoot, queries::QueryRoot},
-    routes, secrets,
+    routes,
     security::jwt::JWTManager,
 };
 use async_graphql::{EmptySubscription, Schema};
@@ -32,14 +32,14 @@ impl App {
 }
 
 pub async fn router() -> axum::Router {
-    // Get secrets
-    let secrets_client = secrets::SecretsManager::new().await;
-    let jwt_keys = secrets_client.get_jwt_keys().await.unwrap();
-    let db_user = secrets_client.get_secret("db-user").await.unwrap();
-    let db_password = secrets_client.get_secret("db-password").await.unwrap();
-    let db_host = secrets_client.get_secret("db-host").await.unwrap();
-    let db_name = secrets_client.get_secret("db-name").await.unwrap();
-    info!("loaded secrets");
+    // Get configuration from environment variables
+    let db_user = std::env::var("DB_USER").expect("DB_USER not set");
+    let db_password = std::env::var("DB_PASSWORD").expect("DB_PASSWORD not set");
+    let db_host = std::env::var("DB_HOST").expect("DB_HOST not set");
+    let db_name = std::env::var("DB_NAME").expect("DB_NAME not set");
+    let jwt_private_key = std::env::var("JWT_PRIVATE_KEY").expect("JWT_PRIVATE_KEY not set");
+    let jwt_public_key = std::env::var("JWT_PUBLIC_KEY").expect("JWT_PUBLIC_KEY not set");
+    info!("loaded configuration from environment");
 
     let database = database::Database::new(
         db_user.as_str(),
@@ -48,7 +48,7 @@ pub async fn router() -> axum::Router {
         db_name.as_str(),
     )
     .await;
-    let jwt_manager = JWTManager::new(jwt_keys.public_key.as_str(), jwt_keys.private_key.as_str());
+    let jwt_manager = JWTManager::new(jwt_public_key.as_str(), jwt_private_key.as_str());
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(database.clone())
         .data(jwt_manager.clone())
