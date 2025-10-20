@@ -139,6 +139,7 @@ module "server" {
   database_security_group_id = module.database.database_security_group_id
   database_secret_arn        = module.database.database_secret_arn
   database_kms_key_arn       = module.database.database_kms_key_arn
+  database_endpoint          = module.database.database_endpoint
   ecr_repository_url         = aws_ecr_repository.habit_market_backend.repository_url
   alb_arn                    = aws_lb.habit_market.arn
   alb_security_group_id      = aws_security_group.alb.id

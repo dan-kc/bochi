@@ -199,23 +199,25 @@ resource "aws_ecs_task_definition" "habit_market_server" {
         },
         {
           name  = "DB_HOST"
-          value = 5432
+          value = split(":", var.database_endpoint)[0]
         },
       ]
 
       secrets = [
         {
-          name = "DB_USER"
+          name      = "DB_USER"
+          valueFrom = "${var.database_secret_arn}:username::"
         },
         {
-          name = "DB_PASSWORD"
+          name      = "DB_PASSWORD"
+          valueFrom = "${var.database_secret_arn}:password::"
         },
         {
-          name = "JWT_PUBLIC_KEY"
+          name      = "JWT_PUBLIC_KEY"
           valueFrom = "${data.aws_secretsmanager_secret_version.jwt_keys_version.arn}:eddsa-public-key::"
         },
         {
-          name = "JWT_PRIVATE_KEY"
+          name      = "JWT_PRIVATE_KEY"
           valueFrom = "${data.aws_secretsmanager_secret_version.jwt_keys_version.arn}:eddsa-private-key::"
         },
       ]

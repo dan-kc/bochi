@@ -33,6 +33,11 @@ variable "database_kms_key_arn" {
   description = "ARN of the KMS key used for database secrets"
 }
 
+variable "database_endpoint" {
+  type        = string
+  description = "Database connection endpoint"
+}
+
 variable "ecr_repository_url" {
   type        = string
   description = "URL of the ECR repository for the server image"
