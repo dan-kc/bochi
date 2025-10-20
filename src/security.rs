@@ -33,7 +33,9 @@ pub mod jwt {
     }
 
     impl JWTManager {
-        pub fn new(public_key: &str, private_key: &str) -> Self {
+        pub fn new() -> Self {
+            let private_key = std::env::var("JWT_PRIVATE_KEY").expect("JWT_PRIVATE_KEY not set");
+            let public_key = std::env::var("JWT_PUBLIC_KEY").expect("JWT_PUBLIC_KEY not set");
             let decoding_key = DecodingKey::from_ed_pem(public_key.as_bytes()).unwrap();
             let encoding_key = EncodingKey::from_ed_pem(private_key.as_bytes()).unwrap();
 
