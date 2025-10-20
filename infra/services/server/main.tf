@@ -80,14 +80,6 @@ resource "aws_ecs_task_definition" "habit_market_server" {
   }
 }
 
-# Get secrets
-data "aws_secretsmanager_secret" "jwt_keys" {
-  name = "server/jwt"
-}
-data "aws_secretsmanager_secret_version" "jwt_keys_version" {
-  secret_id = data.aws_secretsmanager_secret.jwt_keys.id
-}
-
 # Security group for ECS tasks
 resource "aws_security_group" "ecs_tasks" {
   name        = "habit-market-server-ecs-tasks-sg"
@@ -186,17 +178,6 @@ resource "aws_launch_template" "ecs_instance" {
     tags = {
       Name = "habit-market-ecs-instance"
     }
-  }
-}
-
-# Get the latest ECS-optimized AMI
-data "aws_ami" "ecs_optimized" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
   }
 }
 
