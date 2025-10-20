@@ -6,111 +6,6 @@
 #   d. Terminate old instance after 5 minutes
 #   e. Auto-rollback if deployment fails
 
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "habit-market-server-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "habit-market-server-ecs-task-execution-role"
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  name = "habit-market-server-ecs-task-execution-secrets"
-  role = aws_iam_role.ecs_task_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = [
-          var.database_secret_arn,
-          data.aws_secretsmanager_secret.jwt_keys.arn
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
-        Resource = [
-          var.database_kms_key_arn,
-          "*" # Allow decryption of any KMS key used by secrets
-        ]
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role" "ecs_task_role" {
-  name = "habit-market-server-ecs-task-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "habit-market-server-ecs-task-role"
-  }
-}
-
-# IAM role for CodeDeploy
-resource "aws_iam_role" "codedeploy" {
-  name = "habit-market-codedeploy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "codedeploy.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "habit-market-codedeploy-role"
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
-  role       = aws_iam_role.codedeploy.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
-}
-
 # Data source for existing JWT secret (managed outside Terraform)
 data "aws_secretsmanager_secret" "jwt_keys" {
   name = "server/jwt"
@@ -172,7 +67,7 @@ resource "aws_cloudwatch_log_group" "habit_market_server" {
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "habit_market_server" {
-  family                   = "habit-market-server"
+  family                   = "habit-market-server" # "Name", basically
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   cpu                      = "256" # 0.25 vCPU
@@ -252,33 +147,6 @@ resource "aws_ecs_task_definition" "habit_market_server" {
   }
 }
 
-# IAM role for EC2 instances in the ECS cluster
-resource "aws_iam_role" "ecs_instance_role" {
-  name = "habit-market-ecs-instance-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
-  role       = aws_iam_role.ecs_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
-resource "aws_iam_instance_profile" "ecs_instance_profile" {
-  name = "habit-market-ecs-instance-profile"
-  role = aws_iam_role.ecs_instance_role.name
-}
 
 # Security group for EC2 instances
 resource "aws_security_group" "ecs_instances" {
@@ -291,7 +159,7 @@ resource "aws_security_group" "ecs_instances" {
     to_port         = 65535
     protocol        = "tcp"
     security_groups = [var.alb_security_group_id]
-    description     = "Allow all traffic from ALB"
+    description     = "Allow all traffic from ALB" # Why do we allow all traffic? I should only allow 80 and 443 right?
   }
 
   egress {
@@ -311,7 +179,7 @@ resource "aws_security_group" "ecs_instances" {
 resource "aws_launch_template" "ecs_instance" {
   name_prefix   = "habit-market-ecs-instance-"
   image_id      = data.aws_ami.ecs_optimized.id
-  instance_type = "t3.micro" # Cheapest instance type eligible for free tier
+  instance_type = "t3.micro"
 
   iam_instance_profile {
     arn = aws_iam_instance_profile.ecs_instance_profile.arn
@@ -324,14 +192,6 @@ resource "aws_launch_template" "ecs_instance" {
     echo ECS_CLUSTER=${var.ecs_cluster_name} >> /etc/ecs/ecs.config
   EOT
   )
-
-  # Use spot instances for additional cost savings
-  instance_market_options {
-    market_type = "spot"
-    spot_options {
-      max_price = "0.0104" # Current on-demand price for t3.micro, adjust as needed
-    }
-  }
 
   tag_specifications {
     resource_type = "instance"
