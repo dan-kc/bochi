@@ -1,3 +1,11 @@
+# - Normal state: 1 EC2 instance running 
+# - During deployment: CodeDeploy will:
+#   a. Spin up a 2nd instance (green fleet)
+#   b. Route 10% of traffic to new version for 5 minutes (canary)
+#   c. If healthy, shift 100% traffic to new version
+#   d. Terminate old instance after 5 minutes
+#   e. Auto-rollback if deployment fails
+
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "habit-market-server-ecs-task-execution-role"
 
@@ -105,6 +113,33 @@ resource "aws_iam_role_policy" "ecs_task_secrets" {
       }
     ]
   })
+}
+
+# IAM role for CodeDeploy
+resource "aws_iam_role" "codedeploy" {
+  name = "habit-market-codedeploy-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "codedeploy.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "habit-market-codedeploy-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
+  role       = aws_iam_role.codedeploy.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
 # Data source for existing JWT secret (managed outside Terraform)
@@ -353,7 +388,7 @@ resource "aws_autoscaling_group" "ecs_instances" {
   name                = "habit-market-ecs-asg"
   vpc_zone_identifier = var.private_subnet_ids
   min_size            = 1
-  max_size            = 1
+  max_size            = 2 # Allow scaling to 2 instances for canary deployments
   desired_capacity    = 1
 
   launch_template {
@@ -403,9 +438,9 @@ resource "aws_ecs_cluster_capacity_providers" "habit_market" {
   }
 }
 
-# Target Group for ALB
+# Blue Target Group for ALB
 resource "aws_lb_target_group" "habit_market_server" {
-  name        = "habit-market-server-tg"
+  name        = "habit-market-server-tg-blue"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -424,18 +459,109 @@ resource "aws_lb_target_group" "habit_market_server" {
   deregistration_delay = 30
 
   tags = {
-    Name = "habit-market-server-tg"
+    Name = "habit-market-server-tg-blue"
+  }
+}
+
+# Green Target Group for ALB
+resource "aws_lb_target_group" "habit_market_server_green" {
+  name        = "habit-market-server-tg-green"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/health"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 30
+
+  tags = {
+    Name = "habit-market-server-tg-green"
+  }
+}
+
+# CodeDeploy Application
+resource "aws_codedeploy_app" "habit_market_server" {
+  name             = "habit-market-server"
+  compute_platform = "ECS"
+
+  tags = {
+    Name = "habit-market-server-codedeploy-app"
+  }
+}
+
+# CodeDeploy Deployment Group
+resource "aws_codedeploy_deployment_group" "habit_market_server" {
+  app_name              = aws_codedeploy_app.habit_market_server.name
+  deployment_group_name = "habit-market-server-deployment-group"
+  service_role_arn      = aws_iam_role.codedeploy.arn
+
+  deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
+
+  ecs_service {
+    cluster_name = var.ecs_cluster_name
+    service_name = aws_ecs_service.habit_market_server.name
+  }
+
+  blue_green_deployment_config {
+    terminate_blue_instances_on_deployment_success {
+      action                           = "TERMINATE"
+      termination_wait_time_in_minutes = 5
+    }
+
+    deployment_ready_option {
+      action_on_timeout = "CONTINUE_DEPLOYMENT"
+    }
+
+    green_fleet_provisioning_option {
+      action = "COPY_AUTO_SCALING_GROUP"
+    }
+  }
+
+  load_balancer_info {
+    target_group_pair_info {
+      prod_traffic_route {
+        listener_arns = [aws_lb_listener.habit_market_server.arn]
+      }
+
+      target_group {
+        name = aws_lb_target_group.habit_market_server.name
+      }
+
+      target_group {
+        name = aws_lb_target_group.habit_market_server_green.name
+      }
+    }
+  }
+
+  auto_rollback_configuration {
+    enabled = true
+    events  = ["DEPLOYMENT_FAILURE", "DEPLOYMENT_STOP_ON_ALARM"]
+  }
+
+  tags = {
+    Name = "habit-market-server-deployment-group"
   }
 }
 
 # ECS Service
 resource "aws_ecs_service" "habit_market_server" {
-  name                               = "habit-market-server"
-  cluster                            = var.ecs_cluster_id
-  task_definition                    = aws_ecs_task_definition.habit_market_server.arn
-  desired_count                      = 1
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
+  name            = "habit-market-server"
+  cluster         = var.ecs_cluster_id
+  task_definition = aws_ecs_task_definition.habit_market_server.arn
+  desired_count   = 1
+
+  deployment_controller {
+    type = "CODE_DEPLOY"
+  }
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2.name
@@ -463,6 +589,10 @@ resource "aws_ecs_service" "habit_market_server" {
 
   tags = {
     Name = "habit-market-server-service"
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition, load_balancer]
   }
 }
 
