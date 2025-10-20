@@ -84,37 +84,6 @@ resource "aws_iam_role" "ecs_task_role" {
   }
 }
 
-resource "aws_iam_role_policy" "ecs_task_secrets" {
-  name = "habit-market-server-ecs-task-secrets"
-  role = aws_iam_role.ecs_task_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = [
-          var.database_secret_arn,
-          data.aws_secretsmanager_secret.jwt_keys.arn
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
-        Resource = [
-          var.database_kms_key_arn,
-          "*" # Allow decryption of any KMS key used by secrets
-        ]
-      }
-    ]
-  })
-}
-
 # IAM role for CodeDeploy
 resource "aws_iam_role" "codedeploy" {
   name = "habit-market-codedeploy-role"
