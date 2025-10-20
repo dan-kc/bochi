@@ -51,7 +51,6 @@ resource "aws_ecs_cluster" "habit_market" {
   }
 }
 
-
 module "database" {
   source              = "./services/database"
   vpc_id              = aws_vpc.habit_market.id
