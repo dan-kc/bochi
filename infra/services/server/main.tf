@@ -1,70 +1,3 @@
-# - Normal state: 1 EC2 instance running 
-# - During deployment: CodeDeploy will:
-#   a. Spin up a 2nd instance (green fleet)
-#   b. Route 10% of traffic to new version for 5 minutes (canary)
-#   c. If healthy, shift 100% traffic to new version
-#   d. Terminate old instance after 5 minutes
-#   e. Auto-rollback if deployment fails
-
-# Data source for existing JWT secret (managed outside Terraform)
-data "aws_secretsmanager_secret" "jwt_keys" {
-  name = "server/jwt"
-}
-
-# Data source to get the actual secret string from Secrets Manager
-# This allows us to parse its content.
-data "aws_secretsmanager_secret_version" "jwt_keys_version" {
-  secret_id = data.aws_secretsmanager_secret.jwt_keys.id
-}
-
-# Security group for ECS tasks
-resource "aws_security_group" "ecs_tasks" {
-  name        = "habit-market-server-ecs-tasks-sg"
-  description = "Security group for ECS tasks"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [var.alb_security_group_id]
-    description     = "Allow traffic from ALB"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
-  }
-
-  tags = {
-    Name = "habit-market-server-ecs-tasks-sg"
-  }
-}
-
-# Allow ECS tasks to connect to database
-resource "aws_security_group_rule" "database_from_ecs" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.ecs_tasks.id
-  security_group_id        = var.database_security_group_id
-  description              = "Allow PostgreSQL from ECS tasks"
-}
-
-# CloudWatch log group for the application
-resource "aws_cloudwatch_log_group" "habit_market_server" {
-  name              = "/ecs/habit-market-server"
-  retention_in_days = 7 # Keep logs for 7 days to save costs
-
-  tags = {
-    Name = "habit-market-server-logs"
-  }
-}
-
 # ECS Task Definition
 resource "aws_ecs_task_definition" "habit_market_server" {
   family                   = "habit-market-server" # "Name", basically
@@ -147,6 +80,61 @@ resource "aws_ecs_task_definition" "habit_market_server" {
   }
 }
 
+# Get secrets
+data "aws_secretsmanager_secret" "jwt_keys" {
+  name = "server/jwt"
+}
+data "aws_secretsmanager_secret_version" "jwt_keys_version" {
+  secret_id = data.aws_secretsmanager_secret.jwt_keys.id
+}
+
+# Security group for ECS tasks
+resource "aws_security_group" "ecs_tasks" {
+  name        = "habit-market-server-ecs-tasks-sg"
+  description = "Security group for ECS tasks"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [var.alb_security_group_id]
+    description     = "Allow traffic from ALB"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "habit-market-server-ecs-tasks-sg"
+  }
+}
+
+# Allow ECS tasks to connect to database
+resource "aws_security_group_rule" "database_from_ecs" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs_tasks.id
+  security_group_id        = var.database_security_group_id
+  description              = "Allow PostgreSQL from ECS tasks"
+}
+
+# CloudWatch log group for the application
+resource "aws_cloudwatch_log_group" "habit_market_server" {
+  name              = "/ecs/habit-market-server"
+  retention_in_days = 7 # Keep logs for 7 days to save costs
+
+  tags = {
+    Name = "habit-market-server-logs"
+  }
+}
 
 # Security group for EC2 instances
 resource "aws_security_group" "ecs_instances" {
