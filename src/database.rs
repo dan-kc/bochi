@@ -15,7 +15,7 @@ impl Database {
         let host = std::env::var("DB_HOST").expect("DB_HOST not set");
         let name = std::env::var("DB_NAME").expect("DB_NAME not set");
 
-        let database_url = format!("postgres://{}:{}@{}/{}", user, password, host, name);
+        let database_url = format!("postgres://{}:{}@{}:5432/{}", user, password, host, name);
         let pool = PgPoolOptions::new()
             .max_connections(97) // 97 is the default limit for postgres. Change this if we ever have
             // another server connecting. All pools must add up to 97.
