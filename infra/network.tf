@@ -199,3 +199,45 @@ resource "aws_vpc_endpoint" "s3" {
     Name = "habit-market-s3-endpoint"
   }
 }
+
+# VPC Endpoint for ECS
+resource "aws_vpc_endpoint" "ecs" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.ecs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-ecs-endpoint"
+  }
+}
+
+# VPC Endpoint for ECS Agent
+resource "aws_vpc_endpoint" "ecs_agent" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.ecs-agent"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-ecs-agent-endpoint"
+  }
+}
+
+# VPC Endpoint for ECS Telemetry
+resource "aws_vpc_endpoint" "ecs_telemetry" {
+  vpc_id              = aws_vpc.habit_market.id
+  service_name        = "com.amazonaws.eu-west-2.ecs-telemetry"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "habit-market-ecs-telemetry-endpoint"
+  }
+}

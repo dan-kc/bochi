@@ -318,6 +318,11 @@ resource "aws_codedeploy_deployment_group" "habit_market_server" {
   service_role_arn      = aws_iam_role.codedeploy.arn
 
   deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
+  
+  deployment_style {
+    deployment_type   = "BLUE_GREEN"
+    deployment_option = "WITH_TRAFFIC_CONTROL"
+  }
 
   ecs_service {
     cluster_name = var.ecs_cluster_name
@@ -332,10 +337,6 @@ resource "aws_codedeploy_deployment_group" "habit_market_server" {
 
     deployment_ready_option {
       action_on_timeout = "CONTINUE_DEPLOYMENT"
-    }
-
-    green_fleet_provisioning_option {
-      action = "COPY_AUTO_SCALING_GROUP"
     }
   }
 
