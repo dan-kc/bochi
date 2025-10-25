@@ -143,3 +143,13 @@ module "server" {
   alb_arn                    = aws_lb.habit_market.arn
   alb_security_group_id      = aws_security_group.alb.id
 }
+
+output "alb_dns_name" {
+  value       = aws_lb.habit_market.dns_name
+  description = "DNS name of the Application Load Balancer"
+}
+
+output "api_url" {
+  value       = "http://${aws_lb.habit_market.dns_name}"
+  description = "URL for accessing the API"
+}

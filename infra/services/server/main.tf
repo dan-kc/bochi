@@ -30,6 +30,10 @@ resource "aws_ecs_task_definition" "habit_market_server" {
           value = "habit_market"
         },
         {
+          name  = "SSL_MODE"
+          value = "require"
+        },
+        {
           name  = "DB_HOST"
           value = split(":", var.database_endpoint)[0]
         },
@@ -65,13 +69,13 @@ resource "aws_ecs_task_definition" "habit_market_server" {
 
       essential = true # If this container stops for any reason, the entire ECS task will stop.
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
-      }
+      # healthCheck = {
+      #   command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      #   interval    = 30
+      #   timeout     = 5
+      #   retries     = 3
+      #   startPeriod = 30
+      # }
     }
   ])
 
@@ -184,6 +188,7 @@ resource "aws_launch_template" "ecs_instance" {
 # Auto Scaling Group for EC2 instances
 # Manages the underlying EC2 instances, ensuring a desired number 
 # of instances are running and handling instance health.
+## HERE
 resource "aws_autoscaling_group" "ecs_instances" {
   name                = "habit-market-ecs-asg"
   vpc_zone_identifier = var.private_subnet_ids
@@ -318,7 +323,7 @@ resource "aws_codedeploy_deployment_group" "habit_market_server" {
   service_role_arn      = aws_iam_role.codedeploy.arn
 
   deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
-  
+
   deployment_style {
     deployment_type   = "BLUE_GREEN"
     deployment_option = "WITH_TRAFFIC_CONTROL"
