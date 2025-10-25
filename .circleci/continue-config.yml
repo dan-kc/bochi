@@ -367,6 +367,6 @@ workflows:
           requires:
             - build_upload_migration_image
 
-      - deploy_server_image:
-          requires:
-            - build_upload_server_image
+      # - deploy_server_image:
+      #     requires:
+      #       - build_upload_server_image
