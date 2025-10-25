@@ -73,12 +73,9 @@ jobs:
           command: |
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
-            nix develop --command bash -c "
-              set -e
-              nix build .#server-docker
-              ACTUAL_IMAGE_PATH=$(readlink -f result)
-              cp "${ACTUAL_IMAGE_PATH}" server.tar.gz
-            "
+            nix develop --command nix build .#server-docker
+            ACTUAL_IMAGE_PATH=$(readlink -f result)
+            cp "${ACTUAL_IMAGE_PATH}" server-image.tar.gz
       - setup_remote_docker:
           docker_layer_caching: true
       - aws-cli/setup:
@@ -88,8 +85,7 @@ jobs:
           name: Upload Image
           command: |
             #!/bin/bash -eo pipefail
-            docker load --input server.tar.gz
-            docker images
+            docker load --input server-image.tar.gz
 
             IMAGE_NAME="habit-market-backend" # As defined in the flake.nix
             IMAGE_TAG="latest"
