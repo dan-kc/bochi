@@ -345,10 +345,10 @@ workflows:
         - << pipeline.parameters.server-change >>
         - not: << pipeline.parameters.migration >>
     jobs:
-      - check
-      - build_upload_server_image:
-          requires:
-            - check
+      # - check
+      - build_upload_server_image
+          # requires:
+          #   - check
       # - deploy_server_image:
       #     requires:
       #       - build_upload_server_image

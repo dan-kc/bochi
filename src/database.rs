@@ -17,9 +17,11 @@ impl Database {
             form_urlencoded::byte_serialize(password.as_bytes()).collect();
         let host = std::env::var("DB_HOST").expect("DB_HOST not set");
         let name = std::env::var("DB_NAME").expect("DB_NAME not set");
+        let ssl_mode = std::env::var("SSL_MODE").expect("SSL_MODE not set");
+
         let database_url = format!(
-            "postgres://{}:{}@{}:5432/{}",
-            user, encoded_password, host, name
+            "postgres://{}:{}@{}:5432/{}?sslmode={}",
+            user, encoded_password, host, name, ssl_mode
         );
 
         let pool = PgPoolOptions::new()

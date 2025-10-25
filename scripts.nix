@@ -169,6 +169,7 @@ let
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
       DB_NAME="habit_market" \
+      SSL_MODE="disable" \
       JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
 -----END PRIVATE KEY-----" \
@@ -187,6 +188,7 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
       DB_NAME="test_habit_market" \
+      SSL_MODE="disable" \
       JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
 -----END PRIVATE KEY-----" \
