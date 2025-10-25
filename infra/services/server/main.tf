@@ -182,6 +182,8 @@ resource "aws_launch_template" "ecs_instance" {
 }
 
 # Auto Scaling Group for EC2 instances
+# Manages the underlying EC2 instances, ensuring a desired number 
+# of instances are running and handling instance health.
 resource "aws_autoscaling_group" "ecs_instances" {
   name                = "habit-market-ecs-asg"
   vpc_zone_identifier = var.private_subnet_ids
@@ -200,6 +202,8 @@ resource "aws_autoscaling_group" "ecs_instances" {
     propagate_at_launch = true
   }
 
+  # This is a crucial tag that allows the ECS Agent on the instances 
+  # to register them with ECS as container instances.
   tag {
     key                 = "AmazonECSManaged"
     value               = true
@@ -208,6 +212,8 @@ resource "aws_autoscaling_group" "ecs_instances" {
 }
 
 # ECS Capacity Provider
+# Manages how ECS tasks are placed on that infrastructure. It tells 
+# ECS where to run tasks and how to scale the ASG based on task demand.
 resource "aws_ecs_capacity_provider" "ec2" {
   name = "habit-market-ec2-capacity-provider"
 
@@ -215,7 +221,7 @@ resource "aws_ecs_capacity_provider" "ec2" {
     auto_scaling_group_arn = aws_autoscaling_group.ecs_instances.arn
 
     managed_scaling {
-      status                    = "ENABLED"
+      status                    = "ENABLED" # Allow ECS to manage the scaling of the linked ASG.
       target_capacity           = 100
       minimum_scaling_step_size = 1
       maximum_scaling_step_size = 1
@@ -231,17 +237,26 @@ resource "aws_ecs_cluster_capacity_providers" "habit_market" {
 
   default_capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2.name
-    weight            = 1
-    base              = 1
+    # If multiple default capacity providers were specified, 
+    # this one would get a weight of 1. Since it's the only 
+    # one, all tasks using the default strategy will go here.
+    weight = 1
+    # ECS will always attempt to launch at least 1 task on 
+    # this capacity provider before considering other options 
+    # (if any were present). In this case, it means the first 
+    # task will definitely use this provider.
+    base = 1
   }
 }
 
 # Blue Target Group for ALB
 resource "aws_lb_target_group" "habit_market_server" {
-  name        = "habit-market-server-tg-blue"
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  name     = "habit-market-server-tg-blue"
+  port     = 8080 # Expect traffic on port 8080 from the load balancer.
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+  # Register targets based on their IP addresses. This is common for ECS 
+  # Fargate tasks and ECS EC2 tasks in awsvpc network mode.
   target_type = "ip"
 
   health_check {
@@ -261,7 +276,7 @@ resource "aws_lb_target_group" "habit_market_server" {
   }
 }
 
-# Green Target Group for ALB
+# Green Target Group for ALB (The new one)
 resource "aws_lb_target_group" "habit_market_server_green" {
   name        = "habit-market-server-tg-green"
   port        = 8080
@@ -388,6 +403,42 @@ resource "aws_ecs_service" "habit_market_server" {
     Name = "habit-market-server-service"
   }
 
+  # Do not consider changes to the task_definition and load_balancer 
+  # attributes as reasons to update or replace the ECS service 
+  # after its initial creation.
+
+  # - Normally, when you update your task_definition (e.g., change 
+  #   the Docker image, add environment variables), Terraform would 
+  #   want to update the task_definition attribute on the aws_ecs_service.
+
+  # - However, with CodeDeploy, CodeDeploy itself manages the update of 
+  #   the task_definition for the ECS service during a blue/green 
+  #   deployment. When CodeDeploy creates the new "green" version of 
+  #   the service, it updates the task_definition to point to the new one.
+
+  # - If Terraform were to try to update task_definition concurrently or 
+  #   based on its own plan, it could conflict with or break CodeDeploy's 
+  #   process. By ignoring it, you're telling Terraform to trust CodeDeploy 
+  #   to handle the task_definition updates.
+
+  # - Similarly, the load_balancer block within an ECS service defines the 
+  #   initial (blue) target group that the service is connected to.
+
+  # - During a blue/green deployment, CodeDeploy is responsible for shifting 
+  #   traffic between the initial ("blue") target group and the new 
+  #   ("green") target group. It does this by modifying the ALB listener 
+  #   rules, not by changing the load_balancer configuration on the ECS 
+  #   service itself (which always points to the "blue" group, and the 
+  #   "green" group is dynamically registered/deregistered by CodeDeploy).
+  #
+  # - If Terraform were to try and manage changes to this load_balancer block 
+  #   after CodeDeploy takes over, it could interfere with the traffic routing 
+  #   managed by CodeDeploy.
+
+  # In essence, lifecycle { ignore_changes = [...] } in this context allows 
+  # Terraform to manage the initial setup of the ECS service, but then cede 
+  # control over task_definition and load_balancer updates to AWS CodeDeploy, 
+  # preventing potential conflicts during subsequent deployments.
   lifecycle {
     ignore_changes = [task_definition, load_balancer]
   }
