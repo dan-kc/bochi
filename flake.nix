@@ -97,7 +97,7 @@
             Cmd = [ "${self.packages.${system}.server}/bin/habit-market-backend" ];
             WorkingDir = "/app";
             ExposedPorts = {
-              "80/tcp" = { };
+              "8080/tcp" = { };
             };
             Env = [
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
