@@ -65,7 +65,7 @@ let
     # Start PostgreSQL
     start-postgres = pkgs.writeShellScriptBin "start-postgres" ''
       set -e
-      PGDATA="/tmp/postgres-data"
+      PGDATA=".pgdata"
       if [ ! -d "$PGDATA" ]; then
         echo "Initializing PostgreSQL database..."
         initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
@@ -145,7 +145,8 @@ let
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
       echo "Stopping PostgreSQL..."
-      pg_ctl -D /tmp/postgres-data stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
+      PGDATA=".pgdata"
+      pg_ctl -D "$PGDATA" stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
 
       echo "Stopping Adminer..."
       pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"

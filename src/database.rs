@@ -1,6 +1,7 @@
 use crate::graphql::mutations::{CreateRewardInput, CreateTaskInput};
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use url::form_urlencoded;
 
 #[derive(Clone)]
 pub struct Database {
@@ -12,13 +13,20 @@ impl Database {
         // Get configuration from environment variables
         let user = std::env::var("DB_USER").expect("DB_USER not set");
         let password = std::env::var("DB_PASSWORD").expect("DB_PASSWORD not set");
+        let encoded_password: String =
+            form_urlencoded::byte_serialize(password.as_bytes()).collect();
         let host = std::env::var("DB_HOST").expect("DB_HOST not set");
         let name = std::env::var("DB_NAME").expect("DB_NAME not set");
+        let database_url = format!(
+            "postgres://{}:{}@{}:5432/{}",
+            user, encoded_password, host, name
+        );
 
-        let database_url = format!("postgres://{}:{}@{}:5432/{}", user, password, host, name);
         let pool = PgPoolOptions::new()
-            .max_connections(97) // 97 is the default limit for postgres. Change this if we ever have
-            // another server connecting. All pools must add up to 97.
+            // 97 is the default connection limit for postgres. All pools must add up
+            // to at most 97. Since we will have at most 2 servers, 48 is an
+            // appropriate value here.
+            .max_connections(48)
             .connect(&database_url)
             .await
             .expect("Unable to create database pool.");
