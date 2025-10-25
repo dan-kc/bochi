@@ -85,7 +85,7 @@
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-backend";
           # This tag is only used locally. ECR doesn't know about this.
-          tag = "latest"; 
+          tag = "latest";
 
           contents = with pkgs; [
             dockerTools.caCertificates
@@ -101,14 +101,15 @@
             };
             Env = [
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              "PATH=${pkgs.curl}/bin"
             ];
           };
         };
-        
+
         packages.flyway-docker = pkgs.dockerTools.buildLayeredImage {
           name = "habit-market-migrations";
           tag = "latest";
-          
+
           contents = with pkgs; [
             dockerTools.caCertificates
             flyway
@@ -119,14 +120,14 @@
             gnused
             jq
           ];
-          
+
           extraCommands = ''
             mkdir -p sql scripts
             cp -r ${./migrations}/* sql/
             cp ${./flyway-entrypoint.sh} scripts/flyway-entrypoint.sh
             chmod +x scripts/flyway-entrypoint.sh
           '';
-          
+
           config = {
             Entrypoint = [ "/scripts/flyway-entrypoint.sh" ];
             WorkingDir = "/";
