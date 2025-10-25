@@ -390,3 +390,71 @@ resource "aws_iam_role_policy_attachment" "circleci_ecs_run_task_attachment" {
   role       = aws_iam_role.circleci_uploader_deployer.name
   policy_arn = aws_iam_policy.circleci_ecs_run_task_policy.arn
 }
+
+# Policy for CircleCI to use CodeDeploy for ECS deployments
+resource "aws_iam_policy" "circleci_codedeploy_policy" {
+  name        = "circleci-codedeploy-policy"
+  description = "Allows CircleCI to trigger CodeDeploy deployments for ECS services"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "codedeploy:CreateDeployment",
+          "codedeploy:GetApplication",
+          "codedeploy:GetDeploymentGroup",
+          "codedeploy:GetDeployment",
+          "codedeploy:GetDeploymentConfig",
+          "codedeploy:RegisterApplicationRevision",
+          "codedeploy:GetApplicationRevision",
+          "codedeploy:PutLifecycleEventHookExecutionStatus"
+        ]
+        Resource = [
+          "arn:aws:codedeploy:eu-west-2:*:application:habit-market-server",
+          "arn:aws:codedeploy:eu-west-2:*:deploymentgroup:habit-market-server/*",
+          "arn:aws:codedeploy:eu-west-2:*:deploymentconfig:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeServices",
+          "ecs:CreateTaskSet",
+          "ecs:UpdateServicePrimaryTaskSet",
+          "ecs:DeleteTaskSet",
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:ModifyListener",
+          "elasticloadbalancing:DescribeRules",
+          "elasticloadbalancing:ModifyRule"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          "arn:aws:iam::*:role/habit-market-server-ecs-task-execution-role",
+          "arn:aws:iam::*:role/habit-market-server-ecs-task-role"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "circleci_codedeploy_attachment" {
+  role       = aws_iam_role.circleci_uploader_deployer.name
+  policy_arn = aws_iam_policy.circleci_codedeploy_policy.arn
+}

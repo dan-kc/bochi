@@ -164,9 +164,17 @@ let
 
     # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
-      DATABASE_NAME="habit_market" \
+      DB_USER="user" \
+      DB_PASSWORD="password" \
+      DB_HOST="localhost" \
+      DB_NAME="habit_market" \
+      JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
+-----END PRIVATE KEY-----" \
+      JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
+-----END PUBLIC KEY-----" \
       LOG_DESTINATION=logs \
-      STATE="DEV" \
       cargo run "$@"
     '';
 
@@ -174,8 +182,16 @@ let
     t = pkgs.writeShellScriptBin "t" ''
       set -e 
       ${clean}/bin/clean test_habit_market
-      DATABASE_NAME="test_habit_market" \
-      STATE="TEST" \
+      DB_USER="user" \
+      DB_PASSWORD="password" \
+      DB_HOST="localhost" \
+      DB_NAME="test_habit_market" \
+      JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
+-----END PRIVATE KEY-----" \
+      JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
+-----END PUBLIC KEY-----" \
       cargo test "$@"
     '';
 

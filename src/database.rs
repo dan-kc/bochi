@@ -8,7 +8,13 @@ pub struct Database {
 }
 
 impl Database {
-    pub async fn new(user: &str, password: &str, host: &str, name: &str) -> Self {
+    pub async fn new() -> Self {
+        // Get configuration from environment variables
+        let user = std::env::var("DB_USER").expect("DB_USER not set");
+        let password = std::env::var("DB_PASSWORD").expect("DB_PASSWORD not set");
+        let host = std::env::var("DB_HOST").expect("DB_HOST not set");
+        let name = std::env::var("DB_NAME").expect("DB_NAME not set");
+
         let database_url = format!("postgres://{}:{}@{}/{}", user, password, host, name);
         let pool = PgPoolOptions::new()
             .max_connections(97) // 97 is the default limit for postgres. Change this if we ever have
