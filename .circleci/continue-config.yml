@@ -249,28 +249,28 @@ jobs:
               --region ${AWS_REGION} \
               --query "services[0].taskDefinition" \
               --output text)
-            
+
             # Get the task definition JSON
             TASK_DEF_JSON=$(aws ecs describe-task-definition \
               --task-definition ${TASK_DEF_ARN} \
               --region ${AWS_REGION} \
               --query "taskDefinition" \
               --output json)
-            
+
             # Remove fields that shouldn't be in the new registration
             NEW_TASK_DEF=$(echo "$TASK_DEF_JSON" | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
-            
+
             # Update the image tag to the new version
             VERSION_TAG="${CIRCLE_SHA1::7}"
             NEW_TASK_DEF=$(echo "$NEW_TASK_DEF" | jq ".containerDefinitions[0].image = \"${ECR_REPOSITORY_URI}:${VERSION_TAG}\"")
-            
+
             # Register the new task definition
             NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
               --cli-input-json "$NEW_TASK_DEF" \
               --region ${AWS_REGION} \
               --query "taskDefinition.taskDefinitionArn" \
               --output text)
-            
+
             echo "New task definition registered: ${NEW_TASK_DEF_ARN}"
             echo "export NEW_TASK_DEF_ARN=${NEW_TASK_DEF_ARN}" >> $BASH_ENV
       - run:
@@ -286,7 +286,7 @@ jobs:
               --region ${AWS_REGION} \
               --query "deploymentId" \
               --output text)
-            
+
             echo "Deployment initiated: ${DEPLOYMENT_ID}"
             echo "export DEPLOYMENT_ID=${DEPLOYMENT_ID}" >> $BASH_ENV
             echo "Deployment URL: https://console.aws.amazon.com/codesuite/codedeploy/deployments/${DEPLOYMENT_ID}?region=${AWS_REGION}"
@@ -295,11 +295,11 @@ jobs:
           command: |
             # Wait for deployment to complete (with timeout)
             echo "Waiting for deployment to complete..."
-            
+
             # Poll deployment status
             MAX_ATTEMPTS=60  # 30 minutes max (30 seconds * 60)
             ATTEMPT=0
-            
+
             while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
               STATUS=$(aws deploy get-deployment \
                 --deployment-id ${DEPLOYMENT_ID} \
@@ -338,35 +338,57 @@ jobs:
               
               ATTEMPT=$((ATTEMPT + 1))
             done
-            
+
             echo "Deployment timed out after 30 minutes"
             exit 1
 
 workflows:
-  ci:
+  server-only-workflow:
     when:
-      or:
+      and:
         - << pipeline.parameters.server-change >>
-        - << pipeline.parameters.migration >>
+        - not: << pipeline.parameters.migration >>
     jobs:
       - check
-
       - build_upload_server_image:
           requires:
             - check
-          when:
-            - << pipeline.parameters.server-change >>
+      # - deploy_server_image:
+      #     requires:
+      #       - build_upload_server_image
 
+  migration-only-workflow:
+    when:
+      and:
+        - << pipeline.parameters.migration >>
+        - not: << pipeline.parameters.server-change >>
+    jobs:
+      - check
       - build_upload_migration_image:
           requires:
             - check
-          when:
-            - << pipeline.parameters.migration >>
-
       - deploy_migration_image:
           requires:
             - build_upload_migration_image
 
+  both-workflow:
+    when:
+      and:
+        - << pipeline.parameters.server-change >>
+        - << pipeline.parameters.migration >>
+    jobs:
+      - check
+      - build_upload_server_image:
+          requires:
+            - check
+      - build_upload_migration_image:
+          requires:
+            - check
+      - deploy_migration_image:
+          requires:
+            - build_upload_migration_image
+            - build_upload_server_image
       # - deploy_server_image:
       #     requires:
       #       - build_upload_server_image
+      #       - deploy_migration_image
