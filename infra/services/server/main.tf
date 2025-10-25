@@ -382,7 +382,6 @@ resource "aws_ecs_service" "habit_market_server" {
   depends_on = [
     aws_lb_listener.habit_market_server,
     aws_iam_role_policy.ecs_task_execution_secrets,
-    aws_iam_role_policy.ecs_task_secrets
   ]
 
   tags = {
