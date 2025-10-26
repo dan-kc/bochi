@@ -136,6 +136,8 @@ jobs:
     docker:
       - image: cimg/base:2025.10
     steps:
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
           name: Run Database Migrations via ECS Fargate
           command: |
@@ -214,129 +216,36 @@ jobs:
       - aws-cli/setup:
           role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
-          name: Create appspec.json for CodeDeploy
+          name: Update ECS Service with New Image
           command: |
-            cat > /tmp/appspec.json <<EOF
-            {
-              "version": 0.0,
-              "Resources": [
-                {
-                  "TargetService": {
-                    "Type": "AWS::ECS::Service",
-                    "Properties": {
-                      "TaskDefinition": "habit-market-server",
-                      "LoadBalancerInfo": {
-                        "ContainerName": "habit-market-server",
-                        "ContainerPort": 8080
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-            EOF
-      - run:
-          name: Register new task definition revision
-          command: |
-            # Get the current task definition
-            TASK_DEF_ARN=$(aws ecs describe-services \
+            echo "Triggering ECS rolling update with new image..."
+            
+            # Force a new deployment with the latest image
+            # ECS will pull the :latest tag which we just pushed in the build job
+            aws ecs update-service \
+              --cluster habit-market-cluster \
+              --service habit-market-server \
+              --force-new-deployment \
+              --region ${AWS_REGION}
+            
+            echo "Rolling update initiated. Waiting for service to stabilize..."
+            
+            # Wait for the service to become stable (all tasks running and healthy)
+            # This will timeout after 10 minutes by default
+            aws ecs wait services-stable \
+              --cluster habit-market-cluster \
+              --services habit-market-server \
+              --region ${AWS_REGION}
+            
+            echo "Deployment completed successfully!"
+            
+            # Get the current service status
+            aws ecs describe-services \
               --cluster habit-market-cluster \
               --services habit-market-server \
               --region ${AWS_REGION} \
-              --query "services[0].taskDefinition" \
-              --output text)
-
-            # Get the task definition JSON
-            TASK_DEF_JSON=$(aws ecs describe-task-definition \
-              --task-definition ${TASK_DEF_ARN} \
-              --region ${AWS_REGION} \
-              --query "taskDefinition" \
-              --output json)
-
-            # Remove fields that shouldn't be in the new registration
-            NEW_TASK_DEF=$(echo "$TASK_DEF_JSON" | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
-
-            # Update the image tag to the new version
-            VERSION_TAG="${CIRCLE_SHA1::7}"
-            NEW_TASK_DEF=$(echo "$NEW_TASK_DEF" | jq ".containerDefinitions[0].image = \"${ECR_REPOSITORY_URI}:${VERSION_TAG}\"")
-
-            # Register the new task definition
-            NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
-              --cli-input-json "$NEW_TASK_DEF" \
-              --region ${AWS_REGION} \
-              --query "taskDefinition.taskDefinitionArn" \
-              --output text)
-
-            echo "New task definition registered: ${NEW_TASK_DEF_ARN}"
-            echo "export NEW_TASK_DEF_ARN=${NEW_TASK_DEF_ARN}" >> $BASH_ENV
-      - run:
-          name: Trigger CodeDeploy Deployment
-          command: |
-            # Create deployment with canary configuration
-            DEPLOYMENT_ID=$(aws deploy create-deployment \
-              --application-name habit-market-server \
-              --deployment-group-name habit-market-server-deployment-group \
-              --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": "'$(cat /tmp/appspec.json | jq -Rs .)'", "sha256": "'$(sha256sum /tmp/appspec.json | cut -d' ' -f1)'"}}' \
-              --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-              --description "Deployment of version ${CIRCLE_SHA1::7} from CircleCI build #${CIRCLE_BUILD_NUM}" \
-              --region ${AWS_REGION} \
-              --query "deploymentId" \
-              --output text)
-
-            echo "Deployment initiated: ${DEPLOYMENT_ID}"
-            echo "export DEPLOYMENT_ID=${DEPLOYMENT_ID}" >> $BASH_ENV
-            echo "Deployment URL: https://console.aws.amazon.com/codesuite/codedeploy/deployments/${DEPLOYMENT_ID}?region=${AWS_REGION}"
-      - run:
-          name: Wait for Deployment Completion
-          command: |
-            # Wait for deployment to complete (with timeout)
-            echo "Waiting for deployment to complete..."
-
-            # Poll deployment status
-            MAX_ATTEMPTS=60  # 30 minutes max (30 seconds * 60)
-            ATTEMPT=0
-
-            while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-              STATUS=$(aws deploy get-deployment \
-                --deployment-id ${DEPLOYMENT_ID} \
-                --region ${AWS_REGION} \
-                --query "deploymentInfo.status" \
-                --output text)
-              
-              echo "Deployment status: ${STATUS}"
-              
-              case ${STATUS} in
-                "Succeeded")
-                  echo "Deployment completed successfully!"
-                  exit 0
-                  ;;
-                "Failed"|"Stopped")
-                  echo "Deployment failed with status: ${STATUS}"
-                  
-                  # Get deployment details for debugging
-                  aws deploy get-deployment \
-                    --deployment-id ${DEPLOYMENT_ID} \
-                    --region ${AWS_REGION} \
-                    --query "deploymentInfo.errorInformation" \
-                    --output json
-                  
-                  exit 1
-                  ;;
-                "InProgress"|"Queued"|"Created"|"Ready")
-                  echo "Deployment still in progress..."
-                  sleep 30
-                  ;;
-                *)
-                  echo "Unknown deployment status: ${STATUS}"
-                  exit 1
-                  ;;
-              esac
-              
-              ATTEMPT=$((ATTEMPT + 1))
-            done
-
-            echo "Deployment timed out after 30 minutes"
-            exit 1
+              --query "services[0].{DesiredCount:desiredCount,RunningCount:runningCount,PendingCount:pendingCount}" \
+              --output table
 
 workflows:
   server-only-workflow:
@@ -345,13 +254,13 @@ workflows:
         - << pipeline.parameters.server-change >>
         - not: << pipeline.parameters.migration >>
     jobs:
-      # - check
-      - build_upload_server_image
-          # requires:
-          #   - check
-      # - deploy_server_image:
-      #     requires:
-      #       - build_upload_server_image
+      - check
+      - build_upload_server_image:
+          requires:
+            - check
+      - deploy_server_image:
+          requires:
+            - build_upload_server_image
 
   migration-only-workflow:
     when:
@@ -384,7 +293,7 @@ workflows:
           requires:
             - build_upload_migration_image
             - build_upload_server_image
-      # - deploy_server_image:
-      #     requires:
-      #       - build_upload_server_image
-      #       - deploy_migration_image
+      - deploy_server_image:
+          requires:
+            - build_upload_server_image
+            - deploy_migration_image

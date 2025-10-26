@@ -89,7 +89,6 @@
 
           contents = with pkgs; [
             dockerTools.caCertificates
-            curl
             self.packages.${system}.server
           ];
 
@@ -101,7 +100,6 @@
             };
             Env = [
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-              "PATH=${pkgs.curl}/bin"
             ];
           };
         };

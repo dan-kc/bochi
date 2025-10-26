@@ -193,7 +193,7 @@ resource "aws_autoscaling_group" "ecs_instances" {
   name                = "habit-market-ecs-asg"
   vpc_zone_identifier = var.private_subnet_ids
   min_size            = 1
-  max_size            = 2 # Allow scaling to 2 instances for canary deployments
+  max_size            = 2 # Allow scaling to 2 instances for rolling deployments
   desired_capacity    = 1
 
   launch_template {
@@ -254,7 +254,7 @@ resource "aws_ecs_cluster_capacity_providers" "habit_market" {
   }
 }
 
-# Blue Target Group for ALB
+# Target Group for ALB
 resource "aws_lb_target_group" "habit_market_server" {
   name     = "habit-market-server-tg-blue"
   port     = 8080 # Expect traffic on port 8080 from the load balancer.
@@ -281,105 +281,25 @@ resource "aws_lb_target_group" "habit_market_server" {
   }
 }
 
-# Green Target Group for ALB (The new one)
-resource "aws_lb_target_group" "habit_market_server_green" {
-  name        = "habit-market-server-tg-green"
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  deregistration_delay = 30
-
-  tags = {
-    Name = "habit-market-server-tg-green"
-  }
-}
-
-# CodeDeploy Application
-resource "aws_codedeploy_app" "habit_market_server" {
-  name             = "habit-market-server"
-  compute_platform = "ECS"
-
-  tags = {
-    Name = "habit-market-server-codedeploy-app"
-  }
-}
-
-# CodeDeploy Deployment Group
-resource "aws_codedeploy_deployment_group" "habit_market_server" {
-  app_name              = aws_codedeploy_app.habit_market_server.name
-  deployment_group_name = "habit-market-server-deployment-group"
-  service_role_arn      = aws_iam_role.codedeploy.arn
-
-  deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
-
-  deployment_style {
-    deployment_type   = "BLUE_GREEN"
-    deployment_option = "WITH_TRAFFIC_CONTROL"
-  }
-
-  ecs_service {
-    cluster_name = var.ecs_cluster_name
-    service_name = aws_ecs_service.habit_market_server.name
-  }
-
-  blue_green_deployment_config {
-    terminate_blue_instances_on_deployment_success {
-      action                           = "TERMINATE"
-      termination_wait_time_in_minutes = 5
-    }
-
-    deployment_ready_option {
-      action_on_timeout = "CONTINUE_DEPLOYMENT"
-    }
-  }
-
-  load_balancer_info {
-    target_group_pair_info {
-      prod_traffic_route {
-        listener_arns = [aws_lb_listener.habit_market_server.arn]
-      }
-
-      target_group {
-        name = aws_lb_target_group.habit_market_server.name
-      }
-
-      target_group {
-        name = aws_lb_target_group.habit_market_server_green.name
-      }
-    }
-  }
-
-  auto_rollback_configuration {
-    enabled = true
-    events  = ["DEPLOYMENT_FAILURE", "DEPLOYMENT_STOP_ON_ALARM"]
-  }
-
-  tags = {
-    Name = "habit-market-server-deployment-group"
-  }
-}
-
-# ECS Service
+# ECS Service with Rolling Updates
 resource "aws_ecs_service" "habit_market_server" {
   name            = "habit-market-server"
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.habit_market_server.arn
-  desired_count   = 1
+  desired_count   = 1  # Single task, ECS will scale to 2 during rolling updates
 
   deployment_controller {
-    type = "CODE_DEPLOY"
+    type = "ECS"  # Use ECS deployment controller for rolling updates
+  }
+
+  # Rolling update configuration
+  deployment_minimum_healthy_percent = 100  # Never drop below 100% capacity
+  deployment_maximum_percent         = 200  # Allow double capacity during deployment
+
+  # Circuit breaker for automatic rollback
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   capacity_provider_strategy {
@@ -400,6 +320,8 @@ resource "aws_ecs_service" "habit_market_server" {
     container_port   = 8080
   }
 
+  health_check_grace_period_seconds = 60  # Give container time to start
+
   depends_on = [
     aws_lb_listener.habit_market_server,
     aws_iam_role_policy.ecs_task_execution_secrets,
@@ -407,46 +329,6 @@ resource "aws_ecs_service" "habit_market_server" {
 
   tags = {
     Name = "habit-market-server-service"
-  }
-
-  # Do not consider changes to the task_definition and load_balancer 
-  # attributes as reasons to update or replace the ECS service 
-  # after its initial creation.
-
-  # - Normally, when you update your task_definition (e.g., change 
-  #   the Docker image, add environment variables), Terraform would 
-  #   want to update the task_definition attribute on the aws_ecs_service.
-
-  # - However, with CodeDeploy, CodeDeploy itself manages the update of 
-  #   the task_definition for the ECS service during a blue/green 
-  #   deployment. When CodeDeploy creates the new "green" version of 
-  #   the service, it updates the task_definition to point to the new one.
-
-  # - If Terraform were to try to update task_definition concurrently or 
-  #   based on its own plan, it could conflict with or break CodeDeploy's 
-  #   process. By ignoring it, you're telling Terraform to trust CodeDeploy 
-  #   to handle the task_definition updates.
-
-  # - Similarly, the load_balancer block within an ECS service defines the 
-  #   initial (blue) target group that the service is connected to.
-
-  # - During a blue/green deployment, CodeDeploy is responsible for shifting 
-  #   traffic between the initial ("blue") target group and the new 
-  #   ("green") target group. It does this by modifying the ALB listener 
-  #   rules, not by changing the load_balancer configuration on the ECS 
-  #   service itself (which always points to the "blue" group, and the 
-  #   "green" group is dynamically registered/deregistered by CodeDeploy).
-  #
-  # - If Terraform were to try and manage changes to this load_balancer block 
-  #   after CodeDeploy takes over, it could interfere with the traffic routing 
-  #   managed by CodeDeploy.
-
-  # In essence, lifecycle { ignore_changes = [...] } in this context allows 
-  # Terraform to manage the initial setup of the ECS service, but then cede 
-  # control over task_definition and load_balancer updates to AWS CodeDeploy, 
-  # preventing potential conflicts during subsequent deployments.
-  lifecycle {
-    ignore_changes = [task_definition, load_balancer]
   }
 }
 

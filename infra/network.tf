@@ -133,6 +133,7 @@ resource "aws_security_group" "vpc_endpoints" {
 }
 
 # VPC Endpoint for Secrets Manager
+## HERE
 resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id              = aws_vpc.habit_market.id
   service_name        = "com.amazonaws.eu-west-2.secretsmanager"

@@ -102,34 +102,3 @@ resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "habit-market-ecs-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
 }
-
-# CODEDEPLOY
-# This role gives AWS CodeDeploy the permissions
-# it needs to interact with ECS, Elastic Load Balancing (ELB), and
-# other services to perform deployments.
-resource "aws_iam_role" "codedeploy" {
-  name = "habit-market-codedeploy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "codedeploy.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "habit-market-codedeploy-role"
-  }
-}
-resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
-  role = aws_iam_role.codedeploy.name
-  # A managed policy that gives CodeDeploy the necessary permissions for ECS blue/green deployments.
-  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
-}
-
