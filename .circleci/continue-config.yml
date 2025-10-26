@@ -223,7 +223,7 @@ jobs:
             # Force a new deployment with the latest image
             # ECS will pull the :latest tag which we just pushed in the build job
             aws ecs update-service \
-              --cluster habit-market-cluster \
+              --cluster habit_market_cluster \
               --service habit-market-server \
               --force-new-deployment \
               --region ${AWS_REGION}
@@ -233,7 +233,7 @@ jobs:
             # Wait for the service to become stable (all tasks running and healthy)
             # This will timeout after 10 minutes by default
             aws ecs wait services-stable \
-              --cluster habit-market-cluster \
+              --cluster habit_market_cluster \
               --services habit-market-server \
               --region ${AWS_REGION}
             
@@ -241,7 +241,7 @@ jobs:
             
             # Get the current service status
             aws ecs describe-services \
-              --cluster habit-market-cluster \
+              --cluster habit_market_cluster \
               --services habit-market-server \
               --region ${AWS_REGION} \
               --query "services[0].{DesiredCount:desiredCount,RunningCount:runningCount,PendingCount:pendingCount}" \
