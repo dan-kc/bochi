@@ -78,16 +78,16 @@ pub async fn router() -> axum::Router {
         .nest("/auth", auth_router)
         .layer(cors)
         .layer(
+            // This will make all routes implicitly have a:
+            // #[tracing::instrument(level = Level::INFO, ...)]
             TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                 let request_id = uuid::Uuid::new_v4().to_string();
-
                 tracing::span!(
-                    Level::DEBUG,
+                    Level::INFO,
                     "request",
                     %request_id,
                     method = ?request.method(),
                     uri = %request.uri(),
-                    version = ?request.version(),
                 )
             }),
         )

@@ -282,6 +282,7 @@ pub async fn health() -> Response {
 }
 
 pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+
 #[debug_handler]
 pub async fn graphql(
     Extension(schema): Extension<ServiceSchema>,
@@ -289,12 +290,12 @@ pub async fn graphql(
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     let inner_req = req.into_inner();
+    let operation_name = inner_req
+        .operation_name
+        .as_deref()
+        .unwrap_or("unnamed_operation");
 
-    // Log the GraphQL operation details
-    info!(
-        query = %inner_req.query, // % uses Display to print
-        "GraphQL operation",
-    );
+    info!(graphql.operation_name = operation_name, "GraphQL operation",);
 
     schema.execute(inner_req.data(auth_status)).await.into()
 }
