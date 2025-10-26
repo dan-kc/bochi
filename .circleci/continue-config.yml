@@ -217,6 +217,7 @@ jobs:
           role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
       - run:
           name: Update ECS Service with New Image
+          no_output_timeout: 15m
           command: |
             echo "Triggering ECS rolling update with new image..."
             
