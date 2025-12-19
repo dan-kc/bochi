@@ -9,6 +9,7 @@ pub mod jwt {
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
     use rand::Rng;
     use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
 
     use super::{generate_refresh_token, hash_password};
 
@@ -20,8 +21,8 @@ pub mod jwt {
 
     impl Claims {
         // access the sub (user_id). This must be a string in Claims.
-        pub fn sub(&self) -> i32 {
-            self.sub.parse::<i32>().unwrap()
+        pub fn sub(&self) -> Uuid {
+            self.sub.parse::<Uuid>().unwrap()
         }
     }
 
@@ -47,7 +48,7 @@ pub mod jwt {
         }
 
         // Validates the jwt, returning the user's id if all is well.
-        pub fn validate(&self, jwt: &str) -> Option<i32> {
+        pub fn validate(&self, jwt: &str) -> Option<Uuid> {
             if let Ok(token_data) =
                 jsonwebtoken::decode::<Claims>(jwt, &self.decoding_key, &self.validation)
             {
@@ -58,7 +59,7 @@ pub mod jwt {
         }
 
         /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
-        pub fn create(&self, user_id: i32, name: &str) -> (String, String, String) {
+        pub fn create(&self, user_id: Uuid, name: &str) -> (String, String, String) {
             let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
             let claims = Claims {
                 exp: time_in_half_an_hour,
@@ -93,20 +94,20 @@ pub mod jwt {
     }
 }
 
-pub fn parse_refresh_token(refresh_token: &str) -> Result<(i32, String, String), Error> {
+pub fn parse_refresh_token(refresh_token: &str) -> Result<(Uuid, String, String), Error> {
     let parts: Vec<&str> = refresh_token.split('$').collect();
     if parts.len() != 3 {
         return Err(Error::FailedToParseRefreshToken);
     };
-    let user_id: i32 = parts[0]
+    let user_id: Uuid = parts[0]
         .parse()
         .map_err(|_| Error::FailedToParseRefreshToken)?;
 
     Ok((user_id, parts[1].to_string(), parts[2].to_string()))
 }
 
-fn generate_refresh_token(user_id: i32, name: &str) -> (String, String) {
-    let mut refresh_token = String::with_capacity(10 + 1 + 10 + 1 + 36);
+fn generate_refresh_token(user_id: Uuid, name: &str) -> (String, String) {
+    let mut refresh_token = String::with_capacity(36 + 1 + 10 + 1 + 36);
     refresh_token.push_str(user_id.to_string().as_str());
     refresh_token.push('$');
     refresh_token.push_str(name);

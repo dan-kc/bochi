@@ -2,6 +2,7 @@ use crate::graphql::mutations::{CreateRewardInput, CreateTaskInput};
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use url::form_urlencoded;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct Database {
@@ -41,8 +42,8 @@ impl Database {
         &self,
         email: &str,
         hashed_password: &str,
-    ) -> Result<i32, sqlx::Error> {
-        let (user_id,): (i32,) =
+    ) -> Result<Uuid, sqlx::Error> {
+        let (user_id,): (Uuid,) =
             sqlx::query_as("INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id")
                 .bind(email)
                 .bind(hashed_password)
@@ -145,7 +146,7 @@ impl Database {
     pub async fn create_or_overwrite_refresh_token(
         &self,
         refresh_token: &str,
-        user_id: i32,
+        user_id: Uuid,
         name: &str,
         is_api_key: bool,
     ) -> Result<RefreshTokenRow, sqlx::Error> {
@@ -174,7 +175,7 @@ impl Database {
 
     pub async fn delete_refresh_token_by_user_and_name(
         &self,
-        user_id: i32,
+        user_id: Uuid,
         name: &str,
     ) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM refresh_tokens WHERE user_id = $1 AND name = $2")
@@ -189,7 +190,7 @@ impl Database {
     pub async fn get_refresh_token_from_name_user(
         &self,
         name: &str,
-        user_id: i32,
+        user_id: Uuid,
     ) -> Result<RefreshTokenRow, sqlx::Error> {
         sqlx::query_as(
             "
@@ -220,14 +221,14 @@ impl Database {
 }
 
 pub struct CreateTaskOptions {
-    pub user_id: i32,
+    pub user_id: Uuid,
     pub name: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
 }
 impl CreateTaskOptions {
-    pub fn new(input: CreateTaskInput, user_id: i32) -> Self {
+    pub fn new(input: CreateTaskInput, user_id: Uuid) -> Self {
         Self {
             user_id,
             name: input.name,
@@ -239,12 +240,12 @@ impl CreateTaskOptions {
 }
 
 pub struct CreateTradeWithTaskOptions {
-    user_id: i32,
-    task_id: i32,
+    user_id: Uuid,
+    task_id: Uuid,
     amount: i32,
 }
 impl CreateTradeWithTaskOptions {
-    pub fn new(user_id: i32, task_id: i32, amount: i32) -> Self {
+    pub fn new(user_id: Uuid, task_id: Uuid, amount: i32) -> Self {
         Self {
             user_id: user_id,
             task_id: task_id,
@@ -254,12 +255,12 @@ impl CreateTradeWithTaskOptions {
 }
 
 pub struct CreateTradeWithRewardOptions {
-    user_id: i32,
-    reward_id: i32,
+    user_id: Uuid,
+    reward_id: Uuid,
     amount: i32,
 }
 impl CreateTradeWithRewardOptions {
-    pub fn new(user_id: i32, reward_id: i32, amount: i32) -> Self {
+    pub fn new(user_id: Uuid, reward_id: Uuid, amount: i32) -> Self {
         Self {
             user_id: user_id,
             reward_id: reward_id,
@@ -269,14 +270,14 @@ impl CreateTradeWithRewardOptions {
 }
 
 pub struct CreateRewardOptions {
-    pub user_id: i32,
+    pub user_id: Uuid,
     pub name: String,
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
 }
 impl CreateRewardOptions {
-    pub fn new(input: CreateRewardInput, user_id: i32) -> Self {
+    pub fn new(input: CreateRewardInput, user_id: Uuid) -> Self {
         Self {
             user_id,
             name: input.name,
@@ -289,7 +290,7 @@ impl CreateRewardOptions {
 
 #[derive(sqlx::FromRow)]
 pub struct UserRow {
-    pub id: i32,
+    pub id: Uuid,
     #[allow(dead_code)]
     pub email: String,
     pub password: String,
@@ -305,7 +306,7 @@ pub struct RefreshTokenRow {
 
 #[derive(sqlx::FromRow)]
 pub struct TaskRow {
-    pub id: i32,
+    pub id: Uuid,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -316,7 +317,7 @@ pub struct TaskRow {
 
 #[derive(sqlx::FromRow)]
 pub struct RewardRow {
-    pub id: i32,
+    pub id: Uuid,
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
@@ -327,10 +328,10 @@ pub struct RewardRow {
 
 #[derive(sqlx::FromRow)]
 pub struct TradeWithTaskRow {
-    pub id: i32,
+    pub id: Uuid,
     pub created_at: NaiveDateTime,
     pub amount: i32,
-    pub task_id: i32,
+    pub task_id: Uuid,
 
     // Task join
     pub task_name: String,
@@ -343,10 +344,10 @@ pub struct TradeWithTaskRow {
 
 #[derive(sqlx::FromRow)]
 pub struct TradeWithRewardRow {
-    pub id: i32,
+    pub id: Uuid,
     pub created_at: NaiveDateTime,
     pub amount: i32,
-    pub reward_id: i32,
+    pub reward_id: Uuid,
 
     // Task join
     pub reward_name: String,

@@ -1,6 +1,7 @@
-# Do no do until launch:
+## Do no do until launch:
 
 - Monitoring (prometheus for application level monitoring, cloudwatch for OS monitoring) (or maybe do it?)
+- Local first architecture (probably use PowerSync when the time comes)
 
 ## Local development:
 

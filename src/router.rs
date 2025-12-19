@@ -14,6 +14,7 @@ use axum::{
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{info, Level};
+use uuid::Uuid;
 
 /// Stuff we need in every route and all middleware. This is seperate to what we need in gql
 /// resolvers.
@@ -97,7 +98,7 @@ pub async fn router() -> axum::Router {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
-    pub user_id: i32,
+    pub user_id: Uuid,
 }
 
 async fn auth(State(app): State<App>, mut req: Request, next: Next) -> Response {

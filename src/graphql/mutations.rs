@@ -11,6 +11,7 @@ use crate::{
 };
 use async_graphql::{ErrorExtensionValues, InputObject, Object};
 use chrono::{NaiveDateTime, Utc};
+use uuid::Uuid;
 
 pub struct MutationRoot;
 
@@ -64,8 +65,8 @@ pub struct CreateRewardInput {
 
 #[derive(InputObject)]
 pub struct CreateTradeInput {
-    pub task_id: Option<i32>,
-    pub reward_id: Option<i32>,
+    pub task_id: Option<String>,
+    pub reward_id: Option<String>,
 }
 
 #[Object]
@@ -214,7 +215,10 @@ impl MutationRoot {
             .user_id;
 
         if input.task_id.is_some() {
-            let opts = CreateTradeWithTaskOptions::new(user_id, input.task_id.unwrap(), 1000);
+            let task_id = input.task_id.unwrap().parse::<Uuid>().map_err(|_| {
+                Error::Validation("Invalid task_id format".to_string()).into_graphql_error()
+            })?;
+            let opts = CreateTradeWithTaskOptions::new(user_id, task_id, 1000);
             let trade_row = database.create_trade_with_task(opts).await.map_err(|e| {
                 error!("Database Error: {:?}", e);
                 Error::Internal.into_graphql_error()
@@ -222,7 +226,10 @@ impl MutationRoot {
 
             Ok(trade_row.into())
         } else {
-            let opts = CreateTradeWithRewardOptions::new(user_id, input.reward_id.unwrap(), 1000);
+            let reward_id = input.reward_id.unwrap().parse::<Uuid>().map_err(|_| {
+                Error::Validation("Invalid reward_id format".to_string()).into_graphql_error()
+            })?;
+            let opts = CreateTradeWithRewardOptions::new(user_id, reward_id, 1000);
             let trade_row = database.create_trade_with_reward(opts).await.map_err(|e| {
                 error!("Database Error: {:?}", e);
                 Error::Internal.into_graphql_error()

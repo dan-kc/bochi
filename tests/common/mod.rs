@@ -153,6 +153,9 @@ pub async fn get_access_token_for_user(email: &str, password: &str) -> String {
 
     json.get("accessToken")
         .and_then(|v| v.as_str())
-        .expect("Login response should contain accessToken")
+        .unwrap_or_else(|| {
+            eprintln!("Login response body: {}", serde_json::to_string_pretty(&json).unwrap());
+            panic!("Login response should contain accessToken");
+        })
         .to_string()
 }

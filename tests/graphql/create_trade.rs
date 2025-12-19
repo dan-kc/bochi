@@ -41,7 +41,7 @@ async fn test_create_trade_with_task_success() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Now create a trade with the task
@@ -149,7 +149,7 @@ async fn test_create_trade_with_reward_success() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Now create a trade with the reward
@@ -252,7 +252,7 @@ async fn test_create_trade_with_both_task_and_reward() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Create a reward
@@ -280,7 +280,7 @@ async fn test_create_trade_with_both_task_and_reward() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Try to create a trade with both
@@ -392,7 +392,7 @@ async fn test_create_trade_without_authentication() {
         }",
         "variables": {
             "input": {
-                "taskId": 1,
+                "taskId": "079d9887-79f9-4bdf-a341-2d5990a694e1",
             }
         }
     });
@@ -424,7 +424,7 @@ async fn test_create_trade_with_invalid_auth_token() {
         }",
         "variables": {
             "input": {
-                "taskId": 1,
+                "taskId": "1d85a35e-f39f-4f60-9015-f449d3f97ed2",
             }
         }
     });
@@ -464,7 +464,7 @@ async fn test_create_trade_with_nonexistent_task() {
         }",
         "variables": {
             "input": {
-                "taskId": 99999,
+                "taskId": "2d452d8f-f87a-4d6b-b16a-acdfcbea1fff",
             }
         }
     });
@@ -508,7 +508,7 @@ async fn test_create_trade_with_nonexistent_reward() {
         }",
         "variables": {
             "input": {
-                "rewardId": 99999,
+                "rewardId": "e1633515-d8b9-4ae2-bc93-5f2b3b0956fc",
             }
         }
     });
@@ -569,7 +569,7 @@ async fn test_create_trade_interface_fields() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Query for interface fields only
@@ -604,7 +604,7 @@ async fn test_create_trade_interface_fields() {
     assert_eq!(trade.get("amount").unwrap(), 1000);
 
     let tradable_item = trade.get("tradableItem").unwrap();
-    assert_eq!(tradable_item.get("id").unwrap().as_i64().unwrap(), task_id);
+    assert_eq!(tradable_item.get("id").unwrap().as_str().unwrap(), task_id);
     assert_eq!(tradable_item.get("name").unwrap(), "Test Task with Dates");
     assert_eq!(
         tradable_item.get("description").unwrap(),
@@ -658,7 +658,7 @@ async fn test_create_trade_query_specific_type_fields() {
         .unwrap()
         .get("id")
         .unwrap()
-        .as_i64()
+        .as_str()
         .unwrap();
 
     // Query with inline fragments to get type-specific fields
