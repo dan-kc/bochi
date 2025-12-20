@@ -77,8 +77,8 @@ let
       export PGHOST=localhost
       createuser -U $USER user 2>/dev/null || echo "  ✓ User 'user' already exists"
       psql -U $USER -d postgres -c "ALTER USER \"user\" WITH PASSWORD 'password';" 2>/dev/null || true
-      createdb -U $USER -O user habit_market 2>/dev/null || echo "  ✓ Database 'habit_market' already exists"
-      createdb -U $USER -O user test_habit_market 2>/dev/null || echo "  ✓ Database 'test_habit_market' already exists"
+      createdb -U $USER -O user tofustash 2>/dev/null || echo "  ✓ Database 'tofustash' already exists"
+      createdb -U $USER -O user tofustash_test 2>/dev/null || echo "  ✓ Database 'tofustash_test' already exists"
       echo "PostgreSQL started successfully"
     '';
 
@@ -168,7 +168,7 @@ let
       DB_USER="user" \
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
-      DB_NAME="habit_market" \
+      DB_NAME="tofu_stash" \
       SSL_MODE="disable" \
       JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
@@ -183,11 +183,11 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
       set -e 
-      ${clean}/bin/clean test_habit_market
+      ${clean}/bin/clean tofustash_test
       DB_USER="user" \
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
-      DB_NAME="test_habit_market" \
+      DB_NAME="tofustash_test" \
       SSL_MODE="disable" \
       JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
@@ -198,12 +198,12 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
       cargo test "$@"
     '';
 
-    # Kills all habit_market processes
+    # Kills all tofustash processes
     kp = pkgs.writeShellScriptBin "kp" ''
-      	pkill -f habit-market-backend
+      	pkill -f tofustash
     '';
 
-    # Displays the schema of a database table in habit_market
+    # Displays the schema of a database table in tofustash
     schema = pkgs.writeShellScriptBin "schema" ''
       set -e 
       if [ -z "$1" ]; then
@@ -211,19 +211,19 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
         exit 1
       fi
       TABLE_NAME="$1"
-      PGPASSWORD=password psql -h localhost -U user -d habit_market -P pager=off -c "\d+ ''${TABLE_NAME}"
+      PGPASSWORD=password psql -h localhost -U user -d tofustash -P pager=off -c "\d+ ''${TABLE_NAME}"
     '';
 
     # Flyway wrapper with config
     fw = pkgs.writeShellScriptBin "fw" ''
       set -e 
-      # Use the first argument as DATABASE_NAME if provided, otherwise default to habit_market
+      # Use the first argument as DATABASE_NAME if provided, otherwise default to tofustash
       # Shift removes the first argument so "$@" correctly passes remaining arguments
       if [ -n "$1" ]; then
         DATABASE_NAME="$1"
         shift
       else
-        DATABASE_NAME="habit_market" # Default database name
+        DATABASE_NAME="tofustash" # Default database name
       fi
 
       echo "Using database: ''${DATABASE_NAME}"
@@ -249,7 +249,7 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
         exit 1
       fi
       DB_NAME="$1"
-      echo "Killing any running habit-market-backend processes..."
+      echo "Killing any running tofustash processes..."
       ${kp}/bin/kp
       echo "Dropping existing database..."
       PGPASSWORD=password psql -h localhost -U user -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
