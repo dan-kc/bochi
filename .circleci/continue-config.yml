@@ -58,7 +58,7 @@ jobs:
               cargo fmt --all --check
               cargo check
               start
-              fw test_habit_market migrate
+              fw tofustash_test migrate
               t
             "
 
@@ -87,7 +87,7 @@ jobs:
             #!/bin/bash -eo pipefail
             docker load --input server-image.tar.gz
 
-            IMAGE_NAME="habit-market-backend" # As defined in the flake.nix
+            IMAGE_NAME="tofustash-backend" # As defined in the flake.nix
             IMAGE_TAG="latest"
             VERSION_TAG="${CIRCLE_SHA1::7}"
 
@@ -122,8 +122,8 @@ jobs:
             #!/bin/bash -eo pipefail
             docker load --input flyway-image.tar.gz
 
-            FLYWAY_IMAGE_NAME="habit-market-migrations" # As defined in the flake.nix
-            FLYWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/habit-market-migration"
+            FLYWAY_IMAGE_NAME="tofustash-migrations" # As defined in the flake.nix
+            FLYWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tofustash-migration"
 
             docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:latest"
             docker tag ${FLYWAY_IMAGE_NAME} "${FLYWAY_ECR_URI}:${CIRCLE_SHA1::7}"
@@ -144,20 +144,20 @@ jobs:
             #!/bin/bash -eo pipefail
 
             # Define ECS cluster and task definition
-            CLUSTER_NAME="habit_market_cluster"
-            TASK_DEFINITION="habit-market-migrations"
+            CLUSTER_NAME="tofustash_cluster"
+            TASK_DEFINITION="tofustash-migrations"
 
             # Get subnet IDs from AWS (you could also hardcode or use parameter store)
             SUBNET_IDS=$(aws ec2 describe-subnets \
               --region ${AWS_REGION} \
-              --filters "Name=tag:Name,Values=habit-market-private-subnet*" \
+              --filters "Name=tag:Name,Values=tofustash-private-subnet*" \
               --query "Subnets[*].SubnetId" \
               --output text | tr '\t' ',')
 
             # Get security group for migration tasks
             SECURITY_GROUP=$(aws ec2 describe-security-groups \
               --region ${AWS_REGION} \
-              --filters "Name=group-name,Values=habit-market-migration-task-sg" \
+              --filters "Name=group-name,Values=tofustash-migration-task-sg" \
               --query "SecurityGroups[0].GroupId" \
               --output text)
 
@@ -192,7 +192,7 @@ jobs:
               echo "Migration failed with exit code: ${EXIT_CODE}"
               
               # Get logs
-              LOG_GROUP="/ecs/habit-market-migrations"
+              LOG_GROUP="/ecs/tofustash-migrations"
               TASK_ID=$(echo ${TASK_ARN} | awk -F/ '{print $NF}')
               LOG_STREAM="flyway/flyway/${TASK_ID}"
               
@@ -224,8 +224,8 @@ jobs:
             # Force a new deployment with the latest image
             # ECS will pull the :latest tag which we just pushed in the build job
             aws ecs update-service \
-              --cluster habit_market_cluster \
-              --service habit-market-server \
+              --cluster tofustash_cluster \
+              --service tofustash-server \
               --force-new-deployment \
               --region ${AWS_REGION}
             
@@ -234,16 +234,16 @@ jobs:
             # Wait for the service to become stable (all tasks running and healthy)
             # This will timeout after 10 minutes by default
             aws ecs wait services-stable \
-              --cluster habit_market_cluster \
-              --services habit-market-server \
+              --cluster tofustash_cluster \
+              --services tofustash-server \
               --region ${AWS_REGION}
             
             echo "Deployment completed successfully!"
             
             # Get the current service status
             aws ecs describe-services \
-              --cluster habit_market_cluster \
-              --services habit-market-server \
+              --cluster tofustash_cluster \
+              --services tofustash-server \
               --region ${AWS_REGION} \
               --query "services[0].{DesiredCount:desiredCount,RunningCount:runningCount,PendingCount:pendingCount}" \
               --output table

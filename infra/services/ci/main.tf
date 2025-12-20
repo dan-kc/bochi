@@ -1,6 +1,10 @@
 locals {
-  circleci_org_id     = "2f633adc-140c-4ef2-818e-664307d1c0a9"
-  circleci_project_id = "80253561-a5bc-4229-8fa1-bcf2d834b9e2"
+  circleci_org_id     = "467fa236-85cd-42f9-a7cb-6acb321858bc"
+  circleci_project_id = "283765cd-c505-4bab-947e-c1a53cb8db5c"
+}
+
+data "tls_certificate" "circleci" {
+  url = "https://oidc.circleci.com/org/${local.circleci_org_id}"
 }
 
 # Define the AWS IAM OIDC Provider for CircleCi
@@ -12,10 +16,7 @@ resource "aws_iam_openid_connect_provider" "circleci" {
     "sts.amazonaws.com",
     local.circleci_org_id,
   ]
-
-  thumbprint_list = [
-    "20f540dd952c6054be3fc82f7a222a051df2b09b",
-  ]
+  thumbprint_list = [data.tls_certificate.circleci.certificates[0].sha1_fingerprint]
 }
 
 # define an IAM Role in AWS that trusts this OIDC provider and grants the necessary permissions.
@@ -80,7 +81,7 @@ resource "aws_iam_role_policy_attachment" "ecr_upload_policy_attachment" {
 
 # Security group for Fargate tasks
 resource "aws_security_group" "migration_task" {
-  name        = "habit-market-migration-task-sg"
+  name        = "tofustash-migration-task-sg"
   description = "Security group for Flyway migration Fargate tasks"
   vpc_id      = var.vpc_id
 
@@ -91,10 +92,6 @@ resource "aws_security_group" "migration_task" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
-  }
-
-  tags = {
-    Name = "habit-market-migration-task-sg"
   }
 }
 
@@ -111,18 +108,13 @@ resource "aws_security_group_rule" "database_from_migration" {
 
 # CloudWatch Log Group for migration tasks
 resource "aws_cloudwatch_log_group" "migration" {
-  name              = "/ecs/habit-market-migrations"
+  name              = "/ecs/tofustash-migrations"
   retention_in_days = 7
-
-  tags = {
-    Environment = "production"
-    Service     = "migrations"
-  }
 }
 
 # IAM role for ECS task execution
 resource "aws_iam_role" "migration_task_execution" {
-  name = "habit-market-migration-task-execution-role"
+  name = "tofustash-migration-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -136,10 +128,6 @@ resource "aws_iam_role" "migration_task_execution" {
       }
     ]
   })
-
-  tags = {
-    Name = "habit-market-migration-task-execution-role"
-  }
 }
 
 # Attach AWS managed policy for ECS task execution
@@ -192,7 +180,7 @@ resource "aws_iam_role_policy" "migration_task_execution_logs" {
 
 # IAM role for ECS task (runtime)
 resource "aws_iam_role" "migration_task" {
-  name = "habit-market-migration-task-role"
+  name = "tofustash-migration-task-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -206,10 +194,6 @@ resource "aws_iam_role" "migration_task" {
       }
     ]
   })
-
-  tags = {
-    Name = "habit-market-migration-task-role"
-  }
 }
 
 # Policy for task to access Secrets Manager
@@ -291,7 +275,7 @@ resource "aws_iam_role_policy" "migration_task_logs" {
 
 # ECS Task Definition for Flyway migrations
 resource "aws_ecs_task_definition" "migration" {
-  family                   = "habit-market-migrations"
+  family                   = "tofustash-migrations"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
@@ -324,11 +308,6 @@ resource "aws_ecs_task_definition" "migration" {
       essential = true
     }
   ])
-
-  tags = {
-    Name        = "habit-market-migration-task"
-    Environment = "production"
-  }
 }
 
 # Policy for CircleCI ECS operations (migrations and deployments)
@@ -364,7 +343,7 @@ resource "aws_iam_policy" "circleci_ecs_policy" {
           "ecs:DescribeServices"
         ]
         Resource = [
-          "arn:aws:ecs:eu-west-2:*:service/habit-market-cluster/habit-market-server"
+          "arn:aws:ecs:eu-west-2:*:service/tofustash-cluster/tofustash-server"
         ]
       },
       {

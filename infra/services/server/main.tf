@@ -323,7 +323,7 @@ resource "aws_ecs_service" "habit_market_server" {
   health_check_grace_period_seconds = 60  # Give container time to start
 
   depends_on = [
-    aws_lb_listener.habit_market_server,
+    aws_lb_listener_rule.habit_market_server,
     aws_iam_role_policy.ecs_task_execution_secrets,
   ]
 
@@ -332,14 +332,20 @@ resource "aws_ecs_service" "habit_market_server" {
   }
 }
 
-# ALB Listener
-resource "aws_lb_listener" "habit_market_server" {
-  load_balancer_arn = var.alb_arn
-  port              = "80"
-  protocol          = "HTTP"
+# HTTPS Listener Rule
+# Attaches to the HTTPS listener created in lb.tf
+resource "aws_lb_listener_rule" "habit_market_server" {
+  listener_arn = var.https_listener_arn
+  priority     = 100
 
-  default_action {
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.habit_market_server.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
   }
 }

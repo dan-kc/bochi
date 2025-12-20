@@ -43,12 +43,12 @@ variable "ecr_repository_url" {
   description = "URL of the ECR repository for the server image"
 }
 
-variable "alb_arn" {
-  type        = string
-  description = "ARN of the Application Load Balancer"
-}
-
 variable "alb_security_group_id" {
   type        = string
   description = "Security group ID of the Application Load Balancer"
+}
+
+variable "https_listener_arn" {
+  type        = string
+  description = "ARN of the HTTPS listener to attach rules to"
 }

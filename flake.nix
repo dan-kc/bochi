@@ -62,7 +62,7 @@
         };
 
         packages.server = pkgs.rustPlatform.buildRustPackage {
-          pname = "habit-market-backend";
+          pname = "tofustash-backend";
           version = "0.1.0";
           src = ./.;
           doCheck = false; # Run tests seperately
@@ -83,7 +83,7 @@
         };
         packages.default = self.packages.${system}.server;
         packages.server-docker = pkgs.dockerTools.buildLayeredImage {
-          name = "habit-market-backend";
+          name = "tofustash-backend";
           # This tag is only used locally. ECR doesn't know about this.
           tag = "latest";
 
@@ -93,7 +93,7 @@
           ];
 
           config = {
-            Cmd = [ "${self.packages.${system}.server}/bin/habit-market-backend" ];
+            Cmd = [ "${self.packages.${system}.server}/bin/tofustash-backend" ];
             WorkingDir = "/app";
             ExposedPorts = {
               "8080/tcp" = { };
@@ -105,7 +105,7 @@
         };
 
         packages.flyway-docker = pkgs.dockerTools.buildLayeredImage {
-          name = "habit-market-migrations";
+          name = "tofustash-migrations";
           tag = "latest";
 
           contents = with pkgs; [

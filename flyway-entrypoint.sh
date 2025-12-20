@@ -39,11 +39,11 @@ echo "Successfully retrieved secret value"
 # Parse the JSON to get credentials
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
-DB_NAME=habit_market
+DB_NAME=tofu_stash
 DB_PORT=5432
 
 # Hardcode the database host to avoid VPC endpoint issues
-DB_HOST="habit-market.c96way2g09hd.eu-west-2.rds.amazonaws.com"
+DB_HOST="tofustash.c96way2g09hd.eu-west-2.rds.amazonaws.com"
 echo "Using hardcoded database host: $DB_HOST"
 
 echo "Database host: $DB_HOST"

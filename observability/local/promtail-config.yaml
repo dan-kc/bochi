@@ -24,8 +24,8 @@ scrape_configs:
           # Specifies that the log files are located on the machine where Promtail is running
           - localhost
         labels:
-          # Adds a label job="habit-market" to all logs. This is useful for filtering in Grafana.
-          job: habit-market
+          # Adds a label job="tofustash" to all logs. This is useful for filtering in Grafana.
+          job: tofustash
           __path__: ${PROMTAIL_LOG_PATH:-./logs/server.log*}
     pipeline_stages:
       # In Loki, the most efficient and fundamental way to filter and query your logs is by labels.
@@ -45,7 +45,7 @@ scrape_configs:
             duration: duration
             error: error
       - labels:
-        # Labels (easy filtering like: "{job="habit-market", level="error"} | json will quickly get you all error logs from habit-market.")
+        # Labels (easy filtering like: "{job="tofustash", level="error"} | json will quickly get you all error logs from tofustash.")
           level:
           method:
           status:

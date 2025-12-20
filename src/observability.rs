@@ -26,7 +26,7 @@ pub fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 
     let registry = tracing_subscriber::registry().with(stdout_layer).with(
         EnvFilter::try_from_default_env()
-            .or_else(|_| EnvFilter::try_new("habit_market_backend=error,tower_http=warn"))
+            .or_else(|_| EnvFilter::try_new("tofustash_backend=error,tower_http=warn"))
             .unwrap(),
     );
 

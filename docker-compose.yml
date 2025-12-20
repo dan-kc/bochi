@@ -1,13 +1,13 @@
 services:
   server:
-    image: habit-market-backend:latest
-    container_name: habit-market-backend
+    image: tofustash-backend:latest
+    container_name: tofustash-backend
     network_mode: host
     environment:
       DB_USER: "user"
       DB_PASSWORD: "password"
       DB_HOST: "localhost"
-      DB_NAME: "habit_market"
+      DB_NAME: "tofustash-backend"
       SSL_MODE: "disable"
       JWT_PRIVATE_KEY: |
         -----BEGIN PRIVATE KEY-----

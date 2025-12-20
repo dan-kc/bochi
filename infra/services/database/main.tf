@@ -1,25 +1,17 @@
-resource "aws_db_subnet_group" "habit_market" {
-  name = "habit-market-db-subnet-group"
+resource "aws_db_subnet_group" "tofustash" {
+  name = "tofustash-db-subnet-group"
 
   # The second subnet in eu-west-2b is essentially unused - it's 
   # just there to satisfy AWS's requirement. The database will
   # only ever run in eu-west-2a unless you manually change it or 
   # upgrade to Multi-AZ later.
   subnet_ids = [var.private_subnet_id, var.private_subnet_b_id]
-
-  tags = {
-    Name = "Habit Market DB subnet group"
-  }
 }
 
 resource "aws_security_group" "database" {
-  name        = "habit-market-database-sg"
+  name        = "tofustash-database-sg"
   description = "Security group for RDS PostgreSQL"
   vpc_id      = var.vpc_id
-
-  tags = {
-    Name = "habit-market-database-sg"
-  }
 }
 
 resource "aws_security_group_rule" "database_from_private_subnet" {
@@ -32,8 +24,8 @@ resource "aws_security_group_rule" "database_from_private_subnet" {
   description       = "Allow PostgreSQL from private subnet"
 }
 
-resource "aws_db_instance" "habit_market" {
-  identifier     = "habit-market"
+resource "aws_db_instance" "tofustash" {
+  identifier     = "tofustash"
   engine         = "postgres"
   engine_version = "17.6"
 
@@ -44,7 +36,7 @@ resource "aws_db_instance" "habit_market" {
   storage_encrypted = true
 
   # Database configuration
-  db_name = "habit_market"
+  db_name = "tofustash"
   port    = 5432
 
   # Credentials managed by Secrets Manager
@@ -53,7 +45,7 @@ resource "aws_db_instance" "habit_market" {
   username                      = "postgres"
 
   # Network configuration
-  db_subnet_group_name   = aws_db_subnet_group.habit_market.name
+  db_subnet_group_name   = aws_db_subnet_group.tofustash.name
   vpc_security_group_ids = [aws_security_group.database.id]
   publicly_accessible    = false
 
@@ -76,30 +68,21 @@ resource "aws_db_instance" "habit_market" {
 
   # Additional settings for cost optimization
   deletion_protection = false
-
-  tags = {
-    Name        = "habit-market-database"
-    Environment = "production"
-  }
 }
 
 # KMS key for Secrets Manager encryption
 resource "aws_kms_key" "database" {
   description             = "KMS key for RDS Secrets Manager"
   deletion_window_in_days = 10
-
-  tags = {
-    Name = "habit-market-database-kms"
-  }
 }
 
 resource "aws_kms_alias" "database" {
-  name          = "alias/habit-market-database"
+  name          = "alias/tofustash-database"
   target_key_id = aws_kms_key.database.key_id
 }
 
 output "database_endpoint" {
-  value       = aws_db_instance.habit_market.endpoint
+  value       = aws_db_instance.tofustash.endpoint
   description = "Database connection endpoint"
 }
 
@@ -109,7 +92,7 @@ output "database_security_group_id" {
 }
 
 output "database_secret_arn" {
-  value       = aws_db_instance.habit_market.master_user_secret[0].secret_arn
+  value       = aws_db_instance.tofustash.master_user_secret[0].secret_arn
   description = "ARN of the secret containing database credentials"
 }
 

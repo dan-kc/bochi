@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "name": "habit_market_queries",
+  "name": "tofustash_queries",
   "type": "collection",
   "ignore": [
     "node_modules",

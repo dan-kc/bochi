@@ -2,7 +2,7 @@ use crate::common::register_and_get_refresh_token;
 use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use habit_market_backend::router;
+use tofustash_backend::router;
 use http::Method;
 use http_body_util::BodyExt;
 use serde_json::json;
