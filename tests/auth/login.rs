@@ -1,11 +1,11 @@
 use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use tofustash_backend::router;
 use http::Method;
 use http_body_util::BodyExt;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tofustash_backend::router;
 use tower::ServiceExt;
 
 async fn register_user_for_login(email: &str, password: &str) -> Result<(), String> {

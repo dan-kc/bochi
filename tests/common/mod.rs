@@ -1,9 +1,9 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use tofustash_backend::router;
 use http::Method;
 use http_body_util::BodyExt;
 use serde_json::json;
+use tofustash_backend::router;
 use tower::ServiceExt;
 
 pub async fn register_and_get_refresh_token(email: &str, password: &str) -> Result<String, String> {
@@ -154,7 +154,10 @@ pub async fn get_access_token_for_user(email: &str, password: &str) -> String {
     json.get("accessToken")
         .and_then(|v| v.as_str())
         .unwrap_or_else(|| {
-            eprintln!("Login response body: {}", serde_json::to_string_pretty(&json).unwrap());
+            eprintln!(
+                "Login response body: {}",
+                serde_json::to_string_pretty(&json).unwrap()
+            );
             panic!("Login response should contain accessToken");
         })
         .to_string()

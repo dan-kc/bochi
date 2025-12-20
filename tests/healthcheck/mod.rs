@@ -1,8 +1,8 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use tofustash_backend::router;
 use http::Method;
 use http_body_util::BodyExt;
+use tofustash_backend::router;
 use tower::ServiceExt;
 
 #[tokio::test]

@@ -2,9 +2,9 @@ use crate::common::{get_access_token_for_user, make_authenticated_graphql_reques
 use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use tofustash_backend::router;
 use http::Method;
 use serde_json::{json, Value};
+use tofustash_backend::router;
 use tower::ServiceExt;
 
 #[tokio::test]
