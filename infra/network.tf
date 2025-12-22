@@ -8,6 +8,9 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.tofustash.id
   cidr_block        = "10.1.1.0/24"
   availability_zone = "eu-west-2a"
+  tags = {
+    Name = "tofustash-private-a"
+  }
 }
 
 # Additional private subnet for RDS subnet group (required minimum 2 subnets)
@@ -15,6 +18,9 @@ resource "aws_subnet" "private_b" {
   vpc_id            = aws_vpc.tofustash.id
   cidr_block        = "10.1.2.0/24"
   availability_zone = "eu-west-2b"
+  tags = {
+    Name = "tofustash-private-b"
+  }
 }
 
 resource "aws_subnet" "public" {
@@ -22,6 +28,9 @@ resource "aws_subnet" "public" {
   cidr_block              = "10.1.3.0/24"
   availability_zone       = "eu-west-2a"
   map_public_ip_on_launch = true
+  tags = {
+    Name = "tofustash-public-a"
+  }
 }
 
 # Additional public subnet for ALB (requires 2 AZs)
@@ -30,6 +39,9 @@ resource "aws_subnet" "public_b" {
   cidr_block              = "10.1.4.0/24"
   availability_zone       = "eu-west-2b"
   map_public_ip_on_launch = true
+  tags = {
+    Name = "tofustash-public-a"
+  }
 }
 
 

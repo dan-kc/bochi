@@ -93,6 +93,9 @@ resource "aws_security_group" "migration_task" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
+  tags = {
+    Name = "tofustash-migration-task-sg"
+  }
 }
 
 # Allow migration task to connect to database
