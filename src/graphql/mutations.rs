@@ -53,6 +53,7 @@ pub struct CreateTaskInput {
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
+    pub min_daily_frequency: Option<f64>,
 }
 
 #[derive(InputObject)]
@@ -103,6 +104,21 @@ impl MutationRoot {
         if let Some(due_at) = input.due_by {
             if due_at <= now {
                 let msg = format!("The 'due_by' date ({}) has already passed or is the current moment. Please select a future date.", input.due_by.unwrap());
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+        }
+
+        if input.due_by.is_some() && input.min_daily_frequency.is_some() {
+            let msg = "A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one.".to_string();
+            return Err(Error::Validation(msg).into_graphql_error());
+        }
+
+        if let Some(freq) = input.min_daily_frequency {
+            if freq < 0.0 || freq > 100.0 {
+                let msg = format!(
+                    "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
+                    freq as i32
+                );
                 return Err(Error::Validation(msg).into_graphql_error());
             }
         }

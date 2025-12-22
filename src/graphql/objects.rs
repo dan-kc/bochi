@@ -11,6 +11,7 @@ pub struct TaskObject {
     hidden_until: Option<NaiveDateTime>,
     due_by: Option<NaiveDateTime>,
     description: String,
+    min_daily_frequency: Option<f64>,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -22,6 +23,7 @@ impl From<TaskRow> for TaskObject {
             hidden_until: task_row.hidden_until,
             due_by: task_row.due_by,
             description: task_row.description,
+            min_daily_frequency: task_row.min_daily_frequency,
         }
     }
 }
@@ -80,6 +82,7 @@ impl From<TradeWithTaskRow> for TradeObject {
             hidden_until: trade_row.task_hidden_until,
             due_by: trade_row.task_due_by,
             description: trade_row.task_description,
+            min_daily_frequency: trade_row.task_min_daily_frequency,
         });
 
         return TradeObject {

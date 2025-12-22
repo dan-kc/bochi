@@ -59,13 +59,14 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, created_at, deleted_at, hidden_until, due_by, description",
+            (user_id, name, hidden_until, due_by, description, min_daily_frequency) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, created_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
         .bind(create_task_options.hidden_until)
         .bind(create_task_options.due_by)
         .bind(create_task_options.description)
+        .bind(create_task_options.min_daily_frequency)
         .fetch_one(&self.pool)
         .await
     }
@@ -95,7 +96,7 @@ impl Database {
             // We `SELECT $1, $2` here instead of `SELECT column names`. This is valid SQL.
             // We do this because we can only do a where claude if we SELECT. We don't want
             // to use any of the values from the tasks table for the insert, so we just provide
-            // literal values that, after the validation is done, gets used by the insert 
+            // literal values that, after the validation is done, gets used by the insert
             // statment.
             "WITH new_trade AS (
                 INSERT INTO trades (task_id, amount)
@@ -106,7 +107,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                t.name AS task_name, t.created_at AS task_created_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description
+                t.name AS task_name, t.created_at AS task_created_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency
             FROM new_trade nt
             JOIN tasks t ON nt.task_id = t.id",
         )
@@ -226,6 +227,7 @@ pub struct CreateTaskOptions {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
+    pub min_daily_frequency: Option<f64>,
 }
 impl CreateTaskOptions {
     pub fn new(input: CreateTaskInput, user_id: Uuid) -> Self {
@@ -235,6 +237,7 @@ impl CreateTaskOptions {
             hidden_until: input.hidden_until,
             due_by: input.due_by,
             description: input.description,
+            min_daily_frequency: input.min_daily_frequency,
         }
     }
 }
@@ -313,6 +316,7 @@ pub struct TaskRow {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
+    pub min_daily_frequency: Option<f64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -340,6 +344,7 @@ pub struct TradeWithTaskRow {
     pub task_hidden_until: Option<NaiveDateTime>,
     pub task_due_by: Option<NaiveDateTime>,
     pub task_description: String,
+    pub task_min_daily_frequency: Option<f64>,
 }
 
 #[derive(sqlx::FromRow)]

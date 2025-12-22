@@ -27,6 +27,7 @@ async fn test_create_task_success() {
                 description
                 hiddenUntil
                 dueBy
+                minDailyFrequency
             }
         }",
         "variables": {
@@ -52,6 +53,10 @@ async fn test_create_task_success() {
     );
     assert_eq!(task.get("hiddenUntil").unwrap(), &serde_json::Value::Null);
     assert_eq!(task.get("dueBy").unwrap(), &serde_json::Value::Null);
+    assert_eq!(
+        task.get("minDailyFrequency").unwrap(),
+        &serde_json::Value::Null
+    );
 }
 
 #[tokio::test]
@@ -336,12 +341,14 @@ async fn test_create_task_maximum_valid_input() {
             createTask(input: $input) {
                 name
                 description
+                minDailyFrequency
             }
         }",
         "variables": {
             "input": {
                 "name": max_name,
                 "description": max_description,
+                "minDailyFrequency": 100.0,
             }
         }
     });
@@ -356,6 +363,7 @@ async fn test_create_task_maximum_valid_input() {
         task.get("description").unwrap(),
         &Value::String(max_description)
     );
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 100.0);
 }
 
 #[tokio::test]
@@ -586,4 +594,302 @@ async fn test_create_task_name_empty_string() {
             "Validation Error: Please provide a name between 1 and 100 characters long. Your current name is 0 characters.".to_string()
         )
     );
+}
+
+#[tokio::test]
+async fn test_create_task_with_min_daily_frequency() {
+    let email = generate_email_from_fn!(test_create_task_with_min_daily_frequency);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "A test task description",
+                "minDailyFrequency": 5.5,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 5.5);
+}
+
+#[tokio::test]
+async fn test_create_task_min_daily_frequency_negative() {
+    let email = generate_email_from_fn!(test_create_task_min_daily_frequency_negative);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "minDailyFrequency": -1.0
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'min_daily_frequency must be between 0 and 100. You sent -1."
+                .to_string()
+        )
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: The 'min_daily_frequency must be between 0 and 100. You sent -1."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_create_task_min_daily_frequency_too_large() {
+    let email = generate_email_from_fn!(test_create_task_min_daily_frequency_too_large);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "test name",
+                "description": "test description",
+                "minDailyFrequency": 101.0
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'min_daily_frequency must be between 0 and 100. You sent 101."
+                .to_string()
+        )
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: The 'min_daily_frequency must be between 0 and 100. You sent 101."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_create_task_min_daily_frequency_zero() {
+    let email = generate_email_from_fn!(test_create_task_min_daily_frequency_zero);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "Test description",
+                "minDailyFrequency": 0.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 0.0);
+}
+
+#[tokio::test]
+async fn test_create_task_min_daily_frequency_boundary() {
+    let email = generate_email_from_fn!(test_create_task_min_daily_frequency_boundary);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "Test description",
+                "minDailyFrequency": 100.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 100.0);
+}
+
+#[tokio::test]
+async fn test_create_task_with_both_due_by_and_min_daily_frequency() {
+    let email = generate_email_from_fn!(test_create_task_with_both_due_by_and_min_daily_frequency);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                dueBy
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "Test description",
+                "dueBy": "2028-12-25T23:59:59",
+                "minDailyFrequency": 5.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one."
+                .to_string()
+        )
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+    assert_eq!(
+        extensions.get("details").unwrap(),
+        &Value::String(
+            "Validation Error: A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_create_task_with_hidden_until_and_min_daily_frequency() {
+    let email = generate_email_from_fn!(test_create_task_with_hidden_until_and_min_daily_frequency);
+    let password = "password123";
+
+    // Register user
+    register_user(&email, password).await;
+
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                hiddenUntil
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Task with hidden and frequency",
+                "description": "Task with hidden_until and min_daily_frequency",
+                "hiddenUntil": "2028-12-16T00:33:08",
+                "minDailyFrequency": 10.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("hiddenUntil").unwrap(), "2028-12-16T00:33:08");
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 10.0);
 }
