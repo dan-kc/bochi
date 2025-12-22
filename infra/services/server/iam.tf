@@ -1,6 +1,6 @@
 # TASK EXECUTION
 resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "habit-market-server-ecs-task-execution-role"
+  name = "tofustash-server-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -16,11 +16,11 @@ resource "aws_iam_role" "ecs_task_execution_role" {
   })
 
   tags = {
-    Name = "habit-market-server-ecs-task-execution-role"
+    Name = "tofustash-server-ecs-task-execution-role"
   }
 }
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  name = "habit-market-server-ecs-task-execution-secrets"
+  name = "tofustash-server-ecs-task-execution-secrets"
   role = aws_iam_role.ecs_task_execution_role.id
 
   policy = jsonencode({
@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
 
 # TASK
 resource "aws_iam_role" "ecs_task_role" {
-  name = "habit-market-server-ecs-task-role"
+  name = "tofustash-server-ecs-task-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -73,13 +73,13 @@ resource "aws_iam_role" "ecs_task_role" {
   })
 
   tags = {
-    Name = "habit-market-server-ecs-task-role"
+    Name = "tofustash-server-ecs-task-role"
   }
 }
 
 # EC2 INSTANCES
 resource "aws_iam_role" "ecs_instance_role" {
-  name = "habit-market-ecs-instance-role"
+  name = "tofustash-ecs-instance-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -99,6 +99,6 @@ resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 resource "aws_iam_instance_profile" "ecs_instance_profile" {
-  name = "habit-market-ecs-instance-profile"
+  name = "tofustash-ecs-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
 }

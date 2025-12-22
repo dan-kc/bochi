@@ -1,6 +1,6 @@
 # ECS Task Definition
-resource "aws_ecs_task_definition" "habit_market_server" {
-  family                   = "habit-market-server" # "Name", basically
+resource "aws_ecs_task_definition" "tofustash_server" {
+  family                   = "tofustash-server" # "Name", basically
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   cpu                      = "256" # 0.25 vCPU
@@ -10,7 +10,7 @@ resource "aws_ecs_task_definition" "habit_market_server" {
 
   container_definitions = jsonencode([
     {
-      name  = "habit-market-server"
+      name  = "tofustash-server"
       image = "${var.ecr_repository_url}:latest"
 
       portMappings = [
@@ -27,7 +27,7 @@ resource "aws_ecs_task_definition" "habit_market_server" {
         },
         {
           name  = "DB_NAME"
-          value = "habit_market"
+          value = "tofustash"
         },
         {
           name  = "SSL_MODE"
@@ -61,7 +61,7 @@ resource "aws_ecs_task_definition" "habit_market_server" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.habit_market_server.name
+          "awslogs-group"         = aws_cloudwatch_log_group.tofustash_server.name
           "awslogs-region"        = "eu-west-2"
           "awslogs-stream-prefix" = "ecs"
         }
@@ -80,13 +80,13 @@ resource "aws_ecs_task_definition" "habit_market_server" {
   ])
 
   tags = {
-    Name = "habit-market-server-task-definition"
+    Name = "tofustash-server-task-definition"
   }
 }
 
 # Security group for ECS tasks
 resource "aws_security_group" "ecs_tasks" {
-  name        = "habit-market-server-ecs-tasks-sg"
+  name        = "tofustash-server-ecs-tasks-sg"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
 
@@ -107,7 +107,7 @@ resource "aws_security_group" "ecs_tasks" {
   }
 
   tags = {
-    Name = "habit-market-server-ecs-tasks-sg"
+    Name = "tofustash-server-ecs-tasks-sg"
   }
 }
 
@@ -123,18 +123,18 @@ resource "aws_security_group_rule" "database_from_ecs" {
 }
 
 # CloudWatch log group for the application
-resource "aws_cloudwatch_log_group" "habit_market_server" {
-  name              = "/ecs/habit-market-server"
+resource "aws_cloudwatch_log_group" "tofustash_server" {
+  name              = "/ecs/tofustash-server"
   retention_in_days = 7 # Keep logs for 7 days to save costs
 
   tags = {
-    Name = "habit-market-server-logs"
+    Name = "tofustash-server-logs"
   }
 }
 
 # Security group for EC2 instances
 resource "aws_security_group" "ecs_instances" {
-  name        = "habit-market-ecs-instances-sg"
+  name        = "tofustash-ecs-instances-sg"
   description = "Security group for ECS EC2 instances"
   vpc_id      = var.vpc_id
 
@@ -155,13 +155,13 @@ resource "aws_security_group" "ecs_instances" {
   }
 
   tags = {
-    Name = "habit-market-ecs-instances-sg"
+    Name = "tofustash-ecs-instances-sg"
   }
 }
 
 # Launch template for EC2 instances
 resource "aws_launch_template" "ecs_instance" {
-  name_prefix   = "habit-market-ecs-instance-"
+  name_prefix   = "tofustash-ecs-instance-"
   image_id      = data.aws_ami.ecs_optimized.id
   instance_type = "t3.micro"
 
@@ -180,7 +180,7 @@ resource "aws_launch_template" "ecs_instance" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "habit-market-ecs-instance"
+      Name = "tofustash-ecs-instance"
     }
   }
 }
@@ -190,7 +190,7 @@ resource "aws_launch_template" "ecs_instance" {
 # of instances are running and handling instance health.
 ## HERE
 resource "aws_autoscaling_group" "ecs_instances" {
-  name                = "habit-market-ecs-asg"
+  name                = "tofustash-ecs-asg"
   vpc_zone_identifier = var.private_subnet_ids
   min_size            = 1
   max_size            = 2 # Allow scaling to 2 instances for rolling deployments
@@ -203,7 +203,7 @@ resource "aws_autoscaling_group" "ecs_instances" {
 
   tag {
     key                 = "Name"
-    value               = "habit-market-ecs-instance"
+    value               = "tofustash-ecs-instance"
     propagate_at_launch = true
   }
 
@@ -220,7 +220,7 @@ resource "aws_autoscaling_group" "ecs_instances" {
 # Manages how ECS tasks are placed on that infrastructure. It tells 
 # ECS where to run tasks and how to scale the ASG based on task demand.
 resource "aws_ecs_capacity_provider" "ec2" {
-  name = "habit-market-ec2-capacity-provider"
+  name = "tofustash-ec2-capacity-provider"
 
   auto_scaling_group_provider {
     auto_scaling_group_arn = aws_autoscaling_group.ecs_instances.arn
@@ -235,7 +235,7 @@ resource "aws_ecs_capacity_provider" "ec2" {
 }
 
 # Associate capacity provider with cluster
-resource "aws_ecs_cluster_capacity_providers" "habit_market" {
+resource "aws_ecs_cluster_capacity_providers" "tofustash" {
   cluster_name = var.ecs_cluster_name
 
   capacity_providers = [aws_ecs_capacity_provider.ec2.name]
@@ -255,8 +255,8 @@ resource "aws_ecs_cluster_capacity_providers" "habit_market" {
 }
 
 # Target Group for ALB
-resource "aws_lb_target_group" "habit_market_server" {
-  name     = "habit-market-server-tg-blue"
+resource "aws_lb_target_group" "tofustash_server" {
+  name     = "tofustash-server-tg-blue"
   port     = 8080 # Expect traffic on port 8080 from the load balancer.
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -277,15 +277,15 @@ resource "aws_lb_target_group" "habit_market_server" {
   deregistration_delay = 30
 
   tags = {
-    Name = "habit-market-server-tg-blue"
+    Name = "tofustash-server-tg-blue"
   }
 }
 
 # ECS Service with Rolling Updates
-resource "aws_ecs_service" "habit_market_server" {
-  name            = "habit-market-server"
+resource "aws_ecs_service" "tofustash_server" {
+  name            = "tofustash-server"
   cluster         = var.ecs_cluster_id
-  task_definition = aws_ecs_task_definition.habit_market_server.arn
+  task_definition = aws_ecs_task_definition.tofustash_server.arn
   desired_count   = 1  # Single task, ECS will scale to 2 during rolling updates
 
   deployment_controller {
@@ -315,32 +315,32 @@ resource "aws_ecs_service" "habit_market_server" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.habit_market_server.arn
-    container_name   = "habit-market-server"
+    target_group_arn = aws_lb_target_group.tofustash_server.arn
+    container_name   = "tofustash-server"
     container_port   = 8080
   }
 
   health_check_grace_period_seconds = 60  # Give container time to start
 
   depends_on = [
-    aws_lb_listener_rule.habit_market_server,
+    aws_lb_listener_rule.tofustash_server,
     aws_iam_role_policy.ecs_task_execution_secrets,
   ]
 
   tags = {
-    Name = "habit-market-server-service"
+    Name = "tofustash-server-service"
   }
 }
 
 # HTTPS Listener Rule
 # Attaches to the HTTPS listener created in lb.tf
-resource "aws_lb_listener_rule" "habit_market_server" {
+resource "aws_lb_listener_rule" "tofustash_server" {
   listener_arn = var.https_listener_arn
   priority     = 100
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.habit_market_server.arn
+    target_group_arn = aws_lb_target_group.tofustash_server.arn
   }
 
   condition {
