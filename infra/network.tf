@@ -9,7 +9,7 @@ resource "aws_subnet" "private" {
   cidr_block        = "10.1.1.0/24"
   availability_zone = "eu-west-2a"
   tags = {
-    Name = "tofustash-private-a"
+    Name = "tofustash-private-subnet-a"
   }
 }
 
@@ -19,7 +19,7 @@ resource "aws_subnet" "private_b" {
   cidr_block        = "10.1.2.0/24"
   availability_zone = "eu-west-2b"
   tags = {
-    Name = "tofustash-private-b"
+    Name = "tofustash-private-subnet-b"
   }
 }
 
@@ -29,7 +29,7 @@ resource "aws_subnet" "public" {
   availability_zone       = "eu-west-2a"
   map_public_ip_on_launch = true
   tags = {
-    Name = "tofustash-public-a"
+    Name = "tofustash-public-subnet-a"
   }
 }
 
@@ -40,7 +40,7 @@ resource "aws_subnet" "public_b" {
   availability_zone       = "eu-west-2b"
   map_public_ip_on_launch = true
   tags = {
-    Name = "tofustash-public-a"
+    Name = "tofustash-public-subnet-b"
   }
 }
 

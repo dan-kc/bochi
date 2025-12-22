@@ -168,7 +168,7 @@ let
       DB_USER="user" \
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
-      DB_NAME="tofu_stash" \
+      DB_NAME="tofustash" \
       SSL_MODE="disable" \
       JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd

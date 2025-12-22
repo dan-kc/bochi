@@ -39,7 +39,7 @@ echo "Successfully retrieved secret value"
 # Parse the JSON to get credentials
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*' | cut -d'"' -f4)
-DB_NAME=tofu_stash
+DB_NAME=tofustash
 DB_PORT=5432
 
 # Hardcode the database host to avoid VPC endpoint issues
