@@ -55,7 +55,12 @@ pub async fn router() -> axum::Router {
 
     let cors = CorsLayer::new()
         .allow_origin(
-            "http://localhost:3000"
+            "http://localhost:8500"
+                .parse::<axum::http::HeaderValue>()
+                .unwrap(),
+        )
+        .allow_origin(
+            "http://localhost:8501"
                 .parse::<axum::http::HeaderValue>()
                 .unwrap(),
         )

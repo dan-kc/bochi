@@ -10,7 +10,9 @@ mod security;
 async fn main() {
     let _guard = observability::init_tracing();
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     info!("the app is listening");
 
     let router = router::router().await;

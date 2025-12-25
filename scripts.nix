@@ -25,7 +25,7 @@ let
     '';
 
     # Truncates all tables and loads fixture data into tofustash database
-    load = pkgs.writeShellScriptBin "load" ''
+    seed = pkgs.writeShellScriptBin "seed" ''
       set -e
       echo "Truncating all tables in tofustash database..."
       PGPASSWORD=password psql -h localhost -U user -d tofustash -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
@@ -175,6 +175,7 @@ let
 
     # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
+      PORT="8500" \
       DB_USER="user" \
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
@@ -192,8 +193,9 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
 
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
-      set -e 
+      set -e
       ${clean}/bin/clean tofustash_test
+      PORT="8500" \
       DB_USER="user" \
       DB_PASSWORD="password" \
       DB_HOST="localhost" \
