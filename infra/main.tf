@@ -89,18 +89,18 @@ module "ci" {
   database_kms_key_arn       = module.database.database_kms_key_arn
 }
 
-# module "server" {
-#   source = "./services/server"
-#
-#   vpc_id                     = aws_vpc.tofustash.id
-#   private_subnet_ids         = [aws_subnet.private.id, aws_subnet.private_b.id]
-#   ecs_cluster_id             = aws_ecs_cluster.tofustash.id
-#   ecs_cluster_name           = aws_ecs_cluster.tofustash.name
-#   database_security_group_id = module.database.database_security_group_id
-#   database_secret_arn        = module.database.database_secret_arn
-#   database_kms_key_arn       = module.database.database_kms_key_arn
-#   database_endpoint          = module.database.database_endpoint
-#   ecr_repository_url         = aws_ecr_repository.tofustash_backend.repository_url
-#   alb_security_group_id      = aws_security_group.alb.id
-#   https_listener_arn         = aws_lb_listener.https.arn
-# }
+module "server" {
+  source = "./services/server"
+
+  vpc_id                     = aws_vpc.tofustash.id
+  private_subnet_ids         = [aws_subnet.private.id, aws_subnet.private_b.id]
+  ecs_cluster_id             = aws_ecs_cluster.tofustash.id
+  ecs_cluster_name           = aws_ecs_cluster.tofustash.name
+  database_security_group_id = module.database.database_security_group_id
+  database_secret_arn        = module.database.database_secret_arn
+  database_kms_key_arn       = module.database.database_kms_key_arn
+  database_endpoint          = module.database.database_endpoint
+  ecr_repository_url         = aws_ecr_repository.tofustash_backend.repository_url
+  alb_security_group_id      = aws_security_group.alb.id
+  https_listener_arn         = aws_lb_listener.https.arn
+}

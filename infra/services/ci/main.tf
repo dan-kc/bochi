@@ -346,7 +346,7 @@ resource "aws_iam_policy" "circleci_ecs_policy" {
           "ecs:DescribeServices"
         ]
         Resource = [
-          "arn:aws:ecs:eu-west-2:*:service/tofustash-cluster/tofustash-server"
+          "arn:aws:ecs:eu-west-2:*:service/tofustash_cluster/tofustash-server"
         ]
       },
       {
