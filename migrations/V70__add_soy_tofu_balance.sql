@@ -1,0 +1,3 @@
+ALTER TABLE users
+    ADD COLUMN soy_balance FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN tofu_balance FLOAT NOT NULL DEFAULT 0;
