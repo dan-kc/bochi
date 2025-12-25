@@ -20,8 +20,18 @@ let
       fi
       DB_NAME="$1"
       echo "Truncating all tables in ''${DB_NAME} database..."
-      PGPASSWORD=password psql -h localhost -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      PGPASSWORD=password psql -h localhost -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
       echo "Database cleaned!"
+    '';
+
+    # Truncates all tables and loads fixture data into tofustash database
+    load = pkgs.writeShellScriptBin "load" ''
+      set -e
+      echo "Truncating all tables in tofustash database..."
+      PGPASSWORD=password psql -h localhost -U user -d tofustash -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      echo "Loading fixture data..."
+      PGPASSWORD=password psql -h localhost -U user -d tofustash -f ./dev-seed.sql
+      echo "Fixtures loaded successfully!"
     '';
 
     ra = pkgs.writeShellScriptBin "ra" ''
