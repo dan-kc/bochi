@@ -70,12 +70,31 @@ resource "aws_route_table_association" "public_b" {
   route_table_id = aws_route_table.public.id
 }
 
+# Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags = {
+    Name = "tofustash-nat-eip"
+  }
+}
+
+# NAT Gateway in public subnet
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+  tags = {
+    Name = "tofustash-nat-gateway"
+  }
+}
+
 # Route table for private subnets
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.tofustash.id
 
-  # No default route - private subnets have no internet access
-  # AWS services are accessed via VPC endpoints
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
 }
 
 resource "aws_route_table_association" "private" {
@@ -88,102 +107,10 @@ resource "aws_route_table_association" "private_b" {
   route_table_id = aws_route_table.private.id
 }
 
-# Security group for VPC endpoints
-resource "aws_security_group" "vpc_endpoints" {
-  name        = "tofustash-vpc-endpoints-sg"
-  description = "Security group for VPC endpoints"
-  vpc_id      = aws_vpc.tofustash.id
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.tofustash.cidr_block]
-    description = "HTTPS from VPC"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# VPC Endpoint for Secrets Manager
-resource "aws_vpc_endpoint" "secretsmanager" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.secretsmanager"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for ECR API
-resource "aws_vpc_endpoint" "ecr_api" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.ecr.api"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for ECR Docker Registry
-resource "aws_vpc_endpoint" "ecr_dkr" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.ecr.dkr"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for CloudWatch Logs
-resource "aws_vpc_endpoint" "logs" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.logs"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for S3 (Gateway endpoint - required for ECR image layers)
+# VPC Endpoint for S3
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.tofustash.id
   service_name      = "com.amazonaws.eu-west-2.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
-}
-
-# VPC Endpoint for ECS
-resource "aws_vpc_endpoint" "ecs" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.ecs"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for ECS Agent
-resource "aws_vpc_endpoint" "ecs_agent" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.ecs-agent"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-}
-
-# VPC Endpoint for ECS Telemetry
-resource "aws_vpc_endpoint" "ecs_telemetry" {
-  vpc_id              = aws_vpc.tofustash.id
-  service_name        = "com.amazonaws.eu-west-2.ecs-telemetry"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
 }
