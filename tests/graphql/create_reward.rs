@@ -177,7 +177,7 @@ async fn test_create_reward_validation_description_too_long() {
 
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let long_description = "a".repeat(16385);
+    let long_description = "a".repeat(10001);
     let query = json!({
         "query": "mutation CreateReward($input: CreateRewardInput!) {
             createReward(input: $input) {
@@ -203,7 +203,7 @@ async fn test_create_reward_validation_description_too_long() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Description is too long (16385 characters), max 16384.".to_string()
+            "Validation Error: Description is too long (10001 characters), max 10,000.".to_string()
         )
     );
 
@@ -215,7 +215,7 @@ async fn test_create_reward_validation_description_too_long() {
     assert_eq!(
         extensions.get("details").unwrap(),
         &Value::String(
-            "Validation Error: Description is too long (16385 characters), max 16384.".to_string()
+            "Validation Error: Description is too long (10001 characters), max 10,000.".to_string()
         )
     );
 }
@@ -332,7 +332,7 @@ async fn test_create_reward_maximum_valid_input() {
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let max_name = "a".repeat(100);
-    let max_description = "b".repeat(16384);
+    let max_description = "b".repeat(10000);
 
     let query = json!({
         "query": "mutation CreateReward($input: CreateRewardInput!) {
