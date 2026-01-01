@@ -46,7 +46,7 @@ let
       set -e
       ROOT="$PWD"
       mkdir -p "$ROOT/logs"
-      touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/frontend.log"
+      touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/frontend.log" "$ROOT/logs/backend.log" "$ROOT/logs/lspmux.log"
 
       echo "Checking services..."
 
@@ -71,29 +71,69 @@ let
         echo "  ✓ PostgreSQL started"
       fi
 
+      # Backend
+      if pgrep -f "tofustash-backend" > /dev/null 2>&1; then
+        echo "  ✓ Backend already running"
+      else
+        echo "  → Starting Backend..."
+        cd "$ROOT/backend"
+        PORT="${env.SERVER_PORT}" \
+        DB_USER="${env.DB_USER}" \
+        DB_PASSWORD="${env.DB_PASSWORD}" \
+        DB_HOST="${env.DB_HOST}" \
+        DB_NAME="${env.DB_NAME}" \
+        SSL_MODE="disable" \
+        JWT_PRIVATE_KEY="${env.JWT_PRIVATE_KEY}" \
+        JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
+        LOG_DESTINATION=logs \
+        nohup cargo run &> "$ROOT/logs/backend.log" & disown
+        cd "$ROOT"
+        echo "  ✓ Backend started"
+      fi
+
       # Adminer
       if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
         echo "  ✓ Adminer already running"
       else
         echo "  → Starting Adminer..."
-        (${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php &> "$ROOT/logs/adminer.log" &)
+        nohup ${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php &> "$ROOT/logs/adminer.log" & disown
         echo "  ✓ Adminer started"
       fi
 
       # Frontend
-      if pgrep -f "npm run dev" > /dev/null 2>&1; then
+      if pgrep -f "expo start --web" > /dev/null 2>&1; then
         echo "  ✓ Frontend already running"
       else
         echo "  → Starting Frontend..."
-        (cd "$ROOT/frontend" && ${pkgs.nodejs}/bin/npm run dev &> "$ROOT/logs/frontend.log" &)
+        cd "$ROOT/frontend"
+        nohup ${pkgs.nodejs}/bin/npm run web &> "$ROOT/logs/frontend.log" & disown
+        cd "$ROOT"
         echo "  ✓ Frontend started"
+      fi
+
+      # LSP Mux
+      if ${pkgs.netcat}/bin/nc -z localhost ${env.LSPMUX_PORT} 2>/dev/null; then
+        echo "  ✓ LSP Mux already running"
+      else
+        echo "  → Starting LSP Mux..."
+        LSPMUX_DIR="/tmp/ra-${env.LSPMUX_PORT}"
+        CONFIG_DIR="$LSPMUX_DIR/lspmux"
+        CONFIG_FILE="$CONFIG_DIR/config.toml"
+        mkdir -p "$CONFIG_DIR"
+        cat > "$CONFIG_FILE" <<EOF
+        ${env.LSPMUX_CONFIG}
+      EOF
+        XDG_CONFIG_HOME=$LSPMUX_DIR nohup lspmux server &> "$ROOT/logs/lspmux.log" & disown
+        echo "  ✓ LSP Mux started"
       fi
 
       echo ""
       echo "Services ready:"
       echo "  PostgreSQL: localhost:5432"
+      echo "  Backend:    http://localhost:${env.SERVER_PORT}"
       echo "  Adminer:    http://localhost:${toString env.ADMINER_PORT}"
       echo "  Frontend:   http://localhost:${env.FRONTEND_PORT}"
+      echo "  LSP Mux:    localhost:${env.LSPMUX_PORT}"
       echo ""
       echo "Logs: $ROOT/logs/"
     '';
@@ -102,8 +142,15 @@ let
     stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
       echo "Stopping services..."
 
+      # LSP Mux
+      if pkill -f "lspmux server" 2>/dev/null; then
+        echo "  ✓ LSP Mux stopped"
+      else
+        echo "  ✗ LSP Mux not running"
+      fi
+
       # Frontend
-      if pkill -f "npm run dev" 2>/dev/null; then
+      if pkill -f "expo start --web" 2>/dev/null; then
         echo "  ✓ Frontend stopped"
       else
         echo "  ✗ Frontend not running"
@@ -116,6 +163,13 @@ let
         echo "  ✗ Adminer not running"
       fi
 
+      # Backend
+      if pkill -f "tofustash-backend" 2>/dev/null; then
+        echo "  ✓ Backend stopped"
+      else
+        echo "  ✗ Backend not running"
+      fi
+
       # PostgreSQL
       PGDATA=${env.PGDATA}
       if pg_ctl -D "$PGDATA" stop 2>/dev/null; then
@@ -125,6 +179,47 @@ let
       fi
 
       echo "Done."
+    '';
+
+    # Show status of all services
+    status = pkgs.writeShellScriptBin "status" ''
+      echo "Service Status:"
+      echo ""
+
+      # PostgreSQL
+      if pg_isready -h ${env.DB_HOST} -q 2>/dev/null; then
+        echo "  PostgreSQL   ✓ Running    localhost:5432"
+      else
+        echo "  PostgreSQL   ✗ Stopped"
+      fi
+
+      # Backend
+      if pgrep -f "tofustash-backend" > /dev/null 2>&1; then
+        echo "  Backend      ✓ Running    http://localhost:${env.SERVER_PORT}"
+      else
+        echo "  Backend      ✗ Stopped"
+      fi
+
+      # Adminer
+      if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
+        echo "  Adminer      ✓ Running    http://localhost:${toString env.ADMINER_PORT}"
+      else
+        echo "  Adminer      ✗ Stopped"
+      fi
+
+      # Frontend
+      if pgrep -f "expo start --web" > /dev/null 2>&1; then
+        echo "  Frontend     ✓ Running    http://localhost:${env.FRONTEND_PORT}"
+      else
+        echo "  Frontend     ✗ Stopped"
+      fi
+
+      # LSP Mux
+      if ${pkgs.netcat}/bin/nc -z localhost ${env.LSPMUX_PORT} 2>/dev/null; then
+        echo "  LSP Mux      ✓ Running    localhost:${env.LSPMUX_PORT}"
+      else
+        echo "  LSP Mux      ✗ Stopped"
+      fi
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
@@ -187,7 +282,7 @@ let
     # Start frontend web dev server
     web = pkgs.writeShellScriptBin "web" ''
       set -e
-      (cd frontend && ${pkgs.nodejs}/bin/npm run dev "$@")
+      (cd frontend && ${pkgs.nodejs}/bin/npm run web "$@")
     '';
 
     # Sets up and tears down the test environment. Wraps `cargo test`.
