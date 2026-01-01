@@ -44,27 +44,87 @@ let
     # Start development environment
     start-dev = pkgs.writeShellScriptBin "start-dev" ''
       set -e
-      echo "Stopping any existing services..."
-      ${stop-dev}/bin/stop-dev || true
-      sleep 1
-      echo "Starting services..."
-      echo "Starting PostgreSQL..."
-      ${start-postgres}/bin/start-postgres
-      echo "Starting Adminer..."
-      (nohup adminer &> /dev/null &) && \
-      echo "All services started successfully!"
+      ROOT="$PWD"
+      mkdir -p "$ROOT/logs"
+      touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/frontend.log"
+
+      echo "Checking services..."
+
+      # PostgreSQL
+      PGDATA="$ROOT/${env.PGDATA}"
+      if pg_isready -h ${env.DB_HOST} -q 2>/dev/null; then
+        echo "  ✓ PostgreSQL already running"
+      else
+        echo "  → Starting PostgreSQL..."
+        if [ ! -d "$PGDATA" ]; then
+          echo "    Initializing PostgreSQL database..."
+          initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
+        fi
+        pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp" start
+        sleep 2
+        # Create user and databases if they don't exist
+        export PGHOST=${env.DB_HOST}
+        createuser -U $USER ${env.DB_USER} 2>/dev/null || true
+        psql -U $USER -d postgres -c "ALTER USER \"${env.DB_USER}\" WITH PASSWORD '${env.DB_PASSWORD}';" 2>/dev/null || true
+        createdb -U $USER -O ${env.DB_USER} ${env.DB_NAME} 2>/dev/null || true
+        createdb -U $USER -O ${env.DB_USER} ${env.DB_NAME_TEST} 2>/dev/null || true
+        echo "  ✓ PostgreSQL started"
+      fi
+
+      # Adminer
+      if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
+        echo "  ✓ Adminer already running"
+      else
+        echo "  → Starting Adminer..."
+        (${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php &> "$ROOT/logs/adminer.log" &)
+        echo "  ✓ Adminer started"
+      fi
+
+      # Frontend
+      if pgrep -f "npm run dev" > /dev/null 2>&1; then
+        echo "  ✓ Frontend already running"
+      else
+        echo "  → Starting Frontend..."
+        (cd "$ROOT/frontend" && ${pkgs.nodejs}/bin/npm run dev &> "$ROOT/logs/frontend.log" &)
+        echo "  ✓ Frontend started"
+      fi
+
+      echo ""
+      echo "Services ready:"
+      echo "  PostgreSQL: localhost:5432"
+      echo "  Adminer:    http://localhost:${toString env.ADMINER_PORT}"
+      echo "  Frontend:   http://localhost:${env.FRONTEND_PORT}"
+      echo ""
+      echo "Logs: $ROOT/logs/"
     '';
 
     # Stop development environment
     stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
-      echo "Stopping PostgreSQL..."
+      echo "Stopping services..."
+
+      # Frontend
+      if pkill -f "npm run dev" 2>/dev/null; then
+        echo "  ✓ Frontend stopped"
+      else
+        echo "  ✗ Frontend not running"
+      fi
+
+      # Adminer
+      if pkill -f "php -S localhost:${toString env.ADMINER_PORT}" 2>/dev/null; then
+        echo "  ✓ Adminer stopped"
+      else
+        echo "  ✗ Adminer not running"
+      fi
+
+      # PostgreSQL
       PGDATA=${env.PGDATA}
-      pg_ctl -D "$PGDATA" stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
+      if pg_ctl -D "$PGDATA" stop 2>/dev/null; then
+        echo "  ✓ PostgreSQL stopped"
+      else
+        echo "  ✗ PostgreSQL not running"
+      fi
 
-      echo "Stopping Adminer..."
-      pkill -f "php -S localhost:${toString env.ADMINER_PORT}" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
-
-      echo "All services stopped."
+      echo "Done."
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''

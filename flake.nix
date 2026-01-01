@@ -48,6 +48,12 @@
           FRONTEND_PORT = "8502";
           FRONTEND_LOG_FILE = "./logs/frontend.log";
 
+          # Postgres
+          POSTGRES_LOG_FILE = "./logs/postgres.log";
+
+          # Adminer
+          ADMINER_LOG_FILE = "./logs/adminer.log";
+
           # lspmux
           LSPMUX_PORT = "8503";
           LSPMUX_LOG_FILE = "./logs/lspmux.log";
