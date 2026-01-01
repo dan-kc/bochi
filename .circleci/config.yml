@@ -12,8 +12,8 @@ workflows:
           base-revision: main
           config-path: .circleci/continue-config.yml
           mapping: |
-            src/.* server-change true
-            migrations/.* migration true
+            backend/src/.* server-change true
+            backend/migrations/.* migration true
           filters:
             branches:
               only: main

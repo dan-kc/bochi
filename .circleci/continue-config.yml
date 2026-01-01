@@ -38,6 +38,7 @@ jobs:
             export USER=${USER:-circleci}
             . /home/circleci/.nix-profile/etc/profile.d/nix.sh
             nix develop --command bash -c "
+              cd backend
               set -e
               cargo fmt --all --check
               cargo check

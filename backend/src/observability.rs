@@ -2,6 +2,7 @@ use tracing_appender::rolling::hourly;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+
 pub fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     // Always log to stdout
     let stdout_layer = fmt::layer()

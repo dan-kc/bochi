@@ -1,11 +1,11 @@
 { pkgs }:
 let
-  ra-multiplex-port = "27632";
-  ra-config = ''
+  lspmux-port = "27632";
+  lspmux-config = ''
     instance_timeout = false 
     gc_interval = 10
-    listen = ["127.0.0.1", ${ra-multiplex-port}]
-    connect = ["127.0.0.1", ${ra-multiplex-port}]
+    listen = ["127.0.0.1", ${lspmux-port}]
+    connect = ["127.0.0.1", ${lspmux-port}]
     log_filters = "info"
     pass_environment = []
   '';
@@ -34,20 +34,20 @@ let
       echo "Fixtures loaded successfully!"
     '';
 
-    ra = pkgs.writeShellScriptBin "ra" ''
-      RA_MULTIPLEX_DIR="/tmp/ra-${ra-multiplex-port}"
-      CONFIG_DIR="$RA_MULTIPLEX_DIR/ra-multiplex"  
+    start-lsp = pkgs.writeShellScriptBin "start-lsp" ''
+      LSPMUX_DIR="/tmp/ra-${lspmux-port}"
+      CONFIG_DIR="$LSPMUX_DIR/lspmux"  
       CONFIG_FILE="$CONFIG_DIR/config.toml"
-      LOG_DIR="/tmp/ra-multiplex"
-      LOG_FILE="$LOG_DIR/$RA_MULTIPLEX_PORT.log"
+      LOG_DIR="/tmp/lspmux"
+      LOG_FILE="$LOG_DIR/$LSPMUX_PORT.log"
 
       mkdir -p "$LOG_DIR"
       mkdir -p "$CONFIG_DIR"
       cat > "$CONFIG_FILE" <<EOF
-      ${ra-config}
+      ${lspmux-config}
       EOF
 
-      XDG_CONFIG_HOME=$RA_MULTIPLEX_DIR ra-multiplex server &> "$LOG_FILE" & disown
+      XDG_CONFIG_HOME=$LSPMUX_DIR lspmux server &> "$LOG_FILE" & disown
       echo "Listening"
     '';
 
@@ -175,6 +175,8 @@ let
 
     # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
+      set -e
+      cd backend
       PORT="8500" \
       DB_USER="user" \
       DB_PASSWORD="password" \
@@ -195,6 +197,7 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
     t = pkgs.writeShellScriptBin "t" ''
       set -e
       ${clean}/bin/clean tofustash_test
+      cd backend
       PORT="8500" \
       DB_USER="user" \
       DB_PASSWORD="password" \

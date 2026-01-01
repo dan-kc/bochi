@@ -23,7 +23,6 @@
           inherit system overlays;
         };
         scripts = import ./scripts.nix { inherit pkgs; };
-
       in
       {
         devShells.default = pkgs.mkShell {
@@ -36,6 +35,11 @@
                 "rustc"
                 "rustfmt"
               ])
+              typescript-language-server
+              nodePackages.prettier
+              nodejs_24
+              pnpm_9
+              eas-cli
               rust-analyzer
               terraform-ls
               adminer
@@ -47,7 +51,7 @@
               flyway
               opentofu
               awscli2
-              ra-multiplex
+              lspmux
               circleci-cli
               grafana-loki
               postgresql
@@ -57,18 +61,18 @@
           shellHook = ''
             export RUST_LOG=info
             # export RUST_BACKTRACE=1
-            export RA_MULTIPLEX_PORT="27632"
+            export LSPMUX_PORT="27632"
           '';
         };
 
         packages.server = pkgs.rustPlatform.buildRustPackage {
           pname = "tofustash-backend";
           version = "0.1.0";
-          src = ./.;
+          src = backend/.;
           doCheck = false; # Run tests seperately
 
           cargoLock = {
-            lockFile = ./Cargo.lock;
+            lockFile = backend/Cargo.lock;
           };
 
           nativeBuildInputs = with pkgs; [
