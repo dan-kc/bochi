@@ -52,10 +52,10 @@ let
     '';
 
     # Start development environment
-    start = pkgs.writeShellScriptBin "start" ''
+    start-dev = pkgs.writeShellScriptBin "start-dev" ''
       set -e
       echo "Stopping any existing services..."
-      ${stop}/bin/stop || true
+      ${stop-dev}/bin/stop || true
       sleep 1
       echo "Starting services..."
       echo "Starting PostgreSQL..."
@@ -66,6 +66,27 @@ let
       ${start-promtail}/bin/start-promtail && \
       ${start-grafana}/bin/start-grafana
       echo "All services started successfully!"
+    '';
+
+    # Stop development environment
+    stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
+      echo "Stopping PostgreSQL..."
+      PGDATA=".pgdata"
+      pg_ctl -D "$PGDATA" stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
+
+      echo "Stopping Adminer..."
+      pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
+
+      echo "Stopping Loki..."
+      pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
+
+      echo "Stopping Promtail..."
+      pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
+
+      echo "Stopping Grafana..."
+      pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
+
+      echo "All services stopped."
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
@@ -152,27 +173,6 @@ let
       echo "Grafana started (PID: $GRAFANA_PID)"
     '';
 
-    # Stop development environment
-    stop = pkgs.writeShellScriptBin "stop" ''
-      echo "Stopping PostgreSQL..."
-      PGDATA=".pgdata"
-      pg_ctl -D "$PGDATA" stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
-
-      echo "Stopping Adminer..."
-      pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
-
-      echo "Stopping Loki..."
-      pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
-
-      echo "Stopping Promtail..."
-      pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
-
-      echo "Stopping Grafana..."
-      pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
-
-      echo "All services stopped."
-    '';
-
     # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
       set -e
@@ -191,6 +191,13 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
 -----END PUBLIC KEY-----" \
       LOG_DESTINATION=logs \
       cargo run "$@"
+    '';
+
+    # Start frontend dev server
+    run-frontend = pkgs.writeShellScriptBin "run-frontend" ''
+      set -e
+      cd frontend
+      npm run start "$@"
     '';
 
     # Sets up and tears down the test environment. Wraps `cargo test`.
