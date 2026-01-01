@@ -45,7 +45,7 @@ let
     start-dev = pkgs.writeShellScriptBin "start-dev" ''
       set -e
       echo "Stopping any existing services..."
-      ${stop-dev}/bin/stop || true
+      ${stop-dev}/bin/stop-dev || true
       sleep 1
       echo "Starting services..."
       echo "Starting PostgreSQL..."
