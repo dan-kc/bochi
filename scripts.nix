@@ -45,6 +45,14 @@ let
     start-dev = pkgs.writeShellScriptBin "start-dev" ''
       set -e
       ROOT="$PWD"
+
+      # Handle --force flag
+      if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+        echo "Force restarting all services..."
+        ${stop-dev}/bin/stop-dev
+        echo ""
+      fi
+
       mkdir -p "$ROOT/logs"
       touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/frontend.log" "$ROOT/logs/backend.log" "$ROOT/logs/lspmux.log"
 
