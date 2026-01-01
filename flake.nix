@@ -22,7 +22,51 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        scripts = import ./scripts.nix { inherit pkgs; };
+        env = rec {
+          # Database
+          DB_NAME = "tofustash";
+          DB_NAME_TEST = "tofustash_test";
+          DB_HOST = "localhost";
+          DB_PORT = "8500";
+          DB_USER = "user";
+          DB_PASSWORD = "password";
+          PGDATA = ".pgdata";
+
+          # Backend
+          SERVER_PORT = "8501";
+          SERVER_LOG_FILE = "./logs/server.log";
+          RUST_LOG = "info";
+          # RUST_BACKTRACE = 1;
+          JWT_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
+    -----END PRIVATE KEY-----";
+          JWT_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----
+    MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
+    -----END PUBLIC KEY-----";
+
+          # Frontend
+          FRONTEND_PORT = "8502";
+          FRONTEND_LOG_FILE = "./logs/frontend.log";
+
+          # lspmux
+          LSPMUX_PORT = "8503";
+          LSPMUX_LOG_FILE = "./logs/lspmux.log";
+          LSPMUX_CONFIG = ''
+            instance_timeout = false 
+            gc_interval = 10
+            listen = ["127.0.0.1", ${LSPMUX_PORT}]
+            connect = ["127.0.0.1", ${LSPMUX_PORT}]
+            log_filters = "info"
+            pass_environment = []
+          '';
+
+          # Adminer
+          ADMINER_PORT = 8504;
+        };
+        scripts = import ./scripts.nix {
+          inherit pkgs;
+          inherit env;
+        };
       in
       {
         devShells.default = pkgs.mkShell {
@@ -53,15 +97,12 @@
               awscli2
               lspmux
               circleci-cli
-              grafana-loki
               postgresql
-              grafana
             ]
             ++ scripts;
           shellHook = ''
             export RUST_LOG=info
             # export RUST_BACKTRACE=1
-            export LSPMUX_PORT="27632"
           '';
         };
 

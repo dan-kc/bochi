@@ -1,26 +1,17 @@
-{ pkgs }:
+{ pkgs, env }:
 let
-  lspmux-port = "27632";
-  lspmux-config = ''
-    instance_timeout = false 
-    gc_interval = 10
-    listen = ["127.0.0.1", ${lspmux-port}]
-    connect = ["127.0.0.1", ${lspmux-port}]
-    log_filters = "info"
-    pass_environment = []
-  '';
-
   scripts = rec {
     # Whipes all tables in the provided database.
     clean = pkgs.writeShellScriptBin "clean" ''
       set -e 
       if [ -z "$1" ]; then
-        echo "Usage: clean <database_name>"
+        echo "Usage: clean ${env.DB_NAME}"
+        echo "OR:    clean ${env.DB_NAME_TEST}"
         exit 1
       fi
       DB_NAME="$1"
       echo "Truncating all tables in ''${DB_NAME} database..."
-      PGPASSWORD=password psql -h localhost -U user -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
       echo "Database cleaned!"
     '';
 
@@ -28,23 +19,22 @@ let
     seed = pkgs.writeShellScriptBin "seed" ''
       set -e
       echo "Truncating all tables in tofustash database..."
-      PGPASSWORD=password psql -h localhost -U user -d tofustash -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      ${clean}/bin/clean ${env.DB_NAME} || true
       echo "Loading fixture data..."
-      PGPASSWORD=password psql -h localhost -U user -d tofustash -f ./dev-seed.sql
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -f ./dev-seed.sql
       echo "Fixtures loaded successfully!"
     '';
 
     start-lsp = pkgs.writeShellScriptBin "start-lsp" ''
-      LSPMUX_DIR="/tmp/ra-${lspmux-port}"
+      LSPMUX_DIR="/tmp/ra-${env.LSPMUX_PORT}"
       CONFIG_DIR="$LSPMUX_DIR/lspmux"  
       CONFIG_FILE="$CONFIG_DIR/config.toml"
-      LOG_DIR="/tmp/lspmux"
-      LOG_FILE="$LOG_DIR/$LSPMUX_PORT.log"
+      LOG_FILE=${env.LSPMUX_LOG_FILE}
 
-      mkdir -p "$LOG_DIR"
+      mkdir -p "$(dirname "$LOG_FILE")"
       mkdir -p "$CONFIG_DIR"
       cat > "$CONFIG_FILE" <<EOF
-      ${lspmux-config}
+      ${env.LSPMUX_CONFIG}
       EOF
 
       XDG_CONFIG_HOME=$LSPMUX_DIR lspmux server &> "$LOG_FILE" & disown
@@ -60,43 +50,31 @@ let
       echo "Starting services..."
       echo "Starting PostgreSQL..."
       ${start-postgres}/bin/start-postgres
+      echo "Starting Adminer..."
       (nohup adminer &> /dev/null &) && \
-      ${start-loki}/bin/start-loki && \
-      sleep 2 && \
-      ${start-promtail}/bin/start-promtail && \
-      ${start-grafana}/bin/start-grafana
       echo "All services started successfully!"
     '';
 
     # Stop development environment
     stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
       echo "Stopping PostgreSQL..."
-      PGDATA=".pgdata"
+      PGDATA=${env.PGDATA}
       pg_ctl -D "$PGDATA" stop 2>/dev/null && echo "✓ PostgreSQL stopped" || echo "✗ PostgreSQL not running"
 
       echo "Stopping Adminer..."
-      pkill -f "php -S localhost:8081" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
-
-      echo "Stopping Loki..."
-      pkill -f "loki -config.file" && echo "✓ Loki stopped" || echo "✗ Loki not running"
-
-      echo "Stopping Promtail..."
-      pkill -9 promtail && echo "✓ Promtail stopped" || echo "✗ Promtail not running"
-
-      echo "Stopping Grafana..."
-      pkill -f "grafana-server" && echo "✓ Grafana stopped" || echo "✗ Grafana not running"
+      pkill -f "php -S localhost:${toString env.ADMINER_PORT}" && echo "✓ Adminer stopped" || echo "✗ Adminer not running"
 
       echo "All services stopped."
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
-      ${pkgs.php83}/bin/php -S localhost:8081 ${pkgs.adminer}/adminer.php
+      ${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php
     '';
 
     # Start PostgreSQL
     start-postgres = pkgs.writeShellScriptBin "start-postgres" ''
       set -e
-      PGDATA=".pgdata"
+      PGDATA=${env.PGDATA}
       if [ ! -d "$PGDATA" ]; then
         echo "Initializing PostgreSQL database..."
         initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
@@ -105,90 +83,26 @@ let
       pg_ctl -D "$PGDATA" -l /tmp/postgres.log -o "-k /tmp" start
       sleep 2
       # Create user and databases if they don't exist
-      export PGHOST=localhost
-      createuser -U $USER user 2>/dev/null || echo "  ✓ User 'user' already exists"
-      psql -U $USER -d postgres -c "ALTER USER \"user\" WITH PASSWORD 'password';" 2>/dev/null || true
-      createdb -U $USER -O user tofustash 2>/dev/null || echo "  ✓ Database 'tofustash' already exists"
-      createdb -U $USER -O user tofustash_test 2>/dev/null || echo "  ✓ Database 'tofustash_test' already exists"
+      export PGHOST=${env.DB_HOST}
+      createuser -U $USER ${env.DB_USER} 2>/dev/null || echo "  ✓ User '${env.DB_USER}' already exists"
+      psql -U $USER -d postgres -c "ALTER USER \"${env.DB_USER}\" WITH PASSWORD '${env.DB_PASSWORD}';" 2>/dev/null || true
+      createdb -U $USER -O ${env.DB_USER} ${env.DB_NAME} 2>/dev/null || echo "  ✓ Database '${env.DB_NAME}' already exists"
+      createdb -U $USER -O ${env.DB_USER} ${env.DB_NAME_TEST} 2>/dev/null || echo "  ✓ Database '${env.DB_NAME_TEST}' already exists"
       echo "PostgreSQL started successfully"
-    '';
-
-    # Start loki
-    start-loki = pkgs.writeShellScriptBin "start-loki" ''
-      set -e
-      LOKI_DATA_DIR="/tmp/loki-data"
-      mkdir -p "$LOKI_DATA_DIR/chunks"
-      mkdir -p "$LOKI_DATA_DIR/rules"
-      mkdir -p "$LOKI_DATA_DIR/compactor"
-      echo "Starting Loki..."
-      ${pkgs.grafana-loki}/bin/loki -config.file=./observability/local/loki-config.yaml &> /tmp/loki.log &
-      LOKI_PID=$!
-      sleep 2
-      if ! kill -0 $LOKI_PID 2>/dev/null; then
-        echo "Failed to start Loki. Check /tmp/loki.log for details"
-        cat /tmp/loki.log | tail -20
-        exit 1
-      fi
-      echo "Loki started (PID: $LOKI_PID)"
-    '';
-
-    # Start promtail
-    start-promtail = pkgs.writeShellScriptBin "start-promtail" ''
-      set -e
-      mkdir -p ./logs
-      echo "Starting Promtail..."
-      export PROMTAIL_LOG_PATH="$(pwd)/logs/server.log*"
-      ${pkgs.grafana-loki}/bin/promtail -config.expand-env=true -config.file=./observability/local/promtail-config.yaml &> /tmp/promtail.log &
-      PROMTAIL_PID=$!
-      sleep 2
-      if ! kill -0 $PROMTAIL_PID 2>/dev/null; then
-        echo "Failed to start Promtail. Check /tmp/promtail.log for details"
-        cat /tmp/promtail.log | tail -20
-        exit 1
-      fi
-      echo "Promtail started (PID: $PROMTAIL_PID)"
-    '';
-
-    # Start grafana
-    start-grafana = pkgs.writeShellScriptBin "start-grafana" ''
-      set -e
-      GRAFANA_DATA_DIR="/tmp/grafana-storage"
-      mkdir -p "$GRAFANA_DATA_DIR"
-      echo "Starting Grafana..."
-      GF_SECURITY_ADMIN_PASSWORD=admin \
-      GF_SECURITY_ADMIN_USER=admin \
-      GF_AUTH_ANONYMOUS_ENABLED=true \
-      GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
-      GF_AUTH_DISABLE_LOGIN_FORM=true \
-      GF_AUTH_DISABLE_SIGNOUT_MENU=true \
-      GF_PATHS_DATA="$GRAFANA_DATA_DIR" \
-      ${pkgs.grafana}/bin/grafana-server --homepath ${pkgs.grafana}/share/grafana &> /tmp/grafana.log &
-      GRAFANA_PID=$!
-      sleep 2
-      if ! kill -0 $GRAFANA_PID 2>/dev/null; then
-        echo "Failed to start Grafana. Check /tmp/grafana.log for details"
-        cat /tmp/grafana.log | tail -20
-        exit 1
-      fi
-      echo "Grafana started (PID: $GRAFANA_PID)"
     '';
 
     # Wraps `cargo run` with env vars
     run = pkgs.writeShellScriptBin "run" ''
       set -e
       cd backend
-      PORT="8500" \
-      DB_USER="user" \
-      DB_PASSWORD="password" \
-      DB_HOST="localhost" \
-      DB_NAME="tofustash" \
+      PORT="${env.SERVER_PORT}" \
+      DB_USER="${env.DB_USER}" \
+      DB_PASSWORD="${env.DB_PASSWORD}" \
+      DB_HOST="${env.DB_HOST}" \
+      DB_NAME="${env.DB_NAME}" \
       SSL_MODE="disable" \
-      JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
------END PRIVATE KEY-----" \
-      JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
------END PUBLIC KEY-----" \
+      JWT_PRIVATE_KEY="${env.JWT_PRIVATE_KEY}" \
+      JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
       LOG_DESTINATION=logs \
       cargo run "$@"
     '';
@@ -203,20 +117,16 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
       set -e
-      ${clean}/bin/clean tofustash_test
+      ${clean}/bin/clean ${env.DB_NAME_TEST}
       cd backend
-      PORT="8500" \
-      DB_USER="user" \
-      DB_PASSWORD="password" \
-      DB_HOST="localhost" \
-      DB_NAME="tofustash_test" \
+      PORT="${env.SERVER_PORT}" \
+      DB_USER="${env.DB_USER}" \
+      DB_PASSWORD="${env.DB_PASSWORD}" \
+      DB_HOST="${env.DB_HOST}" \
+      DB_NAME="${env.DB_NAME_TEST}" \
       SSL_MODE="disable" \
-      JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIL9ijTozRgbWNk4WlZosj9MibQ9s8gwcEOqk0KxQxxGd
------END PRIVATE KEY-----" \
-      JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
------END PUBLIC KEY-----" \
+      JWT_PRIVATE_KEY="${env.JWT_PRIVATE_KEY}" \
+      JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
       cargo test "$@"
     '';
 
@@ -227,32 +137,32 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
 
     # Displays the schema of a database table in tofustash
     schema = pkgs.writeShellScriptBin "schema" ''
-      set -e 
+      set -e
       if [ -z "$1" ]; then
         echo "Usage: schema <table name>"
         exit 1
       fi
       TABLE_NAME="$1"
-      PGPASSWORD=password psql -h localhost -U user -d tofustash -P pager=off -c "\d+ ''${TABLE_NAME}"
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -P pager=off -c "\d+ ''${TABLE_NAME}"
     '';
 
     # Flyway wrapper with config
     fw = pkgs.writeShellScriptBin "fw" ''
-      set -e 
+      set -e
       # Use the first argument as DATABASE_NAME if provided, otherwise default to tofustash
       # Shift removes the first argument so "$@" correctly passes remaining arguments
       if [ -n "$1" ]; then
         DATABASE_NAME="$1"
         shift
       else
-        DATABASE_NAME="tofustash" # Default database name
+        DATABASE_NAME="${env.DB_NAME}" # Default database name
       fi
 
       echo "Using database: ''${DATABASE_NAME}"
       ${pkgs.flyway}/bin/flyway \
-        -url="jdbc:postgresql://localhost:5432/''${DATABASE_NAME}" \
-        -user="user" \
-        -password="password" \
+        -url="jdbc:postgresql://${env.DB_HOST}:5432/''${DATABASE_NAME}" \
+        -user="${env.DB_USER}" \
+        -password="${env.DB_PASSWORD}" \
         -locations="filesystem:./migrations" \
         -validateOnMigrate=true \
         -baselineOnMigrate=true \
@@ -265,18 +175,18 @@ MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
 
     # drops and recreates the provided database, then applies migrations.
     nuke = pkgs.writeShellScriptBin "nuke" ''
-      set -e 
+      set -e
       if [ -z "$1" ]; then
         echo "Usage: nuke <database_name>"
         exit 1
       fi
       DB_NAME="$1"
       echo "Killing any running tofustash processes..."
-      ${kp}/bin/kp
+      ${kp}/bin/kp || true
       echo "Dropping existing database..."
-      PGPASSWORD=password psql -h localhost -U user -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d postgres -c "DROP DATABASE IF EXISTS ''${DB_NAME};"
       echo "Creating database..."
-      PGPASSWORD=password psql -h localhost -U user -d postgres -c "CREATE DATABASE ''${DB_NAME};"
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d postgres -c "CREATE DATABASE ''${DB_NAME};"
       echo "Applying migrations to ''${DB_NAME}..."
       ${fw}/bin/fw ''${DB_NAME} migrate
       echo "Database refresh complete!"
