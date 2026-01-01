@@ -7,6 +7,9 @@ logs
 .git
 .terraform
 .pgdata
+.backend.pid
+.frontend.pid
+.lspmux.pid
 
 # Expo
 .expo/

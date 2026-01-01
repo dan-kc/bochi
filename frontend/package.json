@@ -3,11 +3,11 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "dotenv -- sh -c 'expo start --port $PORT --host $HOST'",
+    "start": "dotenv -- sh -c 'expo start --port $FRONTEND_PORT --host $HOST'",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "dotenv -- sh -c 'expo start --android --port $PORT --host $HOST'",
-    "ios": "dotenv -- sh -c 'expo start --ios --port $PORT --host $HOST'",
-    "web": "dotenv -- sh -c 'expo start --web --port $PORT --host $HOST'",
+    "android": "dotenv -- sh -c 'expo start --android --port $FRONTEND_PORT --host $HOST'",
+    "ios": "dotenv -- sh -c 'expo start --ios --port $FRONTEND_PORT --host $HOST'",
+    "web": "dotenv -- sh -c 'expo start --web --port $FRONTEND_PORT --host $HOST'",
     "lint": "expo lint"
   },
   "dependencies": {

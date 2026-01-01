@@ -80,7 +80,7 @@ let
       fi
 
       # Backend
-      if pgrep -f "tofustash-backend" > /dev/null 2>&1; then
+      if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null; then
         echo "  ✓ Backend already running"
       else
         echo "  → Starting Backend..."
@@ -94,7 +94,9 @@ let
         JWT_PRIVATE_KEY="${env.JWT_PRIVATE_KEY}" \
         JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
         LOG_DESTINATION=logs \
-        nohup cargo run &> "$ROOT/logs/backend.log" & disown
+        nohup cargo run &> "$ROOT/logs/backend.log" &
+        echo $! > "$ROOT/.backend.pid"
+        disown
         cd "$ROOT"
         echo "  ✓ Backend started"
       fi
@@ -109,18 +111,20 @@ let
       fi
 
       # Frontend
-      if pgrep -f "expo start --web" > /dev/null 2>&1; then
+      if [ -f "$ROOT/.frontend.pid" ] && kill -0 $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
         echo "  ✓ Frontend already running"
       else
         echo "  → Starting Frontend..."
         cd "$ROOT/frontend"
-        nohup ${pkgs.nodejs}/bin/npm run web &> "$ROOT/logs/frontend.log" & disown
+        PATH="${pkgs.nodejs}/bin:$PATH" nohup ${pkgs.nodejs}/bin/npm run web &> "$ROOT/logs/frontend.log" &
+        echo $! > "$ROOT/.frontend.pid"
+        disown
         cd "$ROOT"
         echo "  ✓ Frontend started"
       fi
 
       # LSP Mux
-      if ${pkgs.netcat}/bin/nc -z localhost ${env.LSPMUX_PORT} 2>/dev/null; then
+      if [ -f "$ROOT/.lspmux.pid" ] && kill -0 $(cat "$ROOT/.lspmux.pid") 2>/dev/null; then
         echo "  ✓ LSP Mux already running"
       else
         echo "  → Starting LSP Mux..."
@@ -131,7 +135,9 @@ let
         cat > "$CONFIG_FILE" <<EOF
         ${env.LSPMUX_CONFIG}
       EOF
-        XDG_CONFIG_HOME=$LSPMUX_DIR nohup lspmux server &> "$ROOT/logs/lspmux.log" & disown
+        XDG_CONFIG_HOME=$LSPMUX_DIR nohup lspmux server &> "$ROOT/logs/lspmux.log" &
+        echo $! > "$ROOT/.lspmux.pid"
+        disown
         echo "  ✓ LSP Mux started"
       fi
 
@@ -148,19 +154,24 @@ let
 
     # Stop development environment
     stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
+      ROOT="$PWD"
       echo "Stopping services..."
 
       # LSP Mux
-      if pkill -f "lspmux server" 2>/dev/null; then
+      if [ -f "$ROOT/.lspmux.pid" ] && kill $(cat "$ROOT/.lspmux.pid") 2>/dev/null; then
+        rm -f "$ROOT/.lspmux.pid"
         echo "  ✓ LSP Mux stopped"
       else
+        rm -f "$ROOT/.lspmux.pid"
         echo "  ✗ LSP Mux not running"
       fi
 
       # Frontend
-      if pkill -f "expo start --web" 2>/dev/null; then
+      if [ -f "$ROOT/.frontend.pid" ] && kill $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
+        rm -f "$ROOT/.frontend.pid"
         echo "  ✓ Frontend stopped"
       else
+        rm -f "$ROOT/.frontend.pid"
         echo "  ✗ Frontend not running"
       fi
 
@@ -172,15 +183,17 @@ let
       fi
 
       # Backend
-      if pkill -f "tofustash-backend" 2>/dev/null; then
+      if [ -f "$ROOT/.backend.pid" ] && kill $(cat "$ROOT/.backend.pid") 2>/dev/null; then
+        rm -f "$ROOT/.backend.pid"
         echo "  ✓ Backend stopped"
       else
+        rm -f "$ROOT/.backend.pid"
         echo "  ✗ Backend not running"
       fi
 
       # PostgreSQL
-      PGDATA=${env.PGDATA}
-      if pg_ctl -D "$PGDATA" stop 2>/dev/null; then
+      PGDATA="$ROOT/${env.PGDATA}"
+      if pg_ctl -D "$PGDATA" stop &>/dev/null; then
         echo "  ✓ PostgreSQL stopped"
       else
         echo "  ✗ PostgreSQL not running"
@@ -191,6 +204,7 @@ let
 
     # Show status of all services
     status = pkgs.writeShellScriptBin "status" ''
+      ROOT="$PWD"
       echo "Service Status:"
       echo ""
 
@@ -202,7 +216,7 @@ let
       fi
 
       # Backend
-      if pgrep -f "tofustash-backend" > /dev/null 2>&1; then
+      if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null; then
         echo "  Backend      ✓ Running    http://localhost:${env.SERVER_PORT}"
       else
         echo "  Backend      ✗ Stopped"
@@ -216,14 +230,14 @@ let
       fi
 
       # Frontend
-      if pgrep -f "expo start --web" > /dev/null 2>&1; then
+      if [ -f "$ROOT/.frontend.pid" ] && kill -0 $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
         echo "  Frontend     ✓ Running    http://localhost:${env.FRONTEND_PORT}"
       else
         echo "  Frontend     ✗ Stopped"
       fi
 
       # LSP Mux
-      if ${pkgs.netcat}/bin/nc -z localhost ${env.LSPMUX_PORT} 2>/dev/null; then
+      if [ -f "$ROOT/.lspmux.pid" ] && kill -0 $(cat "$ROOT/.lspmux.pid") 2>/dev/null; then
         echo "  LSP Mux      ✓ Running    localhost:${env.LSPMUX_PORT}"
       else
         echo "  LSP Mux      ✗ Stopped"
@@ -237,13 +251,14 @@ let
     # Start PostgreSQL
     start-postgres = pkgs.writeShellScriptBin "start-postgres" ''
       set -e
-      PGDATA=${env.PGDATA}
+      ROOT="$PWD"
+      PGDATA="$ROOT/${env.PGDATA}"
       if [ ! -d "$PGDATA" ]; then
         echo "Initializing PostgreSQL database..."
         initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
       fi
       echo "Starting PostgreSQL..."
-      pg_ctl -D "$PGDATA" -l /tmp/postgres.log -o "-k /tmp" start
+      pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp" start
       sleep 2
       # Create user and databases if they don't exist
       export PGHOST=${env.DB_HOST}
@@ -309,9 +324,15 @@ let
       cargo test "$@"
     '';
 
-    # Kills all tofustash processes
+    # Kills the backend process for this project
     kp = pkgs.writeShellScriptBin "kp" ''
-      	pkill -f tofustash
+      ROOT="$PWD"
+      if [ -f "$ROOT/.backend.pid" ]; then
+        kill $(cat "$ROOT/.backend.pid") 2>/dev/null && echo "Backend killed" || echo "Backend not running"
+        rm -f "$ROOT/.backend.pid"
+      else
+        echo "No backend PID file found"
+      fi
     '';
 
     # Displays the schema of a database table in tofustash

@@ -107,6 +107,8 @@
           shellHook = ''
             export RUST_LOG=info
             # export RUST_BACKTRACE=1
+            export FRONTEND_PORT="${env.FRONTEND_PORT}"
+            export HOST="localhost"
           '';
         };
 
