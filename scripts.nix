@@ -141,13 +141,7 @@ let
         echo "  ✓ LSP Mux started"
       fi
 
-      echo ""
-      echo "Services ready:"
-      echo "  PostgreSQL: localhost:5432"
-      echo "  Backend:    http://localhost:${env.SERVER_PORT}"
-      echo "  Adminer:    http://localhost:${toString env.ADMINER_PORT}"
-      echo "  Frontend:   http://localhost:${env.FRONTEND_PORT}"
-      echo "  LSP Mux:    localhost:${env.LSPMUX_PORT}"
+      ${status}/bin/status
       echo ""
       echo "Logs: $ROOT/logs/"
     '';
@@ -217,21 +211,21 @@ let
 
       # Backend
       if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null; then
-        echo "  Backend      ✓ Running    http://localhost:${env.SERVER_PORT}"
+        echo "  Backend      ✓ Running    localhost:${env.SERVER_PORT}"
       else
         echo "  Backend      ✗ Stopped"
       fi
 
       # Adminer
       if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
-        echo "  Adminer      ✓ Running    http://localhost:${toString env.ADMINER_PORT}"
+        echo "  Adminer      ✓ Running    localhost:${toString env.ADMINER_PORT}"
       else
         echo "  Adminer      ✗ Stopped"
       fi
 
       # Frontend
       if [ -f "$ROOT/.frontend.pid" ] && kill -0 $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
-        echo "  Frontend     ✓ Running    http://localhost:${env.FRONTEND_PORT}"
+        echo "  Frontend     ✓ Running    localhost:${env.FRONTEND_PORT}"
       else
         echo "  Frontend     ✗ Stopped"
       fi
