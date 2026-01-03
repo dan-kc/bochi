@@ -25,22 +25,6 @@ let
       echo "Fixtures loaded successfully!"
     '';
 
-    start-lsp = pkgs.writeShellScriptBin "start-lsp" ''
-      LSPMUX_DIR="/tmp/ra-${env.LSPMUX_PORT}"
-      CONFIG_DIR="$LSPMUX_DIR/lspmux"  
-      CONFIG_FILE="$CONFIG_DIR/config.toml"
-      LOG_FILE=${env.LSPMUX_LOG_FILE}
-
-      mkdir -p "$(dirname "$LOG_FILE")"
-      mkdir -p "$CONFIG_DIR"
-      cat > "$CONFIG_FILE" <<EOF
-      ${env.LSPMUX_CONFIG}
-      EOF
-
-      XDG_CONFIG_HOME=$LSPMUX_DIR lspmux server &> "$LOG_FILE" & disown
-      echo "Listening"
-    '';
-
     # Start development environment
     start-dev = pkgs.writeShellScriptBin "start-dev" ''
       set -e
