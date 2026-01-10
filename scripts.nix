@@ -96,7 +96,7 @@ let
       fi
 
       # Frontend
-      if [ -f "$ROOT/.frontend.pid" ] && kill -0 $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
+      if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
         echo "  ✓ Frontend already running"
       else
         echo "  → Starting Frontend..."
@@ -105,6 +105,13 @@ let
         echo $! > "$ROOT/.frontend.pid"
         disown
         cd "$ROOT"
+        # Wait for frontend to start listening (up to 10 seconds)
+        for i in {1..20}; do
+          if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
+            break
+          fi
+          sleep 0.5
+        done
         echo "  ✓ Frontend started"
       fi
 
@@ -146,7 +153,8 @@ let
       fi
 
       # Frontend
-      if [ -f "$ROOT/.frontend.pid" ] && kill $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
+      FRONTEND_PID=$(lsof -t -i :${env.FRONTEND_PORT} -sTCP:LISTEN 2>/dev/null)
+      if [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null; then
         rm -f "$ROOT/.frontend.pid"
         echo "  ✓ Frontend stopped"
       else
@@ -209,7 +217,7 @@ let
       fi
 
       # Frontend
-      if [ -f "$ROOT/.frontend.pid" ] && kill -0 $(cat "$ROOT/.frontend.pid") 2>/dev/null; then
+      if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
         echo "  Frontend     ✓ Running    localhost:${env.FRONTEND_PORT}"
       else
         echo "  Frontend     ✗ Stopped"

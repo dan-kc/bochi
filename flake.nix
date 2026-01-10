@@ -27,7 +27,7 @@
           DB_NAME = "tofustash";
           DB_NAME_TEST = "tofustash_test";
           DB_HOST = "localhost";
-          DB_PORT = "8500";
+          DB_PORT = "5432";
           DB_USER = "user";
           DB_PASSWORD = "password";
           PGDATA = ".pgdata";
