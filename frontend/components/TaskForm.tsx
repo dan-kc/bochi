@@ -178,6 +178,13 @@ const taskSchema = z
   );
 
 type TaskMode = "task" | "habit";
+type FrequencyPeriod = "day" | "week" | "month";
+
+const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
+  day: 1,
+  week: 7,
+  month: 30,
+};
 
 export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
   const [name, setName] = useState("");
@@ -185,6 +192,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
   const [hiddenUntil, setHiddenUntil] = useState<Date | null>(null);
   const [dueBy, setDueBy] = useState<Date | null>(null);
   const [minDailyFrequency, setMinDailyFrequency] = useState("");
+  const [frequencyPeriod, setFrequencyPeriod] = useState<FrequencyPeriod>("day");
   const [mode, setMode] = useState<TaskMode>("task");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -198,11 +206,30 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
       setDescription(task.description);
       setHiddenUntil(task.hidden_until ? new Date(task.hidden_until) : null);
       setDueBy(task.due_by ? new Date(task.due_by) : null);
-      setMinDailyFrequency(
-        task.min_daily_frequency !== null
-          ? String(task.min_daily_frequency)
-          : "",
-      );
+
+      if (task.min_daily_frequency !== null) {
+        const dailyFreq = task.min_daily_frequency;
+        // Determine best period to display based on the stored daily frequency
+        let bestPeriod: FrequencyPeriod = "day";
+        let displayValue = dailyFreq;
+
+        if (dailyFreq >= 1) {
+          bestPeriod = "day";
+          displayValue = dailyFreq;
+        } else if (dailyFreq * 7 >= 1) {
+          bestPeriod = "week";
+          displayValue = dailyFreq * 7;
+        } else {
+          bestPeriod = "month";
+          displayValue = dailyFreq * 30;
+        }
+
+        setFrequencyPeriod(bestPeriod);
+        setMinDailyFrequency(String(displayValue));
+      } else {
+        setMinDailyFrequency("");
+        setFrequencyPeriod("day");
+      }
       setMode(task.min_daily_frequency !== null ? "habit" : "task");
     } else {
       const empty = createEmptyTaskInput();
@@ -211,6 +238,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
       setHiddenUntil(null);
       setDueBy(null);
       setMinDailyFrequency("");
+      setFrequencyPeriod("day");
       setMode("task");
     }
   }, [task]);
@@ -222,8 +250,11 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
   const handleSave = async () => {
     setErrors({});
 
-    const frequency = minDailyFrequency.trim()
+    const rawFrequency = minDailyFrequency.trim()
       ? parseFloat(minDailyFrequency)
+      : null;
+    const frequency = rawFrequency !== null
+      ? rawFrequency / PERIOD_DIVISORS[frequencyPeriod]
       : null;
 
     const input = {
@@ -417,18 +448,45 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
           {mode === "habit" && (
             <View>
               <Text className="text-sm font-medium text-gray-700 mb-1">
-                Daily Frequency *
+                Frequency *
               </Text>
-              <TextInput
-                className={`border rounded-lg px-4 py-3 text-base ${errors.min_daily_frequency ? "border-red-500" : "border-gray-300"}`}
-                placeholder="e.g., 1 for once daily, 0.5 for every other day"
-                value={minDailyFrequency}
-                onChangeText={setMinDailyFrequency}
-                keyboardType="decimal-pad"
-                editable={!isLoading}
-              />
-              <Text className="text-xs text-gray-500 mt-1">
-                How many times per day (1-100)
+              <View className="flex-row gap-2 mb-2">
+                <TextInput
+                  className={`flex-1 border rounded-lg px-4 py-3 text-base ${errors.min_daily_frequency ? "border-red-500" : "border-gray-300"}`}
+                  placeholder="e.g., 1, 2, 3"
+                  value={minDailyFrequency}
+                  onChangeText={setMinDailyFrequency}
+                  keyboardType="decimal-pad"
+                  editable={!isLoading}
+                />
+                <Text className="self-center text-gray-500">per</Text>
+              </View>
+              <View className="flex-row gap-2">
+                {(["day", "week", "month"] as const).map((period) => (
+                  <Pressable
+                    key={period}
+                    onPress={() => setFrequencyPeriod(period)}
+                    disabled={isLoading}
+                    className={`flex-1 py-2 px-3 rounded-lg items-center border ${
+                      frequencyPeriod === period
+                        ? "bg-purple-500 border-purple-500"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    <Text
+                      className={`font-medium ${
+                        frequencyPeriod === period ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {period.charAt(0).toUpperCase() + period.slice(1)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text className="text-xs text-gray-500 mt-2">
+                {frequencyPeriod === "day" && "Times per day (e.g., 1 = once daily, 2 = twice daily)"}
+                {frequencyPeriod === "week" && "Times per week (e.g., 3 = three times a week)"}
+                {frequencyPeriod === "month" && "Times per month (e.g., 2 = twice a month)"}
               </Text>
             </View>
           )}
