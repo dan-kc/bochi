@@ -1,6 +1,4 @@
-use crate::common::{
-    get_access_token_for_user, make_authenticated_graphql_request, register_user,
-};
+use crate::common::{get_access_token_for_user, make_authenticated_graphql_request, register_user};
 use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -22,7 +20,7 @@ async fn test_sync_pull_returns_empty_for_new_user() {
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -92,7 +90,7 @@ async fn test_sync_pull_returns_all_tasks_when_since_is_null() {
 
     // Pull all tasks
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -157,7 +155,7 @@ async fn test_sync_pull_returns_tasks_modified_since_timestamp() {
 
     // Get current server time to use as "since"
     let pull_query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 serverTime
             }
@@ -196,7 +194,7 @@ async fn test_sync_pull_returns_tasks_modified_since_timestamp() {
 
     // Pull tasks since the timestamp - should only get the new task
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -271,6 +269,8 @@ async fn test_sync_pull_includes_soft_deleted_tasks() {
                 "id": task_id,
                 "name": "Task to delete",
                 "description": "This will be soft deleted",
+                "createdAt": "2025-01-01T00:00:00",
+                "updatedAt": "2025-01-01T00:00:00",
                 "deletedAt": "2025-01-01T00:00:00"
             }]
         }
@@ -279,7 +279,7 @@ async fn test_sync_pull_includes_soft_deleted_tasks() {
 
     // Pull all tasks - should include the soft-deleted task
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -355,7 +355,7 @@ async fn test_sync_pull_only_returns_own_tasks() {
 
     // User 1 pulls - should only see their own task
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -383,7 +383,7 @@ async fn test_sync_pull_requires_authentication() {
     let router = router::router().await;
 
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -416,7 +416,7 @@ async fn test_sync_pull_with_invalid_auth_token() {
     let router = router::router().await;
 
     let query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -571,7 +571,10 @@ async fn test_sync_push_updates_existing_task() {
     let updated_task = &tasks[0];
     assert_eq!(updated_task.get("id").unwrap(), task_id);
     assert_eq!(updated_task.get("name").unwrap(), "Updated Name");
-    assert_eq!(updated_task.get("description").unwrap(), "Updated Description");
+    assert_eq!(
+        updated_task.get("description").unwrap(),
+        "Updated Description"
+    );
 }
 
 #[tokio::test]
@@ -1040,7 +1043,7 @@ async fn test_sync_push_cannot_modify_other_users_tasks() {
     // The task should either be rejected or a new task created for user 2 (not modify user 1's task)
     // Verify user 1's task is unchanged
     let pull_query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -1314,7 +1317,7 @@ async fn test_sync_roundtrip_push_then_pull() {
 
     // Pull and verify
     let pull_query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id
@@ -1402,7 +1405,7 @@ async fn test_sync_incremental_pull_after_push() {
 
     // Pull since first push - should only get the second task
     let pull_query = json!({
-        "query": "query SyncPull($since: DateTime) {
+        "query": "query SyncPull($since: NaiveDateTime) {
             syncPull(since: $since) {
                 tasks {
                     id

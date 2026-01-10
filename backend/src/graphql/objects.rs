@@ -1,17 +1,18 @@
 use crate::database::{RewardRow, TaskRow, TradeWithRewardRow, TradeWithTaskRow};
-use async_graphql::{Interface, SimpleObject};
+use async_graphql::{InputObject, Interface, SimpleObject};
 use chrono::NaiveDateTime;
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 pub struct TaskObject {
-    id: String,
-    name: String, // Max 100 utf-8 chars
-    created_at: NaiveDateTime,
-    deleted_at: Option<NaiveDateTime>,
-    hidden_until: Option<NaiveDateTime>,
-    due_by: Option<NaiveDateTime>,
-    description: String,
-    min_daily_frequency: Option<f64>,
+    pub id: String,
+    pub name: String, // Max 100 utf-8 chars
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_by: Option<NaiveDateTime>,
+    pub description: String,
+    pub min_daily_frequency: Option<f64>,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -19,6 +20,7 @@ impl From<TaskRow> for TaskObject {
             id: task_row.id.to_string(),
             name: task_row.name,
             created_at: task_row.created_at,
+            updated_at: task_row.updated_at,
             deleted_at: task_row.deleted_at,
             hidden_until: task_row.hidden_until,
             due_by: task_row.due_by,
@@ -33,6 +35,7 @@ pub struct RewardObject {
     id: String,
     name: String, // Max 100 utf-8 chars
     created_at: NaiveDateTime,
+    updated_at: NaiveDateTime,
     deleted_at: Option<NaiveDateTime>,
     hidden_until: Option<NaiveDateTime>,
     description: String,
@@ -44,6 +47,7 @@ impl From<RewardRow> for RewardObject {
             id: reward_row.id.to_string(),
             name: reward_row.name,
             created_at: reward_row.created_at,
+            updated_at: reward_row.updated_at,
             deleted_at: reward_row.deleted_at,
             hidden_until: reward_row.hidden_until,
             description: reward_row.description,
@@ -56,6 +60,7 @@ impl From<RewardRow> for RewardObject {
     field(name = "id", ty = "&String"),
     field(name = "name", ty = "String"),
     field(name = "created_at", ty = "&NaiveDateTime"),
+    field(name = "updated_at", ty = "&NaiveDateTime"),
     field(name = "deleted_at", ty = "&Option<NaiveDateTime>"),
     field(name = "hidden_until", ty = "&Option<NaiveDateTime>"),
     field(name = "description", ty = "String")
@@ -78,6 +83,7 @@ impl From<TradeWithTaskRow> for TradeObject {
             id: trade_row.task_id.to_string(),
             name: trade_row.task_name,
             created_at: trade_row.task_created_at,
+            updated_at: trade_row.task_updated_at,
             deleted_at: trade_row.task_deleted_at,
             hidden_until: trade_row.task_hidden_until,
             due_by: trade_row.task_due_by,
@@ -99,6 +105,7 @@ impl From<TradeWithRewardRow> for TradeObject {
             id: trade_row.reward_id.to_string(),
             name: trade_row.reward_name,
             created_at: trade_row.reward_created_at,
+            updated_at: trade_row.reward_updated_at,
             deleted_at: trade_row.reward_deleted_at,
             hidden_until: trade_row.reward_hidden_until,
             description: trade_row.reward_description,
@@ -112,4 +119,33 @@ impl From<TradeWithRewardRow> for TradeObject {
             tradable_item: item,
         };
     }
+}
+
+// ============================================================================
+// Sync Types
+// ============================================================================
+
+#[derive(InputObject)]
+pub struct SyncTaskInput {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_by: Option<NaiveDateTime>,
+    pub min_daily_frequency: Option<f64>,
+}
+
+#[derive(SimpleObject)]
+pub struct SyncPullResponse {
+    pub tasks: Vec<TaskObject>,
+    pub server_time: NaiveDateTime,
+}
+
+#[derive(SimpleObject)]
+pub struct SyncPushResponse {
+    pub tasks: Vec<TaskObject>,
+    pub server_time: NaiveDateTime,
 }

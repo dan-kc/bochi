@@ -1,11 +1,11 @@
 use std::{any::Any, sync::Arc};
 use tracing::error;
 
-use super::objects::{RewardObject, TaskObject, TradeObject};
+use super::objects::{RewardObject, SyncPushResponse, SyncTaskInput, TaskObject, TradeObject};
 use crate::{
     database::{
         self, CreateRewardOptions, CreateTaskOptions, CreateTradeWithRewardOptions,
-        CreateTradeWithTaskOptions,
+        CreateTradeWithTaskOptions, UpsertTaskOptions,
     },
     router::AuthenticatedUser,
 };
@@ -258,5 +258,111 @@ impl MutationRoot {
 
             Ok(trade_row.into())
         }
+    }
+
+    async fn sync_push(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        tasks: Vec<SyncTaskInput>,
+    ) -> Result<SyncPushResponse, async_graphql::Error> {
+        let database = ctx.data::<database::Database>().map_err(|e| {
+            error!("Database pool not found in context: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
+
+        let user_id = ctx
+            .data::<AuthenticatedUser>()
+            .map_err(|e| {
+                error!("User not found in context: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?
+            .user_id;
+
+        let mut result_tasks = Vec::new();
+
+        for task_input in tasks {
+            // Validate task ID is a valid UUID
+            let task_id = task_input.id.parse::<Uuid>().map_err(|_| {
+                Error::Validation(format!("Invalid task id format: {}", task_input.id))
+                    .into_graphql_error()
+            })?;
+
+            // Validate name length
+            let name_len = task_input.name.chars().count();
+            if name_len > 100 || name_len < 1 {
+                let msg = format!(
+                    "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
+                    name_len
+                );
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+
+            // Validate description length
+            let desc_len = task_input.description.chars().count();
+            if desc_len > 10000 {
+                let msg = format!(
+                    "Description is too long ({} characters), max 10,000.",
+                    desc_len
+                );
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+
+            // Validate min_daily_frequency
+            if let Some(freq) = task_input.min_daily_frequency {
+                if freq < 0.0 || freq > 100.0 {
+                    let msg = format!(
+                        "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
+                        freq as f32
+                    );
+                    return Err(Error::Validation(msg).into_graphql_error());
+                }
+            }
+
+            // Check if this task already exists and belongs to this user
+            let existing_task = database
+                .get_task_by_id(user_id, task_id)
+                .await
+                .map_err(|e| {
+                    error!("Database Error: {:?}", e);
+                    Error::Internal.into_graphql_error()
+                })?;
+
+            // Save name for comparison after move
+            let input_name = task_input.name.clone();
+
+            // If task doesn't exist for this user, check if it exists for any user
+            // by attempting upsert - the upsert query handles ownership check
+            let upsert_opts = UpsertTaskOptions {
+                id: task_id,
+                name: task_input.name,
+                description: task_input.description,
+                created_at: task_input.created_at,
+                deleted_at: task_input.deleted_at,
+                hidden_until: task_input.hidden_until,
+                due_by: task_input.due_by,
+                min_daily_frequency: task_input.min_daily_frequency,
+            };
+
+            let task_row = database
+                .upsert_task(user_id, upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error: {:?}", e);
+                    Error::Internal.into_graphql_error()
+                })?;
+
+            // Only include task if it belongs to this user (upsert returns the task regardless)
+            // Check by comparing if we actually modified it or if it was owned by someone else
+            if existing_task.is_some() || task_row.name == input_name {
+                result_tasks.push(task_row.into());
+            }
+        }
+
+        let server_time = Utc::now().naive_utc();
+
+        Ok(SyncPushResponse {
+            tasks: result_tasks,
+            server_time,
+        })
     }
 }

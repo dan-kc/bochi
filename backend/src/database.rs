@@ -59,7 +59,7 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description, min_daily_frequency) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, created_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
+            (user_id, name, hidden_until, due_by, description, min_daily_frequency) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
@@ -77,7 +77,7 @@ impl Database {
     ) -> Result<RewardRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO rewards
-            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, deleted_at, hidden_until, max_daily_frequency",
+            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency",
         )
         .bind(create_reward_options.user_id)
         .bind(create_reward_options.name)
@@ -107,7 +107,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                t.name AS task_name, t.created_at AS task_created_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency
+                t.name AS task_name, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency
             FROM new_trade nt
             JOIN tasks t ON nt.task_id = t.id",
         )
@@ -132,7 +132,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                r.name AS reward_name, r.created_at AS reward_created_at, r.deleted_at AS reward_deleted_at, r.hidden_until AS reward_hidden_until, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
+                r.name AS reward_name, r.created_at AS reward_created_at, r.updated_at AS reward_updated_at, r.deleted_at AS reward_deleted_at, r.hidden_until AS reward_hidden_until, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
             FROM new_trade nt
             JOIN rewards r ON nt.reward_id = r.id",
         )
@@ -219,6 +219,91 @@ impl Database {
             .await?
             .ok_or(sqlx::Error::RowNotFound)
     }
+
+    // ============================================================================
+    // Sync Operations
+    // ============================================================================
+
+    /// Get all tasks for a user, optionally filtered by updated_at > since
+    pub async fn get_tasks_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TaskRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+                     FROM tasks
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+                     FROM tasks
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Upsert a task - insert if not exists, update if exists and belongs to user
+    pub async fn upsert_task(
+        &self,
+        user_id: Uuid,
+        task: UpsertTaskOptions,
+    ) -> Result<TaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO UPDATE SET
+                name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
+                description = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.description ELSE tasks.description END,
+                deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
+                hidden_until = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.hidden_until ELSE tasks.hidden_until END,
+                due_by = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.due_by ELSE tasks.due_by END,
+                min_daily_frequency = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.min_daily_frequency ELSE tasks.min_daily_frequency END
+             RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
+        )
+        .bind(task.id)
+        .bind(user_id)
+        .bind(&task.name)
+        .bind(&task.description)
+        .bind(task.created_at)
+        .bind(task.deleted_at)
+        .bind(task.hidden_until)
+        .bind(task.due_by)
+        .bind(task.min_daily_frequency)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    /// Get a single task by ID for a specific user
+    pub async fn get_task_by_id(
+        &self,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<Option<TaskRow>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+             FROM tasks
+             WHERE id = $1 AND user_id = $2",
+        )
+        .bind(task_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
 }
 
 pub struct CreateTaskOptions {
@@ -291,6 +376,17 @@ impl CreateRewardOptions {
     }
 }
 
+pub struct UpsertTaskOptions {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub due_by: Option<NaiveDateTime>,
+    pub min_daily_frequency: Option<f64>,
+}
+
 #[derive(sqlx::FromRow)]
 pub struct UserRow {
     pub id: Uuid,
@@ -312,6 +408,7 @@ pub struct TaskRow {
     pub id: Uuid,
     pub name: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
@@ -325,6 +422,7 @@ pub struct RewardRow {
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
@@ -340,6 +438,7 @@ pub struct TradeWithTaskRow {
     // Task join
     pub task_name: String,
     pub task_created_at: NaiveDateTime,
+    pub task_updated_at: NaiveDateTime,
     pub task_deleted_at: Option<NaiveDateTime>,
     pub task_hidden_until: Option<NaiveDateTime>,
     pub task_due_by: Option<NaiveDateTime>,
@@ -354,9 +453,10 @@ pub struct TradeWithRewardRow {
     pub amount: i32,
     pub reward_id: Uuid,
 
-    // Task join
+    // Reward join
     pub reward_name: String,
     pub reward_created_at: NaiveDateTime,
+    pub reward_updated_at: NaiveDateTime,
     pub reward_deleted_at: Option<NaiveDateTime>,
     pub reward_hidden_until: Option<NaiveDateTime>,
     pub reward_description: String,
