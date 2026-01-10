@@ -16,10 +16,31 @@ type Listener = () => void;
 
 // ============ Storage Helpers ============
 
+/**
+ * Normalize a task from storage to ensure all fields exist.
+ * This handles schema migrations for tasks saved before new fields were added.
+ */
+function normalizeTask(task: Partial<Task>): Task {
+  return {
+    id: task.id ?? "",
+    user_id: task.user_id ?? "",
+    name: task.name ?? "",
+    description: task.description ?? "",
+    created_at: task.created_at ?? new Date().toISOString(),
+    updated_at: task.updated_at ?? new Date().toISOString(),
+    deleted_at: task.deleted_at ?? null,
+    hidden_until: task.hidden_until ?? null,
+    due_by: task.due_by ?? null,
+    min_daily_frequency: task.min_daily_frequency ?? null,
+    difficulty_rank: task.difficulty_rank ?? null,
+  };
+}
+
 function readStorageSync(): TaskState {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const data = localStorage.getItem(TASKS_STORAGE_KEY);
-    const tasks: Task[] = data ? JSON.parse(data) : [];
+    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
+    const tasks = rawTasks.map(normalizeTask);
     return normalize(tasks);
   }
   // For mobile or SSR, we'll load async and update
@@ -29,11 +50,13 @@ function readStorageSync(): TaskState {
 async function readStorageAsync(): Promise<TaskState> {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const data = localStorage.getItem(TASKS_STORAGE_KEY);
-    const tasks: Task[] = data ? JSON.parse(data) : [];
+    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
+    const tasks = rawTasks.map(normalizeTask);
     return normalize(tasks);
   } else {
     const data = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
-    const tasks: Task[] = data ? JSON.parse(data) : [];
+    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
+    const tasks = rawTasks.map(normalizeTask);
     return normalize(tasks);
   }
 }
@@ -93,7 +116,8 @@ class TaskStore {
 
     window.addEventListener("storage", (e) => {
       if (e.key === TASKS_STORAGE_KEY && e.newValue) {
-        const tasks: Task[] = JSON.parse(e.newValue);
+        const rawTasks: Partial<Task>[] = JSON.parse(e.newValue);
+        const tasks = rawTasks.map(normalizeTask);
         this.state = normalize(tasks);
         this.notify();
       }
@@ -137,7 +161,8 @@ class TaskStore {
     return this.state.allIds
       .map((id) => this.state.byId[id])
       .filter(
-        (t) => t.user_id === userId && !t.deleted_at && t.difficulty_rank !== null,
+        // Use != null to exclude both null and undefined (unranked tasks)
+        (t) => t.user_id === userId && !t.deleted_at && t.difficulty_rank != null,
       )
       .sort((a, b) => {
         // Higher difficulty_rank = harder task, so sort descending
@@ -254,11 +279,13 @@ class TaskStore {
 
   // ============ Sync Helpers ============
 
-  async mergeTasks(serverTasks: Task[], userId?: string): Promise<void> {
+  async mergeTasks(serverTasks: Partial<Task>[], userId?: string): Promise<void> {
     const newById = { ...this.state.byId };
     const existingIds = new Set(this.state.allIds);
 
-    for (const task of serverTasks) {
+    for (const rawTask of serverTasks) {
+      // Normalize to ensure all fields exist (handles schema migrations)
+      const task = normalizeTask(rawTask);
       const existing = newById[task.id];
       // Preserve user_id from existing local task, or use provided userId for new tasks
       const user_id = existing?.user_id || userId || task.user_id;
