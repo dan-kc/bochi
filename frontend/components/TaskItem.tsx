@@ -1,5 +1,7 @@
 import { View, Text, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { Task } from "@/lib/task";
+import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
 
 interface TaskItemProps {
   task: Task;
@@ -16,6 +18,36 @@ function formatDate(dateString: string | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function PriceDisplay({ taskId }: { taskId: string }) {
+  const priceContext = usePriceUpdateOptional();
+  if (!priceContext) return null;
+
+  const priceData = priceContext.prices[taskId];
+  if (!priceData) return null;
+
+  const { current, previous } = priceData;
+  const isUp = current > previous;
+  const isDown = current < previous;
+
+  return (
+    <View className="flex-row items-center bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+      {isUp && (
+        <Ionicons name="arrow-up" size={12} color="#22c55e" />
+      )}
+      {isDown && (
+        <Ionicons name="arrow-down" size={12} color="#ef4444" />
+      )}
+      <Text
+        className={`text-xs font-medium ml-0.5 ${
+          isUp ? "text-green-600" : isDown ? "text-red-600" : "text-amber-700"
+        }`}
+      >
+        {current} soy
+      </Text>
+    </View>
+  );
 }
 
 export function TaskItem({
@@ -45,13 +77,16 @@ export function TaskItem({
             <Text className="text-lg font-semibold text-gray-900 mb-1 flex-1">
               {task.name}
             </Text>
-            {isUnrankedInDifficultyView && (
-              <View className="bg-gray-200 px-2 py-1 rounded ml-2">
-                <Text className="text-gray-600 text-xs font-medium">
-                  Unranked
-                </Text>
-              </View>
-            )}
+            <View className="flex-row items-center gap-2 ml-2">
+              <PriceDisplay taskId={task.id} />
+              {isUnrankedInDifficultyView && (
+                <View className="bg-gray-200 px-2 py-1 rounded">
+                  <Text className="text-gray-600 text-xs font-medium">
+                    Unranked
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
           {task.description ? (
             <Text

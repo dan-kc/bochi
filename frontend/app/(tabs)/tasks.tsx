@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
 import { useTasks } from "@/lib/TaskContext";
+import { usePriceUpdate } from "@/lib/PriceUpdateContext";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskForm } from "@/components/TaskForm";
 import { DifficultyRanker } from "@/components/DifficultyRanker";
@@ -28,8 +29,16 @@ export default function Tasks() {
   const [taskToRank, setTaskToRank] = useState<Task | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("newest");
 
+  // Price update context
+  const { updatePrices } = usePriceUpdate();
+
   // Use sorted tasks based on mode
   const displayTasks = sortMode === "difficulty" ? rankedTasks : tasks;
+
+  // Update prices when tasks change
+  useEffect(() => {
+    updatePrices(tasks);
+  }, [tasks, updatePrices]);
 
   const handleAddTask = useCallback(() => {
     selectTask(null);
@@ -116,7 +125,7 @@ export default function Tasks() {
       <TaskItem
         task={item}
         onPress={handleTaskPress}
-        onSetDifficulty={handleSetDifficulty}
+        onSetDifficulty={sortMode === "difficulty" ? handleSetDifficulty : undefined}
         isDifficultyView={sortMode === "difficulty"}
       />
     ),
