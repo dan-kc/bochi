@@ -535,7 +535,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
               className="border border-orange-300 py-3 px-6 rounded-lg items-center mt-2"
             >
               <Text className="text-orange-600 font-semibold text-base">
-                Re-rank Difficulty
+                {task?.difficulty_rank ? "Re-rank Difficulty" : "Set Difficulty"}
               </Text>
             </Pressable>
           )}
