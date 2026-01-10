@@ -6,6 +6,7 @@ const API_PROTOCOL = process.env.EXPO_PUBLIC_API_PROTOCOL || "http";
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST || "localhost";
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT || "8501";
 const API_BASE = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`;
+const GRAPHQL_ENDPOINT = `${API_BASE}/graphql`;
 
 export interface AuthTokens {
   refresh_token: string;
@@ -94,20 +95,158 @@ class ApiClient {
     });
   }
 
-  // ============ Task sync endpoints ============
+  // ============ GraphQL requests ============
+
+  private async graphqlRequest<T>(
+    query: string,
+    variables?: Record<string, unknown>,
+  ): Promise<T> {
+    const tokens = await getStoredTokens();
+    if (!tokens) {
+      throw { message: "Not authenticated" } as ApiError;
+    }
+
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    const json = await response.json();
+
+    if (json.errors && json.errors.length > 0) {
+      throw { message: json.errors[0].message } as ApiError;
+    }
+
+    return json.data as T;
+  }
+
+  // ============ Task sync endpoints (GraphQL) ============
 
   async pullTasks(since: string | null): Promise<SyncPullResponse> {
-    const query = since ? `?since=${encodeURIComponent(since)}` : "";
-    return this.authenticatedRequest<SyncPullResponse>(`/tasks/sync${query}`, {
-      method: "GET",
-    });
+    const query = `
+      query SyncPull($since: NaiveDateTime) {
+        syncPull(since: $since) {
+          tasks {
+            id
+            name
+            description
+            createdAt
+            updatedAt
+            deletedAt
+            hiddenUntil
+            dueBy
+            minDailyFrequency
+          }
+          serverTime
+        }
+      }
+    `;
+
+    const result = await this.graphqlRequest<{
+      syncPull: {
+        tasks: Array<{
+          id: string;
+          name: string;
+          description: string;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+          hiddenUntil: string | null;
+          dueBy: string | null;
+          minDailyFrequency: number | null;
+        }>;
+        serverTime: string;
+      };
+    }>(query, { since });
+
+    // Transform GraphQL response to match expected format
+    return {
+      tasks: result.syncPull.tasks.map((t) => ({
+        id: t.id,
+        user_id: "", // Not returned by GraphQL, populated locally
+        name: t.name,
+        description: t.description,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+        hidden_until: t.hiddenUntil,
+        due_by: t.dueBy,
+        min_daily_frequency: t.minDailyFrequency,
+      })),
+      server_time: result.syncPull.serverTime,
+    };
   }
 
   async pushTasks(tasks: Task[]): Promise<SyncPushResponse> {
-    return this.authenticatedRequest<SyncPushResponse>("/tasks/sync", {
-      method: "POST",
-      body: JSON.stringify({ tasks }),
-    });
+    const mutation = `
+      mutation SyncPush($tasks: [SyncTaskInput!]!) {
+        syncPush(tasks: $tasks) {
+          tasks {
+            id
+            name
+            description
+            createdAt
+            updatedAt
+            deletedAt
+            hiddenUntil
+            dueBy
+            minDailyFrequency
+          }
+          serverTime
+        }
+      }
+    `;
+
+    // Transform tasks to GraphQL input format (camelCase)
+    const taskInputs = tasks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+      deletedAt: t.deleted_at,
+      hiddenUntil: t.hidden_until,
+      dueBy: t.due_by,
+      minDailyFrequency: t.min_daily_frequency,
+    }));
+
+    const result = await this.graphqlRequest<{
+      syncPush: {
+        tasks: Array<{
+          id: string;
+          name: string;
+          description: string;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+          hiddenUntil: string | null;
+          dueBy: string | null;
+          minDailyFrequency: number | null;
+        }>;
+        serverTime: string;
+      };
+    }>(mutation, { tasks: taskInputs });
+
+    // Transform GraphQL response to match expected format
+    return {
+      tasks: result.syncPush.tasks.map((t) => ({
+        id: t.id,
+        user_id: "", // Not returned by GraphQL, populated locally
+        name: t.name,
+        description: t.description,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+        hidden_until: t.hiddenUntil,
+        due_by: t.dueBy,
+        min_daily_frequency: t.minDailyFrequency,
+      })),
+      server_time: result.syncPush.serverTime,
+    };
   }
 }
 

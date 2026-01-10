@@ -102,7 +102,7 @@ pub async fn make_authenticated_graphql_request(
                 .method(Method::POST)
                 .uri("/graphql")
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .header(http::header::AUTHORIZATION, access_token)
+                .header(http::header::AUTHORIZATION, format!("Bearer {}", access_token))
                 .body(Body::from(query.to_string()))
                 .unwrap(),
         )

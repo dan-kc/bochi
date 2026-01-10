@@ -78,6 +78,7 @@ let
         JWT_PRIVATE_KEY="${env.JWT_PRIVATE_KEY}" \
         JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
         LOG_DESTINATION=logs \
+        RUST_LOG=info \
         nohup cargo run &> "$ROOT/logs/backend.log" &
         echo $! > "$ROOT/.backend.pid"
         disown

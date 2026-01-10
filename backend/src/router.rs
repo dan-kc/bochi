@@ -115,7 +115,8 @@ async fn auth(State(app): State<App>, mut req: Request, next: Next) -> Response 
     let headers = req.headers();
     let jwt_optional = headers
         .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header_value| header_value.to_str().ok());
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
 
     match jwt_optional {
         None => StatusCode::UNAUTHORIZED.into_response(),
