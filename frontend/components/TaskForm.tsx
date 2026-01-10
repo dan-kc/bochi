@@ -140,6 +140,7 @@ interface TaskFormProps {
   onSave: (input: TaskInput) => Promise<void>;
   onCancel: () => void;
   onDelete?: () => Promise<void>;
+  onRerank?: () => void;
 }
 
 const taskSchema = z
@@ -186,7 +187,7 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
-export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
+export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [hiddenUntil, setHiddenUntil] = useState<Date | null>(null);
@@ -526,6 +527,18 @@ export function TaskForm({ task, onSave, onCancel, onDelete }: TaskFormProps) {
               )}
             </Pressable>
           </View>
+
+          {isEditing && onRerank && (
+            <Pressable
+              onPress={onRerank}
+              disabled={isLoading}
+              className="border border-orange-300 py-3 px-6 rounded-lg items-center mt-2"
+            >
+              <Text className="text-orange-600 font-semibold text-base">
+                Re-rank Difficulty
+              </Text>
+            </Pressable>
+          )}
 
           {isEditing && onDelete && (
             <Pressable

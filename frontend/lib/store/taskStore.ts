@@ -133,6 +133,18 @@ class TaskStore {
       );
   }
 
+  getTasksSortedByDifficulty(userId: string): Task[] {
+    return this.state.allIds
+      .map((id) => this.state.byId[id])
+      .filter(
+        (t) => t.user_id === userId && !t.deleted_at && t.difficulty_rank !== null,
+      )
+      .sort((a, b) => {
+        // Higher difficulty_rank = harder task, so sort descending
+        return (b.difficulty_rank ?? "").localeCompare(a.difficulty_rank ?? "");
+      });
+  }
+
   getTaskById(id: string): Task | undefined {
     return this.state.byId[id];
   }
@@ -154,6 +166,7 @@ class TaskStore {
       hidden_until: input.hidden_until ?? null,
       due_by: input.due_by ?? null,
       min_daily_frequency: input.min_daily_frequency ?? null,
+      difficulty_rank: input.difficulty_rank ?? null,
     };
 
     // Update state
@@ -193,6 +206,10 @@ class TaskStore {
         input.min_daily_frequency !== undefined
           ? input.min_daily_frequency
           : existing.min_daily_frequency,
+      difficulty_rank:
+        input.difficulty_rank !== undefined
+          ? input.difficulty_rank
+          : existing.difficulty_rank,
       updated_at: now,
     };
 

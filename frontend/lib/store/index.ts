@@ -5,4 +5,5 @@ export {
   useTaskCount,
   useTaskActions,
   useTaskStore,
+  useTasksSortedByDifficulty,
 } from "./hooks";

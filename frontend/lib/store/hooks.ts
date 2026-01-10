@@ -97,6 +97,38 @@ export function useTaskCount(userId: string): number {
   return useSyncExternalStore(taskStore.subscribe, getSnapshot, getSnapshot);
 }
 
+/**
+ * Subscribe to tasks sorted by difficulty for a user.
+ * Only includes tasks that have a difficulty_rank set.
+ * Sorted from hardest to easiest.
+ */
+export function useTasksSortedByDifficulty(userId: string): Task[] {
+  // Use a ref to cache the previous result for shallow comparison
+  const cacheRef = useRef<{ tasks: Task[]; serialized: string }>({
+    tasks: [],
+    serialized: "[]",
+  });
+
+  const getSnapshotWithCache = useCallback(() => {
+    const tasks = taskStore.getTasksSortedByDifficulty(userId);
+    // Serialize for comparison (only IDs and difficulty_rank for efficiency)
+    const serialized = JSON.stringify(
+      tasks.map((t) => `${t.id}:${t.difficulty_rank}`),
+    );
+
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { tasks, serialized };
+    }
+    return cacheRef.current.tasks;
+  }, [userId]);
+
+  return useSyncExternalStore(
+    taskStore.subscribe,
+    getSnapshotWithCache,
+    getSnapshotWithCache,
+  );
+}
+
 // ============ Actions (no subscription, just mutations) ============
 
 export function useTaskActions() {

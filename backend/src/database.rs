@@ -59,7 +59,7 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description, min_daily_frequency) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
+            (user_id, name, hidden_until, due_by, description, min_daily_frequency, difficulty_rank) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
@@ -67,6 +67,7 @@ impl Database {
         .bind(create_task_options.due_by)
         .bind(create_task_options.description)
         .bind(create_task_options.min_daily_frequency)
+        .bind(create_task_options.difficulty_rank)
         .fetch_one(&self.pool)
         .await
     }
@@ -107,7 +108,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                t.name AS task_name, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency
+                t.name AS task_name, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency, t.difficulty_rank AS task_difficulty_rank
             FROM new_trade nt
             JOIN tasks t ON nt.task_id = t.id",
         )
@@ -233,7 +234,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank
                      FROM tasks
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -245,7 +246,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank
                      FROM tasks
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -264,16 +265,17 @@ impl Database {
         task: UpsertTaskOptions,
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency, difficulty_rank)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (id) DO UPDATE SET
                 name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
                 description = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.description ELSE tasks.description END,
                 deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
                 hidden_until = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.hidden_until ELSE tasks.hidden_until END,
                 due_by = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.due_by ELSE tasks.due_by END,
-                min_daily_frequency = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.min_daily_frequency ELSE tasks.min_daily_frequency END
-             RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency",
+                min_daily_frequency = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.min_daily_frequency ELSE tasks.min_daily_frequency END,
+                difficulty_rank = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.difficulty_rank ELSE tasks.difficulty_rank END
+             RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank",
         )
         .bind(task.id)
         .bind(user_id)
@@ -284,6 +286,7 @@ impl Database {
         .bind(task.hidden_until)
         .bind(task.due_by)
         .bind(task.min_daily_frequency)
+        .bind(&task.difficulty_rank)
         .fetch_one(&self.pool)
         .await
     }
@@ -295,7 +298,7 @@ impl Database {
         task_id: Uuid,
     ) -> Result<Option<TaskRow>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency
+            "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank
              FROM tasks
              WHERE id = $1 AND user_id = $2",
         )
@@ -313,6 +316,7 @@ pub struct CreateTaskOptions {
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 impl CreateTaskOptions {
     pub fn new(input: CreateTaskInput, user_id: Uuid) -> Self {
@@ -323,6 +327,7 @@ impl CreateTaskOptions {
             due_by: input.due_by,
             description: input.description,
             min_daily_frequency: input.min_daily_frequency,
+            difficulty_rank: input.difficulty_rank,
         }
     }
 }
@@ -385,6 +390,7 @@ pub struct UpsertTaskOptions {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -414,6 +420,7 @@ pub struct TaskRow {
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -444,6 +451,7 @@ pub struct TradeWithTaskRow {
     pub task_due_by: Option<NaiveDateTime>,
     pub task_description: String,
     pub task_min_daily_frequency: Option<f64>,
+    pub task_difficulty_rank: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]

@@ -9,6 +9,7 @@ export interface Task {
   hidden_until: string | null;
   due_by: string | null;
   min_daily_frequency: number | null;
+  difficulty_rank: string | null;
 }
 
 export interface TaskInput {
@@ -18,6 +19,7 @@ export interface TaskInput {
   hidden_until?: string | null;
   due_by?: string | null;
   min_daily_frequency?: number | null;
+  difficulty_rank?: string | null;
 }
 
 export function createEmptyTaskInput(): TaskInput {
@@ -28,5 +30,6 @@ export function createEmptyTaskInput(): TaskInput {
     hidden_until: null,
     due_by: null,
     min_daily_frequency: null,
+    difficulty_rank: null,
   };
 }

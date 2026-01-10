@@ -54,6 +54,7 @@ pub struct CreateTaskInput {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 
 #[derive(InputObject)]
@@ -341,6 +342,7 @@ impl MutationRoot {
                 hidden_until: task_input.hidden_until,
                 due_by: task_input.due_by,
                 min_daily_frequency: task_input.min_daily_frequency,
+                difficulty_rank: task_input.difficulty_rank,
             };
 
             let task_row = database

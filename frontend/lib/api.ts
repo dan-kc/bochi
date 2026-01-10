@@ -141,6 +141,7 @@ class ApiClient {
             hiddenUntil
             dueBy
             minDailyFrequency
+            difficultyRank
           }
           serverTime
         }
@@ -162,6 +163,7 @@ class ApiClient {
           hiddenUntil: string | null;
           dueBy: string | null;
           minDailyFrequency: number | null;
+          difficultyRank: string | null;
         }>;
         serverTime: string;
       };
@@ -180,6 +182,7 @@ class ApiClient {
         hidden_until: t.hiddenUntil,
         due_by: t.dueBy,
         min_daily_frequency: t.minDailyFrequency,
+        difficulty_rank: t.difficultyRank,
       })),
       server_time: result.syncPull.serverTime,
     };
@@ -199,6 +202,7 @@ class ApiClient {
             hiddenUntil
             dueBy
             minDailyFrequency
+            difficultyRank
           }
           serverTime
         }
@@ -220,6 +224,7 @@ class ApiClient {
       hiddenUntil: toNaiveDateTime(t.hidden_until),
       dueBy: toNaiveDateTime(t.due_by),
       minDailyFrequency: t.min_daily_frequency,
+      difficultyRank: t.difficulty_rank,
     }));
 
     const result = await this.graphqlRequest<{
@@ -234,6 +239,7 @@ class ApiClient {
           hiddenUntil: string | null;
           dueBy: string | null;
           minDailyFrequency: number | null;
+          difficultyRank: string | null;
         }>;
         serverTime: string;
       };
@@ -252,6 +258,7 @@ class ApiClient {
         hidden_until: t.hiddenUntil,
         due_by: t.dueBy,
         min_daily_frequency: t.minDailyFrequency,
+        difficulty_rank: t.difficultyRank,
       })),
       server_time: result.syncPush.serverTime,
     };

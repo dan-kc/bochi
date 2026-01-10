@@ -8,10 +8,11 @@ import {
 import type { Task, TaskInput } from "./task";
 import { useAuth } from "./AuthContext";
 import { useSyncOptional } from "./sync";
-import { useTasks as useTasksFromStore, useTaskActions } from "./store";
+import { useTasks as useTasksFromStore, useTaskActions, useTasksSortedByDifficulty } from "./store";
 
 interface TaskContextType {
   tasks: Task[];
+  rankedTasks: Task[];
   selectedTask: Task | null;
   isEditing: boolean;
   createTask: (input: TaskInput) => Promise<Task>;
@@ -33,6 +34,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Get tasks from reactive store (fine-grained subscription)
   const tasks = useTasksFromStore(userId);
+  const rankedTasks = useTasksSortedByDifficulty(userId);
 
   // UI state (not persisted)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -80,6 +82,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     <TaskContext.Provider
       value={{
         tasks,
+        rankedTasks,
         selectedTask,
         isEditing,
         createTask,

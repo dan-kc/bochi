@@ -13,6 +13,7 @@ pub struct TaskObject {
     pub due_by: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -26,6 +27,7 @@ impl From<TaskRow> for TaskObject {
             due_by: task_row.due_by,
             description: task_row.description,
             min_daily_frequency: task_row.min_daily_frequency,
+            difficulty_rank: task_row.difficulty_rank,
         }
     }
 }
@@ -89,6 +91,7 @@ impl From<TradeWithTaskRow> for TradeObject {
             due_by: trade_row.task_due_by,
             description: trade_row.task_description,
             min_daily_frequency: trade_row.task_min_daily_frequency,
+            difficulty_rank: trade_row.task_difficulty_rank,
         });
 
         return TradeObject {
@@ -136,6 +139,7 @@ pub struct SyncTaskInput {
     pub hidden_until: Option<NaiveDateTime>,
     pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
+    pub difficulty_rank: Option<String>,
 }
 
 #[derive(SimpleObject)]
