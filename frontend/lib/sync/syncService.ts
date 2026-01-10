@@ -9,7 +9,7 @@ import {
 import type { SyncCallbacks } from "./types";
 
 const DEBOUNCE_MS = 2000;
-const BACKGROUND_SYNC_INTERVAL_MS = 60000; // 1 minute
+const BACKGROUND_SYNC_INTERVAL_MS = 5000; // 5 seconds
 
 export class SyncService {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
