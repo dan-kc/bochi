@@ -117,7 +117,7 @@ export default function Tasks() {
         task={item}
         onPress={handleTaskPress}
         onSetDifficulty={handleSetDifficulty}
-        showDifficultyRank={sortMode === "difficulty"}
+        isDifficultyView={sortMode === "difficulty"}
       />
     ),
     [handleTaskPress, handleSetDifficulty, sortMode],
@@ -182,6 +182,7 @@ export default function Tasks() {
             data={displayTasks}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
+            extraData={sortMode}
             contentContainerStyle={{ padding: 16 }}
             estimatedItemSize={100}
           />

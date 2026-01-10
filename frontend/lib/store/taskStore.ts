@@ -160,13 +160,14 @@ class TaskStore {
   getTasksSortedByDifficulty(userId: string): Task[] {
     return this.state.allIds
       .map((id) => this.state.byId[id])
-      .filter(
-        // Use != null to exclude both null and undefined (unranked tasks)
-        (t) => t.user_id === userId && !t.deleted_at && t.difficulty_rank != null,
-      )
+      .filter((t) => t.user_id === userId && !t.deleted_at)
       .sort((a, b) => {
+        // Unranked tasks go to the bottom
+        if (a.difficulty_rank == null && b.difficulty_rank == null) return 0;
+        if (a.difficulty_rank == null) return 1;
+        if (b.difficulty_rank == null) return -1;
         // Higher difficulty_rank = harder task, so sort descending
-        return (b.difficulty_rank ?? "").localeCompare(a.difficulty_rank ?? "");
+        return b.difficulty_rank.localeCompare(a.difficulty_rank);
       });
   }
 

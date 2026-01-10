@@ -99,8 +99,7 @@ export function useTaskCount(userId: string): number {
 
 /**
  * Subscribe to tasks sorted by difficulty for a user.
- * Only includes tasks that have a difficulty_rank set.
- * Sorted from hardest to easiest.
+ * Sorted from hardest to easiest, with unranked tasks at the bottom.
  */
 export function useTasksSortedByDifficulty(userId: string): Task[] {
   // Use a ref to cache the previous result for shallow comparison

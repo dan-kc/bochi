@@ -5,7 +5,7 @@ interface TaskItemProps {
   task: Task;
   onPress: (task: Task) => void;
   onSetDifficulty?: (task: Task) => void;
-  showDifficultyRank?: boolean;
+  isDifficultyView?: boolean;
 }
 
 function formatDate(dateString: string | null): string {
@@ -22,16 +22,22 @@ export function TaskItem({
   task,
   onPress,
   onSetDifficulty,
-  showDifficultyRank,
+  isDifficultyView,
 }: TaskItemProps) {
   const hasDueBy = task.due_by !== null;
   const hasHiddenUntil = task.hidden_until !== null;
-  const hasDifficultyRank = task.difficulty_rank !== null;
+  // Use != null to catch both null and undefined
+  const hasDifficultyRank = task.difficulty_rank != null;
+  const isUnrankedInDifficultyView = isDifficultyView && !hasDifficultyRank;
 
   return (
     <Pressable
       onPress={() => onPress(task)}
-      className="bg-white border border-gray-200 rounded-lg p-4 mb-3"
+      className={`border rounded-lg p-4 mb-3 ${
+        isUnrankedInDifficultyView
+          ? "bg-gray-50 border-gray-300"
+          : "bg-white border-gray-200"
+      }`}
     >
       {({ hovered }) => (
         <View className={hovered ? "opacity-80" : ""}>
@@ -39,10 +45,10 @@ export function TaskItem({
             <Text className="text-lg font-semibold text-gray-900 mb-1 flex-1">
               {task.name}
             </Text>
-            {showDifficultyRank && hasDifficultyRank && (
-              <View className="bg-orange-100 px-2 py-1 rounded ml-2">
-                <Text className="text-orange-700 text-xs font-medium">
-                  Ranked
+            {isUnrankedInDifficultyView && (
+              <View className="bg-gray-200 px-2 py-1 rounded ml-2">
+                <Text className="text-gray-600 text-xs font-medium">
+                  Unranked
                 </Text>
               </View>
             )}
