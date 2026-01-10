@@ -237,12 +237,15 @@ class TaskStore {
 
   // ============ Sync Helpers ============
 
-  async mergeTasks(serverTasks: Task[]): Promise<void> {
+  async mergeTasks(serverTasks: Task[], userId?: string): Promise<void> {
     const newById = { ...this.state.byId };
     const existingIds = new Set(this.state.allIds);
 
     for (const task of serverTasks) {
-      newById[task.id] = task;
+      const existing = newById[task.id];
+      // Preserve user_id from existing local task, or use provided userId for new tasks
+      const user_id = existing?.user_id || userId || task.user_id;
+      newById[task.id] = { ...task, user_id };
       if (!existingIds.has(task.id)) {
         existingIds.add(task.id);
       }

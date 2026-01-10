@@ -42,17 +42,20 @@ export function SyncProvider({ children }: SyncProviderProps) {
       });
 
       // Create sync service when user logs in
-      syncServiceRef.current = new SyncService({
-        onStatusChange: (status, error) => {
-          setSyncStatus(status);
-          setSyncError(status === "error" ? (error ?? "Sync failed") : null);
+      syncServiceRef.current = new SyncService(
+        {
+          onStatusChange: (status, error) => {
+            setSyncStatus(status);
+            setSyncError(status === "error" ? (error ?? "Sync failed") : null);
+          },
+          onSyncComplete: (serverTime) => {
+            setLastSyncTime(serverTime);
+            // No need to refresh tasks - taskStore is reactive!
+            // React components using useTasks() will automatically re-render
+          },
         },
-        onSyncComplete: (serverTime) => {
-          setLastSyncTime(serverTime);
-          // No need to refresh tasks - taskStore is reactive!
-          // React components using useTasks() will automatically re-render
-        },
-      });
+        user.id,
+      );
 
       // Trigger initial sync on login
       syncServiceRef.current.triggerSync();

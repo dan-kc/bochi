@@ -16,9 +16,11 @@ export class SyncService {
   private backgroundSyncInterval: ReturnType<typeof setInterval> | null = null;
   private isSyncing = false;
   private callbacks: SyncCallbacks;
+  private userId: string;
 
-  constructor(callbacks: SyncCallbacks) {
+  constructor(callbacks: SyncCallbacks, userId: string) {
     this.callbacks = callbacks;
+    this.userId = userId;
     this.startBackgroundSync();
   }
 
@@ -39,7 +41,7 @@ export class SyncService {
       const pullResponse = await api.pullTasks(lastSync);
 
       if (pullResponse.tasks.length > 0) {
-        await taskStore.mergeTasks(pullResponse.tasks);
+        await taskStore.mergeTasks(pullResponse.tasks, this.userId);
       }
 
       await setLastSyncTime(pullResponse.server_time);
@@ -104,7 +106,7 @@ export class SyncService {
 
       // Step 2: Merge server tasks into store
       if (pullResponse.tasks.length > 0) {
-        await taskStore.mergeTasks(pullResponse.tasks);
+        await taskStore.mergeTasks(pullResponse.tasks, this.userId);
       }
 
       // Step 3: Push dirty local tasks
@@ -115,7 +117,7 @@ export class SyncService {
           const pushResponse = await api.pushTasks(dirtyTasks);
           // Apply server's resolved versions
           if (pushResponse.tasks.length > 0) {
-            await taskStore.mergeTasks(pushResponse.tasks);
+            await taskStore.mergeTasks(pushResponse.tasks, this.userId);
           }
         }
       }
