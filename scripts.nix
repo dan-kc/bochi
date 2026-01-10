@@ -26,14 +26,14 @@ let
     '';
 
     # Start development environment
-    start-dev = pkgs.writeShellScriptBin "start-dev" ''
+    start = pkgs.writeShellScriptBin "start" ''
       set -e
       ROOT="$PWD"
 
       # Handle --force flag
       if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
         echo "Force restarting all services..."
-        ${stop-dev}/bin/stop-dev
+        ${stop}/bin/stop
         echo ""
       fi
 
@@ -131,7 +131,7 @@ let
     '';
 
     # Stop development environment
-    stop-dev = pkgs.writeShellScriptBin "stop-dev" ''
+    stop = pkgs.writeShellScriptBin "stop" ''
       ROOT="$PWD"
       echo "Stopping services..."
 
