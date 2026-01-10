@@ -64,6 +64,11 @@ pub async fn router() -> axum::Router {
                 .parse::<axum::http::HeaderValue>()
                 .unwrap(),
         )
+        .allow_origin(
+            "http://localhost:8502"
+                .parse::<axum::http::HeaderValue>()
+                .unwrap(),
+        )
         .allow_methods([
             axum::http::Method::GET,
             axum::http::Method::POST,

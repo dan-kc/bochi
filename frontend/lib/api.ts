@@ -2,9 +2,9 @@ import type { Task } from "./task";
 import type { SyncPullResponse, SyncPushResponse } from "./sync/types";
 import { getStoredTokens } from "./storage";
 
-const API_PROTOCOL = process.env.EXPO_PUBLIC_API_PROTOCOL || "https";
+const API_PROTOCOL = process.env.EXPO_PUBLIC_API_PROTOCOL || "http";
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST || "localhost";
-const API_PORT = process.env.EXPO_PUBLIC_API_PORT || "8500";
+const API_PORT = process.env.EXPO_PUBLIC_API_PORT || "8501";
 const API_BASE = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`;
 
 export interface AuthTokens {
