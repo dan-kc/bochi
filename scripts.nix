@@ -101,7 +101,7 @@ let
       else
         echo "  → Starting Frontend..."
         cd "$ROOT/frontend"
-        PATH="${pkgs.nodejs}/bin:$PATH" nohup ${pkgs.nodejs}/bin/npm run web &> "$ROOT/logs/frontend.log" &
+        nohup bash -c 'PATH="${pkgs.nodejs}/bin:$PATH" ${pkgs.nodejs}/bin/npm run web 2>&1 | ${pkgs.moreutils}/bin/ts "[%Y-%m-%d %H:%M:%S]"' >> "$ROOT/logs/frontend.log" 2>&1 &
         echo $! > "$ROOT/.frontend.pid"
         disown
         cd "$ROOT"

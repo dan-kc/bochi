@@ -102,6 +102,7 @@
               lspmux
               circleci-cli
               postgresql
+              moreutils
             ]
             ++ scripts;
           shellHook = ''

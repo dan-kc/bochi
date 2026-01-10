@@ -37,12 +37,11 @@ function parseJwtPayload(
 }
 
 function getUserFromTokens(tokens: AuthTokens): User | null {
-  const payload = parseJwtPayload(tokens.access_token);
-  if (payload?.email) {
-    // Use 'sub' claim as user ID, fallback to email
+  const payload = parseJwtPayload(tokens.accessToken);
+  if (payload?.sub) {
     return {
-      id: payload.sub ?? payload.email,
-      email: payload.email,
+      id: payload.sub,
+      email: payload.email ?? "", // Email not in JWT, will be empty
     };
   }
   return null;
@@ -56,15 +55,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function loadStoredAuth() {
       try {
         const tokens = await getStoredTokens();
+        console.log("[Auth] Stored tokens:", tokens ? "found" : "none");
         if (tokens) {
-          // Try to refresh tokens on app start
+          // First, try to use existing tokens
+          const user = getUserFromTokens(tokens);
+          console.log("[Auth] User from tokens:", user);
+          if (user) {
+            setUser(user);
+          }
+
+          // Then try to refresh in the background
           try {
-            const newTokens = await api.refreshTokens(tokens.refresh_token);
+            const newTokens = await api.refreshTokens(tokens.refreshToken);
             await storeTokens(newTokens);
             setUser(getUserFromTokens(newTokens));
-          } catch {
-            // Refresh failed, clear stored tokens
-            await clearTokens();
+            console.log("[Auth] Token refresh succeeded");
+          } catch (error) {
+            console.log("[Auth] Token refresh failed:", error);
+            // Only clear tokens if refresh was explicitly rejected (invalid token)
+            // Don't clear on network errors - user can still use existing tokens
+            const isAuthError =
+              error &&
+              typeof error === "object" &&
+              "status" in error &&
+              (error.status === 401 || error.status === 403);
+            if (isAuthError) {
+              console.log("[Auth] Clearing tokens due to auth error");
+              await clearTokens();
+              setUser(null);
+            }
+            // On network errors, keep existing tokens and user state
           }
         }
       } finally {
@@ -91,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const tokens = await getStoredTokens();
       if (tokens) {
-        await api.logout(tokens.refresh_token);
+        await api.logout(tokens.refreshToken);
       }
     } catch {
       // Logout API call failed, but we still want to clear local state

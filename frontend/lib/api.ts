@@ -9,8 +9,8 @@ const API_BASE = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`;
 const GRAPHQL_ENDPOINT = `${API_BASE}/graphql`;
 
 export interface AuthTokens {
-  refresh_token: string;
-  access_token: string;
+  refreshToken: string;
+  accessToken: string;
 }
 
 export type ValidationError =
@@ -23,6 +23,7 @@ export type ValidationError =
 export interface ApiError {
   errors?: ValidationError[];
   message?: string;
+  status?: number;
 }
 
 class ApiClient {
@@ -41,7 +42,7 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
-      throw data as ApiError;
+      throw { ...data, status: response.status } as ApiError;
     }
 
     return data as T;
@@ -62,16 +63,16 @@ class ApiClient {
   }
 
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
-    return this.request<AuthTokens>("/auth/refresh_tokens", {
+    return this.request<AuthTokens>("/auth/refresh-tokens", {
       method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({ refreshToken }),
     });
   }
 
   async logout(refreshToken: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({ refreshToken }),
     });
   }
 
@@ -90,7 +91,7 @@ class ApiClient {
       ...options,
       headers: {
         ...options.headers,
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${tokens.accessToken}`,
       },
     });
   }
@@ -110,7 +111,7 @@ class ApiClient {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -146,6 +147,9 @@ class ApiClient {
       }
     `;
 
+    // Strip 'Z' suffix from since parameter (NaiveDateTime doesn't accept timezone)
+    const sinceParsed = since ? since.replace(/Z$/, "") : null;
+
     const result = await this.graphqlRequest<{
       syncPull: {
         tasks: Array<{
@@ -161,7 +165,7 @@ class ApiClient {
         }>;
         serverTime: string;
       };
-    }>(query, { since });
+    }>(query, { since: sinceParsed });
 
     // Transform GraphQL response to match expected format
     return {
@@ -201,16 +205,20 @@ class ApiClient {
       }
     `;
 
+    // Helper to strip 'Z' suffix from ISO dates (NaiveDateTime doesn't accept timezone)
+    const toNaiveDateTime = (date: string | null): string | null =>
+      date ? date.replace(/Z$/, "") : null;
+
     // Transform tasks to GraphQL input format (camelCase)
     const taskInputs = tasks.map((t) => ({
       id: t.id,
       name: t.name,
       description: t.description,
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
-      deletedAt: t.deleted_at,
-      hiddenUntil: t.hidden_until,
-      dueBy: t.due_by,
+      createdAt: toNaiveDateTime(t.created_at),
+      updatedAt: toNaiveDateTime(t.updated_at),
+      deletedAt: toNaiveDateTime(t.deleted_at),
+      hiddenUntil: toNaiveDateTime(t.hidden_until),
+      dueBy: toNaiveDateTime(t.due_by),
       minDailyFrequency: t.min_daily_frequency,
     }));
 
