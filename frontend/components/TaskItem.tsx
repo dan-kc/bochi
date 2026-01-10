@@ -44,7 +44,7 @@ function PriceDisplay({ taskId }: { taskId: string }) {
           isUp ? "text-green-600" : isDown ? "text-red-600" : "text-amber-700"
         }`}
       >
-        {current} soy
+        {current} soy (was {previous})
       </Text>
     </View>
   );

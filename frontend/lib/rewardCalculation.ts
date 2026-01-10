@@ -194,9 +194,12 @@ export function calculateRandomMultiplier(
   // Combine task ID and time bucket for deterministic variation
   const seed = `${taskId}-${timeBucket}`;
   const hash = deterministicHash(seed);
+  const multiplier = MIN_RANDOM_MULTIPLIER + hash * (MAX_RANDOM_MULTIPLIER - MIN_RANDOM_MULTIPLIER);
+
+  console.log(`[Random] seed="${seed}", hash=${hash.toFixed(4)}, multiplier=${multiplier.toFixed(4)}`);
 
   // Map hash (0-1) to multiplier range
-  return MIN_RANDOM_MULTIPLIER + hash * (MAX_RANDOM_MULTIPLIER - MIN_RANDOM_MULTIPLIER);
+  return multiplier;
 }
 
 /**
