@@ -211,8 +211,6 @@ export function calculateRandomMultiplier(
   const hash = deterministicHash(seed);
   const multiplier = MIN_RANDOM_MULTIPLIER + hash * (MAX_RANDOM_MULTIPLIER - MIN_RANDOM_MULTIPLIER);
 
-  console.log(`[Random] seed="${seed}", hash=${hash.toFixed(4)}, multiplier=${multiplier.toFixed(4)}`);
-
   // Map hash (0-1) to multiplier range
   return multiplier;
 }
