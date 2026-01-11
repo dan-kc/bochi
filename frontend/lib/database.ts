@@ -75,6 +75,7 @@ export async function createTask(
     hidden_until: input.hidden_until ?? null,
     due_by: input.due_by ?? null,
     min_daily_frequency: input.min_daily_frequency ?? null,
+    difficulty_rank: input.difficulty_rank ?? null,
   };
 
   const tasks = await getTasksFromStorage();

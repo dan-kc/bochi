@@ -11,7 +11,6 @@ import { getStoredTokens, storeTokens, clearTokens } from "./storage";
 
 interface User {
   id: string;
-  email: string;
 }
 
 interface AuthContextType {
@@ -24,9 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function parseJwtPayload(
-  token: string,
-): { sub?: string; email?: string } | null {
+function parseJwtPayload(token: string): { sub?: string } | null {
   try {
     const base64Payload = token.split(".")[1];
     const payload = atob(base64Payload);
@@ -41,7 +38,6 @@ function getUserFromTokens(tokens: AuthTokens): User | null {
   if (payload?.sub) {
     return {
       id: payload.sub,
-      email: payload.email ?? "", // Email not in JWT, will be empty
     };
   }
   return null;
@@ -52,10 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // This function to be defined, then called because it is async.
     async function loadStoredAuth() {
       try {
         const tokens = await getStoredTokens();
-        console.log("[Auth] Stored tokens:", tokens ? "found" : "none");
+        console.log("[Auth] Stored tokens found");
         if (tokens) {
           // First, try to use existing tokens
           const user = getUserFromTokens(tokens);
@@ -98,13 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (email: string, password: string) => {
     const tokens = await api.register(email, password);
     await storeTokens(tokens);
-    setUser(getUserFromTokens(tokens) ?? { id: email, email });
+    const user = getUserFromTokens(tokens);
+    if (!user) {
+      throw new Error("Failed to get user from tokens");
+    }
+    setUser(user);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const tokens = await api.login(email, password);
     await storeTokens(tokens);
-    setUser(getUserFromTokens(tokens) ?? { id: email, email });
+    const user = getUserFromTokens(tokens);
+    if (!user) {
+      throw new Error("Failed to get user from tokens");
+    }
+    setUser(user);
   }, []);
 
   const logout = useCallback(async () => {

@@ -2,7 +2,7 @@ import { View, Text, Pressable, Image } from "react-native";
 
 interface ProfileCardProps {
   user?: {
-    email: string;
+    id: string;
     avatarUrl?: string;
   } | null;
   onRegister?: () => void;
@@ -28,13 +28,13 @@ export default function ProfileCard({
           ) : (
             <View className="w-14 h-14 rounded-full bg-blue-500 items-center justify-center">
               <Text className="text-white text-xl font-bold">
-                {user.email.charAt(0).toUpperCase()}
+                {user.id.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <View className="flex-1">
             <Text className="text-lg font-semibold text-gray-900">
-              {user.email}
+              {user.id}
             </Text>
           </View>
         </View>

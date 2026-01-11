@@ -8,7 +8,7 @@ export default function Navbar() {
     { name: "Home", path: "/" },
     { name: "Tasks", path: "/tasks" },
     { name: "Settings", path: "/settings" },
-  ];
+  ] as const;
 
   return (
     <View className="bg-white border-b border-gray-200 px-6 py-4">
