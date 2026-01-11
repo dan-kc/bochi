@@ -77,6 +77,15 @@ export function DifficultyRanker({
     );
   }
 
+  // If comparison task is undefined (brief window before effect transitions to complete)
+  if (!comparisonTask) {
+    return (
+      <View className="flex-1 items-center justify-center p-6">
+        <Text className="text-gray-500">Finalizing ranking...</Text>
+      </View>
+    );
+  }
+
   // If complete, show confirmation
   if (state === "complete") {
     return (
