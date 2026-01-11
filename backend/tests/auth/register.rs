@@ -82,7 +82,7 @@ async fn test_register_user_already_exists() {
 
     assert_eq!(first_response.status(), StatusCode::OK);
 
-    // Second registration with same email
+    // Second registration with same email - returns generic error to prevent email enumeration
     let router2 = router::router().await;
 
     let request_body2 = json!({
@@ -102,7 +102,8 @@ async fn test_register_user_already_exists() {
         .await
         .unwrap();
 
-    assert_eq!(second_response.status(), StatusCode::CONFLICT);
+    // Returns BAD_REQUEST with generic error to prevent email enumeration
+    assert_eq!(second_response.status(), StatusCode::BAD_REQUEST);
 
     let response_body_bytes = second_response
         .into_body()
@@ -120,13 +121,14 @@ async fn test_register_user_already_exists() {
     assert_eq!(errors.len(), 1, "Should have exactly one error");
 
     let error = &errors[0];
+    // Generic error message that doesn't reveal whether the email exists
     assert_eq!(
         error.get("code").and_then(|v| v.as_str()),
-        Some("USER_ALREADY_EXISTS")
+        Some("FAILED_TO_REGISTER")
     );
     assert_eq!(
         error.get("message").and_then(|v| v.as_str()),
-        Some("User already exists.")
+        Some("Registration failed. Please try again.")
     );
 }
 
@@ -432,26 +434,16 @@ async fn test_register_multiple_validation_errors() {
         .filter_map(|e| e.get("code").and_then(|v| v.as_str()))
         .collect();
 
-    // We should get validation errors, or possibly USER_ALREADY_EXISTS if this exact combo was used before
-    if error_codes.contains(&"USER_ALREADY_EXISTS") {
-        // If user already exists, that's acceptable for this test
-        assert_eq!(
-            errors.len(),
-            1,
-            "Should have exactly one error if user exists"
-        );
-    } else {
-        // Otherwise, we should have validation errors
-        assert!(
-            error_codes.contains(&"EMAIL_TOO_LONG")
-                || error_codes.contains(&"INVALID_EMAIL_ADDRESS"),
-            "Should have EMAIL_TOO_LONG or INVALID_EMAIL_ADDRESS error"
-        );
-        assert!(
-            error_codes.contains(&"PASSWORD_TOO_LONG"),
-            "Should have PASSWORD_TOO_LONG error"
-        );
-    }
+    // We should get validation errors
+    assert!(
+        error_codes.contains(&"EMAIL_TOO_LONG")
+            || error_codes.contains(&"INVALID_EMAIL_ADDRESS"),
+        "Should have EMAIL_TOO_LONG or INVALID_EMAIL_ADDRESS error"
+    );
+    assert!(
+        error_codes.contains(&"PASSWORD_TOO_LONG"),
+        "Should have PASSWORD_TOO_LONG error"
+    );
 }
 
 #[tokio::test]

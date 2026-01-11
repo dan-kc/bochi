@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::sync::OnceLock;
 
 use crate::{
     graphql::{mutations::MutationRoot, queries::QueryRoot},
@@ -18,6 +19,11 @@ use convert_case::Casing;
 use regex::Regex;
 use tracing::info;
 
+fn email_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$").unwrap())
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AuthResponse {
@@ -28,7 +34,7 @@ struct AuthResponse {
 #[derive(Debug, serde::Serialize)]
 pub enum Error {
     ValidationErrorList(Vec<ValidationError>),
-    UserAlreadyExists,
+    FailedToRegister,
     FailedToLogin,
     FailedToCreateRefreshToken,
     FailedToCreateUser,
@@ -39,7 +45,7 @@ impl Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::ValidationErrorList(_) => StatusCode::BAD_REQUEST, // The outer match arm dissalows this
-            Self::UserAlreadyExists => StatusCode::CONFLICT,
+            Self::FailedToRegister => StatusCode::BAD_REQUEST,
 
             Self::FailedToCreateUser => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToLogin => StatusCode::INTERNAL_SERVER_ERROR,
@@ -54,7 +60,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ValidationErrorList(_) => panic!(), // The outer match arm dissalows this
-            Self::UserAlreadyExists => write!(f, "User already exists."),
+            Self::FailedToRegister => write!(f, "Registration failed. Please try again."),
 
             Self::FailedToCreateUser => write!(f, "Failed to create user."),
             Self::FailedToLogin => write!(f, "Failed to login user."),
@@ -165,9 +171,7 @@ pub async fn register(
     Json(input): Json<RegisterInput>,
 ) -> Result<Response, Error> {
     let mut errors = vec![];
-    let is_valid_email = Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$")
-        .unwrap()
-        .is_match(input.email.as_str());
+    let is_valid_email = email_regex().is_match(input.email.as_str());
     if !is_valid_email {
         errors.push(ValidationError::InvalidEmailAddress);
     }
@@ -187,13 +191,14 @@ pub async fn register(
         return Err(Error::ValidationErrorList(errors));
     }
 
+    // Return generic error to prevent email enumeration
     if app
         .database
         .get_user_from_email(input.email.as_str())
         .await
         .is_ok()
     {
-        return Err(Error::UserAlreadyExists);
+        return Err(Error::FailedToRegister);
     }
 
     let hashed_password = security::hash_password(input.password.as_str());
@@ -311,9 +316,7 @@ pub async fn login(
     State(app): State<App>,
     Json(input): Json<LoginInput>,
 ) -> Result<Response, Error> {
-    let valid_email = Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$")
-        .unwrap()
-        .is_match(input.email.as_str());
+    let valid_email = email_regex().is_match(input.email.as_str());
     let email_too_long = input.email.len() > 254;
     let password_ascii = input.password.is_ascii();
     let password_in_bounds = input.password.len() <= 64 && input.password.len() >= 8;

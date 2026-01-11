@@ -1,18 +1,16 @@
 import { Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import type { AuthTokens } from "./api";
 
 const TOKENS_KEY = "auth_tokens";
 
-// Storage abstraction that uses localStorage on web
-// For native platforms, you should install expo-secure-store and use it here
+// Storage abstraction that uses localStorage on web and SecureStore on native
 const storage = {
   async getItem(key: string): Promise<string | null> {
     if (Platform.OS === "web") {
       return localStorage.getItem(key);
     }
-    // For native, you would use SecureStore:
-    // return await SecureStore.getItemAsync(key);
-    return null;
+    return await SecureStore.getItemAsync(key);
   },
 
   async setItem(key: string, value: string): Promise<void> {
@@ -20,8 +18,7 @@ const storage = {
       localStorage.setItem(key, value);
       return;
     }
-    // For native, you would use SecureStore:
-    // await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync(key, value);
   },
 
   async removeItem(key: string): Promise<void> {
@@ -29,8 +26,7 @@ const storage = {
       localStorage.removeItem(key);
       return;
     }
-    // For native, you would use SecureStore:
-    // await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync(key);
   },
 };
 

@@ -116,20 +116,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadStoredAuth() {
       try {
         const tokens = await getStoredTokens();
-        if (tokens) {
+        if (tokens && isMounted) {
           console.log("[Auth] Stored tokens found");
           const user = getUserFromTokens(tokens);
           console.log("[Auth] User from tokens:", user);
           if (user) {
             setUser(user);
           }
-          await performTokenRefresh(tokens.refreshToken);
+          // Only refresh if still mounted (prevents double refresh in StrictMode)
+          if (isMounted) {
+            await performTokenRefresh(tokens.refreshToken);
+          }
         }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
@@ -137,10 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // This cleanup function will rarely execute because the context provider
     // wraps the whole app. This means it will never unmount unless the user
-    // quits the app. So in production it will never unmount, but in local 
-    // development it may, becuase of HMR. ALso this is still good to have
-    // incase of a refactor in future.
+    // quits the app. So in production it will never unmount, but in local
+    // development it may, because of HMR. Also this is still good to have
+    // in case of a refactor in future.
     return () => {
+      isMounted = false;
       clearRefreshTimeout();
     };
   }, [performTokenRefresh, clearRefreshTimeout]);
