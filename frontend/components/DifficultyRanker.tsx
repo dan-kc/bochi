@@ -118,11 +118,11 @@ export function DifficultyRanker({
         <View className="bg-blue-50 rounded-xl p-4 mb-6">
           <Text className="text-sm text-blue-600 font-medium mb-1">New Task</Text>
           <Text className="text-lg font-semibold text-gray-900">{task.name}</Text>
-          {task.description && (
+          {task.description ? (
             <Text className="text-gray-600 text-sm mt-1" numberOfLines={2}>
               {task.description}
             </Text>
-          )}
+          ) : null}
         </View>
 
         <Text className="text-center text-gray-700 text-lg mb-4">
@@ -132,11 +132,11 @@ export function DifficultyRanker({
         <View className="bg-gray-50 rounded-xl p-4 mb-8">
           <Text className="text-sm text-gray-500 font-medium mb-1">Compare with</Text>
           <Text className="text-lg font-semibold text-gray-900">{comparisonTask.name}</Text>
-          {comparisonTask.description && (
+          {comparisonTask.description ? (
             <Text className="text-gray-600 text-sm mt-1" numberOfLines={2}>
               {comparisonTask.description}
             </Text>
-          )}
+          ) : null}
         </View>
 
         <View className="gap-3">
