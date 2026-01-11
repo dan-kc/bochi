@@ -7,15 +7,18 @@ import {
   setLastSyncTime,
   checkAndPrepareFullSyncIfNeeded,
   recordFullSyncCompleted,
+  clearFullSyncTimestamp,
 } from "./syncStorage";
 import type { SyncCallbacks } from "./types";
 
 const DEBOUNCE_MS = 2000;
 const BACKGROUND_SYNC_INTERVAL_MS = 5000; // 5 seconds
+const FULL_SYNC_RESET_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export class SyncService {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private backgroundSyncInterval: ReturnType<typeof setInterval> | null = null;
+  private fullSyncResetInterval: ReturnType<typeof setInterval> | null = null;
   private isSyncing = false;
   private callbacks: SyncCallbacks;
   private userId: string;
@@ -24,6 +27,7 @@ export class SyncService {
     this.callbacks = callbacks;
     this.userId = userId;
     this.startBackgroundSync();
+    this.startFullSyncResetTimer();
   }
 
   private startBackgroundSync(): void {
@@ -31,6 +35,14 @@ export class SyncService {
     this.backgroundSyncInterval = setInterval(() => {
       this.executeBackgroundPull();
     }, BACKGROUND_SYNC_INTERVAL_MS);
+  }
+
+  private startFullSyncResetTimer(): void {
+    // Every 24 hours, clear the full sync timestamp to force a full sync
+    this.fullSyncResetInterval = setInterval(() => {
+      console.log("[Sync] 24-hour timer: clearing full sync timestamp");
+      clearFullSyncTimestamp();
+    }, FULL_SYNC_RESET_INTERVAL_MS);
   }
 
   private async executeBackgroundPull(): Promise<void> {
@@ -101,6 +113,10 @@ export class SyncService {
     if (this.backgroundSyncInterval) {
       clearInterval(this.backgroundSyncInterval);
       this.backgroundSyncInterval = null;
+    }
+    if (this.fullSyncResetInterval) {
+      clearInterval(this.fullSyncResetInterval);
+      this.fullSyncResetInterval = null;
     }
   }
 

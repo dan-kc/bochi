@@ -113,3 +113,10 @@ export async function checkAndPrepareFullSyncIfNeeded(): Promise<boolean> {
 export async function recordFullSyncCompleted(): Promise<void> {
   await setItem(LAST_FULL_SYNC_KEY, Date.now().toString());
 }
+
+/**
+ * Clear the full sync timestamp, forcing the next sync to be a full sync.
+ */
+export async function clearFullSyncTimestamp(): Promise<void> {
+  await removeItem(LAST_FULL_SYNC_KEY);
+}
