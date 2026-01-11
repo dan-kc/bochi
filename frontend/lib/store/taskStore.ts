@@ -74,6 +74,18 @@ async function writeStorage(state: TaskState): Promise<void> {
   }
 }
 
+/**
+ * Verify in-memory state matches localStorage.
+ * Returns true if consistent, false if mismatch detected.
+ */
+function verifyStorageConsistency(memoryState: TaskState): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined") return true;
+
+  const stored = localStorage.getItem(TASKS_STORAGE_KEY);
+  const memoryData = JSON.stringify(denormalize(memoryState));
+  return stored === memoryData;
+}
+
 function normalize(tasks: Task[]): TaskState {
   const byId: Record<string, Task> = {};
   const allIds: string[] = [];
@@ -101,9 +113,11 @@ class TaskStore {
       this.state = readStorageSync();
       this.initialized = true;
       this.setupCrossTabSync();
+      this.setupVisibilityReload();
     } else if (Platform.OS !== "web") {
       // Async load for mobile
       this.init();
+      this.setupAppStateReload();
     }
     // For SSR, we start with empty state and hydrate on client
   }
@@ -125,6 +139,51 @@ class TaskStore {
         this.notify();
       }
     });
+  }
+
+  /**
+   * Reload from storage when tab becomes visible.
+   * Guards against in-memory state getting out of sync with localStorage.
+   */
+  private setupVisibilityReload() {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        // Check if in-memory state matches storage
+        if (!verifyStorageConsistency(this.state)) {
+          console.log("[TaskStore] State mismatch detected on visibility change, reloading from storage");
+          this.state = readStorageSync();
+          this.notify();
+        }
+      }
+    });
+  }
+
+  /**
+   * Reload from storage when app returns to foreground (mobile).
+   */
+  private setupAppStateReload() {
+    import("react-native")
+      .then(({ AppState }) => {
+        AppState.addEventListener("change", (nextAppState) => {
+          if (nextAppState === "active") {
+            // Reload from storage when app becomes active
+            readStorageAsync().then((state) => {
+              const currentIds = this.state.allIds.join(",");
+              const newIds = state.allIds.join(",");
+              if (currentIds !== newIds) {
+                console.log("[TaskStore] State change detected on app foreground, reloading");
+                this.state = state;
+                this.notify();
+              }
+            });
+          }
+        });
+      })
+      .catch(() => {
+        // AppState not available (SSR or test environment)
+      });
   }
 
   private notify() {
