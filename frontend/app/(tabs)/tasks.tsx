@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
@@ -8,7 +8,9 @@ import { TaskItem } from "@/components/TaskItem";
 import { TaskForm } from "@/components/TaskForm";
 import { DifficultyRanker } from "@/components/DifficultyRanker";
 import { SyncStatusIcon } from "@/components/SyncStatusIcon";
+import { BalanceDisplay } from "@/components/BalanceDisplay";
 import type { Task, TaskInput } from "@/lib/task";
+import { isHabit } from "@/lib/task";
 
 type SortMode = "newest" | "difficulty";
 
@@ -20,6 +22,7 @@ export default function Tasks() {
     createTask,
     updateTask,
     deleteTask,
+    completeTask,
     selectTask,
     setIsEditing,
   } = useTasks();
@@ -32,8 +35,18 @@ export default function Tasks() {
   // Price update context
   const { updatePrices } = usePriceUpdate();
 
+  // Filter out completed non-habit tasks
+  const activeTasks = useMemo(
+    () => tasks.filter((t) => !t.completed_at || isHabit(t)),
+    [tasks],
+  );
+  const activeRankedTasks = useMemo(
+    () => rankedTasks.filter((t) => !t.completed_at || isHabit(t)),
+    [rankedTasks],
+  );
+
   // Use sorted tasks based on mode
-  const displayTasks = sortMode === "difficulty" ? rankedTasks : tasks;
+  const displayTasks = sortMode === "difficulty" ? activeRankedTasks : activeTasks;
 
   // Update prices when tasks change
   useEffect(() => {
@@ -112,6 +125,13 @@ export default function Tasks() {
     [],
   );
 
+  const handleComplete = useCallback(
+    async (task: Task) => {
+      await completeTask(task);
+    },
+    [completeTask],
+  );
+
   const handleRerank = useCallback(() => {
     if (selectedTask) {
       setIsModalVisible(false);
@@ -125,11 +145,12 @@ export default function Tasks() {
       <TaskItem
         task={item}
         onPress={handleTaskPress}
+        onComplete={handleComplete}
         onSetDifficulty={sortMode === "difficulty" ? handleSetDifficulty : undefined}
         isDifficultyView={sortMode === "difficulty"}
       />
     ),
-    [handleTaskPress, handleSetDifficulty, sortMode],
+    [handleTaskPress, handleComplete, handleSetDifficulty, sortMode],
   );
 
   const keyExtractor = useCallback((item: Task) => item.id, []);
@@ -140,7 +161,10 @@ export default function Tasks() {
         <View className="p-4 border-b border-gray-200">
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-2xl font-bold text-gray-900">Tasks</Text>
-            <SyncStatusIcon />
+            <View className="flex-row items-center gap-2">
+              <BalanceDisplay />
+              <SyncStatusIcon />
+            </View>
           </View>
           <View className="flex-row gap-2">
             <Pressable

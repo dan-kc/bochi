@@ -9,6 +9,7 @@ import type { Task, TaskInput } from "./task";
 import { useAuth } from "./AuthContext";
 import { useSyncOptional } from "./sync";
 import { useTasks as useTasksFromStore, useTaskActions, useTasksSortedByDifficulty, LOCAL_USER_ID } from "./store";
+import { completeTask as completeTaskAction } from "./completeTask";
 
 interface TaskContextType {
   tasks: Task[];
@@ -18,6 +19,7 @@ interface TaskContextType {
   createTask: (input: TaskInput) => Promise<Task>;
   updateTask: (id: string, input: Partial<TaskInput>) => Promise<Task | null>;
   deleteTask: (id: string) => Promise<boolean>;
+  completeTask: (task: Task) => Promise<number>;
   selectTask: (task: Task | null) => void;
   setIsEditing: (editing: boolean) => void;
 }
@@ -74,6 +76,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     [sync, actions],
   );
 
+  const completeTask = useCallback(
+    async (task: Task): Promise<number> => {
+      const amount = await completeTaskAction(task, tasks, userId, () => {
+        sync?.notifyChange();
+      });
+      return amount;
+    },
+    [tasks, userId, sync],
+  );
+
   const selectTask = useCallback((task: Task | null) => {
     setSelectedTask(task);
   }, []);
@@ -88,6 +100,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         createTask,
         updateTask,
         deleteTask,
+        completeTask,
         selectTask,
         setIsEditing,
       }}

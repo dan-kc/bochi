@@ -1,11 +1,14 @@
 use std::{any::Any, sync::Arc};
 use tracing::error;
 
-use super::objects::{RewardObject, SyncPushResponse, SyncTaskInput, TaskObject, TradeObject};
+use super::objects::{
+    RewardObject, SyncPushResponse, SyncPushTradesResponse, SyncTaskInput, SyncTradeInput,
+    TaskObject, TradeObject,
+};
 use crate::{
     database::{
         self, CreateRewardOptions, CreateTaskOptions, CreateTradeWithRewardOptions,
-        CreateTradeWithTaskOptions, UpsertTaskOptions,
+        CreateTradeWithTaskOptions, UpsertTaskOptions, UpsertTradeOptions,
     },
     router::AuthenticatedUser,
 };
@@ -343,6 +346,7 @@ impl MutationRoot {
                 due_by: task_input.due_by,
                 min_daily_frequency: task_input.min_daily_frequency,
                 difficulty_rank: task_input.difficulty_rank,
+                completed_at: task_input.completed_at,
             };
 
             let task_row = database
@@ -365,6 +369,90 @@ impl MutationRoot {
         Ok(SyncPushResponse {
             tasks: result_tasks,
             server_time,
+        })
+    }
+
+    async fn sync_push_trades(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        trades: Vec<SyncTradeInput>,
+    ) -> Result<SyncPushTradesResponse, async_graphql::Error> {
+        let database = ctx.data::<database::Database>().map_err(|e| {
+            error!("Database pool not found in context: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
+
+        let user_id = ctx
+            .data::<AuthenticatedUser>()
+            .map_err(|e| {
+                error!("User not found in context: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?
+            .user_id;
+
+        let mut result_trades = Vec::new();
+        let mut final_balance = 0.0;
+
+        for trade_input in trades {
+            // Validate trade ID is a valid UUID
+            let trade_id = trade_input.id.parse::<Uuid>().map_err(|_| {
+                Error::Validation(format!("Invalid trade id format: {}", trade_input.id))
+                    .into_graphql_error()
+            })?;
+
+            // Validate task_id if provided
+            let task_id = if let Some(task_id_str) = &trade_input.task_id {
+                Some(task_id_str.parse::<Uuid>().map_err(|_| {
+                    Error::Validation(format!("Invalid task_id format: {}", task_id_str))
+                        .into_graphql_error()
+                })?)
+            } else {
+                None
+            };
+
+            // Validate reward_id if provided
+            let reward_id = if let Some(reward_id_str) = &trade_input.reward_id {
+                Some(reward_id_str.parse::<Uuid>().map_err(|_| {
+                    Error::Validation(format!("Invalid reward_id format: {}", reward_id_str))
+                        .into_graphql_error()
+                })?)
+            } else {
+                None
+            };
+
+            // Trade must have either task_id or reward_id
+            if task_id.is_none() && reward_id.is_none() {
+                let msg = "Trade must have a task_id or reward_id".to_string();
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+
+            let upsert_opts = UpsertTradeOptions {
+                id: trade_id,
+                task_id,
+                reward_id,
+                amount: trade_input.amount,
+                created_at: trade_input.created_at,
+                deleted_at: trade_input.deleted_at,
+            };
+
+            let (trade_row, new_balance) = database
+                .upsert_trade_and_update_balance(user_id, upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error: {:?}", e);
+                    Error::Internal.into_graphql_error()
+                })?;
+
+            result_trades.push(trade_row.into());
+            final_balance = new_balance;
+        }
+
+        let server_time = Utc::now().naive_utc();
+
+        Ok(SyncPushTradesResponse {
+            trades: result_trades,
+            server_time,
+            new_balance: final_balance,
         })
     }
 }

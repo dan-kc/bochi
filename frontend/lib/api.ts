@@ -1,6 +1,13 @@
 import { Platform } from "react-native";
 import type { Task } from "./task";
-import type { SyncPullResponse, SyncPushResponse } from "./sync/types";
+import type { Trade } from "./trade";
+import type {
+  SyncPullResponse,
+  SyncPushResponse,
+  SyncPullTradesResponse,
+  SyncPushTradesResponse,
+  BalanceResponse,
+} from "./sync/types";
 import { getStoredTokens } from "./storage";
 
 const API_PROTOCOL = process.env.EXPO_PUBLIC_API_PROTOCOL || "http";
@@ -192,6 +199,7 @@ class ApiClient {
             dueBy
             minDailyFrequency
             difficultyRank
+            completedAt
           }
           serverTime
         }
@@ -214,6 +222,7 @@ class ApiClient {
           dueBy: string | null;
           minDailyFrequency: number | null;
           difficultyRank: string | null;
+          completedAt: string | null;
         }>;
         serverTime: string;
       };
@@ -233,6 +242,7 @@ class ApiClient {
         due_by: t.dueBy,
         min_daily_frequency: t.minDailyFrequency,
         difficulty_rank: t.difficultyRank,
+        completed_at: t.completedAt,
       })),
       server_time: result.syncPull.serverTime,
     };
@@ -253,6 +263,7 @@ class ApiClient {
             dueBy
             minDailyFrequency
             difficultyRank
+            completedAt
           }
           serverTime
         }
@@ -275,6 +286,7 @@ class ApiClient {
       dueBy: toNaiveDateTime(t.due_by),
       minDailyFrequency: t.min_daily_frequency,
       difficultyRank: t.difficulty_rank,
+      completedAt: toNaiveDateTime(t.completed_at),
     }));
 
     const result = await this.graphqlRequest<{
@@ -290,6 +302,7 @@ class ApiClient {
           dueBy: string | null;
           minDailyFrequency: number | null;
           difficultyRank: string | null;
+          completedAt: string | null;
         }>;
         serverTime: string;
       };
@@ -309,8 +322,147 @@ class ApiClient {
         due_by: t.dueBy,
         min_daily_frequency: t.minDailyFrequency,
         difficulty_rank: t.difficultyRank,
+        completed_at: t.completedAt,
       })),
       server_time: result.syncPush.serverTime,
+    };
+  }
+
+  // ============ Trade sync endpoints (GraphQL) ============
+
+  async pullTrades(since: string | null): Promise<SyncPullTradesResponse> {
+    const query = `
+      query SyncPullTrades($since: NaiveDateTime) {
+        syncPullTrades(since: $since) {
+          trades {
+            id
+            taskId
+            rewardId
+            amount
+            createdAt
+            updatedAt
+            deletedAt
+          }
+          serverTime
+        }
+      }
+    `;
+
+    const sinceParsed = since ? since.replace(/Z$/, "") : null;
+
+    const result = await this.graphqlRequest<{
+      syncPullTrades: {
+        trades: Array<{
+          id: string;
+          taskId: string | null;
+          rewardId: string | null;
+          amount: number;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+        }>;
+        serverTime: string;
+      };
+    }>(query, { since: sinceParsed });
+
+    return {
+      trades: result.syncPullTrades.trades.map((t) => ({
+        id: t.id,
+        user_id: "", // Populated locally
+        task_id: t.taskId,
+        reward_id: t.rewardId,
+        amount: t.amount,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      server_time: result.syncPullTrades.serverTime,
+    };
+  }
+
+  async pushTrades(trades: Trade[]): Promise<SyncPushTradesResponse> {
+    const mutation = `
+      mutation SyncPushTrades($trades: [SyncTradeInput!]!) {
+        syncPushTrades(trades: $trades) {
+          trades {
+            id
+            taskId
+            rewardId
+            amount
+            createdAt
+            updatedAt
+            deletedAt
+          }
+          serverTime
+          newBalance
+        }
+      }
+    `;
+
+    const toNaiveDateTime = (date: string | null): string | null =>
+      date ? date.replace(/Z$/, "") : null;
+
+    const tradeInputs = trades.map((t) => ({
+      id: t.id,
+      taskId: t.task_id,
+      rewardId: t.reward_id,
+      amount: t.amount,
+      createdAt: toNaiveDateTime(t.created_at),
+      deletedAt: toNaiveDateTime(t.deleted_at),
+    }));
+
+    const result = await this.graphqlRequest<{
+      syncPushTrades: {
+        trades: Array<{
+          id: string;
+          taskId: string | null;
+          rewardId: string | null;
+          amount: number;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+        }>;
+        serverTime: string;
+        newBalance: number;
+      };
+    }>(mutation, { trades: tradeInputs });
+
+    return {
+      trades: result.syncPushTrades.trades.map((t) => ({
+        id: t.id,
+        user_id: "", // Populated locally
+        task_id: t.taskId,
+        reward_id: t.rewardId,
+        amount: t.amount,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      server_time: result.syncPushTrades.serverTime,
+      new_balance: result.syncPushTrades.newBalance,
+    };
+  }
+
+  async getBalance(): Promise<BalanceResponse> {
+    const query = `
+      query Balance {
+        balance {
+          soyBalance
+          tofuBalance
+        }
+      }
+    `;
+
+    const result = await this.graphqlRequest<{
+      balance: {
+        soyBalance: number;
+        tofuBalance: number;
+      };
+    }>(query);
+
+    return {
+      soy_balance: result.balance.soyBalance,
+      tofu_balance: result.balance.tofuBalance,
     };
   }
 }

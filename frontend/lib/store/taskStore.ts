@@ -36,6 +36,7 @@ function normalizeTask(task: Partial<Task>): Task {
     due_by: task.due_by ?? null,
     min_daily_frequency: task.min_daily_frequency ?? null,
     difficulty_rank: task.difficulty_rank ?? null,
+    completed_at: task.completed_at ?? null,
   };
 }
 
@@ -255,6 +256,7 @@ class TaskStore {
       due_by: input.due_by ?? null,
       min_daily_frequency: input.min_daily_frequency ?? null,
       difficulty_rank: input.difficulty_rank ?? null,
+      completed_at: input.completed_at ?? null,
     };
 
     // Update state
@@ -298,6 +300,10 @@ class TaskStore {
         input.difficulty_rank !== undefined
           ? input.difficulty_rank
           : existing.difficulty_rank,
+      completed_at:
+        input.completed_at !== undefined
+          ? input.completed_at
+          : existing.completed_at,
       updated_at: now,
     };
 

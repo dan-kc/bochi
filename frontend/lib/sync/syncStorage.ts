@@ -2,7 +2,9 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const DIRTY_TASKS_KEY = "tofustash_dirty_tasks";
+const DIRTY_TRADES_KEY = "tofustash_dirty_trades";
 const LAST_SYNC_KEY = "tofustash_last_sync";
+const LAST_TRADE_SYNC_KEY = "tofustash_trade_last_sync";
 const LAST_FULL_SYNC_KEY = "tofustash_last_full_sync";
 
 // How often to force a full sync (24 hours in milliseconds)
@@ -119,4 +121,49 @@ export async function recordFullSyncCompleted(): Promise<void> {
  */
 export async function clearFullSyncTimestamp(): Promise<void> {
   await removeItem(LAST_FULL_SYNC_KEY);
+}
+
+// ============ Dirty trade tracking ============
+
+export async function getDirtyTradeIds(): Promise<Set<string>> {
+  const data = await getItem(DIRTY_TRADES_KEY);
+  return new Set(data ? JSON.parse(data) : []);
+}
+
+export async function markTradeDirty(tradeId: string): Promise<void> {
+  const dirtyIds = await getDirtyTradeIds();
+  dirtyIds.add(tradeId);
+  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
+}
+
+export async function clearTradeDirtyFlag(tradeId: string): Promise<void> {
+  const dirtyIds = await getDirtyTradeIds();
+  dirtyIds.delete(tradeId);
+  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
+}
+
+export async function clearAllTradeDirtyFlags(): Promise<void> {
+  await removeItem(DIRTY_TRADES_KEY);
+}
+
+export async function markTradesDirty(tradeIds: string[]): Promise<void> {
+  const dirtyIds = await getDirtyTradeIds();
+  for (const id of tradeIds) {
+    dirtyIds.add(id);
+  }
+  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
+}
+
+// ============ Trade last sync timestamp ============
+
+export async function getTradeLastSyncTime(): Promise<string | null> {
+  return getItem(LAST_TRADE_SYNC_KEY);
+}
+
+export async function setTradeLastSyncTime(timestamp: string): Promise<void> {
+  await setItem(LAST_TRADE_SYNC_KEY, timestamp);
+}
+
+export async function clearTradeLastSyncTime(): Promise<void> {
+  await removeItem(LAST_TRADE_SYNC_KEY);
 }

@@ -10,6 +10,7 @@ export interface Task {
   due_by: string | null;
   min_daily_frequency: number | null;
   difficulty_rank: string | null;
+  completed_at: string | null;
 }
 
 export interface TaskInput {
@@ -20,6 +21,7 @@ export interface TaskInput {
   due_by?: string | null;
   min_daily_frequency?: number | null;
   difficulty_rank?: string | null;
+  completed_at?: string | null;
 }
 
 export function createEmptyTaskInput(): TaskInput {
@@ -31,5 +33,13 @@ export function createEmptyTaskInput(): TaskInput {
     due_by: null,
     min_daily_frequency: null,
     difficulty_rank: null,
+    completed_at: null,
   };
+}
+
+/**
+ * Returns true if this task is a habit (has min_daily_frequency)
+ */
+export function isHabit(task: Task): boolean {
+  return task.min_daily_frequency !== null;
 }

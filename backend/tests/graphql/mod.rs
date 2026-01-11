@@ -4,3 +4,4 @@ pub mod create_trade;
 pub mod difficulty_rank;
 pub mod introspection;
 pub mod sync_tasks;
+pub mod sync_trades;
