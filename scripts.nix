@@ -281,18 +281,21 @@ let
 
     # Run npm commands in frontend directory
     npm = pkgs.writeShellScriptBin "npm" ''
-      (cd frontend && ${pkgs.nodejs}/bin/npm "$@")
+      export PATH="${pkgs.nodejs}/bin:$PATH"
+      (cd frontend && npm "$@")
     '';
 
     # Run pnpm commands in frontend directory
     pnpm = pkgs.writeShellScriptBin "pnpm" ''
-      (cd frontend && ${pkgs.pnpm}/bin/pnpm "$@")
+      export PATH="${pkgs.nodejs}/bin:${pkgs.pnpm}/bin:$PATH"
+      (cd frontend && pnpm "$@")
     '';
 
     # Start frontend web dev server
     web = pkgs.writeShellScriptBin "web" ''
       set -e
-      (cd frontend && ${pkgs.nodejs}/bin/npm run web "$@")
+      export PATH="${pkgs.nodejs}/bin:$PATH"
+      (cd frontend && npm run web "$@")
     '';
 
     # Sets up and tears down the test environment. Wraps `cargo test`.

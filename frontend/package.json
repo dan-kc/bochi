@@ -8,7 +8,8 @@
     "android": "dotenv -- sh -c 'expo start --android --port $FRONTEND_PORT --host $HOST'",
     "ios": "dotenv -- sh -c 'expo start --ios --port $FRONTEND_PORT --host $HOST'",
     "web": "dotenv -- sh -c 'BROWSER=none expo start --web --port $FRONTEND_PORT --host $HOST'",
-    "lint": "expo lint"
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint && npm run typecheck"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
