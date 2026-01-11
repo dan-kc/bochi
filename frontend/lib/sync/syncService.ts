@@ -5,6 +5,8 @@ import {
   clearAllDirtyFlags,
   getLastSyncTime,
   setLastSyncTime,
+  checkAndPrepareFullSyncIfNeeded,
+  recordFullSyncCompleted,
 } from "./syncStorage";
 import type { SyncCallbacks } from "./types";
 
@@ -112,6 +114,10 @@ export class SyncService {
     this.callbacks.onStatusChange("syncing");
 
     try {
+      // Step 0: Check if periodic full sync is needed (every 24h)
+      // This clears lastSyncTime if it's been too long since last full sync
+      const isFullSync = await checkAndPrepareFullSyncIfNeeded();
+
       // Step 1: Pull remote changes
       const lastSync = await getLastSyncTime();
       const pullResponse = await api.pullTasks(lastSync);
@@ -142,6 +148,11 @@ export class SyncService {
       await setLastSyncTime(pullResponse.server_time);
       this.callbacks.onStatusChange("synced");
       this.callbacks.onSyncComplete(pullResponse.server_time);
+
+      // Step 6: Record full sync completion if this was a full sync
+      if (isFullSync || lastSync === null) {
+        await recordFullSyncCompleted();
+      }
     } catch (error) {
       console.error("Sync failed:", error);
       const message =

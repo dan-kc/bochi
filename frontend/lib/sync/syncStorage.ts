@@ -3,6 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const DIRTY_TASKS_KEY = "tofustash_dirty_tasks";
 const LAST_SYNC_KEY = "tofustash_last_sync";
+const LAST_FULL_SYNC_KEY = "tofustash_last_full_sync";
+
+// How often to force a full sync (24 hours in milliseconds)
+const FULL_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // ============ Platform-aware storage helpers ============
 
@@ -72,4 +76,40 @@ export async function setLastSyncTime(timestamp: string): Promise<void> {
 
 export async function clearLastSyncTime(): Promise<void> {
   await removeItem(LAST_SYNC_KEY);
+}
+
+// ============ Full sync tracking ============
+
+/**
+ * Check if a full sync is needed (more than 24 hours since last full sync).
+ * If needed, clears lastSyncTime to force a full pull.
+ * Returns true if a full sync will be performed.
+ */
+export async function checkAndPrepareFullSyncIfNeeded(): Promise<boolean> {
+  const lastFullSync = await getItem(LAST_FULL_SYNC_KEY);
+  const now = Date.now();
+
+  if (!lastFullSync) {
+    // Never done a full sync, do one now
+    await removeItem(LAST_SYNC_KEY);
+    return true;
+  }
+
+  const lastFullSyncTime = parseInt(lastFullSync, 10);
+  if (now - lastFullSyncTime > FULL_SYNC_INTERVAL_MS) {
+    // More than 24 hours since last full sync
+    console.log("[Sync] Triggering periodic full sync (last was >24h ago)");
+    await removeItem(LAST_SYNC_KEY);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Record that a full sync was completed.
+ * Should be called after a successful sync when lastSyncTime was null.
+ */
+export async function recordFullSyncCompleted(): Promise<void> {
+  await setItem(LAST_FULL_SYNC_KEY, Date.now().toString());
 }
