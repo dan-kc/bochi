@@ -11,13 +11,64 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     debug_handler,
     extract::State,
-    http::StatusCode,
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Extension, Json,
 };
 use convert_case::Casing;
 use regex::Regex;
 use tracing::info;
+
+/// Create a secure HttpOnly cookie for auth tokens
+fn create_auth_cookie(name: &str, value: &str, max_age_seconds: i64) -> HeaderValue {
+    let cookie = format!(
+        "{}={}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={}",
+        name, value, max_age_seconds
+    );
+    HeaderValue::from_str(&cookie).unwrap()
+}
+
+/// Create a cookie that clears an existing cookie
+fn create_clear_cookie(name: &str) -> HeaderValue {
+    let cookie = format!(
+        "{}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+        name
+    );
+    HeaderValue::from_str(&cookie).unwrap()
+}
+
+/// Build headers with auth cookies set
+fn auth_cookie_headers(access_token: &str, refresh_token: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    // Access token expires in 15 minutes (900 seconds)
+    headers.append(SET_COOKIE, create_auth_cookie("access_token", access_token, 900));
+    // Refresh token expires in 7 days (604800 seconds)
+    headers.append(SET_COOKIE, create_auth_cookie("refresh_token", refresh_token, 604800));
+    headers
+}
+
+/// Build headers that clear auth cookies
+fn clear_auth_cookie_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.append(SET_COOKIE, create_clear_cookie("access_token"));
+    headers.append(SET_COOKIE, create_clear_cookie("refresh_token"));
+    headers
+}
+
+/// Extract refresh_token from Cookie header
+fn extract_refresh_token_from_cookies(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookie_header| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with("refresh_token="))
+                .and_then(|s| s.strip_prefix("refresh_token="))
+                .map(|s| s.to_string())
+        })
+}
 
 fn email_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
@@ -217,25 +268,36 @@ pub async fn register(
         .await
         .map_err(|_| Error::FailedToLogin)?;
 
-    Ok(Json(AuthResponse {
-        refresh_token,
-        access_token,
-    })
-    .into_response())
+    let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
+    Ok((
+        cookie_headers,
+        Json(AuthResponse {
+            refresh_token,
+            access_token,
+        }),
+    )
+        .into_response())
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshTokenInput {
-    refresh_token: String,
+    refresh_token: Option<String>,
 }
 
 #[debug_handler]
 pub async fn refresh_tokens(
     State(app): State<App>,
+    headers: HeaderMap,
     Json(input): Json<RefreshTokenInput>,
 ) -> Result<Response, Error> {
-    let (user_id, name, refresh_token) = parse_refresh_token(input.refresh_token.as_str())
+    // Try body first, fall back to cookie
+    let token = input
+        .refresh_token
+        .or_else(|| extract_refresh_token_from_cookies(&headers))
+        .ok_or(Error::InvalidRefreshToken)?;
+
+    let (user_id, name, refresh_token) = parse_refresh_token(token.as_str())
         .map_err(|_| Error::InvalidRefreshToken)?;
     // Check if token is valid
     if let Ok(refresh_token_row) = app
@@ -265,11 +327,15 @@ pub async fn refresh_tokens(
             .await
             .map_err(|_| Error::FailedToCreateRefreshToken)?;
 
-        Ok(Json(AuthResponse {
-            access_token: new_access_token,
-            refresh_token: new_refresh_token,
-        })
-        .into_response())
+        let cookie_headers = auth_cookie_headers(&new_access_token, &new_refresh_token);
+        Ok((
+            cookie_headers,
+            Json(AuthResponse {
+                access_token: new_access_token,
+                refresh_token: new_refresh_token,
+            }),
+        )
+            .into_response())
     } else {
         Err(Error::InvalidRefreshToken)
     }
@@ -343,11 +409,15 @@ pub async fn login(
             .await
             .map_err(|_| Error::FailedToLogin)?;
 
-        Ok(Json(AuthResponse {
-            refresh_token,
-            access_token,
-        })
-        .into_response())
+        let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
+        Ok((
+            cookie_headers,
+            Json(AuthResponse {
+                refresh_token,
+                access_token,
+            }),
+        )
+            .into_response())
     } else {
         Err(Error::InvalidLoginCredentials)
     }
@@ -358,18 +428,25 @@ struct LogoutResponse {
     success: bool,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LogoutInput {
-    refresh_token: String,
+    refresh_token: Option<String>,
 }
 #[debug_handler]
 pub async fn logout(
     State(app): State<App>,
+    headers: HeaderMap,
     Json(input): Json<LogoutInput>,
 ) -> Result<Response, Error> {
+    // Try body first, fall back to cookie
+    let token = input
+        .refresh_token
+        .or_else(|| extract_refresh_token_from_cookies(&headers))
+        .ok_or(Error::InvalidRefreshToken)?;
+
     // Parse refresh token to get user_id, name, and uuid part
-    let (user_id, name, refresh_token) = parse_refresh_token(input.refresh_token.as_str())
+    let (user_id, name, refresh_token) = parse_refresh_token(token.as_str())
         .map_err(|_| Error::InvalidRefreshToken)?;
 
     // Validate the refresh token exists and matches
@@ -389,5 +466,6 @@ pub async fn logout(
         .delete_refresh_token_by_user_and_name(user_id, name.as_str())
         .await;
 
-    Ok(Json(LogoutResponse { success: true }).into_response())
+    let clear_headers = clear_auth_cookie_headers();
+    Ok((clear_headers, Json(LogoutResponse { success: true })).into_response())
 }

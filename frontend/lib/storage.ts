@@ -3,35 +3,28 @@ import * as SecureStore from "expo-secure-store";
 import type { AuthTokens } from "./api";
 
 const TOKENS_KEY = "auth_tokens";
+const USER_INFO_KEY = "auth_user_info";
+const isWeb = Platform.OS === "web";
 
-// Storage abstraction that uses localStorage on web and SecureStore on native
-const storage = {
-  async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === "web") {
-      return localStorage.getItem(key);
-    }
-    return await SecureStore.getItemAsync(key);
-  },
+// User info stored on web (no sensitive tokens)
+export interface StoredUserInfo {
+  userId: string;
+  expiresAt: number; // Unix timestamp for scheduling refresh
+}
 
-  async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === "web") {
-      localStorage.setItem(key, value);
-      return;
-    }
-    await SecureStore.setItemAsync(key, value);
-  },
+// Storage abstraction:
+// - Web: localStorage for user info only (userId, expiresAt)
+//        Actual auth uses HttpOnly cookies (XSS can't steal session)
+// - Native: SecureStore for full tokens (used for Authorization header)
 
-  async removeItem(key: string): Promise<void> {
-    if (Platform.OS === "web") {
-      localStorage.removeItem(key);
-      return;
-    }
-    await SecureStore.deleteItemAsync(key);
-  },
-};
+// ============ Native-only: Full token storage ============
 
 export async function getStoredTokens(): Promise<AuthTokens | null> {
-  const tokensJson = await storage.getItem(TOKENS_KEY);
+  // Only used on native - web uses cookies
+  if (isWeb) {
+    return null;
+  }
+  const tokensJson = await SecureStore.getItemAsync(TOKENS_KEY);
   if (!tokensJson) return null;
 
   try {
@@ -42,9 +35,53 @@ export async function getStoredTokens(): Promise<AuthTokens | null> {
 }
 
 export async function storeTokens(tokens: AuthTokens): Promise<void> {
-  await storage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+  // Only store on native - web uses cookies
+  if (isWeb) {
+    return;
+  }
+  await SecureStore.setItemAsync(TOKENS_KEY, JSON.stringify(tokens));
 }
 
 export async function clearTokens(): Promise<void> {
-  await storage.removeItem(TOKENS_KEY);
+  // Only used on native
+  if (isWeb) {
+    return;
+  }
+  await SecureStore.deleteItemAsync(TOKENS_KEY);
+}
+
+// ============ Web-only: User info storage (no tokens) ============
+
+export async function getStoredUserInfo(): Promise<StoredUserInfo | null> {
+  if (!isWeb) {
+    return null;
+  }
+  const infoJson = localStorage.getItem(USER_INFO_KEY);
+  if (!infoJson) return null;
+
+  try {
+    return JSON.parse(infoJson) as StoredUserInfo;
+  } catch {
+    return null;
+  }
+}
+
+export async function storeUserInfo(info: StoredUserInfo): Promise<void> {
+  if (!isWeb) {
+    return;
+  }
+  localStorage.setItem(USER_INFO_KEY, JSON.stringify(info));
+}
+
+export async function clearUserInfo(): Promise<void> {
+  if (!isWeb) {
+    return;
+  }
+  localStorage.removeItem(USER_INFO_KEY);
+}
+
+// ============ Platform-agnostic helpers ============
+
+export function isWebPlatform(): boolean {
+  return isWeb;
 }

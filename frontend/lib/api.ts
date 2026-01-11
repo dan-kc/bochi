@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import type { Task } from "./task";
 import type { SyncPullResponse, SyncPushResponse } from "./sync/types";
 import { getStoredTokens } from "./storage";
@@ -7,6 +8,10 @@ const API_HOST = process.env.EXPO_PUBLIC_API_HOST || "localhost";
 const API_PORT = process.env.EXPO_PUBLIC_API_PORT || "8501";
 const API_BASE = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`;
 const GRAPHQL_ENDPOINT = `${API_BASE}/graphql`;
+
+// On web, we use cookies for auth (sent automatically with credentials: 'include')
+// On native, we use Authorization header with tokens from SecureStore
+const isWeb = Platform.OS === "web";
 
 export interface AuthTokens {
   refreshToken: string;
@@ -31,6 +36,8 @@ class ApiClient {
   ): Promise<T> {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
+      // Include credentials so cookies are sent/received on web
+      credentials: isWeb ? "include" : "omit",
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
@@ -60,17 +67,23 @@ class ApiClient {
     });
   }
 
-  async refreshTokens(refreshToken: string): Promise<AuthTokens> {
+  async refreshTokens(refreshToken?: string): Promise<AuthTokens> {
+    // On web, cookie is sent automatically - no need for body
+    // On native, send refresh token in body
+    const body = isWeb ? {} : { refreshToken };
     return this.request<AuthTokens>("/auth/refresh-tokens", {
       method: "POST",
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify(body),
     });
   }
 
-  async logout(refreshToken: string): Promise<{ success: boolean }> {
+  async logout(refreshToken?: string): Promise<{ success: boolean }> {
+    // On web, cookie is sent automatically - no need for body
+    // On native, send refresh token in body
+    const body = isWeb ? {} : { refreshToken };
     return this.request<{ success: boolean }>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify(body),
     });
   }
 
@@ -80,6 +93,12 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {},
   ): Promise<T> {
+    // On web, cookies are sent automatically with credentials: 'include'
+    // On native, we need to get tokens from SecureStore and send Authorization header
+    if (isWeb) {
+      return this.request<T>(endpoint, options);
+    }
+
     const tokens = await getStoredTokens();
     if (!tokens) {
       throw { message: "Not authenticated" } as ApiError;
@@ -100,17 +119,24 @@ class ApiClient {
     query: string,
     variables?: Record<string, unknown>,
   ): Promise<T> {
-    const tokens = await getStoredTokens();
-    if (!tokens) {
-      throw { message: "Not authenticated" } as ApiError;
+    // On web, cookies are sent automatically with credentials: 'include'
+    // On native, we need to get tokens from SecureStore and send Authorization header
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (!isWeb) {
+      const tokens = await getStoredTokens();
+      if (!tokens) {
+        throw { message: "Not authenticated" } as ApiError;
+      }
+      headers["Authorization"] = `Bearer ${tokens.accessToken}`;
     }
 
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokens.accessToken}`,
-      },
+      credentials: isWeb ? "include" : "omit",
+      headers,
       body: JSON.stringify({ query, variables }),
     });
 

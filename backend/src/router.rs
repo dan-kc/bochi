@@ -111,12 +111,31 @@ pub struct AuthenticatedUser {
     pub user_id: Uuid,
 }
 
+/// Extract access_token from Cookie header
+fn extract_token_from_cookies(cookie_header: &str) -> Option<&str> {
+    cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .find(|s| s.starts_with("access_token="))
+        .and_then(|s| s.strip_prefix("access_token="))
+}
+
 async fn auth(State(app): State<App>, mut req: Request, next: Next) -> Response {
     let headers = req.headers();
-    let jwt_optional = headers
+
+    // First try Authorization header (takes precedence)
+    let jwt_from_header = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|header_value| header_value.to_str().ok())
         .and_then(|header| header.strip_prefix("Bearer "));
+
+    // Fall back to cookie if no Authorization header
+    let jwt_from_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(extract_token_from_cookies);
+
+    let jwt_optional = jwt_from_header.or(jwt_from_cookie);
 
     match jwt_optional {
         None => StatusCode::UNAUTHORIZED.into_response(),

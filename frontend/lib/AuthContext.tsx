@@ -8,7 +8,16 @@ import {
   type ReactNode,
 } from "react";
 import { api, type AuthTokens, type ApiError } from "./api";
-import { getStoredTokens, storeTokens, clearTokens } from "./storage";
+import {
+  getStoredTokens,
+  storeTokens,
+  clearTokens,
+  getStoredUserInfo,
+  storeUserInfo,
+  clearUserInfo,
+  isWebPlatform,
+  type StoredUserInfo,
+} from "./storage";
 
 interface User {
   id: string;
@@ -44,6 +53,17 @@ function getUserFromTokens(tokens: AuthTokens): User | null {
   return null;
 }
 
+function getUserInfoFromTokens(tokens: AuthTokens): StoredUserInfo | null {
+  const payload = parseJwtPayload(tokens.accessToken);
+  if (payload?.sub && payload?.exp) {
+    return {
+      userId: payload.sub,
+      expiresAt: payload.exp,
+    };
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,56 +77,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const scheduleTokenRefresh = useCallback(
-    (tokens: AuthTokens, performRefresh: (refreshToken: string) => Promise<void>) => {
+    (
+      expiresAtSeconds: number,
+      refreshToken: string | undefined,
+      performRefresh: (refreshToken?: string) => Promise<void>,
+    ) => {
       clearRefreshTimeout();
 
-      const payload = parseJwtPayload(tokens.accessToken);
-      if (!payload?.exp) {
-        console.log("[Auth] No exp claim in token, skipping refresh schedule");
-        return;
-      }
-
-      const expiresAt = payload.exp * 1000;
+      const expiresAt = expiresAtSeconds * 1000;
       const refreshAt = expiresAt - 60_000; // Refresh 1 minute before expiry
       const delay = refreshAt - Date.now();
 
       if (delay <= 0) {
         console.log("[Auth] Token already expired or expiring soon, refreshing now");
-        performRefresh(tokens.refreshToken);
+        performRefresh(refreshToken);
         return;
       }
 
       console.log(`[Auth] Scheduling token refresh in ${Math.round(delay / 1000)}s`);
       refreshTimeoutRef.current = setTimeout(() => {
-        performRefresh(tokens.refreshToken);
+        performRefresh(refreshToken);
       }, delay);
     },
     [clearRefreshTimeout],
   );
 
   const performTokenRefresh = useCallback(
-    async (refreshToken: string) => {
+    async (refreshToken?: string) => {
       try {
         const newTokens = await api.refreshTokens(refreshToken);
-        await storeTokens(newTokens);
-        setUser(getUserFromTokens(newTokens));
+        const userInfo = getUserInfoFromTokens(newTokens);
+        const user = getUserFromTokens(newTokens);
+
+        if (isWebPlatform()) {
+          // Web: store only user info, cookies handle auth
+          if (userInfo) {
+            await storeUserInfo(userInfo);
+          }
+        } else {
+          // Native: store full tokens
+          await storeTokens(newTokens);
+        }
+
+        setUser(user);
         console.log("[Auth] Token refresh succeeded");
-        scheduleTokenRefresh(newTokens, performTokenRefresh);
+
+        if (userInfo) {
+          scheduleTokenRefresh(userInfo.expiresAt, newTokens.refreshToken, performTokenRefresh);
+        }
       } catch (error) {
         const apiError = error as ApiError;
         const isAuthError = apiError.status === 401;
         if (isAuthError) {
           console.log("[Auth] Token refresh error:", apiError.status, apiError.errors);
           clearRefreshTimeout();
-          await clearTokens();
+          if (isWebPlatform()) {
+            await clearUserInfo();
+          } else {
+            await clearTokens();
+          }
           setUser(null);
         } else {
-          console.log("[Auth] Token refresh failed (keeping tokens):", error);
+          console.log("[Auth] Token refresh failed (keeping session):", error);
           // Retry in 1 minute on network errors
           refreshTimeoutRef.current = setTimeout(async () => {
-            const tokens = await getStoredTokens();
-            if (tokens) {
-              performTokenRefresh(tokens.refreshToken);
+            if (isWebPlatform()) {
+              // On web, just retry - cookie is still there
+              performTokenRefresh();
+            } else {
+              const tokens = await getStoredTokens();
+              if (tokens) {
+                performTokenRefresh(tokens.refreshToken);
+              }
             }
           }, 60_000);
         }
@@ -120,17 +162,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function loadStoredAuth() {
       try {
-        const tokens = await getStoredTokens();
-        if (tokens && isMounted) {
-          console.log("[Auth] Stored tokens found");
-          const user = getUserFromTokens(tokens);
-          console.log("[Auth] User from tokens:", user);
-          if (user) {
-            setUser(user);
+        if (isWebPlatform()) {
+          // Web: check for stored user info, then try to refresh (cookie handles auth)
+          const userInfo = await getStoredUserInfo();
+          if (userInfo && isMounted) {
+            console.log("[Auth] Stored user info found");
+            setUser({ id: userInfo.userId });
+            // Try to refresh - cookie will be sent automatically
+            if (isMounted) {
+              await performTokenRefresh();
+            }
           }
-          // Only refresh if still mounted (prevents double refresh in StrictMode)
-          if (isMounted) {
-            await performTokenRefresh(tokens.refreshToken);
+        } else {
+          // Native: check for stored tokens
+          const tokens = await getStoredTokens();
+          if (tokens && isMounted) {
+            console.log("[Auth] Stored tokens found");
+            const user = getUserFromTokens(tokens);
+            console.log("[Auth] User from tokens:", user);
+            if (user) {
+              setUser(user);
+            }
+            // Only refresh if still mounted (prevents double refresh in StrictMode)
+            if (isMounted) {
+              await performTokenRefresh(tokens.refreshToken);
+            }
           }
         }
       } finally {
@@ -156,13 +212,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (email: string, password: string) => {
       const tokens = await api.register(email, password);
-      await storeTokens(tokens);
+      const userInfo = getUserInfoFromTokens(tokens);
       const user = getUserFromTokens(tokens);
-      if (!user) {
+
+      if (!user || !userInfo) {
         throw new Error("Failed to get user from tokens");
       }
+
+      if (isWebPlatform()) {
+        // Web: store only user info, cookies handle auth
+        await storeUserInfo(userInfo);
+      } else {
+        // Native: store full tokens
+        await storeTokens(tokens);
+      }
+
       setUser(user);
-      scheduleTokenRefresh(tokens, performTokenRefresh);
+      scheduleTokenRefresh(userInfo.expiresAt, tokens.refreshToken, performTokenRefresh);
     },
     [scheduleTokenRefresh, performTokenRefresh],
   );
@@ -170,13 +236,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const tokens = await api.login(email, password);
-      await storeTokens(tokens);
+      const userInfo = getUserInfoFromTokens(tokens);
       const user = getUserFromTokens(tokens);
-      if (!user) {
+
+      if (!user || !userInfo) {
         throw new Error("Failed to get user from tokens");
       }
+
+      if (isWebPlatform()) {
+        // Web: store only user info, cookies handle auth
+        await storeUserInfo(userInfo);
+      } else {
+        // Native: store full tokens
+        await storeTokens(tokens);
+      }
+
       setUser(user);
-      scheduleTokenRefresh(tokens, performTokenRefresh);
+      scheduleTokenRefresh(userInfo.expiresAt, tokens.refreshToken, performTokenRefresh);
     },
     [scheduleTokenRefresh, performTokenRefresh],
   );
@@ -184,14 +260,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     clearRefreshTimeout();
     try {
-      const tokens = await getStoredTokens();
-      if (tokens) {
-        await api.logout(tokens.refreshToken);
+      if (isWebPlatform()) {
+        // Web: cookie sent automatically
+        await api.logout();
+      } else {
+        const tokens = await getStoredTokens();
+        if (tokens) {
+          await api.logout(tokens.refreshToken);
+        }
       }
     } catch {
       // Logout API call failed, but we still want to clear local state
     } finally {
-      await clearTokens();
+      if (isWebPlatform()) {
+        await clearUserInfo();
+      } else {
+        await clearTokens();
+      }
       setUser(null);
     }
   }, [clearRefreshTimeout]);
