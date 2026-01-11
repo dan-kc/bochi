@@ -18,6 +18,7 @@ interface SyncContextType {
   syncError: string | null;
   notifyChange: () => void;
   triggerSync: () => void;
+  waitForSync: () => Promise<void>;
 }
 
 const SyncContext = createContext<SyncContextType | null>(null);
@@ -33,6 +34,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const [syncError, setSyncError] = useState<string | null>(null);
 
   const syncServiceRef = useRef<SyncService | null>(null);
+  const syncWaitersRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
     if (user) {
@@ -47,6 +49,12 @@ export function SyncProvider({ children }: SyncProviderProps) {
           onStatusChange: (status, error) => {
             setSyncStatus(status);
             setSyncError(status === "error" ? (error ?? "Sync failed") : null);
+            // Resolve waiters on sync completion (success or error)
+            if (status === "synced" || status === "error") {
+              const waiters = syncWaitersRef.current;
+              syncWaitersRef.current = [];
+              waiters.forEach((resolve) => resolve());
+            }
           },
           onSyncComplete: (serverTime) => {
             setLastSyncTime(serverTime);
@@ -81,6 +89,17 @@ export function SyncProvider({ children }: SyncProviderProps) {
     syncServiceRef.current?.triggerSync();
   }, []);
 
+  const waitForSync = useCallback((): Promise<void> => {
+    return new Promise((resolve) => {
+      syncWaitersRef.current.push(resolve);
+      // The sync will be triggered by the useEffect when user changes,
+      // or if already synced, trigger manually
+      // Note: We don't trigger here because after login() the user context
+      // changes, which causes a re-render and new SyncService creation.
+      // The new SyncService automatically triggers sync on creation.
+    });
+  }, []);
+
   return (
     <SyncContext.Provider
       value={{
@@ -89,6 +108,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
         syncError,
         notifyChange,
         triggerSync,
+        waitForSync,
       }}
     >
       {children}

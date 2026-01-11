@@ -214,11 +214,68 @@ impl Database {
 
     /// Returns the user from email.
     pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as("SELECT id, email, password FROM users WHERE email = $1")
+        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?
             .ok_or(sqlx::Error::RowNotFound)
+    }
+
+    /// Creates an anonymous user, returning the user id.
+    pub async fn create_anonymous_user(&self, device_id: Uuid) -> Result<Uuid, sqlx::Error> {
+        let (user_id,): (Uuid,) = sqlx::query_as(
+            "INSERT INTO users (is_anonymous, device_id) VALUES (true, $1) RETURNING id",
+        )
+        .bind(device_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user_id)
+    }
+
+    /// Returns the user from device_id.
+    pub async fn get_user_from_device_id(&self, device_id: Uuid) -> Result<UserRow, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, email, password, is_anonymous, device_id FROM users WHERE device_id = $1",
+        )
+        .bind(device_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
+    }
+
+    /// Claims an anonymous account by setting email and password.
+    pub async fn claim_account(
+        &self,
+        user_id: Uuid,
+        email: &str,
+        hashed_password: &str,
+    ) -> Result<(), sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE users SET email = $2, password = $3, is_anonymous = false WHERE id = $1 AND is_anonymous = true",
+        )
+        .bind(user_id)
+        .bind(email)
+        .bind(hashed_password)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    /// Checks if a user is anonymous.
+    pub async fn is_user_anonymous(&self, user_id: Uuid) -> Result<bool, sqlx::Error> {
+        let (is_anonymous,): (bool,) =
+            sqlx::query_as("SELECT is_anonymous FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
+
+        Ok(is_anonymous)
     }
 
     // ============================================================================
@@ -397,8 +454,11 @@ pub struct UpsertTaskOptions {
 pub struct UserRow {
     pub id: Uuid,
     #[allow(dead_code)]
-    pub email: String,
-    pub password: String,
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub is_anonymous: bool,
+    #[allow(dead_code)]
+    pub device_id: Option<Uuid>,
 }
 
 #[derive(sqlx::FromRow)]

@@ -87,6 +87,32 @@ class ApiClient {
     });
   }
 
+  async anonymousAuth(deviceId: string): Promise<AuthTokens> {
+    return this.request<AuthTokens>("/auth/anonymous", {
+      method: "POST",
+      body: JSON.stringify({ deviceId }),
+    });
+  }
+
+  async claimAccount(
+    email: string,
+    password: string,
+    accessToken?: string,
+  ): Promise<AuthTokens> {
+    // On web, cookie is sent automatically
+    // On native, we need to send the access token
+    const headers: Record<string, string> = {};
+    if (!isWeb && accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    return this.request<AuthTokens>("/auth/claim", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers,
+    });
+  }
+
   // ============ Authenticated requests ============
 
   private async authenticatedRequest<T>(

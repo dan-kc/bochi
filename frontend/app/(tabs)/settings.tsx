@@ -19,6 +19,10 @@ export default function Settings() {
     await logout();
   };
 
+  const handleClaimAccount = () => {
+    router.push("/auth/claim");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-1 p-4">
@@ -29,6 +33,7 @@ export default function Settings() {
           onRegister={handleRegister}
           onLogin={handleLogin}
           onLogout={handleLogout}
+          onClaimAccount={handleClaimAccount}
         />
 
         <Text className="text-gray-600">App settings and preferences.</Text>

@@ -52,6 +52,14 @@ export async function clearAllDirtyFlags(): Promise<void> {
   await removeItem(DIRTY_TASKS_KEY);
 }
 
+export async function markTasksDirty(taskIds: string[]): Promise<void> {
+  const dirtyIds = await getDirtyTaskIds();
+  for (const id of taskIds) {
+    dirtyIds.add(id);
+  }
+  await setItem(DIRTY_TASKS_KEY, JSON.stringify(Array.from(dirtyIds)));
+}
+
 // ============ Last sync timestamp ============
 
 export async function getLastSyncTime(): Promise<string | null> {

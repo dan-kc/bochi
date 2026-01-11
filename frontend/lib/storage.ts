@@ -4,6 +4,7 @@ import type { AuthTokens } from "./api";
 
 const TOKENS_KEY = "auth_tokens";
 const USER_INFO_KEY = "auth_user_info";
+const DEVICE_ID_KEY = "device_id";
 const isWeb = Platform.OS === "web";
 
 // User info stored on web (no sensitive tokens)
@@ -84,4 +85,41 @@ export async function clearUserInfo(): Promise<void> {
 
 export function isWebPlatform(): boolean {
   return isWeb;
+}
+
+// ============ Device ID storage (both platforms) ============
+
+function generateUUID(): string {
+  // Simple UUID v4 generator
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export async function getOrCreateDeviceId(): Promise<string> {
+  if (isWeb) {
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = generateUUID();
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  } else {
+    let deviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = generateUUID();
+      await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  }
+}
+
+export async function getDeviceId(): Promise<string | null> {
+  if (isWeb) {
+    return localStorage.getItem(DEVICE_ID_KEY);
+  } else {
+    return SecureStore.getItemAsync(DEVICE_ID_KEY);
+  }
 }

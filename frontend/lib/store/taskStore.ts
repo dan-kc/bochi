@@ -329,6 +329,48 @@ class TaskStore {
     this.state = await readStorageAsync();
     this.notify();
   }
+
+  /**
+   * Clear all tasks from storage. Used when switching accounts without merging.
+   */
+  async clearAllTasks(): Promise<void> {
+    this.state = { byId: {}, allIds: [] };
+    await writeStorage(this.state);
+    this.notify();
+  }
+
+  /**
+   * Get count of all non-deleted tasks for a user.
+   */
+  getTaskCount(userId: string): number {
+    return this.state.allIds.filter(
+      (id) => this.state.byId[id].user_id === userId && !this.state.byId[id].deleted_at,
+    ).length;
+  }
+
+  /**
+   * Update user_id for all tasks (used when merging anonymous tasks to a logged-in account).
+   */
+  async updateAllTasksUserId(newUserId: string): Promise<string[]> {
+    const taskIds: string[] = [];
+    const newById: Record<string, Task> = {};
+
+    for (const id of this.state.allIds) {
+      const task = this.state.byId[id];
+      newById[id] = { ...task, user_id: newUserId };
+      taskIds.push(id);
+    }
+
+    this.state = {
+      byId: newById,
+      allIds: this.state.allIds,
+    };
+
+    await writeStorage(this.state);
+    this.notify();
+
+    return taskIds;
+  }
 }
 
 // ============ Utilities ============

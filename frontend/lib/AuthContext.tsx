@@ -16,22 +16,31 @@ import {
   storeUserInfo,
   clearUserInfo,
   isWebPlatform,
+  getOrCreateDeviceId,
   type StoredUserInfo,
 } from "./storage";
 
 interface User {
   id: string;
+  isAnonymous: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  isAnonymous: boolean;
   register: (email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  claimAccount: (email: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// Extended user info to track anonymous status
+interface ExtendedUserInfo extends StoredUserInfo {
+  isAnonymous: boolean;
+}
 
 function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
   try {
@@ -43,25 +52,128 @@ function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
   }
 }
 
-function getUserFromTokens(tokens: AuthTokens): User | null {
+function getUserFromTokens(tokens: AuthTokens, isAnonymous: boolean): User | null {
   const payload = parseJwtPayload(tokens.accessToken);
   if (payload?.sub) {
     return {
       id: payload.sub,
+      isAnonymous,
     };
   }
   return null;
 }
 
-function getUserInfoFromTokens(tokens: AuthTokens): StoredUserInfo | null {
+function getUserInfoFromTokens(
+  tokens: AuthTokens,
+  isAnonymous: boolean,
+): ExtendedUserInfo | null {
   const payload = parseJwtPayload(tokens.accessToken);
   if (payload?.sub && payload?.exp) {
     return {
       userId: payload.sub,
       expiresAt: payload.exp,
+      isAnonymous,
     };
   }
   return null;
+}
+
+// Storage helpers for extended user info
+const EXTENDED_USER_INFO_KEY = "auth_user_info_extended";
+
+async function getStoredExtendedUserInfo(): Promise<ExtendedUserInfo | null> {
+  if (!isWebPlatform()) {
+    return null;
+  }
+  const infoJson = localStorage.getItem(EXTENDED_USER_INFO_KEY);
+  if (!infoJson) {
+    // Fall back to old user info format
+    const oldInfo = await getStoredUserInfo();
+    if (oldInfo) {
+      return { ...oldInfo, isAnonymous: false };
+    }
+    return null;
+  }
+
+  try {
+    return JSON.parse(infoJson) as ExtendedUserInfo;
+  } catch {
+    return null;
+  }
+}
+
+async function storeExtendedUserInfo(info: ExtendedUserInfo): Promise<void> {
+  if (!isWebPlatform()) {
+    return;
+  }
+  localStorage.setItem(EXTENDED_USER_INFO_KEY, JSON.stringify(info));
+  // Also store in old format for backwards compatibility
+  await storeUserInfo({ userId: info.userId, expiresAt: info.expiresAt });
+}
+
+async function clearExtendedUserInfo(): Promise<void> {
+  if (!isWebPlatform()) {
+    return;
+  }
+  localStorage.removeItem(EXTENDED_USER_INFO_KEY);
+  await clearUserInfo();
+}
+
+// Token storage with anonymous flag for native
+interface ExtendedTokens extends AuthTokens {
+  isAnonymous: boolean;
+}
+
+async function getStoredExtendedTokens(): Promise<ExtendedTokens | null> {
+  if (isWebPlatform()) {
+    return null;
+  }
+  const tokens = await getStoredTokens();
+  if (!tokens) return null;
+
+  // Check localStorage for anonymous flag (fallback to false)
+  // We store this separately because SecureStore is for sensitive data
+  try {
+    const { default: AsyncStorage } = await import(
+      "@react-native-async-storage/async-storage"
+    );
+    const isAnonymousStr = await AsyncStorage.getItem("auth_is_anonymous");
+    const isAnonymous = isAnonymousStr === "true";
+    return { ...tokens, isAnonymous };
+  } catch {
+    return { ...tokens, isAnonymous: false };
+  }
+}
+
+async function storeExtendedTokens(tokens: ExtendedTokens): Promise<void> {
+  if (isWebPlatform()) {
+    return;
+  }
+  await storeTokens(tokens);
+  // Store anonymous flag separately
+  try {
+    const { default: AsyncStorage } = await import(
+      "@react-native-async-storage/async-storage"
+    );
+    await AsyncStorage.setItem("auth_is_anonymous", tokens.isAnonymous.toString());
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+async function clearExtendedTokens(): Promise<void> {
+  if (isWebPlatform()) {
+    return;
+  }
+  await clearTokens();
+  try {
+    const { default: AsyncStorage } = await import(
+      "@react-native-async-storage/async-storage"
+    );
+    await AsyncStorage.removeItem("auth_is_anonymous");
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -106,17 +218,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (refreshToken?: string) => {
       try {
         const newTokens = await api.refreshTokens(refreshToken);
-        const userInfo = getUserInfoFromTokens(newTokens);
-        const user = getUserFromTokens(newTokens);
+
+        // Get current anonymous status from stored data
+        let isAnonymous = false;
+        if (isWebPlatform()) {
+          const stored = await getStoredExtendedUserInfo();
+          isAnonymous = stored?.isAnonymous ?? false;
+        } else {
+          const stored = await getStoredExtendedTokens();
+          isAnonymous = stored?.isAnonymous ?? false;
+        }
+
+        const userInfo = getUserInfoFromTokens(newTokens, isAnonymous);
+        const user = getUserFromTokens(newTokens, isAnonymous);
 
         if (isWebPlatform()) {
           // Web: store only user info, cookies handle auth
           if (userInfo) {
-            await storeUserInfo(userInfo);
+            await storeExtendedUserInfo(userInfo);
           }
         } else {
           // Native: store full tokens
-          await storeTokens(newTokens);
+          await storeExtendedTokens({ ...newTokens, isAnonymous });
         }
 
         setUser(user);
@@ -132,9 +255,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("[Auth] Token refresh error:", apiError.status, apiError.errors);
           clearRefreshTimeout();
           if (isWebPlatform()) {
-            await clearUserInfo();
+            await clearExtendedUserInfo();
           } else {
-            await clearTokens();
+            await clearExtendedTokens();
           }
           setUser(null);
         } else {
@@ -157,6 +280,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [scheduleTokenRefresh, clearRefreshTimeout],
   );
 
+  // Anonymous authentication
+  const performAnonymousAuth = useCallback(async (): Promise<void> => {
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      console.log("[Auth] Performing anonymous auth with device ID:", deviceId);
+
+      const tokens = await api.anonymousAuth(deviceId);
+      const userInfo = getUserInfoFromTokens(tokens, true);
+      const user = getUserFromTokens(tokens, true);
+
+      if (!user || !userInfo) {
+        throw new Error("Failed to get user from tokens");
+      }
+
+      if (isWebPlatform()) {
+        await storeExtendedUserInfo(userInfo);
+      } else {
+        await storeExtendedTokens({ ...tokens, isAnonymous: true });
+      }
+
+      setUser(user);
+      console.log("[Auth] Anonymous auth succeeded");
+      scheduleTokenRefresh(userInfo.expiresAt, tokens.refreshToken, performTokenRefresh);
+    } catch (error) {
+      console.error("[Auth] Anonymous auth failed:", error);
+      // Don't throw - just leave user as null, they can retry
+    }
+  }, [scheduleTokenRefresh, performTokenRefresh]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -164,21 +316,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         if (isWebPlatform()) {
           // Web: check for stored user info, then try to refresh (cookie handles auth)
-          const userInfo = await getStoredUserInfo();
+          const userInfo = await getStoredExtendedUserInfo();
           if (userInfo && isMounted) {
-            console.log("[Auth] Stored user info found");
-            setUser({ id: userInfo.userId });
+            console.log("[Auth] Stored user info found, isAnonymous:", userInfo.isAnonymous);
+            setUser({ id: userInfo.userId, isAnonymous: userInfo.isAnonymous });
             // Try to refresh - cookie will be sent automatically
             if (isMounted) {
               await performTokenRefresh();
             }
+          } else if (isMounted) {
+            // No stored auth - perform anonymous auth
+            console.log("[Auth] No stored auth, performing anonymous auth");
+            await performAnonymousAuth();
           }
         } else {
           // Native: check for stored tokens
-          const tokens = await getStoredTokens();
+          const tokens = await getStoredExtendedTokens();
           if (tokens && isMounted) {
-            console.log("[Auth] Stored tokens found");
-            const user = getUserFromTokens(tokens);
+            console.log("[Auth] Stored tokens found, isAnonymous:", tokens.isAnonymous);
+            const user = getUserFromTokens(tokens, tokens.isAnonymous);
             console.log("[Auth] User from tokens:", user);
             if (user) {
               setUser(user);
@@ -187,6 +343,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isMounted) {
               await performTokenRefresh(tokens.refreshToken);
             }
+          } else if (isMounted) {
+            // No stored auth - perform anonymous auth
+            console.log("[Auth] No stored auth, performing anonymous auth");
+            await performAnonymousAuth();
           }
         }
       } finally {
@@ -198,33 +358,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     loadStoredAuth();
 
-    // This cleanup function will rarely execute because the context provider
-    // wraps the whole app. This means it will never unmount unless the user
-    // quits the app. So in production it will never unmount, but in local
-    // development it may, because of HMR. Also this is still good to have
-    // in case of a refactor in future.
     return () => {
       isMounted = false;
       clearRefreshTimeout();
     };
-  }, [performTokenRefresh, clearRefreshTimeout]);
+  }, [performTokenRefresh, performAnonymousAuth, clearRefreshTimeout]);
 
   const register = useCallback(
     async (email: string, password: string) => {
       const tokens = await api.register(email, password);
-      const userInfo = getUserInfoFromTokens(tokens);
-      const user = getUserFromTokens(tokens);
+      const userInfo = getUserInfoFromTokens(tokens, false);
+      const user = getUserFromTokens(tokens, false);
 
       if (!user || !userInfo) {
         throw new Error("Failed to get user from tokens");
       }
 
       if (isWebPlatform()) {
-        // Web: store only user info, cookies handle auth
-        await storeUserInfo(userInfo);
+        await storeExtendedUserInfo(userInfo);
       } else {
-        // Native: store full tokens
-        await storeTokens(tokens);
+        await storeExtendedTokens({ ...tokens, isAnonymous: false });
       }
 
       setUser(user);
@@ -236,19 +389,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const tokens = await api.login(email, password);
-      const userInfo = getUserInfoFromTokens(tokens);
-      const user = getUserFromTokens(tokens);
+      const userInfo = getUserInfoFromTokens(tokens, false);
+      const user = getUserFromTokens(tokens, false);
 
       if (!user || !userInfo) {
         throw new Error("Failed to get user from tokens");
       }
 
       if (isWebPlatform()) {
-        // Web: store only user info, cookies handle auth
-        await storeUserInfo(userInfo);
+        await storeExtendedUserInfo(userInfo);
       } else {
-        // Native: store full tokens
-        await storeTokens(tokens);
+        await storeExtendedTokens({ ...tokens, isAnonymous: false });
       }
 
       setUser(user);
@@ -261,7 +412,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearRefreshTimeout();
     try {
       if (isWebPlatform()) {
-        // Web: cookie sent automatically
         await api.logout();
       } else {
         const tokens = await getStoredTokens();
@@ -273,16 +423,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Logout API call failed, but we still want to clear local state
     } finally {
       if (isWebPlatform()) {
-        await clearUserInfo();
+        await clearExtendedUserInfo();
       } else {
-        await clearTokens();
+        await clearExtendedTokens();
       }
       setUser(null);
+
+      // After logout, perform anonymous auth to get a new anonymous account
+      await performAnonymousAuth();
     }
-  }, [clearRefreshTimeout]);
+  }, [clearRefreshTimeout, performAnonymousAuth]);
+
+  const claimAccount = useCallback(
+    async (email: string, password: string) => {
+      // Get current access token for the claim request
+      let accessToken: string | undefined;
+      if (!isWebPlatform()) {
+        const tokens = await getStoredTokens();
+        accessToken = tokens?.accessToken;
+      }
+
+      const tokens = await api.claimAccount(email, password, accessToken);
+      const userInfo = getUserInfoFromTokens(tokens, false);
+      const user = getUserFromTokens(tokens, false);
+
+      if (!user || !userInfo) {
+        throw new Error("Failed to get user from tokens");
+      }
+
+      if (isWebPlatform()) {
+        await storeExtendedUserInfo(userInfo);
+      } else {
+        await storeExtendedTokens({ ...tokens, isAnonymous: false });
+      }
+
+      setUser(user);
+      scheduleTokenRefresh(userInfo.expiresAt, tokens.refreshToken, performTokenRefresh);
+    },
+    [scheduleTokenRefresh, performTokenRefresh],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, register, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAnonymous: user?.isAnonymous ?? false,
+        register,
+        login,
+        logout,
+        claimAccount,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

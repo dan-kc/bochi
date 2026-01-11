@@ -77,6 +77,18 @@ export class SyncService {
   }
 
   /**
+   * Trigger sync and wait for completion.
+   * Returns a promise that resolves when sync finishes (success or error).
+   */
+  async syncAndWait(): Promise<void> {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    await this.executeSync();
+  }
+
+  /**
    * Cancel any pending sync and stop background sync (e.g., on logout).
    */
   cancel(): void {

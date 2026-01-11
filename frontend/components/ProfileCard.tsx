@@ -3,11 +3,13 @@ import { View, Text, Pressable, Image } from "react-native";
 interface ProfileCardProps {
   user?: {
     id: string;
+    isAnonymous?: boolean;
     avatarUrl?: string;
   } | null;
   onRegister?: () => void;
   onLogin?: () => void;
   onLogout?: () => void;
+  onClaimAccount?: () => void;
 }
 
 export default function ProfileCard({
@@ -15,7 +17,57 @@ export default function ProfileCard({
   onRegister,
   onLogin,
   onLogout,
+  onClaimAccount,
 }: ProfileCardProps) {
+  // Anonymous user - show claim account prompt
+  if (user && user.isAnonymous) {
+    return (
+      <View className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 mb-4">
+        <View className="flex-row items-center gap-3 mb-3">
+          <View className="w-10 h-10 rounded-full bg-white/20 items-center justify-center">
+            <Text className="text-white text-lg font-bold">?</Text>
+          </View>
+          <View className="flex-1">
+            <Text className="text-white text-sm opacity-80">Anonymous Account</Text>
+            <Text className="text-white text-xs opacity-60">
+              ID: {user.id.slice(0, 8)}...
+            </Text>
+          </View>
+        </View>
+        <Text className="text-white/90 mb-4">
+          Create an account to sync your data across devices and keep it safe.
+        </Text>
+        <View className="flex-row gap-3">
+          <Pressable
+            onPress={onClaimAccount}
+            className="flex-1 bg-white py-3 px-6 rounded-lg items-center"
+          >
+            {({ hovered }) => (
+              <Text
+                className={`font-semibold ${hovered ? "text-orange-700" : "text-orange-600"}`}
+              >
+                Create Account
+              </Text>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={onLogin}
+            className="flex-1 border-2 border-white py-3 px-6 rounded-lg items-center"
+          >
+            {({ hovered }) => (
+              <Text
+                className={`font-semibold ${hovered ? "text-orange-100" : "text-white"}`}
+              >
+                Login
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // Logged in user (not anonymous)
   if (user) {
     return (
       <View className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
@@ -34,8 +86,9 @@ export default function ProfileCard({
           )}
           <View className="flex-1">
             <Text className="text-lg font-semibold text-gray-900">
-              {user.id}
+              {user.id.slice(0, 8)}...
             </Text>
+            <Text className="text-sm text-green-600">Account synced</Text>
           </View>
         </View>
         {onLogout && (
@@ -56,6 +109,7 @@ export default function ProfileCard({
     );
   }
 
+  // No user at all (loading state or error)
   return (
     <View className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 mb-4">
       <Text className="text-xl font-bold text-white mb-2">

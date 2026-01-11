@@ -91,19 +91,29 @@ pub enum Error {
     FailedToCreateUser,
     InvalidRefreshToken,
     InvalidLoginCredentials,
+    InvalidDeviceId,
+    FailedToCreateAnonymousUser,
+    FailedToClaim,
+    AccountAlreadyClaimed,
+    Unauthorized,
 }
 impl Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::ValidationErrorList(_) => StatusCode::BAD_REQUEST, // The outer match arm dissalows this
             Self::FailedToRegister => StatusCode::BAD_REQUEST,
+            Self::InvalidDeviceId => StatusCode::BAD_REQUEST,
+            Self::FailedToClaim => StatusCode::BAD_REQUEST,
+            Self::AccountAlreadyClaimed => StatusCode::BAD_REQUEST,
 
             Self::FailedToCreateUser => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToLogin => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToCreateRefreshToken => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::FailedToCreateAnonymousUser => StatusCode::INTERNAL_SERVER_ERROR,
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }
 }
@@ -123,6 +133,14 @@ impl Display for Error {
             Self::InvalidLoginCredentials => {
                 write!(f, "Incorrect email or password.")
             }
+
+            Self::InvalidDeviceId => write!(f, "Invalid device ID. Must be a valid UUID."),
+            Self::FailedToCreateAnonymousUser => write!(f, "Failed to create anonymous user."),
+            Self::FailedToClaim => write!(f, "Failed to claim account. Please try again."),
+            Self::AccountAlreadyClaimed => {
+                write!(f, "Account has already been claimed.")
+            }
+            Self::Unauthorized => write!(f, "Unauthorized."),
         }
     }
 }
@@ -391,7 +409,9 @@ pub async fn login(
     };
 
     if let Ok(user) = app.database.get_user_from_email(input.email.as_str()).await {
-        if !security::check_password(user.password.as_str(), input.password.as_str()) {
+        // Anonymous users don't have a password, so they can't login with password
+        let stored_password = user.password.as_deref().ok_or(Error::InvalidLoginCredentials)?;
+        if !security::check_password(stored_password, input.password.as_str()) {
             return Err(Error::InvalidLoginCredentials);
         }
 
@@ -468,4 +488,148 @@ pub async fn logout(
 
     let clear_headers = clear_auth_cookie_headers();
     Ok((clear_headers, Json(LogoutResponse { success: true })).into_response())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnonymousInput {
+    device_id: String,
+}
+#[debug_handler]
+pub async fn anonymous(
+    State(app): State<App>,
+    Json(input): Json<AnonymousInput>,
+) -> Result<Response, Error> {
+    // Validate device_id is a valid UUID
+    let device_id = uuid::Uuid::parse_str(&input.device_id).map_err(|_| Error::InvalidDeviceId)?;
+
+    // Check if user with this device_id already exists
+    let user_id = if let Ok(user) = app.database.get_user_from_device_id(device_id).await {
+        // User already exists, return their tokens
+        user.id
+    } else {
+        // Create new anonymous user
+        app.database
+            .create_anonymous_user(device_id)
+            .await
+            .map_err(|_| Error::FailedToCreateAnonymousUser)?
+    };
+
+    // Create tokens for the user
+    let name = create_random_string();
+    let (access_token, refresh_token, hashed_uuid_part) =
+        app.jwt_manager.create(user_id, name.as_str());
+
+    app.database
+        .create_or_overwrite_refresh_token(hashed_uuid_part.as_str(), user_id, name.as_str(), false)
+        .await
+        .map_err(|_| Error::FailedToCreateRefreshToken)?;
+
+    let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
+    Ok((
+        cookie_headers,
+        Json(AuthResponse {
+            refresh_token,
+            access_token,
+        }),
+    )
+        .into_response())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimInput {
+    email: String,
+    password: String,
+}
+#[debug_handler]
+pub async fn claim(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(input): Json<ClaimInput>,
+) -> Result<Response, Error> {
+    // Extract user_id from access token (from header or cookie)
+    let jwt_from_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
+
+    let jwt_from_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|cookie_header| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with("access_token="))
+                .and_then(|s| s.strip_prefix("access_token="))
+        });
+
+    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
+
+    // Validate email and password
+    let mut errors = vec![];
+    let is_valid_email = email_regex().is_match(input.email.as_str());
+    if !is_valid_email {
+        errors.push(ValidationError::InvalidEmailAddress);
+    }
+    if input.email.len() > 254 {
+        errors.push(ValidationError::EmailTooLong);
+    }
+    if !input.password.is_ascii() {
+        errors.push(ValidationError::PasswordNotAscii);
+    }
+    if input.password.len() > 64 {
+        errors.push(ValidationError::PasswordTooLong);
+    }
+    if input.password.len() < 8 {
+        errors.push(ValidationError::PasswordTooShort);
+    }
+    if !errors.is_empty() {
+        return Err(Error::ValidationErrorList(errors));
+    }
+
+    // Check if user is anonymous
+    let is_anonymous = app
+        .database
+        .is_user_anonymous(user_id)
+        .await
+        .map_err(|_| Error::Unauthorized)?;
+
+    if !is_anonymous {
+        return Err(Error::AccountAlreadyClaimed);
+    }
+
+    // Check if email already exists (return generic error to prevent enumeration)
+    if app.database.get_user_from_email(&input.email).await.is_ok() {
+        return Err(Error::FailedToClaim);
+    }
+
+    // Claim the account
+    let hashed_password = security::hash_password(input.password.as_str());
+    app.database
+        .claim_account(user_id, &input.email, &hashed_password)
+        .await
+        .map_err(|_| Error::FailedToClaim)?;
+
+    // Create new tokens for the claimed account
+    let name = create_random_string();
+    let (access_token, refresh_token, hashed_uuid_part) =
+        app.jwt_manager.create(user_id, name.as_str());
+
+    app.database
+        .create_or_overwrite_refresh_token(hashed_uuid_part.as_str(), user_id, name.as_str(), false)
+        .await
+        .map_err(|_| Error::FailedToCreateRefreshToken)?;
+
+    let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
+    Ok((
+        cookie_headers,
+        Json(AuthResponse {
+            refresh_token,
+            access_token,
+        }),
+    )
+        .into_response())
 }
