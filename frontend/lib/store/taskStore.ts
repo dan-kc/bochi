@@ -1,28 +1,14 @@
-import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Task, TaskInput } from "../task";
 import { markTaskDirty, markTasksDirty } from "../sync/syncStorage";
+import { EntityStore, generateUUID } from "./createStore";
 
 const TASKS_STORAGE_KEY = "tofustash_tasks";
 
 // User ID used when offline (no authenticated user)
 export const LOCAL_USER_ID = "local-user";
 
-// ============ Types ============
+// ============ Task Normalization ============
 
-interface TaskState {
-  byId: Record<string, Task>;
-  allIds: string[];
-}
-
-type Listener = () => void;
-
-// ============ Storage Helpers ============
-
-/**
- * Normalize a task from storage to ensure all fields exist.
- * This handles schema migrations for tasks saved before new fields were added.
- */
 function normalizeTask(task: Partial<Task>): Task {
   return {
     id: task.id ?? "",
@@ -40,184 +26,24 @@ function normalizeTask(task: Partial<Task>): Task {
   };
 }
 
-function readStorageSync(): TaskState {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    const data = localStorage.getItem(TASKS_STORAGE_KEY);
-    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
-    const tasks = rawTasks.map(normalizeTask);
-    return normalize(tasks);
-  }
-  // For mobile or SSR, we'll load async and update
-  return { byId: {}, allIds: [] };
-}
+// ============ Task Store ============
 
-async function readStorageAsync(): Promise<TaskState> {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    const data = localStorage.getItem(TASKS_STORAGE_KEY);
-    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
-    const tasks = rawTasks.map(normalizeTask);
-    return normalize(tasks);
-  } else {
-    const data = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
-    const rawTasks: Partial<Task>[] = data ? JSON.parse(data) : [];
-    const tasks = rawTasks.map(normalizeTask);
-    return normalize(tasks);
-  }
-}
-
-async function writeStorage(state: TaskState): Promise<void> {
-  const tasks = denormalize(state);
-  const data = JSON.stringify(tasks);
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    localStorage.setItem(TASKS_STORAGE_KEY, data);
-  } else {
-    await AsyncStorage.setItem(TASKS_STORAGE_KEY, data);
-  }
-}
-
-/**
- * Verify in-memory state matches localStorage.
- * Returns true if consistent, false if mismatch detected.
- */
-function verifyStorageConsistency(memoryState: TaskState): boolean {
-  if (Platform.OS !== "web" || typeof window === "undefined") return true;
-
-  const stored = localStorage.getItem(TASKS_STORAGE_KEY);
-  const memoryData = JSON.stringify(denormalize(memoryState));
-  return stored === memoryData;
-}
-
-function normalize(tasks: Task[]): TaskState {
-  const byId: Record<string, Task> = {};
-  const allIds: string[] = [];
-  for (const task of tasks) {
-    byId[task.id] = task;
-    allIds.push(task.id);
-  }
-  return { byId, allIds };
-}
-
-function denormalize(state: TaskState): Task[] {
-  return state.allIds.map((id) => state.byId[id]);
-}
-
-// ============ Store Class ============
-
-class TaskStore {
-  private state: TaskState = { byId: {}, allIds: [] };
-  private listeners = new Set<Listener>();
-  private initialized = false;
-
+class TaskStore extends EntityStore<Task> {
   constructor() {
-    // Initial sync load for web (client-side only)
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      this.state = readStorageSync();
-      this.initialized = true;
-      this.setupCrossTabSync();
-      this.setupVisibilityReload();
-    } else if (Platform.OS !== "web") {
-      // Async load for mobile
-      this.init();
-      this.setupAppStateReload();
-    }
-    // For SSR, we start with empty state and hydrate on client
-  }
-
-  private async init() {
-    this.state = await readStorageAsync();
-    this.initialized = true;
-    this.notify();
-  }
-
-  private setupCrossTabSync() {
-    if (Platform.OS !== "web" || typeof window === "undefined") return;
-
-    window.addEventListener("storage", (e) => {
-      if (e.key === TASKS_STORAGE_KEY && e.newValue) {
-        const rawTasks: Partial<Task>[] = JSON.parse(e.newValue);
-        const tasks = rawTasks.map(normalizeTask);
-        this.state = normalize(tasks);
-        this.notify();
-      }
+    super({
+      storageKey: TASKS_STORAGE_KEY,
+      normalize: normalizeTask,
+      markDirty: markTaskDirty,
+      markManyDirty: markTasksDirty,
+      enableVisibilityReload: true,
+      enableAppStateReload: true,
     });
   }
 
-  /**
-   * Reload from storage when tab becomes visible.
-   * Guards against in-memory state getting out of sync with localStorage.
-   */
-  private setupVisibilityReload() {
-    if (Platform.OS !== "web" || typeof window === "undefined") return;
-
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        // Check if in-memory state matches storage
-        if (!verifyStorageConsistency(this.state)) {
-          console.log("[TaskStore] State mismatch detected on visibility change, reloading from storage");
-          this.state = readStorageSync();
-          this.notify();
-        }
-      }
-    });
-  }
-
-  /**
-   * Reload from storage when app returns to foreground (mobile).
-   */
-  private setupAppStateReload() {
-    import("react-native")
-      .then(({ AppState }) => {
-        AppState.addEventListener("change", (nextAppState) => {
-          if (nextAppState === "active") {
-            // Reload from storage when app becomes active
-            readStorageAsync().then((state) => {
-              const currentIds = this.state.allIds.join(",");
-              const newIds = state.allIds.join(",");
-              if (currentIds !== newIds) {
-                console.log("[TaskStore] State change detected on app foreground, reloading");
-                this.state = state;
-                this.notify();
-              }
-            });
-          }
-        });
-      })
-      .catch(() => {
-        // AppState not available (SSR or test environment)
-      });
-  }
-
-  private notify() {
-    for (const listener of this.listeners) {
-      listener();
-    }
-  }
-
-  // ============ useSyncExternalStore API ============
-
-  subscribe = (listener: Listener): (() => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
-
-  getSnapshot = (): TaskState => {
-    return this.state;
-  };
-
-  getServerSnapshot = (): TaskState => {
-    return this.state;
-  };
-
-  // ============ Selectors ============
+  // ============ Task-specific Selectors ============
 
   getAllTasks(userId: string): Task[] {
-    return this.state.allIds
-      .map((id) => this.state.byId[id])
-      .filter((t) => t.user_id === userId && !t.deleted_at)
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
+    return this.getAll(userId);
   }
 
   getTasksSortedByDifficulty(userId: string): Task[] {
@@ -225,27 +51,29 @@ class TaskStore {
       .map((id) => this.state.byId[id])
       .filter((t) => t.user_id === userId && !t.deleted_at)
       .sort((a, b) => {
-        // Unranked tasks go to the bottom
         if (a.difficulty_rank == null && b.difficulty_rank == null) return 0;
         if (a.difficulty_rank == null) return 1;
         if (b.difficulty_rank == null) return -1;
-        // Higher difficulty_rank = harder task, so sort descending
         return b.difficulty_rank.localeCompare(a.difficulty_rank);
       });
   }
 
   getTaskById(id: string): Task | undefined {
-    return this.state.byId[id];
+    return this.getById(id);
   }
 
-  // ============ Mutations ============
+  getTaskCount(userId: string): number {
+    return this.state.allIds.filter(
+      (id) => this.state.byId[id].user_id === userId && !this.state.byId[id].deleted_at,
+    ).length;
+  }
+
+  // ============ Task Mutations ============
 
   async createTask(userId: string, input: TaskInput): Promise<Task> {
     const now = new Date().toISOString();
-    const id = generateUUID();
-
     const task: Task = {
-      id,
+      id: generateUUID(),
       user_id: userId,
       name: input.name,
       description: input.description,
@@ -259,222 +87,61 @@ class TaskStore {
       completed_at: input.completed_at ?? null,
     };
 
-    // Update state
-    this.state = {
-      byId: { ...this.state.byId, [id]: task },
-      allIds: [id, ...this.state.allIds],
-    };
-
-    // Persist and notify
-    await writeStorage(this.state);
-    await markTaskDirty(id);
-    this.notify();
-
+    await this.addItem(task);
     return task;
   }
 
-  async updateTask(
-    id: string,
-    input: Partial<TaskInput>,
-  ): Promise<Task | null> {
+  async updateTask(id: string, input: Partial<TaskInput>): Promise<Task | null> {
     const existing = this.state.byId[id];
     if (!existing) return null;
 
-    const now = new Date().toISOString();
-    const updated: Task = {
-      ...existing,
-      name: input.name ?? existing.name,
-      description: input.description ?? existing.description,
-      deleted_at:
-        input.deleted_at !== undefined ? input.deleted_at : existing.deleted_at,
-      hidden_until:
-        input.hidden_until !== undefined
-          ? input.hidden_until
-          : existing.hidden_until,
-      due_by: input.due_by !== undefined ? input.due_by : existing.due_by,
-      min_daily_frequency:
-        input.min_daily_frequency !== undefined
-          ? input.min_daily_frequency
-          : existing.min_daily_frequency,
-      difficulty_rank:
-        input.difficulty_rank !== undefined
-          ? input.difficulty_rank
-          : existing.difficulty_rank,
-      completed_at:
-        input.completed_at !== undefined
-          ? input.completed_at
-          : existing.completed_at,
-      updated_at: now,
-    };
+    const updates: Partial<Task> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.description !== undefined) updates.description = input.description;
+    if (input.deleted_at !== undefined) updates.deleted_at = input.deleted_at;
+    if (input.hidden_until !== undefined) updates.hidden_until = input.hidden_until;
+    if (input.due_by !== undefined) updates.due_by = input.due_by;
+    if (input.min_daily_frequency !== undefined) updates.min_daily_frequency = input.min_daily_frequency;
+    if (input.difficulty_rank !== undefined) updates.difficulty_rank = input.difficulty_rank;
+    if (input.completed_at !== undefined) updates.completed_at = input.completed_at;
 
-    // Update state
-    this.state = {
-      ...this.state,
-      byId: { ...this.state.byId, [id]: updated },
-    };
-
-    // Persist and notify
-    await writeStorage(this.state);
-    await markTaskDirty(id);
-    this.notify();
-
-    return updated;
+    return this.updateItem(id, updates);
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const existing = this.state.byId[id];
-    if (!existing) return false;
-
-    const now = new Date().toISOString();
-    const updated: Task = {
-      ...existing,
-      deleted_at: now,
-      updated_at: now,
-    };
-
-    // Update state
-    this.state = {
-      ...this.state,
-      byId: { ...this.state.byId, [id]: updated },
-    };
-
-    // Persist and notify
-    await writeStorage(this.state);
-    await markTaskDirty(id);
-    this.notify();
-
-    return true;
+    const result = await this.updateItem(id, { deleted_at: new Date().toISOString() });
+    return result !== null;
   }
 
-  // ============ Sync Helpers ============
+  // ============ Sync Helpers (aliases for compatibility) ============
 
   async mergeTasks(serverTasks: Partial<Task>[], userId?: string): Promise<void> {
-    const newById = { ...this.state.byId };
-    const existingIds = new Set(this.state.allIds);
-
-    for (const rawTask of serverTasks) {
-      // Normalize to ensure all fields exist (handles schema migrations)
-      const task = normalizeTask(rawTask);
-      const existing = newById[task.id];
-      // Preserve user_id from existing local task, or use provided userId for new tasks
-      const user_id = existing?.user_id || userId || task.user_id;
-      newById[task.id] = { ...task, user_id };
-      if (!existingIds.has(task.id)) {
-        existingIds.add(task.id);
-      }
-    }
-
-    this.state = {
-      byId: newById,
-      allIds: Array.from(existingIds),
-    };
-
-    await writeStorage(this.state);
-    this.notify();
-  }
-
-  async purgeDeletedTasks(): Promise<void> {
-    const activeIds = this.state.allIds.filter(
-      (id) => this.state.byId[id].deleted_at === null,
-    );
-    const activeById: Record<string, Task> = {};
-    for (const id of activeIds) {
-      activeById[id] = this.state.byId[id];
-    }
-
-    this.state = { byId: activeById, allIds: activeIds };
-    await writeStorage(this.state);
-    this.notify();
+    return this.merge(serverTasks, userId);
   }
 
   getDirtyTasks(dirtyIds: Set<string>): Task[] {
-    return Array.from(dirtyIds)
-      .map((id) => this.state.byId[id])
-      .filter(Boolean);
+    return this.getDirty(dirtyIds);
   }
 
-  async reload(): Promise<void> {
-    this.state = await readStorageAsync();
-    this.notify();
+  async purgeDeletedTasks(): Promise<void> {
+    return this.purgeDeleted();
   }
 
-  /**
-   * Clear all tasks from storage. Used when switching accounts without merging.
-   */
   async clearAllTasks(): Promise<void> {
-    this.state = { byId: {}, allIds: [] };
-    await writeStorage(this.state);
-    this.notify();
+    return this.clearAll();
   }
 
-  /**
-   * Get count of all non-deleted tasks for a user.
-   */
-  getTaskCount(userId: string): number {
-    return this.state.allIds.filter(
-      (id) => this.state.byId[id].user_id === userId && !this.state.byId[id].deleted_at,
-    ).length;
-  }
-
-  /**
-   * Update user_id for all tasks (used when merging anonymous tasks to a logged-in account).
-   * If fromUserId is provided, only tasks matching that user_id will be updated.
-   * Updated tasks are marked as dirty for syncing.
-   */
   async updateAllTasksUserId(newUserId: string, fromUserId?: string): Promise<string[]> {
-    const taskIds: string[] = [];
-    const newById: Record<string, Task> = {};
-
-    for (const id of this.state.allIds) {
-      const task = this.state.byId[id];
-      // Only update tasks that match fromUserId (if specified)
-      if (fromUserId && task.user_id !== fromUserId) {
-        newById[id] = task;
-        continue;
-      }
-      newById[id] = { ...task, user_id: newUserId };
-      taskIds.push(id);
-    }
-
-    this.state = {
-      byId: newById,
-      allIds: this.state.allIds,
-    };
-
-    await writeStorage(this.state);
-
-    // Mark migrated tasks as dirty so they sync to the server
-    if (taskIds.length > 0) {
-      await markTasksDirty(taskIds);
-    }
-
-    this.notify();
-
-    return taskIds;
+    return this.updateAllUserId(newUserId, fromUserId);
   }
 
-  /**
-   * Migrate tasks from LOCAL_USER_ID to a real user ID.
-   * Called when transitioning from offline mode to having an authenticated (or anonymous) user.
-   * Returns the number of tasks migrated.
-   */
   async migrateLocalUserTasks(newUserId: string): Promise<number> {
-    const migratedIds = await this.updateAllTasksUserId(newUserId, LOCAL_USER_ID);
+    const migratedIds = await this.updateAllUserId(newUserId, LOCAL_USER_ID);
     if (migratedIds.length > 0) {
       console.log(`[TaskStore] Migrated ${migratedIds.length} tasks from local-user to ${newUserId}`);
     }
     return migratedIds.length;
   }
-}
-
-// ============ Utilities ============
-
-function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }
 
 // ============ Singleton Export ============

@@ -1,12 +1,6 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const DIRTY_TASKS_KEY = "tofustash_dirty_tasks";
-const DIRTY_TRADES_KEY = "tofustash_dirty_trades";
-const LAST_SYNC_KEY = "tofustash_last_sync";
-const LAST_TRADE_SYNC_KEY = "tofustash_trade_last_sync";
-const LAST_FULL_SYNC_KEY = "tofustash_last_full_sync";
-
 // How often to force a full sync (24 hours in milliseconds)
 const FULL_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -35,52 +29,98 @@ async function removeItem(key: string): Promise<void> {
   await AsyncStorage.removeItem(key);
 }
 
-// ============ Dirty task tracking ============
+// ============ Generic dirty tracking factory ============
 
-export async function getDirtyTaskIds(): Promise<Set<string>> {
-  const data = await getItem(DIRTY_TASKS_KEY);
-  return new Set(data ? JSON.parse(data) : []);
+export interface DirtyTracker {
+  getDirtyIds(): Promise<Set<string>>;
+  markDirty(id: string): Promise<void>;
+  markManyDirty(ids: string[]): Promise<void>;
+  clearDirtyFlag(id: string): Promise<void>;
+  clearAll(): Promise<void>;
 }
 
-export async function markTaskDirty(taskId: string): Promise<void> {
-  const dirtyIds = await getDirtyTaskIds();
-  dirtyIds.add(taskId);
-  await setItem(DIRTY_TASKS_KEY, JSON.stringify(Array.from(dirtyIds)));
-}
-
-export async function clearDirtyFlag(taskId: string): Promise<void> {
-  const dirtyIds = await getDirtyTaskIds();
-  dirtyIds.delete(taskId);
-  await setItem(DIRTY_TASKS_KEY, JSON.stringify(Array.from(dirtyIds)));
-}
-
-export async function clearAllDirtyFlags(): Promise<void> {
-  await removeItem(DIRTY_TASKS_KEY);
-}
-
-export async function markTasksDirty(taskIds: string[]): Promise<void> {
-  const dirtyIds = await getDirtyTaskIds();
-  for (const id of taskIds) {
-    dirtyIds.add(id);
+export function createDirtyTracker(storageKey: string): DirtyTracker {
+  async function getDirtyIds(): Promise<Set<string>> {
+    const data = await getItem(storageKey);
+    return new Set(data ? JSON.parse(data) : []);
   }
-  await setItem(DIRTY_TASKS_KEY, JSON.stringify(Array.from(dirtyIds)));
+
+  async function markDirty(id: string): Promise<void> {
+    const dirtyIds = await getDirtyIds();
+    dirtyIds.add(id);
+    await setItem(storageKey, JSON.stringify(Array.from(dirtyIds)));
+  }
+
+  async function markManyDirty(ids: string[]): Promise<void> {
+    const dirtyIds = await getDirtyIds();
+    for (const id of ids) {
+      dirtyIds.add(id);
+    }
+    await setItem(storageKey, JSON.stringify(Array.from(dirtyIds)));
+  }
+
+  async function clearDirtyFlag(id: string): Promise<void> {
+    const dirtyIds = await getDirtyIds();
+    dirtyIds.delete(id);
+    await setItem(storageKey, JSON.stringify(Array.from(dirtyIds)));
+  }
+
+  async function clearAll(): Promise<void> {
+    await removeItem(storageKey);
+  }
+
+  return { getDirtyIds, markDirty, markManyDirty, clearDirtyFlag, clearAll };
 }
 
-// ============ Last sync timestamp ============
+// ============ Generic sync timestamp factory ============
 
-export async function getLastSyncTime(): Promise<string | null> {
-  return getItem(LAST_SYNC_KEY);
+export interface SyncTimestamp {
+  get(): Promise<string | null>;
+  set(timestamp: string): Promise<void>;
+  clear(): Promise<void>;
 }
 
-export async function setLastSyncTime(timestamp: string): Promise<void> {
-  await setItem(LAST_SYNC_KEY, timestamp);
+export function createSyncTimestamp(storageKey: string): SyncTimestamp {
+  return {
+    get: () => getItem(storageKey),
+    set: (timestamp: string) => setItem(storageKey, timestamp),
+    clear: () => removeItem(storageKey),
+  };
 }
 
-export async function clearLastSyncTime(): Promise<void> {
-  await removeItem(LAST_SYNC_KEY);
-}
+// ============ Task sync tracking ============
+
+const taskDirtyTracker = createDirtyTracker("tofustash_dirty_tasks");
+const taskSyncTimestamp = createSyncTimestamp("tofustash_last_sync");
+
+export const getDirtyTaskIds = taskDirtyTracker.getDirtyIds;
+export const markTaskDirty = taskDirtyTracker.markDirty;
+export const markTasksDirty = taskDirtyTracker.markManyDirty;
+export const clearDirtyFlag = taskDirtyTracker.clearDirtyFlag;
+export const clearAllDirtyFlags = taskDirtyTracker.clearAll;
+
+export const getLastSyncTime = taskSyncTimestamp.get;
+export const setLastSyncTime = taskSyncTimestamp.set;
+export const clearLastSyncTime = taskSyncTimestamp.clear;
+
+// ============ Trade sync tracking ============
+
+const tradeDirtyTracker = createDirtyTracker("tofustash_dirty_trades");
+const tradeSyncTimestamp = createSyncTimestamp("tofustash_trade_last_sync");
+
+export const getDirtyTradeIds = tradeDirtyTracker.getDirtyIds;
+export const markTradeDirty = tradeDirtyTracker.markDirty;
+export const markTradesDirty = tradeDirtyTracker.markManyDirty;
+export const clearTradeDirtyFlag = tradeDirtyTracker.clearDirtyFlag;
+export const clearAllTradeDirtyFlags = tradeDirtyTracker.clearAll;
+
+export const getTradeLastSyncTime = tradeSyncTimestamp.get;
+export const setTradeLastSyncTime = tradeSyncTimestamp.set;
+export const clearTradeLastSyncTime = tradeSyncTimestamp.clear;
 
 // ============ Full sync tracking ============
+
+const fullSyncTimestamp = createSyncTimestamp("tofustash_last_full_sync");
 
 /**
  * Check if a full sync is needed (more than 24 hours since last full sync).
@@ -88,20 +128,18 @@ export async function clearLastSyncTime(): Promise<void> {
  * Returns true if a full sync will be performed.
  */
 export async function checkAndPrepareFullSyncIfNeeded(): Promise<boolean> {
-  const lastFullSync = await getItem(LAST_FULL_SYNC_KEY);
+  const lastFullSync = await fullSyncTimestamp.get();
   const now = Date.now();
 
   if (!lastFullSync) {
-    // Never done a full sync, do one now
-    await removeItem(LAST_SYNC_KEY);
+    await taskSyncTimestamp.clear();
     return true;
   }
 
   const lastFullSyncTime = parseInt(lastFullSync, 10);
   if (now - lastFullSyncTime > FULL_SYNC_INTERVAL_MS) {
-    // More than 24 hours since last full sync
     console.log("[Sync] Triggering periodic full sync (last was >24h ago)");
-    await removeItem(LAST_SYNC_KEY);
+    await taskSyncTimestamp.clear();
     return true;
   }
 
@@ -110,60 +148,12 @@ export async function checkAndPrepareFullSyncIfNeeded(): Promise<boolean> {
 
 /**
  * Record that a full sync was completed.
- * Should be called after a successful sync when lastSyncTime was null.
  */
 export async function recordFullSyncCompleted(): Promise<void> {
-  await setItem(LAST_FULL_SYNC_KEY, Date.now().toString());
+  await fullSyncTimestamp.set(Date.now().toString());
 }
 
 /**
  * Clear the full sync timestamp, forcing the next sync to be a full sync.
  */
-export async function clearFullSyncTimestamp(): Promise<void> {
-  await removeItem(LAST_FULL_SYNC_KEY);
-}
-
-// ============ Dirty trade tracking ============
-
-export async function getDirtyTradeIds(): Promise<Set<string>> {
-  const data = await getItem(DIRTY_TRADES_KEY);
-  return new Set(data ? JSON.parse(data) : []);
-}
-
-export async function markTradeDirty(tradeId: string): Promise<void> {
-  const dirtyIds = await getDirtyTradeIds();
-  dirtyIds.add(tradeId);
-  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
-}
-
-export async function clearTradeDirtyFlag(tradeId: string): Promise<void> {
-  const dirtyIds = await getDirtyTradeIds();
-  dirtyIds.delete(tradeId);
-  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
-}
-
-export async function clearAllTradeDirtyFlags(): Promise<void> {
-  await removeItem(DIRTY_TRADES_KEY);
-}
-
-export async function markTradesDirty(tradeIds: string[]): Promise<void> {
-  const dirtyIds = await getDirtyTradeIds();
-  for (const id of tradeIds) {
-    dirtyIds.add(id);
-  }
-  await setItem(DIRTY_TRADES_KEY, JSON.stringify(Array.from(dirtyIds)));
-}
-
-// ============ Trade last sync timestamp ============
-
-export async function getTradeLastSyncTime(): Promise<string | null> {
-  return getItem(LAST_TRADE_SYNC_KEY);
-}
-
-export async function setTradeLastSyncTime(timestamp: string): Promise<void> {
-  await setItem(LAST_TRADE_SYNC_KEY, timestamp);
-}
-
-export async function clearTradeLastSyncTime(): Promise<void> {
-  await removeItem(LAST_TRADE_SYNC_KEY);
-}
+export const clearFullSyncTimestamp = fullSyncTimestamp.clear;
