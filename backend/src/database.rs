@@ -315,23 +315,52 @@ impl Database {
         }
     }
 
-    /// Upsert a task - insert if not exists, update if exists and belongs to user
+    /// Upsert a task - insert if not exists, update if exists and belongs to user.
+    /// Also transfers ownership from anonymous users to the authenticated user.
     pub async fn upsert_task(
         &self,
         user_id: Uuid,
         task: UpsertTaskOptions,
     ) -> Result<TaskRow, sqlx::Error> {
+        // The condition for allowing updates: either the task belongs to this user,
+        // OR the task belongs to an anonymous user (allowing transfer of ownership)
         sqlx::query_as(
             "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency, difficulty_rank)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (id) DO UPDATE SET
-                name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
-                description = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.description ELSE tasks.description END,
-                deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
-                hidden_until = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.hidden_until ELSE tasks.hidden_until END,
-                due_by = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.due_by ELSE tasks.due_by END,
-                min_daily_frequency = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.min_daily_frequency ELSE tasks.min_daily_frequency END,
-                difficulty_rank = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.difficulty_rank ELSE tasks.difficulty_rank END
+                user_id = CASE
+                    WHEN tasks.user_id = $2 THEN tasks.user_id
+                    WHEN EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN $2
+                    ELSE tasks.user_id
+                END,
+                name = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.name
+                    ELSE tasks.name
+                END,
+                description = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.description
+                    ELSE tasks.description
+                END,
+                deleted_at = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.deleted_at
+                    ELSE tasks.deleted_at
+                END,
+                hidden_until = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.hidden_until
+                    ELSE tasks.hidden_until
+                END,
+                due_by = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.due_by
+                    ELSE tasks.due_by
+                END,
+                min_daily_frequency = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.min_daily_frequency
+                    ELSE tasks.min_daily_frequency
+                END,
+                difficulty_rank = CASE
+                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.difficulty_rank
+                    ELSE tasks.difficulty_rank
+                END
              RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank",
         )
         .bind(task.id)

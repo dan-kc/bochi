@@ -3,6 +3,7 @@ use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http::Method;
+use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tofustash_backend::router;
 use tower::ServiceExt;
@@ -1426,4 +1427,237 @@ async fn test_sync_incremental_pull_after_push() {
     let tasks = sync_pull.get("tasks").unwrap().as_array().unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].get("name").unwrap(), "Second Task");
+}
+
+// ============================================================================
+// Anonymous Account Merge Tests
+// ============================================================================
+
+/// Helper to call /auth/anonymous endpoint
+async fn anonymous_auth(device_id: &str) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "deviceId": device_id
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/anonymous")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    (status, json)
+}
+
+#[tokio::test]
+async fn test_sync_push_can_transfer_task_from_anonymous_to_registered_user() {
+    // Create an anonymous user
+    let device_id = uuid::Uuid::new_v4().to_string();
+    let (status, anon_json) = anonymous_auth(&device_id).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let anon_access_token = anon_json["accessToken"].as_str().unwrap();
+
+    // Anonymous user creates a task
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let create_task_query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Anonymous Task",
+                "description": "Created by anonymous user",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00"
+            }]
+        }
+    });
+
+    let (status, _) = make_authenticated_graphql_request(anon_access_token, create_task_query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify anonymous user can see the task
+    let pull_query = json!({
+        "query": "query SyncPull($since: NaiveDateTime) {
+            syncPull(since: $since) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "since": null
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(anon_access_token, pull_query.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    let tasks = json.get("data").unwrap().get("syncPull").unwrap().get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].get("name").unwrap(), "Anonymous Task");
+
+    // Now register a new user
+    let email = generate_email_from_fn!(test_sync_push_can_transfer_task_from_anonymous_to_registered_user);
+    let password = "password123";
+    register_user(&email, password).await;
+    let registered_access_token = get_access_token_for_user(&email, &password).await;
+
+    // Registered user pushes the same task ID with the same name (simulating merge from client)
+    let push_query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Anonymous Task",
+                "description": "Created by anonymous user",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T11:00:00"
+            }]
+        }
+    });
+
+    let (status, push_json) = make_authenticated_graphql_request(&registered_access_token, push_query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The push should succeed and return the task (ownership transferred)
+    let pushed_tasks = push_json.get("data").unwrap().get("syncPush").unwrap().get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(pushed_tasks.len(), 1);
+    assert_eq!(pushed_tasks[0].get("id").unwrap(), &task_id);
+    assert_eq!(pushed_tasks[0].get("name").unwrap(), "Anonymous Task");
+
+    // Registered user should now see the task when pulling
+    let (status, json) = make_authenticated_graphql_request(&registered_access_token, pull_query.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let sync_pull = json.get("data").unwrap().get("syncPull").unwrap();
+    let tasks = sync_pull.get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].get("id").unwrap(), &task_id);
+    assert_eq!(tasks[0].get("name").unwrap(), "Anonymous Task");
+}
+
+#[tokio::test]
+async fn test_sync_push_registered_user_cannot_hijack_other_registered_users_task() {
+    // This is a safety test to ensure that only anonymous tasks can be transferred,
+    // not tasks from other registered users.
+
+    // Create first registered user and their task
+    let email1 = generate_email_from_fn!(test_sync_push_registered_user_cannot_hijack_other_registered_users_task);
+    let email2 = format!("other_{}", email1);
+    let password = "password123";
+
+    register_user(&email1, password).await;
+    register_user(&email2, password).await;
+
+    let access_token1 = get_access_token_for_user(&email1, &password).await;
+    let access_token2 = get_access_token_for_user(&email2, &password).await;
+
+    // User 1 creates a task
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let create_task_query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "User 1 Task",
+                "description": "Belongs to user 1",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00"
+            }]
+        }
+    });
+
+    let (status, _) = make_authenticated_graphql_request(&access_token1, create_task_query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User 2 tries to take over user 1's task
+    let hijack_query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Hijacked Task",
+                "description": "Trying to steal",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-02T10:00:00"
+            }]
+        }
+    });
+
+    let (status, _) = make_authenticated_graphql_request(&access_token2, hijack_query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User 1's task should still have the original name
+    let pull_query = json!({
+        "query": "query SyncPull($since: NaiveDateTime) {
+            syncPull(since: $since) {
+                tasks {
+                    id
+                    name
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "since": null
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token1, pull_query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let tasks = json.get("data").unwrap().get("syncPull").unwrap().get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].get("name").unwrap(), "User 1 Task"); // Should still be original name
 }
