@@ -31,25 +31,40 @@ const DUE_DATE_MAX_DAYS = 14;
 const MIN_HABIT_MULTIPLIER = 0.5;
 const MAX_HABIT_MULTIPLIER = 1.5;
 
-/** Random element range: ±50% from base */
-const MIN_RANDOM_MULTIPLIER = 0.5;
-const MAX_RANDOM_MULTIPLIER = 1.5;
+/** Random element range: ±15% from base */
+const MIN_RANDOM_MULTIPLIER = 0.85;
+const MAX_RANDOM_MULTIPLIER = 1.15;
 
 /** Time bucket size in milliseconds (30 minutes) */
 const TIME_BUCKET_MS = 30 * 60 * 1000;
 
 /**
- * Simple deterministic hash function for strings.
+ * Deterministic hash function for strings with good avalanche properties.
  * Returns a value between 0 and 1.
+ * Uses MurmurHash3-inspired mixing for better distribution.
  */
 function deterministicHash(input: string): number {
-  let hash = 0;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+
   for (let i = 0; i < input.length; i++) {
     const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
+    h1 = Math.imul(h1 ^ char, 2654435761);
+    h2 = Math.imul(h2 ^ char, 1597334677);
   }
-  // Convert to positive number between 0 and 1
-  return Math.abs(hash % 10000) / 10000;
+
+  // Final mixing for avalanche effect
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 = Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  h1 ^= h1 >>> 16;
+
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 = Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 ^= h2 >>> 16;
+
+  // Combine both hashes and convert to 0-1 range
+  const combined = (h1 ^ h2) >>> 0;
+  return combined / 0xffffffff;
 }
 
 /**
