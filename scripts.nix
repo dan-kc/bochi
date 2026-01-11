@@ -18,7 +18,6 @@ let
     # Truncates all tables and loads fixture data into tofustash database
     seed = pkgs.writeShellScriptBin "seed" ''
       set -e
-      echo "Truncating all tables in tofustash database..."
       ${clean}/bin/clean ${env.DB_NAME} || true
       echo "Loading fixture data..."
       PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -f ./dev-seed.sql
