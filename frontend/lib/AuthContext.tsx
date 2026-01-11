@@ -423,7 +423,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Logout API call failed, but we still want to clear local state
     } finally {
       if (isWebPlatform()) {
-        await clearExtendedUserInfo();
+        // Clear all localStorage for a fresh start
+        localStorage.clear();
       } else {
         await clearExtendedTokens();
       }
