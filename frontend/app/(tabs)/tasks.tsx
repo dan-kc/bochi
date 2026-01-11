@@ -233,7 +233,7 @@ export default function Tasks() {
             {taskToRank && (
               <DifficultyRanker
                 task={taskToRank}
-                existingTasks={rankedTasks.filter(t => t.id !== taskToRank.id)}
+                existingTasks={rankedTasks.filter(t => t.id !== taskToRank.id && t.difficulty_rank !== null)}
                 onComplete={handleRankComplete}
                 onSkip={handleRankSkip}
               />

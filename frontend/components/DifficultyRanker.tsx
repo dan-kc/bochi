@@ -34,11 +34,15 @@ export function DifficultyRanker({
       hasCompletedRef.current = true;
       setState("complete");
       // Generate rank between adjacent tasks
-      const beforeTask = existingTasks[low - 1];
-      const afterTask = existingTasks[low];
-      const beforeRank = beforeTask?.difficulty_rank ?? null;
-      const afterRank = afterTask?.difficulty_rank ?? null;
-      const newRank = generateKeyBetween(beforeRank, afterRank);
+      // List is sorted hardest-first (descending by rank), so:
+      // - existingTasks[low - 1] has higher rank (harder)
+      // - existingTasks[low] has lower rank (easier)
+      // generateKeyBetween expects (smaller, larger) so we swap the order
+      const harderTask = existingTasks[low - 1];
+      const easierTask = existingTasks[low];
+      const harderRank = harderTask?.difficulty_rank ?? null;
+      const easierRank = easierTask?.difficulty_rank ?? null;
+      const newRank = generateKeyBetween(easierRank, harderRank);
       onComplete(newRank);
     }
   }, [low, high, existingTasks, onComplete]);

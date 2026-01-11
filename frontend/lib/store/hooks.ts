@@ -110,9 +110,9 @@ export function useTasksSortedByDifficulty(userId: string): Task[] {
 
   const getSnapshotWithCache = useCallback(() => {
     const tasks = taskStore.getTasksSortedByDifficulty(userId);
-    // Serialize for comparison (only IDs and difficulty_rank for efficiency)
+    // Use updated_at to detect any task field change (not just difficulty_rank)
     const serialized = JSON.stringify(
-      tasks.map((t) => `${t.id}:${t.difficulty_rank}`),
+      tasks.map((t) => `${t.id}:${t.updated_at}`),
     );
 
     if (serialized !== cacheRef.current.serialized) {

@@ -8,8 +8,8 @@
  * See: https://www.figma.com/blog/realtime-editing-of-ordered-sequences/
  */
 
-const DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-const BASE = DIGITS.length; // 62
+const DIGITS = 'abcdefghijklmnopqrstuvwxyz';
+const BASE = DIGITS.length; // 26
 
 /**
  * Generate a key between two optional existing keys.
@@ -24,7 +24,7 @@ export function generateKeyBetween(
 ): string {
   // Handle edge cases
   if (before === null && after === null) {
-    return 'a0'; // First item - middle of the alphabet
+    return 'm'; // First item - middle of the alphabet
   }
 
   if (before === null) {

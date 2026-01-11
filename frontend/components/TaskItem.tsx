@@ -119,6 +119,13 @@ export function TaskItem({
                 </Text>
               </View>
             )}
+            {hasDifficultyRank && isDifficultyView && (
+              <View className="bg-purple-100 px-2 py-1 rounded">
+                <Text className="text-purple-700 text-xs font-mono">
+                  {task.difficulty_rank}
+                </Text>
+              </View>
+            )}
             {!hasDifficultyRank && onSetDifficulty && (
               <Pressable
                 onPress={(e) => {

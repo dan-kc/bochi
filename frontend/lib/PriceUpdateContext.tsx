@@ -70,8 +70,6 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
       const newPrices: Record<string, PriceData> = {};
       const previousBucket = bucket - 1;
 
-      console.log(`[PriceUpdate] bucket=${bucket}, previousBucket=${previousBucket}`);
-
       for (const task of tasks) {
         // For now, we pass 0 completions - this can be enhanced later
         // when trade/completion tracking is available
@@ -94,8 +92,6 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
           previousBucket,
           now
         );
-
-        console.log(`[PriceUpdate] Task ${task.id.slice(0, 8)}: current=${current}, previous=${previous}`);
 
         newPrices[task.id] = {
           current,
