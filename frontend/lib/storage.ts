@@ -11,6 +11,7 @@ const isWeb = Platform.OS === "web";
 export interface StoredUserInfo {
   userId: string;
   expiresAt: number; // Unix timestamp for scheduling refresh
+  isAnonymous: boolean;
 }
 
 // Storage abstraction:

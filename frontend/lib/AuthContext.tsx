@@ -38,11 +38,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Extended user info to track anonymous status
-interface ExtendedUserInfo extends StoredUserInfo {
-  isAnonymous: boolean;
-}
-
 function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
   try {
     const base64Payload = token.split(".")[1];
@@ -67,7 +62,7 @@ function getUserFromTokens(tokens: AuthTokens, isAnonymous: boolean): User | nul
 function getUserInfoFromTokens(
   tokens: AuthTokens,
   isAnonymous: boolean,
-): ExtendedUserInfo | null {
+): StoredUserInfo | null {
   const payload = parseJwtPayload(tokens.accessToken);
   if (payload?.sub && payload?.exp) {
     return {
@@ -77,47 +72,6 @@ function getUserInfoFromTokens(
     };
   }
   return null;
-}
-
-// Storage helpers for extended user info
-const EXTENDED_USER_INFO_KEY = "auth_user_info_extended";
-
-async function getStoredExtendedUserInfo(): Promise<ExtendedUserInfo | null> {
-  if (!isWebPlatform()) {
-    return null;
-  }
-  const infoJson = localStorage.getItem(EXTENDED_USER_INFO_KEY);
-  if (!infoJson) {
-    // Fall back to old user info format
-    const oldInfo = await getStoredUserInfo();
-    if (oldInfo) {
-      return { ...oldInfo, isAnonymous: false };
-    }
-    return null;
-  }
-
-  try {
-    return JSON.parse(infoJson) as ExtendedUserInfo;
-  } catch {
-    return null;
-  }
-}
-
-async function storeExtendedUserInfo(info: ExtendedUserInfo): Promise<void> {
-  if (!isWebPlatform()) {
-    return;
-  }
-  localStorage.setItem(EXTENDED_USER_INFO_KEY, JSON.stringify(info));
-  // Also store in old format for backwards compatibility
-  await storeUserInfo({ userId: info.userId, expiresAt: info.expiresAt });
-}
-
-async function clearExtendedUserInfo(): Promise<void> {
-  if (!isWebPlatform()) {
-    return;
-  }
-  localStorage.removeItem(EXTENDED_USER_INFO_KEY);
-  await clearUserInfo();
 }
 
 // Token storage with anonymous flag for native
@@ -223,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Get current anonymous status from stored data
         let isAnonymous = false;
         if (isWebPlatform()) {
-          const stored = await getStoredExtendedUserInfo();
+          const stored = await getStoredUserInfo();
           isAnonymous = stored?.isAnonymous ?? false;
         } else {
           const stored = await getStoredExtendedTokens();
@@ -236,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isWebPlatform()) {
           // Web: store only user info, cookies handle auth
           if (userInfo) {
-            await storeExtendedUserInfo(userInfo);
+            await storeUserInfo(userInfo);
           }
         } else {
           // Native: store full tokens
@@ -256,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("[Auth] Token refresh error:", apiError.status, apiError.errors);
           clearRefreshTimeout();
           if (isWebPlatform()) {
-            await clearExtendedUserInfo();
+            await clearUserInfo();
           } else {
             await clearExtendedTokens();
           }
@@ -296,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (isWebPlatform()) {
-        await storeExtendedUserInfo(userInfo);
+        await storeUserInfo(userInfo);
       } else {
         await storeExtendedTokens({ ...tokens, isAnonymous: true });
       }
@@ -320,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         if (isWebPlatform()) {
           // Web: check for stored user info, then try to refresh (cookie handles auth)
-          const userInfo = await getStoredExtendedUserInfo();
+          const userInfo = await getStoredUserInfo();
           if (userInfo && isMounted) {
             console.log("[Auth] Stored user info found, isAnonymous:", userInfo.isAnonymous);
             setUser({ id: userInfo.userId, isAnonymous: userInfo.isAnonymous });
@@ -416,7 +370,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (isWebPlatform()) {
-        await storeExtendedUserInfo(userInfo);
+        await storeUserInfo(userInfo);
       } else {
         await storeExtendedTokens({ ...tokens, isAnonymous: false });
       }
@@ -438,7 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (isWebPlatform()) {
-        await storeExtendedUserInfo(userInfo);
+        await storeUserInfo(userInfo);
       } else {
         await storeExtendedTokens({ ...tokens, isAnonymous: false });
       }
@@ -495,7 +449,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (isWebPlatform()) {
-        await storeExtendedUserInfo(userInfo);
+        await storeUserInfo(userInfo);
       } else {
         await storeExtendedTokens({ ...tokens, isAnonymous: false });
       }
