@@ -427,9 +427,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         await clearExtendedTokens();
       }
-      setUser(null);
 
       // After logout, perform anonymous auth to get a new anonymous account
+      // Don't set user to null first - let performAnonymousAuth update directly
+      // to avoid a flash of the "no user" UI state
       await performAnonymousAuth();
     }
   }, [clearRefreshTimeout, performAnonymousAuth]);
