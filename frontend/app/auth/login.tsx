@@ -41,14 +41,17 @@ export default function Login() {
     setIsLoading(true);
     try {
       if (mergeTasks && user) {
-        // Login first to get new user ID
-        await login(loginEmail, loginPassword);
-
-        // Mark all tasks dirty so they'll be pushed to the server
-        // The server will assign them to the authenticated user
+        // Prepare tasks for merge BEFORE login
+        // This must happen before login() because login() triggers an immediate sync
+        // via SyncProvider's useEffect. If we don't prepare first, the sync will:
+        // 1. Use the old lastSyncTime (missing existing tasks on server)
+        // 2. Not push local tasks (they won't be marked dirty yet)
         const taskIds = await taskStore.updateAllTasksUserId("");
         await markTasksDirty(taskIds);
         await clearLastSyncTime(); // Force full sync
+
+        // Now login - this triggers sync with correct state
+        await login(loginEmail, loginPassword);
 
         // Wait for sync to complete before navigating
         // This ensures tasks are pushed to the server
@@ -180,7 +183,7 @@ export default function Login() {
           </View>
 
           <View className="flex-row justify-center mt-6 gap-1">
-            <Text className="text-gray-600">Don't have an account?</Text>
+            <Text className="text-gray-600">Don&apos;t have an account?</Text>
             <Link href="/auth/register" asChild>
               <Pressable>
                 {({ hovered }) => (

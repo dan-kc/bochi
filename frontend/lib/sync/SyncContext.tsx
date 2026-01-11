@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useAuth } from "../AuthContext";
 import { SyncService } from "./syncService";
-import { getLastSyncTime } from "./syncStorage";
+import { getLastSyncTime, clearLastSyncTime } from "./syncStorage";
 import type { SyncStatus } from "./types";
 
 interface SyncContextType {
@@ -35,13 +35,25 @@ export function SyncProvider({ children }: SyncProviderProps) {
 
   const syncServiceRef = useRef<SyncService | null>(null);
   const syncWaitersRef = useRef<Array<() => void>>([]);
+  const previousUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      // Load persisted lastSyncTime
-      getLastSyncTime().then((time) => {
-        if (time) setLastSyncTime(time);
-      });
+      // Detect user change (login/switch accounts)
+      const userChanged = previousUserIdRef.current !== null && previousUserIdRef.current !== user.id;
+      previousUserIdRef.current = user.id;
+
+      // When user changes, clear lastSyncTime to force a full sync
+      // This ensures we pull ALL tasks for the new user, not just recent changes
+      if (userChanged) {
+        clearLastSyncTime();
+        setLastSyncTime(null);
+      } else {
+        // Load persisted lastSyncTime only if user didn't change
+        getLastSyncTime().then((time) => {
+          if (time) setLastSyncTime(time);
+        });
+      }
 
       // Create sync service when user logs in
       syncServiceRef.current = new SyncService(
