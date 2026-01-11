@@ -4,9 +4,10 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
-import { api, type AuthTokens } from "./api";
+import { api, type AuthTokens, type ApiError } from "./api";
 import { getStoredTokens, storeTokens, clearTokens } from "./storage";
 
 interface User {
@@ -23,7 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function parseJwtPayload(token: string): { sub?: string } | null {
+function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
   try {
     const base64Payload = token.split(".")[1];
     const payload = atob(base64Payload);
@@ -46,43 +47,86 @@ function getUserFromTokens(tokens: AuthTokens): User | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearRefreshTimeout = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleTokenRefresh = useCallback(
+    (tokens: AuthTokens, performRefresh: (refreshToken: string) => Promise<void>) => {
+      clearRefreshTimeout();
+
+      const payload = parseJwtPayload(tokens.accessToken);
+      if (!payload?.exp) {
+        console.log("[Auth] No exp claim in token, skipping refresh schedule");
+        return;
+      }
+
+      const expiresAt = payload.exp * 1000;
+      const refreshAt = expiresAt - 60_000; // Refresh 1 minute before expiry
+      const delay = refreshAt - Date.now();
+
+      if (delay <= 0) {
+        console.log("[Auth] Token already expired or expiring soon, refreshing now");
+        performRefresh(tokens.refreshToken);
+        return;
+      }
+
+      console.log(`[Auth] Scheduling token refresh in ${Math.round(delay / 1000)}s`);
+      refreshTimeoutRef.current = setTimeout(() => {
+        performRefresh(tokens.refreshToken);
+      }, delay);
+    },
+    [clearRefreshTimeout],
+  );
+
+  const performTokenRefresh = useCallback(
+    async (refreshToken: string) => {
+      try {
+        const newTokens = await api.refreshTokens(refreshToken);
+        await storeTokens(newTokens);
+        setUser(getUserFromTokens(newTokens));
+        console.log("[Auth] Token refresh succeeded");
+        scheduleTokenRefresh(newTokens, performTokenRefresh);
+      } catch (error) {
+        const apiError = error as ApiError;
+        const isAuthError = apiError.status === 401;
+        if (isAuthError) {
+          console.log("[Auth] Token refresh error:", apiError.status, apiError.errors);
+          clearRefreshTimeout();
+          await clearTokens();
+          setUser(null);
+        } else {
+          console.log("[Auth] Token refresh failed (keeping tokens):", error);
+          // Retry in 1 minute on network errors
+          refreshTimeoutRef.current = setTimeout(async () => {
+            const tokens = await getStoredTokens();
+            if (tokens) {
+              performTokenRefresh(tokens.refreshToken);
+            }
+          }, 60_000);
+        }
+      }
+    },
+    [scheduleTokenRefresh, clearRefreshTimeout],
+  );
 
   useEffect(() => {
-    // This function to be defined, then called because it is async.
     async function loadStoredAuth() {
       try {
         const tokens = await getStoredTokens();
-        console.log("[Auth] Stored tokens found");
         if (tokens) {
-          // First, try to use existing tokens
+          console.log("[Auth] Stored tokens found");
           const user = getUserFromTokens(tokens);
           console.log("[Auth] User from tokens:", user);
           if (user) {
             setUser(user);
           }
-
-          // Then try to refresh in the background
-          try {
-            const newTokens = await api.refreshTokens(tokens.refreshToken);
-            await storeTokens(newTokens);
-            setUser(getUserFromTokens(newTokens));
-            console.log("[Auth] Token refresh succeeded");
-          } catch (error) {
-            console.log("[Auth] Token refresh failed:", error);
-            // Only clear tokens if refresh was explicitly rejected (invalid token)
-            // Don't clear on network errors - user can still use existing tokens
-            const isAuthError =
-              error &&
-              typeof error === "object" &&
-              "status" in error &&
-              (error.status === 401 || error.status === 403);
-            if (isAuthError) {
-              console.log("[Auth] Clearing tokens due to auth error");
-              await clearTokens();
-              setUser(null);
-            }
-            // On network errors, keep existing tokens and user state
-          }
+          await performTokenRefresh(tokens.refreshToken);
         }
       } finally {
         setIsLoading(false);
@@ -90,29 +134,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     loadStoredAuth();
-  }, []);
 
-  const register = useCallback(async (email: string, password: string) => {
-    const tokens = await api.register(email, password);
-    await storeTokens(tokens);
-    const user = getUserFromTokens(tokens);
-    if (!user) {
-      throw new Error("Failed to get user from tokens");
-    }
-    setUser(user);
-  }, []);
+    return () => {
+      clearRefreshTimeout();
+    };
+  }, [performTokenRefresh, clearRefreshTimeout]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const tokens = await api.login(email, password);
-    await storeTokens(tokens);
-    const user = getUserFromTokens(tokens);
-    if (!user) {
-      throw new Error("Failed to get user from tokens");
-    }
-    setUser(user);
-  }, []);
+  const register = useCallback(
+    async (email: string, password: string) => {
+      const tokens = await api.register(email, password);
+      await storeTokens(tokens);
+      const user = getUserFromTokens(tokens);
+      if (!user) {
+        throw new Error("Failed to get user from tokens");
+      }
+      setUser(user);
+      scheduleTokenRefresh(tokens, performTokenRefresh);
+    },
+    [scheduleTokenRefresh, performTokenRefresh],
+  );
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const tokens = await api.login(email, password);
+      await storeTokens(tokens);
+      const user = getUserFromTokens(tokens);
+      if (!user) {
+        throw new Error("Failed to get user from tokens");
+      }
+      setUser(user);
+      scheduleTokenRefresh(tokens, performTokenRefresh);
+    },
+    [scheduleTokenRefresh, performTokenRefresh],
+  );
 
   const logout = useCallback(async () => {
+    clearRefreshTimeout();
     try {
       const tokens = await getStoredTokens();
       if (tokens) {
@@ -124,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await clearTokens();
       setUser(null);
     }
-  }, []);
+  }, [clearRefreshTimeout]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, register, login, logout }}>

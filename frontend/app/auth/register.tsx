@@ -46,8 +46,12 @@ export default function Register() {
       router.replace("/settings");
     } catch (error) {
       const apiError = error as ApiError;
-      if (apiError.errors) {
-        setErrors(apiError.errors.map(getErrorMessage));
+      // Log 4xx errors to console for debugging
+      if (apiError.status && apiError.status >= 400 && apiError.status < 500) {
+        console.log("[Auth] Register error:", apiError.status, apiError.errors);
+      }
+      if (apiError.errors && Array.isArray(apiError.errors)) {
+        setErrors(apiError.errors.map((e: any) => e.message ?? "An error occurred"));
       } else if (apiError.message) {
         setErrors([apiError.message]);
       } else {

@@ -13,15 +13,13 @@ export interface AuthTokens {
   accessToken: string;
 }
 
-export type ValidationError =
-  | "InvalidEmailAddress"
-  | "EmailTooLong"
-  | "PasswordNotAscii"
-  | "PasswordTooLong"
-  | "PasswordTooShort";
+export interface ApiErrorItem {
+  code: string;
+  message: string;
+}
 
 export interface ApiError {
-  errors?: ValidationError[];
+  errors?: ApiErrorItem[];
   message?: string;
   status?: number;
 }
