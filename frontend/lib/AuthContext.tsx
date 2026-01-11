@@ -417,6 +417,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Logout API call failed, but we still want to clear local state
     } finally {
+      // Clear the in-memory task store before clearing storage
+      // This prevents tasks from being written back during anonymous auth
+      await taskStore.clearAllTasks();
+
       if (isWebPlatform()) {
         // Clear all localStorage for a fresh start
         localStorage.clear();
