@@ -1,4 +1,4 @@
-export { taskStore } from "./taskStore";
+export { taskStore, LOCAL_USER_ID } from "./taskStore";
 export {
   useTasks,
   useTask,

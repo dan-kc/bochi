@@ -1,9 +1,12 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Task, TaskInput } from "../task";
-import { markTaskDirty } from "../sync/syncStorage";
+import { markTaskDirty, markTasksDirty } from "../sync/syncStorage";
 
 const TASKS_STORAGE_KEY = "tofustash_tasks";
+
+// User ID used when offline (no authenticated user)
+export const LOCAL_USER_ID = "local-user";
 
 // ============ Types ============
 
@@ -350,13 +353,20 @@ class TaskStore {
 
   /**
    * Update user_id for all tasks (used when merging anonymous tasks to a logged-in account).
+   * If fromUserId is provided, only tasks matching that user_id will be updated.
+   * Updated tasks are marked as dirty for syncing.
    */
-  async updateAllTasksUserId(newUserId: string): Promise<string[]> {
+  async updateAllTasksUserId(newUserId: string, fromUserId?: string): Promise<string[]> {
     const taskIds: string[] = [];
     const newById: Record<string, Task> = {};
 
     for (const id of this.state.allIds) {
       const task = this.state.byId[id];
+      // Only update tasks that match fromUserId (if specified)
+      if (fromUserId && task.user_id !== fromUserId) {
+        newById[id] = task;
+        continue;
+      }
       newById[id] = { ...task, user_id: newUserId };
       taskIds.push(id);
     }
@@ -367,9 +377,28 @@ class TaskStore {
     };
 
     await writeStorage(this.state);
+
+    // Mark migrated tasks as dirty so they sync to the server
+    if (taskIds.length > 0) {
+      await markTasksDirty(taskIds);
+    }
+
     this.notify();
 
     return taskIds;
+  }
+
+  /**
+   * Migrate tasks from LOCAL_USER_ID to a real user ID.
+   * Called when transitioning from offline mode to having an authenticated (or anonymous) user.
+   * Returns the number of tasks migrated.
+   */
+  async migrateLocalUserTasks(newUserId: string): Promise<number> {
+    const migratedIds = await this.updateAllTasksUserId(newUserId, LOCAL_USER_ID);
+    if (migratedIds.length > 0) {
+      console.log(`[TaskStore] Migrated ${migratedIds.length} tasks from local-user to ${newUserId}`);
+    }
+    return migratedIds.length;
   }
 }
 

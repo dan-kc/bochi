@@ -8,7 +8,7 @@ import {
 import type { Task, TaskInput } from "./task";
 import { useAuth } from "./AuthContext";
 import { useSyncOptional } from "./sync";
-import { useTasks as useTasksFromStore, useTaskActions, useTasksSortedByDifficulty } from "./store";
+import { useTasks as useTasksFromStore, useTaskActions, useTasksSortedByDifficulty, LOCAL_USER_ID } from "./store";
 
 interface TaskContextType {
   tasks: Task[];
@@ -30,7 +30,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const actions = useTaskActions();
 
   // Use user ID from auth, fallback to local-user for offline mode
-  const userId = user?.id ?? "local-user";
+  const userId = user?.id ?? LOCAL_USER_ID;
 
   // Get tasks from reactive store (fine-grained subscription)
   const tasks = useTasksFromStore(userId);

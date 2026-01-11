@@ -19,6 +19,7 @@ import {
   getOrCreateDeviceId,
   type StoredUserInfo,
 } from "./storage";
+import { taskStore } from "./store/taskStore";
 
 interface User {
   id: string;
@@ -300,6 +301,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await storeExtendedTokens({ ...tokens, isAnonymous: true });
       }
 
+      // Migrate any tasks created while offline (with "local-user" ID) to this new user
+      await taskStore.migrateLocalUserTasks(user.id);
+
       setUser(user);
       console.log("[Auth] Anonymous auth succeeded");
       scheduleTokenRefresh(userInfo.expiresAt, tokens.refreshToken, performTokenRefresh);
@@ -363,6 +367,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearRefreshTimeout();
     };
   }, [performTokenRefresh, performAnonymousAuth, clearRefreshTimeout]);
+
+  // Retry anonymous auth when connectivity is restored and user is null
+  useEffect(() => {
+    if (isWebPlatform()) {
+      const handleOnline = () => {
+        if (!user && !isLoading) {
+          console.log("[Auth] Connection restored, retrying anonymous auth");
+          performAnonymousAuth();
+        }
+      };
+
+      window.addEventListener("online", handleOnline);
+      return () => window.removeEventListener("online", handleOnline);
+    } else {
+      // Native: use NetInfo to detect when connectivity is restored
+      let unsubscribe: (() => void) | null = null;
+      let wasConnected = false;
+
+      import("@react-native-community/netinfo").then((NetInfo) => {
+        unsubscribe = NetInfo.default.addEventListener((state) => {
+          const isConnected = state.isConnected ?? false;
+
+          // Only trigger when transitioning from offline to online
+          if (isConnected && !wasConnected && !user && !isLoading) {
+            console.log("[Auth] Connection restored, retrying anonymous auth");
+            performAnonymousAuth();
+          }
+
+          wasConnected = isConnected;
+        });
+      });
+
+      return () => {
+        unsubscribe?.();
+      };
+    }
+  }, [user, isLoading, performAnonymousAuth]);
 
   const register = useCallback(
     async (email: string, password: string) => {
