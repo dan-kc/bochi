@@ -378,13 +378,34 @@ pub async fn graphql(
     Extension(auth_status): Extension<AuthenticatedUser>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    let inner_req = req.into_inner();
+    let mut inner_req = req.into_inner();
+
+    // Try to get operation name from request, otherwise parse the query
     let operation_name = inner_req
         .operation_name
-        .as_deref()
-        .unwrap_or("unnamed_operation");
+        .clone()
+        .or_else(|| {
+            inner_req.parsed_query().ok().and_then(|doc| {
+                doc.operations.iter().next().and_then(|(_, op)| {
+                    let op_type = match op.node.ty {
+                        async_graphql::parser::types::OperationType::Query => "query",
+                        async_graphql::parser::types::OperationType::Mutation => "mutation",
+                        async_graphql::parser::types::OperationType::Subscription => "subscription",
+                    };
+                    // Get the first field name from the selection set
+                    op.node.selection_set.node.items.first().and_then(|sel| {
+                        if let async_graphql::parser::types::Selection::Field(field) = &sel.node {
+                            Some(format!("{}:{}", op_type, field.node.name.node))
+                        } else {
+                            None
+                        }
+                    })
+                })
+            })
+        })
+        .unwrap_or_else(|| "unknown".to_string());
 
-    info!(graphql.operation_name = operation_name, "GraphQL operation",);
+    info!(graphql.operation_name = %operation_name, "GraphQL operation");
 
     schema.execute(inner_req.data(auth_status)).await.into()
 }
