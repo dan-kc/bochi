@@ -135,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     loadStoredAuth();
 
+    // This cleanup function will rarely execute because the context provider
+    // wraps the whole app. This means it will never unmount unless the user
+    // quits the app. So in production it will never unmount, but in local 
+    // development it may, becuase of HMR. ALso this is still good to have
+    // incase of a refactor in future.
     return () => {
       clearRefreshTimeout();
     };
