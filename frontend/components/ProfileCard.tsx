@@ -111,11 +111,11 @@ export default function ProfileCard({
 
   // No user at all (loading state or error)
   return (
-    <View className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 mb-4">
+    <View className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 mb-4">
       <Text className="text-xl font-bold text-white mb-2">
         Get Started with Tofustash
       </Text>
-      <Text className="text-blue-100 mb-4">
+      <Text className="text-orange-100 mb-4">
         Sign up to sync your tasks across devices and unlock premium features.
       </Text>
       <View className="flex-row gap-3">
@@ -125,7 +125,7 @@ export default function ProfileCard({
         >
           {({ hovered }) => (
             <Text
-              className={`font-semibold ${hovered ? "text-blue-700" : "text-blue-600"}`}
+              className={`font-semibold ${hovered ? "text-orange-700" : "text-orange-600"}`}
             >
               Register
             </Text>
@@ -137,7 +137,7 @@ export default function ProfileCard({
         >
           {({ hovered }) => (
             <Text
-              className={`font-semibold ${hovered ? "text-blue-100" : "text-white"}`}
+              className={`font-semibold ${hovered ? "text-orange-100" : "text-white"}`}
             >
               Login
             </Text>
