@@ -15,6 +15,7 @@ pub struct TaskObject {
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
     pub completed_at: Option<NaiveDateTime>,
+    pub habit: bool,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -30,6 +31,7 @@ impl From<TaskRow> for TaskObject {
             min_daily_frequency: task_row.min_daily_frequency,
             difficulty_rank: task_row.difficulty_rank,
             completed_at: task_row.completed_at,
+            habit: task_row.habit,
         }
     }
 }
@@ -95,6 +97,7 @@ impl From<TradeWithTaskRow> for TradeObject {
             min_daily_frequency: trade_row.task_min_daily_frequency,
             difficulty_rank: trade_row.task_difficulty_rank,
             completed_at: None, // TradeWithTaskRow doesn't have this field
+            habit: trade_row.task_habit,
         });
 
         return TradeObject {
@@ -144,6 +147,7 @@ pub struct SyncTaskInput {
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
     pub completed_at: Option<NaiveDateTime>,
+    pub habit: bool,
 }
 
 #[derive(SimpleObject)]

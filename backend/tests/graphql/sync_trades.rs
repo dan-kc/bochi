@@ -87,7 +87,8 @@ async fn test_sync_push_trades_creates_new_trade_and_updates_balance() {
         "variables": {
             "input": {
                 "name": "Test Task",
-                "description": "A test task for trading"
+                "description": "A test task for trading",
+                "habit": false,
             }
         }
     });
@@ -170,7 +171,8 @@ async fn test_sync_push_trades_with_frontend_calculated_amount() {
         "variables": {
             "input": {
                 "name": "Difficult Task",
-                "description": "High reward task"
+                "description": "High reward task",
+                "habit": false,
             }
         }
     });
@@ -227,7 +229,8 @@ async fn test_sync_push_multiple_trades_accumulates_balance() {
         "variables": {
             "input": {
                 "name": "Repeatable Task",
-                "description": "Can complete multiple times"
+                "description": "Can complete multiple times",
+                "habit": false,
             }
         }
     });
@@ -364,7 +367,8 @@ async fn test_sync_push_trades_idempotent_same_trade_id() {
         "variables": {
             "input": {
                 "name": "Test Task",
-                "description": "For idempotency test"
+                "description": "For idempotency test",
+                "habit": false,
             }
         }
     });
@@ -463,7 +467,8 @@ async fn test_sync_pull_trades_returns_user_trades() {
         "variables": {
             "input": {
                 "name": "Test Task",
-                "description": "For pull test"
+                "description": "For pull test",
+                "habit": false,
             }
         }
     });
@@ -537,7 +542,8 @@ async fn test_sync_pull_trades_since_timestamp() {
         "variables": {
             "input": {
                 "name": "Test Task",
-                "description": "For timestamp test"
+                "description": "For timestamp test",
+                "habit": false,
             }
         }
     });
@@ -634,7 +640,8 @@ async fn test_sync_pull_trades_only_returns_own_trades() {
         "variables": {
             "input": {
                 "name": "User 1 Task",
-                "description": "Belongs to user 1"
+                "description": "Belongs to user 1",
+                "habit": false,
             }
         }
     });
@@ -715,7 +722,8 @@ async fn test_sync_push_task_with_completed_at() {
                 "description": "This task is done",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-02T10:00:00",
-                "completedAt": "2025-01-02T10:00:00"
+                "completedAt": "2025-01-02T10:00:00",
+                "habit": false,
             }]
         }
     });
@@ -753,7 +761,8 @@ async fn test_sync_pull_includes_completed_at() {
                 "description": "Done!",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-02T10:00:00",
-                "completedAt": "2025-01-02T09:30:00"
+                "completedAt": "2025-01-02T09:30:00",
+                "habit": false,
             }]
         }
     });
@@ -812,7 +821,8 @@ async fn test_habit_task_no_completed_at() {
                 "description": "A habit",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "minDailyFrequency": 100.0
+                "minDailyFrequency": 100.0,
+                "habit": true,
             }]
         }
     });
@@ -920,7 +930,8 @@ async fn test_anonymous_user_can_create_trades_and_earn_balance() {
                 "name": "Anonymous Task",
                 "description": "Created anonymously",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false,
             }]
         }
     });
@@ -986,7 +997,8 @@ async fn test_balance_preserved_after_claim_account() {
                 "name": "Task before claim",
                 "description": "Will keep after claim",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false,
             }]
         }
     });
@@ -1057,7 +1069,8 @@ async fn test_trades_preserved_after_claim_account() {
                 "name": "Task",
                 "description": "Desc",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false,
             }]
         }
     });
@@ -1113,4 +1126,333 @@ async fn test_trades_preserved_after_claim_account() {
     assert_eq!(trades.len(), 1);
     assert_eq!(trades[0]["id"], trade_id);
     assert_eq!(trades[0]["amount"], 300);
+}
+
+// ============================================================================
+// Trade XOR Constraint Tests (task_id XOR reward_id)
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_trade_with_both_task_and_reward_fails() {
+    let email = generate_email_from_fn!(test_sync_trade_with_both_task_and_reward_fails);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create a task
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let create_task_query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks { id }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Test Task",
+                "description": "For XOR test",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false,
+            }]
+        }
+    });
+    make_authenticated_graphql_request(&access_token, create_task_query).await;
+
+    // Create a reward
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let create_reward_query = json!({
+        "query": "mutation CreateReward($input: CreateRewardInput!) {
+            createReward(input: $input) {
+                id
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Reward",
+                "description": "For XOR test"
+            }
+        }
+    });
+    let (_, reward_json) = make_authenticated_graphql_request(&access_token, create_reward_query).await;
+    let reward_id = reward_json["data"]["createReward"]["id"].as_str().unwrap();
+
+    // Try to create a trade with BOTH task_id and reward_id - should fail
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPushTrades($trades: [SyncTradeInput!]!) {
+            syncPushTrades(trades: $trades) {
+                trades { id }
+                newBalance
+            }
+        }",
+        "variables": {
+            "trades": [{
+                "id": trade_id,
+                "taskId": task_id,
+                "rewardId": reward_id,
+                "amount": 100,
+                "createdAt": "2025-01-01T10:00:00"
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some(), "Should fail when both taskId and rewardId are provided");
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.is_empty());
+}
+
+#[tokio::test]
+async fn test_sync_trade_with_neither_task_nor_reward_fails() {
+    let email = generate_email_from_fn!(test_sync_trade_with_neither_task_nor_reward_fails);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Try to create a trade with NEITHER task_id nor reward_id - should fail
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPushTrades($trades: [SyncTradeInput!]!) {
+            syncPushTrades(trades: $trades) {
+                trades { id }
+                newBalance
+            }
+        }",
+        "variables": {
+            "trades": [{
+                "id": trade_id,
+                "amount": 100,
+                "createdAt": "2025-01-01T10:00:00"
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some(), "Should fail when neither taskId nor rewardId is provided");
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.is_empty());
+}
+
+// ============================================================================
+// Habit Constraint Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_habit_with_completed_at_fails() {
+    let email = generate_email_from_fn!(test_sync_habit_with_completed_at_fails);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Try to sync a habit with completed_at - should fail
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks { id }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Bad Habit",
+                "description": "Habit with completed_at is invalid",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-02T10:00:00",
+                "habit": true,
+                "completedAt": "2025-01-02T10:00:00"
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some(), "Should fail when habit has completed_at");
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.is_empty());
+    let error_msg = errors[0]["message"].as_str().unwrap();
+    assert!(error_msg.contains("Habits cannot have a 'completed_at'"), "Error should mention habits and completed_at: {}", error_msg);
+}
+
+#[tokio::test]
+async fn test_sync_non_habit_with_frequency_fails() {
+    let email = generate_email_from_fn!(test_sync_non_habit_with_frequency_fails);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Try to sync a non-habit with min_daily_frequency - should fail
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks { id }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Bad Task",
+                "description": "Non-habit with frequency is invalid",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false,
+                "minDailyFrequency": 5.0
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_some(), "Should fail when non-habit has min_daily_frequency");
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert!(!errors.is_empty());
+    let error_msg = errors[0]["message"].as_str().unwrap();
+    assert!(error_msg.contains("Non-habit tasks cannot have 'min_daily_frequency'"), "Error should mention non-habits and min_daily_frequency: {}", error_msg);
+}
+
+#[tokio::test]
+async fn test_sync_non_habit_with_completed_at_success() {
+    let email = generate_email_from_fn!(test_sync_non_habit_with_completed_at_success);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Sync a non-habit with completed_at - should succeed
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    habit
+                    completedAt
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Completed Task",
+                "description": "Non-habit with completed_at is valid",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-02T10:00:00",
+                "habit": false,
+                "completedAt": "2025-01-02T10:00:00"
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some(), "Should succeed: {:?}", json);
+
+    let tasks = json["data"]["syncPush"]["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["habit"], false);
+    assert_eq!(tasks[0]["completedAt"], "2025-01-02T10:00:00");
+}
+
+#[tokio::test]
+async fn test_sync_habit_with_frequency_success() {
+    let email = generate_email_from_fn!(test_sync_habit_with_frequency_success);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Sync a habit with min_daily_frequency - should succeed
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    habit
+                    minDailyFrequency
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Daily Exercise",
+                "description": "Habit with frequency is valid",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": true,
+                "minDailyFrequency": 1.0
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some(), "Should succeed: {:?}", json);
+
+    let tasks = json["data"]["syncPush"]["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["habit"], true);
+    assert_eq!(tasks[0]["minDailyFrequency"], 1.0);
+}
+
+#[tokio::test]
+async fn test_sync_habit_without_frequency_success() {
+    let email = generate_email_from_fn!(test_sync_habit_without_frequency_success);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Sync a habit without min_daily_frequency - should succeed
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let query = json!({
+        "query": "mutation SyncPush($tasks: [SyncTaskInput!]!) {
+            syncPush(tasks: $tasks) {
+                tasks {
+                    id
+                    habit
+                    minDailyFrequency
+                }
+                serverTime
+            }
+        }",
+        "variables": {
+            "tasks": [{
+                "id": task_id,
+                "name": "Simple Habit",
+                "description": "Habit without frequency is valid",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": true
+            }]
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some(), "Should succeed: {:?}", json);
+
+    let tasks = json["data"]["syncPush"]["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["habit"], true);
+    assert_eq!(tasks[0]["minDailyFrequency"], Value::Null);
 }

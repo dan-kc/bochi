@@ -28,12 +28,14 @@ async fn test_create_task_success() {
                 hiddenUntil
                 dueBy
                 minDailyFrequency
+                habit
             }
         }",
         "variables": {
             "input": {
                 "name": "Test Task",
                 "description": "A test task description",
+                "habit": false,
             }
         }
     });
@@ -57,6 +59,7 @@ async fn test_create_task_success() {
         task.get("minDailyFrequency").unwrap(),
         &serde_json::Value::Null
     );
+    assert_eq!(task.get("habit").unwrap(), false);
 }
 
 #[tokio::test]
@@ -80,6 +83,7 @@ async fn test_create_due_task_success() {
                 "name": "Test Task",
                 "description": "A test task description",
                 "dueBy": "2028-12-25T23:59:59",
+                "habit": false,
             }
         }
     });
@@ -114,6 +118,7 @@ async fn test_create_task_with_optional_fields() {
                 "description": "Task with optional dates",
                 "hiddenUntil": "2028-12-16T00:33:08",
                 "dueBy": "2028-12-25T23:59:59",
+                "habit": false,
             }
         }
     });
@@ -147,6 +152,7 @@ async fn test_create_task_validation_name_too_long() {
             "input": {
                 "name": long_name,
                 "description": "Test description",
+                "habit": false,
             }
         }
     });
@@ -190,6 +196,7 @@ async fn test_create_task_validation_description_too_long() {
             "input": {
                 "name": "Test Task",
                 "description": long_description,
+                "habit": false,
             }
         }
     });
@@ -310,6 +317,7 @@ async fn test_create_task_minimum_valid_input() {
             "input": {
                 "name": "T",
                 "description": "",
+                "habit": false,
             }
         }
     });
@@ -342,6 +350,7 @@ async fn test_create_task_maximum_valid_input() {
                 name
                 description
                 minDailyFrequency
+                habit
             }
         }",
         "variables": {
@@ -349,6 +358,7 @@ async fn test_create_task_maximum_valid_input() {
                 "name": max_name,
                 "description": max_description,
                 "minDailyFrequency": 100.0,
+                "habit": true,
             }
         }
     });
@@ -364,6 +374,7 @@ async fn test_create_task_maximum_valid_input() {
         &Value::String(max_description)
     );
     assert_eq!(task.get("minDailyFrequency").unwrap(), 100.0);
+    assert_eq!(task.get("habit").unwrap(), true);
 }
 
 #[tokio::test]
@@ -386,7 +397,8 @@ async fn test_create_task_hidden_until_in_past() {
             "input": {
                 "name": "test name",
                 "description": "test description",
-                "hiddenUntil": "2022-12-25T23:59:59"
+                "hiddenUntil": "2022-12-25T23:59:59",
+                "habit": false,
             }
         }
     });
@@ -438,7 +450,8 @@ async fn test_create_task_due_by_in_past() {
             "input": {
                 "name": "test name",
                 "description": "test description",
-                "dueBy": "2022-12-25T23:59:59"
+                "dueBy": "2022-12-25T23:59:59",
+                "habit": false,
             }
         }
     });
@@ -567,6 +580,7 @@ async fn test_create_task_name_empty_string() {
             "input": {
                 "name": "",
                 "description": "Test description",
+                "habit": false,
             }
         }
     });
@@ -610,6 +624,7 @@ async fn test_create_task_with_min_daily_frequency() {
         "query": "mutation CreateTask($input: CreateTaskInput!) {
             createTask(input: $input) {
                 minDailyFrequency
+                habit
             }
         }",
         "variables": {
@@ -617,6 +632,7 @@ async fn test_create_task_with_min_daily_frequency() {
                 "name": "Test Task",
                 "description": "A test task description",
                 "minDailyFrequency": 5.5,
+                "habit": true,
             }
         }
     });
@@ -626,6 +642,7 @@ async fn test_create_task_with_min_daily_frequency() {
 
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("minDailyFrequency").unwrap(), 5.5);
+    assert_eq!(task.get("habit").unwrap(), true);
 }
 
 #[tokio::test]
@@ -648,7 +665,8 @@ async fn test_create_task_min_daily_frequency_negative() {
             "input": {
                 "name": "test name",
                 "description": "test description",
-                "minDailyFrequency": -1.0
+                "minDailyFrequency": -1.0,
+                "habit": true,
             }
         }
     });
@@ -702,7 +720,8 @@ async fn test_create_task_min_daily_frequency_too_large() {
             "input": {
                 "name": "test name",
                 "description": "test description",
-                "minDailyFrequency": 101.0
+                "minDailyFrequency": 101.0,
+                "habit": true,
             }
         }
     });
@@ -757,6 +776,7 @@ async fn test_create_task_min_daily_frequency_zero() {
                 "name": "Test Task",
                 "description": "Test description",
                 "minDailyFrequency": 0.0,
+                "habit": true,
             }
         }
     });
@@ -790,6 +810,7 @@ async fn test_create_task_min_daily_frequency_boundary() {
                 "name": "Test Task",
                 "description": "Test description",
                 "minDailyFrequency": 100.0,
+                "habit": true,
             }
         }
     });
@@ -802,14 +823,14 @@ async fn test_create_task_min_daily_frequency_boundary() {
     assert_eq!(task.get("minDailyFrequency").unwrap(), 100.0);
 }
 
+// This test verifies that habits can have both due_by and min_daily_frequency
+// (the old constraint preventing this is removed in favor of habit-based constraints)
 #[tokio::test]
-async fn test_create_task_with_both_due_by_and_min_daily_frequency() {
-    let email = generate_email_from_fn!(test_create_task_with_both_due_by_and_min_daily_frequency);
+async fn test_create_habit_with_both_due_by_and_min_daily_frequency() {
+    let email = generate_email_from_fn!(test_create_habit_with_both_due_by_and_min_daily_frequency);
     let password = "password123";
 
-    // Register user
     register_user(&email, password).await;
-
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let query = json!({
@@ -817,45 +838,28 @@ async fn test_create_task_with_both_due_by_and_min_daily_frequency() {
             createTask(input: $input) {
                 dueBy
                 minDailyFrequency
+                habit
             }
         }",
         "variables": {
             "input": {
-                "name": "Test Task",
+                "name": "Test Habit",
                 "description": "Test description",
                 "dueBy": "2028-12-25T23:59:59",
                 "minDailyFrequency": 5.0,
+                "habit": true,
             }
         }
     });
 
     let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
     assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
 
-    let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert_eq!(errors.len(), 1);
-
-    let error = errors.first().unwrap();
-    assert_eq!(
-        error.get("message").unwrap(),
-        &Value::String(
-            "Validation Error: A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one."
-                .to_string()
-        )
-    );
-
-    let extensions = error.get("extensions").unwrap();
-    assert_eq!(
-        extensions.get("code").unwrap(),
-        &Value::String("BAD_USER_INPUT".to_string())
-    );
-    assert_eq!(
-        extensions.get("details").unwrap(),
-        &Value::String(
-            "Validation Error: A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one."
-                .to_string()
-        )
-    );
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("dueBy").unwrap(), "2028-12-25T23:59:59");
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 5.0);
+    assert_eq!(task.get("habit").unwrap(), true);
 }
 
 #[tokio::test]
@@ -881,6 +885,7 @@ async fn test_create_task_with_hidden_until_and_min_daily_frequency() {
                 "description": "Task with hidden_until and min_daily_frequency",
                 "hiddenUntil": "2028-12-16T00:33:08",
                 "minDailyFrequency": 10.0,
+                "habit": true,
             }
         }
     });
@@ -892,4 +897,164 @@ async fn test_create_task_with_hidden_until_and_min_daily_frequency() {
     let task = json.get("data").unwrap().get("createTask").unwrap();
     assert_eq!(task.get("hiddenUntil").unwrap(), "2028-12-16T00:33:08");
     assert_eq!(task.get("minDailyFrequency").unwrap(), 10.0);
+}
+
+#[tokio::test]
+async fn test_create_habit_task_success() {
+    let email = generate_email_from_fn!(test_create_habit_task_success);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+                name
+                habit
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Daily Exercise",
+                "description": "Do 30 minutes of exercise",
+                "habit": true,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert!(task.get("id").is_some());
+    assert_eq!(task.get("name").unwrap().as_str().unwrap(), "Daily Exercise");
+    assert_eq!(task.get("habit").unwrap(), true);
+    assert_eq!(task.get("minDailyFrequency").unwrap(), &serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn test_create_habit_task_with_frequency() {
+    let email = generate_email_from_fn!(test_create_habit_task_with_frequency);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                habit
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Drink Water",
+                "description": "Stay hydrated",
+                "habit": true,
+                "minDailyFrequency": 8.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("data").is_some());
+
+    let task = json.get("data").unwrap().get("createTask").unwrap();
+    assert_eq!(task.get("habit").unwrap(), true);
+    assert_eq!(task.get("minDailyFrequency").unwrap(), 8.0);
+}
+
+#[tokio::test]
+async fn test_create_non_habit_task_with_frequency_fails() {
+    let email = generate_email_from_fn!(test_create_non_habit_task_with_frequency_fails);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                habit
+                minDailyFrequency
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Regular Task",
+                "description": "Not a habit",
+                "habit": false,
+                "minDailyFrequency": 5.0,
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'."
+                .to_string()
+        )
+    );
+
+    let extensions = error.get("extensions").unwrap();
+    assert_eq!(
+        extensions.get("code").unwrap(),
+        &Value::String("BAD_USER_INPUT".to_string())
+    );
+}
+
+#[tokio::test]
+async fn test_create_task_habit_field_required() {
+    let email = generate_email_from_fn!(test_create_task_habit_field_required);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let query = json!({
+        "query": "mutation CreateTask($input: CreateTaskInput!) {
+            createTask(input: $input) {
+                id
+            }
+        }",
+        "variables": {
+            "input": {
+                "name": "Test Task",
+                "description": "Missing habit field",
+            }
+        }
+    });
+
+    let (status, json) = make_authenticated_graphql_request(&access_token, query).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let errors: Vec<&Value> = json
+        .get("errors")
+        .expect("Response should contain validation errors")
+        .as_array()
+        .expect("errors field should be an array")
+        .iter()
+        .map(|x| {
+            x.get("message")
+                .expect("each entry in errors should have a 'message' field")
+        })
+        .collect();
+
+    assert!(errors.contains(&&Value::String(
+        "Invalid value for argument \"input\", field \"habit\" of type \"Boolean!\" is required but not provided".to_string()
+    )));
 }

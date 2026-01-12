@@ -200,6 +200,7 @@ class ApiClient {
             minDailyFrequency
             difficultyRank
             completedAt
+            habit
           }
           serverTime
         }
@@ -223,6 +224,7 @@ class ApiClient {
           minDailyFrequency: number | null;
           difficultyRank: string | null;
           completedAt: string | null;
+          habit: boolean;
         }>;
         serverTime: string;
       };
@@ -243,6 +245,7 @@ class ApiClient {
         min_daily_frequency: t.minDailyFrequency,
         difficulty_rank: t.difficultyRank,
         completed_at: t.completedAt,
+        habit: t.habit,
       })),
       server_time: result.syncPull.serverTime,
     };
@@ -264,6 +267,7 @@ class ApiClient {
             minDailyFrequency
             difficultyRank
             completedAt
+            habit
           }
           serverTime
         }
@@ -287,6 +291,7 @@ class ApiClient {
       minDailyFrequency: t.min_daily_frequency,
       difficultyRank: t.difficulty_rank,
       completedAt: toNaiveDateTime(t.completed_at),
+      habit: t.habit,
     }));
 
     const result = await this.graphqlRequest<{
@@ -303,6 +308,7 @@ class ApiClient {
           minDailyFrequency: number | null;
           difficultyRank: string | null;
           completedAt: string | null;
+          habit: boolean;
         }>;
         serverTime: string;
       };
@@ -323,6 +329,7 @@ class ApiClient {
         min_daily_frequency: t.minDailyFrequency,
         difficulty_rank: t.difficultyRank,
         completed_at: t.completedAt,
+        habit: t.habit,
       })),
       server_time: result.syncPush.serverTime,
     };

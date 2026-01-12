@@ -58,6 +58,7 @@ pub struct CreateTaskInput {
     pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
+    pub habit: bool,
 }
 
 #[derive(InputObject)]
@@ -114,8 +115,9 @@ impl MutationRoot {
             }
         }
 
-        if input.due_by.is_some() && input.min_daily_frequency.is_some() {
-            let msg = "A task cannot have both 'due_by' and 'min_daily_frequency'. Please provide only one.".to_string();
+        // Habit validation: non-habits cannot have min_daily_frequency
+        if !input.habit && input.min_daily_frequency.is_some() {
+            let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
             return Err(Error::Validation(msg).into_graphql_error());
         }
 
@@ -322,6 +324,18 @@ impl MutationRoot {
                 }
             }
 
+            // Habit validation: habits cannot have completed_at
+            if task_input.habit && task_input.completed_at.is_some() {
+                let msg = "Habits cannot have a 'completed_at' timestamp. Either set 'habit' to false or remove 'completed_at'.".to_string();
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+
+            // Habit validation: non-habits cannot have min_daily_frequency
+            if !task_input.habit && task_input.min_daily_frequency.is_some() {
+                let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
+                return Err(Error::Validation(msg).into_graphql_error());
+            }
+
             // Check if this task already exists and belongs to this user
             let existing_task = database
                 .get_task_by_id(user_id, task_id)
@@ -347,6 +361,7 @@ impl MutationRoot {
                 min_daily_frequency: task_input.min_daily_frequency,
                 difficulty_rank: task_input.difficulty_rank,
                 completed_at: task_input.completed_at,
+                habit: task_input.habit,
             };
 
             let task_row = database

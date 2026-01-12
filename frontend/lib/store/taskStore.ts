@@ -23,6 +23,7 @@ function normalizeTask(task: Partial<Task>): Task {
     min_daily_frequency: task.min_daily_frequency ?? null,
     difficulty_rank: task.difficulty_rank ?? null,
     completed_at: task.completed_at ?? null,
+    habit: task.habit ?? false,
   };
 }
 
@@ -85,6 +86,7 @@ class TaskStore extends EntityStore<Task> {
       min_daily_frequency: input.min_daily_frequency ?? null,
       difficulty_rank: input.difficulty_rank ?? null,
       completed_at: input.completed_at ?? null,
+      habit: input.habit,
     };
 
     await this.addItem(task);
@@ -104,6 +106,7 @@ class TaskStore extends EntityStore<Task> {
     if (input.min_daily_frequency !== undefined) updates.min_daily_frequency = input.min_daily_frequency;
     if (input.difficulty_rank !== undefined) updates.difficulty_rank = input.difficulty_rank;
     if (input.completed_at !== undefined) updates.completed_at = input.completed_at;
+    if (input.habit !== undefined) updates.habit = input.habit;
 
     return this.updateItem(id, updates);
   }
