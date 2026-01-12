@@ -143,40 +143,33 @@ interface TaskFormProps {
   onRerank?: () => void;
 }
 
-const taskSchema = z
-  .object({
-    name: z
-      .string()
-      .min(1, "Name is required")
-      .max(100, "Name must be 100 characters or less"),
-    description: z
-      .string()
-      .max(10000, "Description must be 10,000 characters or less"),
-    hidden_until: z
-      .date()
-      .refine((date) => date > new Date(), {
-        message: "Hidden until must be a future date",
-      })
-      .nullable(),
-    due_by: z
-      .date()
-      .refine((date) => date > new Date(), {
-        message: "Due by must be a future date",
-      })
-      .nullable(),
-    min_daily_frequency: z
-      .number()
-      .gt(0, "Frequency must be greater than 0")
-      .lte(100, "Frequency must be 100 or less")
-      .nullable(),
-  })
-  .refine(
-    (data) => !(data.due_by !== null && data.min_daily_frequency !== null),
-    {
-      message: "Cannot set both due date and daily frequency",
-      path: ["due_by"],
-    },
-  );
+const taskSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(100, "Name must be 100 characters or less"),
+  description: z
+    .string()
+    .max(10000, "Description must be 10,000 characters or less"),
+  hidden_until: z
+    .date()
+    .refine((date) => date > new Date(), {
+      message: "Hidden until must be a future date",
+    })
+    .nullable(),
+  due_by: z
+    .date()
+    .refine((date) => date > new Date(), {
+      message: "Due by must be a future date",
+    })
+    .nullable(),
+  min_daily_frequency: z
+    .number()
+    .gt(0, "Frequency must be greater than 0")
+    .lte(100, "Frequency must be 100 or less")
+    .nullable(),
+  habit: z.boolean(),
+});
 
 type TaskMode = "task" | "habit";
 type FrequencyPeriod = "day" | "week" | "month";
@@ -200,6 +193,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   const isEditing = !!task;
+  const isEditingHabit = isEditing && task?.habit;
 
   useEffect(() => {
     if (task) {
@@ -231,7 +225,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
         setMinDailyFrequency("");
         setFrequencyPeriod("day");
       }
-      setMode(task.min_daily_frequency !== null ? "habit" : "task");
+      setMode(task.habit ? "habit" : "task");
     } else {
       const empty = createEmptyTaskInput();
       setName(empty.name);
@@ -264,6 +258,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
       hidden_until: hiddenUntil,
       due_by: mode === "task" ? dueBy : null,
       min_daily_frequency: mode === "habit" ? frequency : null,
+      habit: mode === "habit",
     };
 
     const result = taskSchema.safeParse(input);
@@ -287,6 +282,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
       hidden_until: result.data.hidden_until?.toISOString() ?? null,
       due_by: result.data.due_by?.toISOString() ?? null,
       min_daily_frequency: result.data.min_daily_frequency,
+      habit: result.data.habit,
     };
 
     setIsSaving(true);
@@ -381,59 +377,61 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
             </Text>
           </View>
 
-          <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Type</Text>
-            <View className="flex-row gap-2">
-              <Pressable
-                onPress={() => handleModeChange("task")}
-                disabled={isLoading}
-                className={`flex-1 py-3 px-4 rounded-lg items-center border ${
-                  mode === "task"
-                    ? "bg-blue-500 border-blue-500"
-                    : "bg-white border-gray-300"
-                }`}
-              >
-                <Text
-                  className={`font-semibold ${
-                    mode === "task" ? "text-white" : "text-gray-700"
+          {!isEditingHabit && (
+            <View>
+              <Text className="text-sm font-medium text-gray-700 mb-2">Type</Text>
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={() => handleModeChange("task")}
+                  disabled={isLoading}
+                  className={`flex-1 py-3 px-4 rounded-lg items-center border ${
+                    mode === "task"
+                      ? "bg-blue-500 border-blue-500"
+                      : "bg-white border-gray-300"
                   }`}
                 >
-                  Task
-                </Text>
-                <Text
-                  className={`text-xs mt-1 ${
-                    mode === "task" ? "text-blue-100" : "text-gray-500"
+                  <Text
+                    className={`font-semibold ${
+                      mode === "task" ? "text-white" : "text-gray-700"
+                    }`}
+                  >
+                    Task
+                  </Text>
+                  <Text
+                    className={`text-xs mt-1 ${
+                      mode === "task" ? "text-blue-100" : "text-gray-500"
+                    }`}
+                  >
+                    One-time
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleModeChange("habit")}
+                  disabled={isLoading}
+                  className={`flex-1 py-3 px-4 rounded-lg items-center border ${
+                    mode === "habit"
+                      ? "bg-purple-500 border-purple-500"
+                      : "bg-white border-gray-300"
                   }`}
                 >
-                  One-time
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => handleModeChange("habit")}
-                disabled={isLoading}
-                className={`flex-1 py-3 px-4 rounded-lg items-center border ${
-                  mode === "habit"
-                    ? "bg-purple-500 border-purple-500"
-                    : "bg-white border-gray-300"
-                }`}
-              >
-                <Text
-                  className={`font-semibold ${
-                    mode === "habit" ? "text-white" : "text-gray-700"
-                  }`}
-                >
-                  Habit
-                </Text>
-                <Text
-                  className={`text-xs mt-1 ${
-                    mode === "habit" ? "text-purple-100" : "text-gray-500"
-                  }`}
-                >
-                  Recurring daily goal
-                </Text>
-              </Pressable>
+                  <Text
+                    className={`font-semibold ${
+                      mode === "habit" ? "text-white" : "text-gray-700"
+                    }`}
+                  >
+                    Habit
+                  </Text>
+                  <Text
+                    className={`text-xs mt-1 ${
+                      mode === "habit" ? "text-purple-100" : "text-gray-500"
+                    }`}
+                  >
+                    Recurring daily goal
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          )}
 
           {mode === "task" && (
             <DatePickerField

@@ -1,4 +1,4 @@
-use crate::database::{RewardRow, TaskRow, TradeWithRewardRow, TradeWithTaskRow};
+use crate::database::{RewardRow, TaskRow, TradeRow, TradeWithRewardRow, TradeWithTaskRow};
 use async_graphql::{InputObject, Interface, SimpleObject};
 use chrono::NaiveDateTime;
 
@@ -14,6 +14,8 @@ pub struct TaskObject {
     pub description: String,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub habit: bool,
 }
 impl From<TaskRow> for TaskObject {
     fn from(task_row: TaskRow) -> Self {
@@ -28,6 +30,8 @@ impl From<TaskRow> for TaskObject {
             description: task_row.description,
             min_daily_frequency: task_row.min_daily_frequency,
             difficulty_rank: task_row.difficulty_rank,
+            completed_at: task_row.completed_at,
+            habit: task_row.habit,
         }
     }
 }
@@ -92,6 +96,8 @@ impl From<TradeWithTaskRow> for TradeObject {
             description: trade_row.task_description,
             min_daily_frequency: trade_row.task_min_daily_frequency,
             difficulty_rank: trade_row.task_difficulty_rank,
+            completed_at: None, // TradeWithTaskRow doesn't have this field
+            habit: trade_row.task_habit,
         });
 
         return TradeObject {
@@ -140,6 +146,8 @@ pub struct SyncTaskInput {
     pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub habit: bool,
 }
 
 #[derive(SimpleObject)]
@@ -152,4 +160,62 @@ pub struct SyncPullResponse {
 pub struct SyncPushResponse {
     pub tasks: Vec<TaskObject>,
     pub server_time: NaiveDateTime,
+}
+
+// ============================================================================
+// Trade Sync Types
+// ============================================================================
+
+#[derive(InputObject)]
+pub struct SyncTradeInput {
+    pub id: String,
+    pub task_id: Option<String>,
+    pub reward_id: Option<String>,
+    pub amount: i32,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(SimpleObject)]
+pub struct SyncTradeObject {
+    pub id: String,
+    pub task_id: Option<String>,
+    pub reward_id: Option<String>,
+    pub amount: i32,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+impl From<TradeRow> for SyncTradeObject {
+    fn from(trade_row: TradeRow) -> Self {
+        Self {
+            id: trade_row.id.to_string(),
+            task_id: trade_row.task_id.map(|id| id.to_string()),
+            reward_id: trade_row.reward_id.map(|id| id.to_string()),
+            amount: trade_row.amount,
+            created_at: trade_row.created_at,
+            updated_at: trade_row.updated_at,
+            deleted_at: trade_row.deleted_at,
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+pub struct SyncPullTradesResponse {
+    pub trades: Vec<SyncTradeObject>,
+    pub server_time: NaiveDateTime,
+}
+
+#[derive(SimpleObject)]
+pub struct SyncPushTradesResponse {
+    pub trades: Vec<SyncTradeObject>,
+    pub server_time: NaiveDateTime,
+    pub new_balance: f64,
+}
+
+#[derive(SimpleObject)]
+pub struct UserBalanceResponse {
+    pub soy_balance: f64,
+    pub tofu_balance: f64,
 }

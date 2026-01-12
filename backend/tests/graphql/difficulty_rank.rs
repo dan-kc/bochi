@@ -35,7 +35,8 @@ async fn test_sync_push_with_difficulty_rank() {
                 "description": "A difficult task",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "difficultyRank": "a0"
+                "difficultyRank": "a0",
+                "habit": false
             }]
         }
     });
@@ -80,7 +81,8 @@ async fn test_sync_push_without_difficulty_rank() {
                 "name": "Unranked Task",
                 "description": "Task without difficulty rank",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -125,7 +127,8 @@ async fn test_sync_push_update_difficulty_rank() {
                 "name": "Task to Rank",
                 "description": "Will be ranked later",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -153,7 +156,8 @@ async fn test_sync_push_update_difficulty_rank() {
                 "description": "Will be ranked later",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-02T10:00:00",
-                "difficultyRank": "b5"
+                "difficultyRank": "b5",
+                "habit": false
             }]
         }
     });
@@ -193,7 +197,8 @@ async fn test_sync_push_clear_difficulty_rank() {
                 "description": "Has a rank",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "difficultyRank": "c3"
+                "difficultyRank": "c3",
+                "habit": false
             }]
         }
     });
@@ -221,7 +226,8 @@ async fn test_sync_push_clear_difficulty_rank() {
                 "description": "Has a rank",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-02T10:00:00",
-                "difficultyRank": null
+                "difficultyRank": null,
+                "habit": false
             }]
         }
     });
@@ -262,7 +268,8 @@ async fn test_sync_pull_includes_difficulty_rank() {
                 "description": "For pull test",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "difficultyRank": "d7"
+                "difficultyRank": "d7",
+                "habit": false
             }]
         }
     });
@@ -322,7 +329,8 @@ async fn test_sync_pull_includes_null_difficulty_rank() {
                 "name": "Unranked Task",
                 "description": "No difficulty rank",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -382,7 +390,8 @@ async fn test_create_task_with_difficulty_rank() {
             "input": {
                 "name": "New Ranked Task",
                 "description": "Created with difficulty",
-                "difficultyRank": "e9"
+                "difficultyRank": "e9",
+                "habit": false
             }
         }
     });
@@ -416,7 +425,8 @@ async fn test_create_task_without_difficulty_rank() {
         "variables": {
             "input": {
                 "name": "Unranked New Task",
-                "description": "No difficulty set"
+                "description": "No difficulty set",
+                "habit": false
             }
         }
     });

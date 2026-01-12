@@ -28,6 +28,7 @@ async fn test_create_trade_with_task_success() {
             "input": {
                 "name": "Test Task",
                 "description": "A test task for trading",
+                "habit": false
             }
         }
     });
@@ -239,6 +240,7 @@ async fn test_create_trade_with_both_task_and_reward() {
             "input": {
                 "name": "Test Task",
                 "description": "A test task",
+                "habit": false
             }
         }
     });
@@ -556,6 +558,7 @@ async fn test_create_trade_interface_fields() {
                 "description": "A test task with optional dates",
                 "hiddenUntil": "2028-12-16T00:33:08",
                 "dueBy": "2028-12-25T23:59:59",
+                "habit": false
             }
         }
     });

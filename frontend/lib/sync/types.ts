@@ -1,4 +1,5 @@
 import type { Task } from "../task";
+import type { Trade } from "../trade";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
@@ -19,4 +20,21 @@ export interface SyncPushResponse {
 export interface SyncCallbacks {
   onStatusChange: (status: SyncStatus, error?: string) => void;
   onSyncComplete: (serverTime: string) => void;
+}
+
+// Trade sync types
+export interface SyncPullTradesResponse {
+  trades: Trade[];
+  server_time: string;
+}
+
+export interface SyncPushTradesResponse {
+  trades: Trade[];
+  server_time: string;
+  new_balance: number;
+}
+
+export interface BalanceResponse {
+  soy_balance: number;
+  tofu_balance: number;
 }

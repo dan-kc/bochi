@@ -1,5 +1,7 @@
 import { api } from "../api";
 import { taskStore } from "../store/taskStore";
+import { tradeStore } from "../store/tradeStore";
+import { balanceStore } from "../store/balanceStore";
 import {
   getDirtyTaskIds,
   clearAllDirtyFlags,
@@ -8,6 +10,10 @@ import {
   checkAndPrepareFullSyncIfNeeded,
   recordFullSyncCompleted,
   clearFullSyncTimestamp,
+  getDirtyTradeIds,
+  clearAllTradeDirtyFlags,
+  getTradeLastSyncTime,
+  setTradeLastSyncTime,
 } from "./syncStorage";
 import type { SyncCallbacks } from "./types";
 
@@ -160,12 +166,17 @@ export class SyncService {
       await clearAllDirtyFlags();
       await taskStore.purgeDeletedTasks();
 
-      // Step 5: Update last sync time and notify success
+      // Step 5: Update last sync time
       await setLastSyncTime(pullResponse.server_time);
+
+      // Step 6: Sync trades
+      await this.syncTrades();
+
+      // Step 7: Notify success
       this.callbacks.onStatusChange("synced");
       this.callbacks.onSyncComplete(pullResponse.server_time);
 
-      // Step 6: Record full sync completion if this was a full sync
+      // Step 8: Record full sync completion if this was a full sync
       if (isFullSync || lastSync === null) {
         await recordFullSyncCompleted();
       }
@@ -178,6 +189,48 @@ export class SyncService {
       this.callbacks.onStatusChange("error", message);
     } finally {
       this.isSyncing = false;
+    }
+  }
+
+  private async syncTrades(): Promise<void> {
+    try {
+      // Pull remote trades
+      const lastTradeSync = await getTradeLastSyncTime();
+      const pullResponse = await api.pullTrades(lastTradeSync);
+
+      // Merge server trades into store
+      if (pullResponse.trades.length > 0) {
+        await tradeStore.mergeTrades(pullResponse.trades, this.userId);
+      }
+
+      // Push dirty local trades
+      const dirtyTradeIds = await getDirtyTradeIds();
+      if (dirtyTradeIds.size > 0) {
+        const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
+        if (dirtyTrades.length > 0) {
+          const pushResponse = await api.pushTrades(dirtyTrades);
+          // Apply server's resolved versions
+          if (pushResponse.trades.length > 0) {
+            await tradeStore.mergeTrades(pushResponse.trades, this.userId);
+          }
+          // Update balance from server
+          await balanceStore.setSoyBalance(pushResponse.new_balance);
+        }
+      }
+
+      // Clear dirty flags and update last sync time
+      await clearAllTradeDirtyFlags();
+      await setTradeLastSyncTime(pullResponse.server_time);
+
+      // Fetch latest balance from server
+      const balanceResponse = await api.getBalance();
+      await balanceStore.setBalance(
+        balanceResponse.soy_balance,
+        balanceResponse.tofu_balance,
+      );
+    } catch (error) {
+      console.error("Trade sync failed:", error);
+      // Don't fail the whole sync for trade sync errors
     }
   }
 }

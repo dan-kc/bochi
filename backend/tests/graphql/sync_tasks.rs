@@ -67,7 +67,8 @@ async fn test_sync_pull_returns_all_tasks_when_since_is_null() {
         "variables": {
             "input": {
                 "name": "Task 1",
-                "description": "Description 1"
+                "description": "Description 1",
+                "habit": false
             }
         }
     });
@@ -83,7 +84,8 @@ async fn test_sync_pull_returns_all_tasks_when_since_is_null() {
         "variables": {
             "input": {
                 "name": "Task 2",
-                "description": "Description 2"
+                "description": "Description 2",
+                "habit": false
             }
         }
     });
@@ -148,7 +150,8 @@ async fn test_sync_pull_returns_tasks_modified_since_timestamp() {
         "variables": {
             "input": {
                 "name": "Old Task",
-                "description": "Created before timestamp"
+                "description": "Created before timestamp",
+                "habit": false
             }
         }
     });
@@ -187,7 +190,8 @@ async fn test_sync_pull_returns_tasks_modified_since_timestamp() {
         "variables": {
             "input": {
                 "name": "New Task",
-                "description": "Created after timestamp"
+                "description": "Created after timestamp",
+                "habit": false
             }
         }
     });
@@ -238,7 +242,8 @@ async fn test_sync_pull_includes_soft_deleted_tasks() {
         "variables": {
             "input": {
                 "name": "Task to delete",
-                "description": "This will be soft deleted"
+                "description": "This will be soft deleted",
+                "habit": false
             }
         }
     });
@@ -272,7 +277,8 @@ async fn test_sync_pull_includes_soft_deleted_tasks() {
                 "description": "This will be soft deleted",
                 "createdAt": "2025-01-01T00:00:00",
                 "updatedAt": "2025-01-01T00:00:00",
-                "deletedAt": "2025-01-01T00:00:00"
+                "deletedAt": "2025-01-01T00:00:00",
+                "habit": false
             }]
         }
     });
@@ -331,7 +337,8 @@ async fn test_sync_pull_only_returns_own_tasks() {
         "variables": {
             "input": {
                 "name": "User 1 Task",
-                "description": "Belongs to user 1"
+                "description": "Belongs to user 1",
+                "habit": false
             }
         }
     });
@@ -348,7 +355,8 @@ async fn test_sync_pull_only_returns_own_tasks() {
         "variables": {
             "input": {
                 "name": "User 2 Task",
-                "description": "Belongs to user 2"
+                "description": "Belongs to user 2",
+                "habit": false
             }
         }
     });
@@ -483,7 +491,8 @@ async fn test_sync_push_creates_new_task() {
                 "name": "New Synced Task",
                 "description": "Created via sync push",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -523,7 +532,8 @@ async fn test_sync_push_updates_existing_task() {
         "variables": {
             "input": {
                 "name": "Original Name",
-                "description": "Original Description"
+                "description": "Original Description",
+                "habit": false
             }
         }
     });
@@ -556,7 +566,8 @@ async fn test_sync_push_updates_existing_task() {
                 "name": "Updated Name",
                 "description": "Updated Description",
                 "createdAt": created_at,
-                "updatedAt": "2030-01-01T12:00:00"
+                "updatedAt": "2030-01-01T12:00:00",
+                "habit": false
             }]
         }
     });
@@ -598,7 +609,8 @@ async fn test_sync_push_soft_deletes_task() {
         "variables": {
             "input": {
                 "name": "Task to Delete",
-                "description": "Will be soft deleted"
+                "description": "Will be soft deleted",
+                "habit": false
             }
         }
     });
@@ -631,7 +643,8 @@ async fn test_sync_push_soft_deletes_task() {
                 "description": "Will be soft deleted",
                 "createdAt": created_at,
                 "updatedAt": "2030-01-01T12:00:00",
-                "deletedAt": "2030-01-01T12:00:00"
+                "deletedAt": "2030-01-01T12:00:00",
+                "habit": false
             }]
         }
     });
@@ -678,21 +691,24 @@ async fn test_sync_push_multiple_tasks() {
                     "name": "Task 1",
                     "description": "First task",
                     "createdAt": "2025-01-01T10:00:00",
-                    "updatedAt": "2025-01-01T10:00:00"
+                    "updatedAt": "2025-01-01T10:00:00",
+                    "habit": false
                 },
                 {
                     "id": task_id_2,
                     "name": "Task 2",
                     "description": "Second task",
                     "createdAt": "2025-01-01T10:00:00",
-                    "updatedAt": "2025-01-01T10:00:00"
+                    "updatedAt": "2025-01-01T10:00:00",
+                    "habit": false
                 },
                 {
                     "id": task_id_3,
                     "name": "Task 3",
                     "description": "Third task",
                     "createdAt": "2025-01-01T10:00:00",
-                    "updatedAt": "2025-01-01T10:00:00"
+                    "updatedAt": "2025-01-01T10:00:00",
+                    "habit": false
                 }
             ]
         }
@@ -739,7 +755,8 @@ async fn test_sync_push_with_optional_fields() {
                 "updatedAt": "2025-01-01T10:00:00",
                 "hiddenUntil": "2030-06-01T00:00:00",
                 "dueBy": "2030-12-31T23:59:59",
-                "minDailyFrequency": null
+                "minDailyFrequency": null,
+                "habit": false
             }]
         }
     });
@@ -778,7 +795,8 @@ async fn test_sync_push_requires_authentication() {
                 "name": "Task",
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -819,7 +837,8 @@ async fn test_sync_push_with_invalid_auth_token() {
                 "name": "Task",
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -866,7 +885,8 @@ async fn test_sync_push_validates_name_too_long() {
                 "name": long_name,
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -911,7 +931,8 @@ async fn test_sync_push_validates_name_empty() {
                 "name": "",
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -957,7 +978,8 @@ async fn test_sync_push_validates_description_too_long() {
                 "name": "Task",
                 "description": long_description,
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1002,7 +1024,8 @@ async fn test_sync_push_cannot_modify_other_users_tasks() {
         "variables": {
             "input": {
                 "name": "User 1 Task",
-                "description": "Belongs to user 1"
+                "description": "Belongs to user 1",
+                "habit": false
             }
         }
     });
@@ -1033,7 +1056,8 @@ async fn test_sync_push_cannot_modify_other_users_tasks() {
                 "name": "Hijacked Task",
                 "description": "Trying to modify another user's task",
                 "createdAt": created_at,
-                "updatedAt": "2030-01-01T12:00:00"
+                "updatedAt": "2030-01-01T12:00:00",
+                "habit": false
             }]
         }
     });
@@ -1128,7 +1152,8 @@ async fn test_sync_push_invalid_uuid() {
                 "name": "Task",
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1169,7 +1194,8 @@ async fn test_sync_push_with_min_daily_frequency() {
                 "description": "Has min daily frequency",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "minDailyFrequency": 3.5
+                "minDailyFrequency": 3.5,
+                "habit": true
             }]
         }
     });
@@ -1210,7 +1236,8 @@ async fn test_sync_push_validates_min_daily_frequency_too_large() {
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "minDailyFrequency": 101.0
+                "minDailyFrequency": 101.0,
+                "habit": true
             }]
         }
     });
@@ -1256,7 +1283,8 @@ async fn test_sync_push_validates_min_daily_frequency_negative() {
                 "description": "Description",
                 "createdAt": "2025-01-01T10:00:00",
                 "updatedAt": "2025-01-01T10:00:00",
-                "minDailyFrequency": -1.0
+                "minDailyFrequency": -1.0,
+                "habit": true
             }]
         }
     });
@@ -1308,7 +1336,8 @@ async fn test_sync_roundtrip_push_then_pull() {
                 "name": "Roundtrip Task",
                 "description": "Test roundtrip",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1368,7 +1397,8 @@ async fn test_sync_incremental_pull_after_push() {
                 "name": "First Task",
                 "description": "Created first",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1398,7 +1428,8 @@ async fn test_sync_incremental_pull_after_push() {
                 "name": "Second Task",
                 "description": "Created second",
                 "createdAt": "2025-01-02T10:00:00",
-                "updatedAt": "2025-01-02T10:00:00"
+                "updatedAt": "2025-01-02T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1493,7 +1524,8 @@ async fn test_sync_push_can_transfer_task_from_anonymous_to_registered_user() {
                 "name": "Anonymous Task",
                 "description": "Created by anonymous user",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1546,7 +1578,8 @@ async fn test_sync_push_can_transfer_task_from_anonymous_to_registered_user() {
                 "name": "Anonymous Task",
                 "description": "Created by anonymous user",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T11:00:00"
+                "updatedAt": "2025-01-01T11:00:00",
+                "habit": false
             }]
         }
     });
@@ -1605,7 +1638,8 @@ async fn test_sync_push_registered_user_cannot_hijack_other_registered_users_tas
                 "name": "User 1 Task",
                 "description": "Belongs to user 1",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-01T10:00:00"
+                "updatedAt": "2025-01-01T10:00:00",
+                "habit": false
             }]
         }
     });
@@ -1630,7 +1664,8 @@ async fn test_sync_push_registered_user_cannot_hijack_other_registered_users_tas
                 "name": "Hijacked Task",
                 "description": "Trying to steal",
                 "createdAt": "2025-01-01T10:00:00",
-                "updatedAt": "2025-01-02T10:00:00"
+                "updatedAt": "2025-01-02T10:00:00",
+                "habit": false
             }]
         }
     });

@@ -76,6 +76,8 @@ export async function createTask(
     due_by: input.due_by ?? null,
     min_daily_frequency: input.min_daily_frequency ?? null,
     difficulty_rank: input.difficulty_rank ?? null,
+    completed_at: input.completed_at ?? null,
+    habit: input.habit,
   };
 
   const tasks = await getTasksFromStorage();
@@ -117,6 +119,10 @@ export async function updateTask(
       input.min_daily_frequency !== undefined
         ? input.min_daily_frequency
         : existingTask.min_daily_frequency,
+    completed_at:
+      input.completed_at !== undefined
+        ? input.completed_at
+        : existingTask.completed_at,
     updated_at: now,
   };
 

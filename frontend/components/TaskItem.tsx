@@ -6,6 +6,7 @@ import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
 interface TaskItemProps {
   task: Task;
   onPress: (task: Task) => void;
+  onComplete?: (task: Task) => void;
   onSetDifficulty?: (task: Task) => void;
   isDifficultyView?: boolean;
 }
@@ -53,6 +54,7 @@ function PriceDisplay({ taskId }: { taskId: string }) {
 export function TaskItem({
   task,
   onPress,
+  onComplete,
   onSetDifficulty,
   isDifficultyView,
 }: TaskItemProps) {
@@ -61,6 +63,8 @@ export function TaskItem({
   // Use != null to catch both null and undefined
   const hasDifficultyRank = task.difficulty_rank != null;
   const isUnrankedInDifficultyView = isDifficultyView && !hasDifficultyRank;
+  const priceContext = usePriceUpdateOptional();
+  const currentPrice = priceContext?.prices[task.id]?.current;
 
   return (
     <Pressable
@@ -135,6 +139,19 @@ export function TaskItem({
                 className="bg-orange-50 border border-orange-200 px-2 py-1 rounded"
               >
                 <Text className="text-orange-600 text-xs">Set Difficulty</Text>
+              </Pressable>
+            )}
+            {onComplete && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onComplete(task);
+                }}
+                className="bg-green-500 px-3 py-1 rounded ml-auto"
+              >
+                <Text className="text-white text-xs font-semibold">
+                  +{currentPrice ?? "..."} soy
+                </Text>
               </Pressable>
             )}
           </View>
