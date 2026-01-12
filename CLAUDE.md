@@ -1,4 +1,4 @@
-Tofustash is a gamefied productivity tool to handle your habits and todos. It is themed on personal finance and the stock exchange. You earn "soy" that is the in game currency. It is awarded for completing habits and tasks, and it is spent on rewards like "eat a chocolcate bar". 
+Tofustash is a gamefied productivity tool to handle your habits and todos. It is themed on personal finance and the stock exchange. You earn "soy" that is the in game currency. It is awarded for completing tasks (habits or todos), and it is spent on rewards like "eat a chocolcate bar". 
 
 ## Frontend
 
