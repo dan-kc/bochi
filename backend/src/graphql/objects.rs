@@ -150,22 +150,6 @@ pub struct SyncTaskInput {
     pub habit: bool,
 }
 
-#[derive(SimpleObject)]
-pub struct SyncPullResponse {
-    pub tasks: Vec<TaskObject>,
-    pub server_time: NaiveDateTime,
-}
-
-#[derive(SimpleObject)]
-pub struct SyncPushResponse {
-    pub tasks: Vec<TaskObject>,
-    pub server_time: NaiveDateTime,
-}
-
-// ============================================================================
-// Trade Sync Types
-// ============================================================================
-
 #[derive(InputObject)]
 pub struct SyncTradeInput {
     pub id: String,
@@ -202,20 +186,25 @@ impl From<TradeRow> for SyncTradeObject {
 }
 
 #[derive(SimpleObject)]
-pub struct SyncPullTradesResponse {
-    pub trades: Vec<SyncTradeObject>,
-    pub server_time: NaiveDateTime,
-}
-
-#[derive(SimpleObject)]
-pub struct SyncPushTradesResponse {
-    pub trades: Vec<SyncTradeObject>,
-    pub server_time: NaiveDateTime,
-    pub new_balance: f64,
-}
-
-#[derive(SimpleObject)]
 pub struct UserBalanceResponse {
     pub soy_balance: f64,
     pub tofu_balance: f64,
+}
+
+// ============================================================================
+// Unified Sync Types
+// ============================================================================
+
+#[derive(InputObject, Default)]
+pub struct SyncInput {
+    pub tasks: Option<Vec<SyncTaskInput>>,
+    pub trades: Option<Vec<SyncTradeInput>>,
+}
+
+#[derive(SimpleObject)]
+pub struct SyncResponse {
+    pub tasks: Vec<TaskObject>,
+    pub trades: Vec<SyncTradeObject>,
+    pub balance: UserBalanceResponse,
+    pub server_time: NaiveDateTime,
 }

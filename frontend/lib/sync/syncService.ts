@@ -3,19 +3,15 @@ import { taskStore } from "../store/taskStore";
 import { tradeStore } from "../store/tradeStore";
 import { balanceStore } from "../store/balanceStore";
 import {
-  getDirtyTaskIds,
-  clearAllDirtyFlags,
-  getLastSyncTime,
+  getSyncState,
+  clearAllDirty,
   setLastSyncTime,
   checkAndPrepareFullSyncIfNeeded,
   recordFullSyncCompleted,
   clearFullSyncTimestamp,
-  getDirtyTradeIds,
-  clearAllTradeDirtyFlags,
-  getTradeLastSyncTime,
-  setTradeLastSyncTime,
+  cleanupOldSyncStorage,
 } from "./syncStorage";
-import type { SyncCallbacks } from "./types";
+import type { SyncCallbacks, SyncInput, SyncTaskInput, SyncTradeInput } from "./types";
 
 const DEBOUNCE_MS = 2000;
 const BACKGROUND_SYNC_INTERVAL_MS = 5000; // 5 seconds
@@ -34,6 +30,8 @@ export class SyncService {
     this.userId = userId;
     this.startBackgroundSync();
     this.startFullSyncResetTimer();
+    // Clean up old storage keys from previous implementation
+    cleanupOldSyncStorage().catch(console.error);
   }
 
   private startBackgroundSync(): void {
@@ -57,15 +55,23 @@ export class SyncService {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
 
     try {
-      const lastSync = await getLastSyncTime();
-      const pullResponse = await api.pullTasks(lastSync);
+      const syncState = await getSyncState();
+      const response = await api.sync(syncState.lastSync);
 
-      if (pullResponse.tasks.length > 0) {
-        await taskStore.mergeTasks(pullResponse.tasks, this.userId);
+      // Merge all entities
+      if (response.tasks.length > 0) {
+        await taskStore.mergeTasks(response.tasks, this.userId);
       }
+      if (response.trades.length > 0) {
+        await tradeStore.mergeTrades(response.trades, this.userId);
+      }
+      await balanceStore.setBalance(
+        response.balance.soy_balance,
+        response.balance.tofu_balance,
+      );
 
-      await setLastSyncTime(pullResponse.server_time);
-      this.callbacks.onSyncComplete(pullResponse.server_time);
+      await setLastSyncTime(response.server_time);
+      this.callbacks.onSyncComplete(response.server_time);
     } catch (error) {
       // Silently fail background sync - don't update status
       console.debug("Background sync failed:", error);
@@ -137,47 +143,64 @@ export class SyncService {
 
     try {
       // Step 0: Check if periodic full sync is needed (every 24h)
-      // This clears lastSyncTime if it's been too long since last full sync
       const isFullSync = await checkAndPrepareFullSyncIfNeeded();
 
-      // Step 1: Pull remote changes
-      const lastSync = await getLastSyncTime();
-      const pullResponse = await api.pullTasks(lastSync);
+      // Step 1: Get current sync state
+      const syncState = await getSyncState();
 
-      // Step 2: Merge server tasks into store
+      // Step 2: Pull all changes from server
+      const pullResponse = await api.sync(syncState.lastSync);
+
+      // Step 3: Merge all entities (order matters: tasks before trades)
       if (pullResponse.tasks.length > 0) {
         await taskStore.mergeTasks(pullResponse.tasks, this.userId);
       }
+      if (pullResponse.trades.length > 0) {
+        await tradeStore.mergeTrades(pullResponse.trades, this.userId);
+      }
+      await balanceStore.setBalance(
+        pullResponse.balance.soy_balance,
+        pullResponse.balance.tofu_balance,
+      );
 
-      // Step 3: Push dirty local tasks
-      const dirtyIds = await getDirtyTaskIds();
-      if (dirtyIds.size > 0) {
-        const dirtyTasks = taskStore.getDirtyTasks(dirtyIds);
-        if (dirtyTasks.length > 0) {
-          const pushResponse = await api.pushTasks(dirtyTasks);
-          // Apply server's resolved versions
-          if (pushResponse.tasks.length > 0) {
-            await taskStore.mergeTasks(pushResponse.tasks, this.userId);
-          }
+      // Step 4: Gather dirty entities
+      const dirtyTaskIds = new Set(syncState.dirty.tasks);
+      const dirtyTradeIds = new Set(syncState.dirty.trades);
+      const dirtyTasks = taskStore.getDirtyTasks(dirtyTaskIds);
+      const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
+
+      // Step 5: Push dirty entities if any
+      if (dirtyTasks.length > 0 || dirtyTrades.length > 0) {
+        const input = this.buildSyncInput(dirtyTasks, dirtyTrades);
+        const pushResponse = await api.syncPush(input);
+
+        // Step 6: Merge server's resolved versions
+        if (pushResponse.tasks.length > 0) {
+          await taskStore.mergeTasks(pushResponse.tasks, this.userId);
         }
+        if (pushResponse.trades.length > 0) {
+          await tradeStore.mergeTrades(pushResponse.trades, this.userId);
+        }
+        await balanceStore.setBalance(
+          pushResponse.balance.soy_balance,
+          pushResponse.balance.tofu_balance,
+        );
       }
 
-      // Step 4: Clear dirty flags and purge deleted tasks
-      await clearAllDirtyFlags();
-      await taskStore.purgeDeletedTasks();
-
-      // Step 5: Update last sync time
+      // Step 7: Clear dirty flags and update timestamp
+      await clearAllDirty();
       await setLastSyncTime(pullResponse.server_time);
 
-      // Step 6: Sync trades
-      await this.syncTrades();
+      // Step 8: Purge soft-deleted entities
+      await taskStore.purgeDeletedTasks();
+      await tradeStore.purgeDeletedTrades();
 
-      // Step 7: Notify success
+      // Step 9: Notify success
       this.callbacks.onStatusChange("synced");
       this.callbacks.onSyncComplete(pullResponse.server_time);
 
-      // Step 8: Record full sync completion if this was a full sync
-      if (isFullSync || lastSync === null) {
+      // Step 10: Record full sync completion if this was a full sync
+      if (isFullSync || syncState.lastSync === null) {
         await recordFullSyncCompleted();
       }
     } catch (error) {
@@ -192,45 +215,43 @@ export class SyncService {
     }
   }
 
-  private async syncTrades(): Promise<void> {
-    try {
-      // Pull remote trades
-      const lastTradeSync = await getTradeLastSyncTime();
-      const pullResponse = await api.pullTrades(lastTradeSync);
+  private buildSyncInput(
+    tasks: ReturnType<typeof taskStore.getDirtyTasks>,
+    trades: ReturnType<typeof tradeStore.getDirtyTrades>,
+  ): SyncInput {
+    const taskInputs: SyncTaskInput[] | undefined =
+      tasks.length > 0
+        ? tasks.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            createdAt: t.created_at,
+            updatedAt: t.updated_at,
+            deletedAt: t.deleted_at,
+            hiddenUntil: t.hidden_until,
+            dueBy: t.due_by,
+            minDailyFrequency: t.min_daily_frequency,
+            difficultyRank: t.difficulty_rank,
+            completedAt: t.completed_at,
+            habit: t.habit,
+          }))
+        : undefined;
 
-      // Merge server trades into store
-      if (pullResponse.trades.length > 0) {
-        await tradeStore.mergeTrades(pullResponse.trades, this.userId);
-      }
+    const tradeInputs: SyncTradeInput[] | undefined =
+      trades.length > 0
+        ? trades.map((t) => ({
+            id: t.id,
+            taskId: t.task_id,
+            rewardId: t.reward_id,
+            amount: t.amount,
+            createdAt: t.created_at,
+            deletedAt: t.deleted_at,
+          }))
+        : undefined;
 
-      // Push dirty local trades
-      const dirtyTradeIds = await getDirtyTradeIds();
-      if (dirtyTradeIds.size > 0) {
-        const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
-        if (dirtyTrades.length > 0) {
-          const pushResponse = await api.pushTrades(dirtyTrades);
-          // Apply server's resolved versions
-          if (pushResponse.trades.length > 0) {
-            await tradeStore.mergeTrades(pushResponse.trades, this.userId);
-          }
-          // Update balance from server
-          await balanceStore.setSoyBalance(pushResponse.new_balance);
-        }
-      }
-
-      // Clear dirty flags and update last sync time
-      await clearAllTradeDirtyFlags();
-      await setTradeLastSyncTime(pullResponse.server_time);
-
-      // Fetch latest balance from server
-      const balanceResponse = await api.getBalance();
-      await balanceStore.setBalance(
-        balanceResponse.soy_balance,
-        balanceResponse.tofu_balance,
-      );
-    } catch (error) {
-      console.error("Trade sync failed:", error);
-      // Don't fail the whole sync for trade sync errors
-    }
+    return {
+      tasks: taskInputs,
+      trades: tradeInputs,
+    };
   }
 }

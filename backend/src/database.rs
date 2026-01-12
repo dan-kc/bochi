@@ -1,6 +1,6 @@
 use crate::graphql::mutations::{CreateRewardInput, CreateTaskInput};
 use chrono::NaiveDateTime;
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres, Transaction};
 use url::form_urlencoded;
 use uuid::Uuid;
 
@@ -316,15 +316,66 @@ impl Database {
         }
     }
 
-    /// Upsert a task - insert if not exists, update if exists and belongs to user.
-    /// Also transfers ownership from anonymous users to the authenticated user.
-    pub async fn upsert_task(
+    // ============================================================================
+    // Trade Sync Operations
+    // ============================================================================
+
+    /// Get all trades for a user, optionally filtered by updated_at > since
+    pub async fn get_trades_since(
         &self,
         user_id: Uuid,
-        task: UpsertTaskOptions,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TradeRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
+                     FROM trades
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
+                     FROM trades
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Get user balance
+    pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
+        sqlx::query_as("SELECT soy_balance, tofu_balance FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    // ============================================================================
+    // Transaction Support for Unified Sync
+    // ============================================================================
+
+    /// Begin a new database transaction
+    pub async fn begin_transaction(&self) -> Result<Transaction<'_, Postgres>, sqlx::Error> {
+        self.pool.begin().await
+    }
+
+    /// Upsert a task within a transaction
+    pub async fn upsert_task_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task: &UpsertTaskOptions,
     ) -> Result<TaskRow, sqlx::Error> {
-        // The condition for allowing updates: either the task belongs to this user,
-        // OR the task belongs to an anonymous user (allowing transfer of ownership)
         sqlx::query_as(
             "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency, difficulty_rank, completed_at, habit)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -384,190 +435,89 @@ impl Database {
         .bind(&task.difficulty_rank)
         .bind(task.completed_at)
         .bind(task.habit)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut **tx)
         .await
     }
 
-    /// Get a single task by ID for a specific user
-    pub async fn get_task_by_id(
-        &self,
+    /// Upsert a trade within a transaction (does not update balance - caller should use recalculate_balance_tx)
+    pub async fn upsert_trade_tx(
+        tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
-        task_id: Uuid,
-    ) -> Result<Option<TaskRow>, sqlx::Error> {
-        sqlx::query_as(
-            "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, completed_at, habit
-             FROM tasks
-             WHERE id = $1 AND user_id = $2",
-        )
-        .bind(task_id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await
-    }
+        trade: &UpsertTradeOptions,
+    ) -> Result<TradeRow, sqlx::Error> {
+        // Validate task belongs to user if task_id is provided
+        if let Some(task_id) = trade.task_id {
+            let task_valid: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM tasks
+                 WHERE id = $1 AND (user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true))",
+            )
+            .bind(task_id)
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?;
 
-    // ============================================================================
-    // Trade Sync Operations
-    // ============================================================================
-
-    /// Get all trades for a user, optionally filtered by updated_at > since
-    pub async fn get_trades_since(
-        &self,
-        user_id: Uuid,
-        since: Option<NaiveDateTime>,
-    ) -> Result<Vec<TradeRow>, sqlx::Error> {
-        match since {
-            Some(since_time) => {
-                sqlx::query_as(
-                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
-                     FROM trades
-                     WHERE user_id = $1 AND updated_at > $2
-                     ORDER BY updated_at ASC",
-                )
-                .bind(user_id)
-                .bind(since_time)
-                .fetch_all(&self.pool)
-                .await
-            }
-            None => {
-                sqlx::query_as(
-                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
-                     FROM trades
-                     WHERE user_id = $1
-                     ORDER BY updated_at ASC",
-                )
-                .bind(user_id)
-                .fetch_all(&self.pool)
-                .await
+            if task_valid.is_none() {
+                return Err(sqlx::Error::RowNotFound);
             }
         }
-    }
 
-    /// Upsert a trade and update user balance atomically.
-    /// Returns the trade and the new balance.
-    pub async fn upsert_trade_and_update_balance(
-        &self,
-        user_id: Uuid,
-        trade: UpsertTradeOptions,
-    ) -> Result<(TradeRow, f64), sqlx::Error> {
-        // Use a transaction to ensure atomicity
-        let mut tx = self.pool.begin().await?;
+        // Validate reward belongs to user if reward_id is provided
+        if let Some(reward_id) = trade.reward_id {
+            let reward_valid: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
+            )
+            .bind(reward_id)
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?;
 
-        // Check if trade already exists
-        let existing_trade: Option<TradeRow> = sqlx::query_as(
-            "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
-             FROM trades WHERE id = $1 AND user_id = $2",
+            if reward_valid.is_none() {
+                return Err(sqlx::Error::RowNotFound);
+            }
+        }
+
+        // Upsert the trade
+        sqlx::query_as(
+            "INSERT INTO trades (id, user_id, task_id, reward_id, amount, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE SET
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING id, task_id, reward_id, amount, created_at, updated_at, deleted_at",
         )
         .bind(trade.id)
         .bind(user_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let trade_row: TradeRow;
-        let balance_delta: i32;
-
-        if let Some(existing) = existing_trade {
-            // Trade exists - check if we're soft-deleting or undeleting
-            let was_deleted = existing.deleted_at.is_some();
-            let is_deleting = trade.deleted_at.is_some();
-
-            if was_deleted && !is_deleting {
-                // Undeleting - add amount back
-                balance_delta = trade.amount;
-            } else if !was_deleted && is_deleting {
-                // Deleting - remove amount
-                balance_delta = -existing.amount;
-            } else {
-                // No change to deletion status - no balance change
-                balance_delta = 0;
-            }
-
-            // Update the trade
-            trade_row = sqlx::query_as(
-                "UPDATE trades SET deleted_at = $3
-                 WHERE id = $1 AND user_id = $2
-                 RETURNING id, task_id, reward_id, amount, created_at, updated_at, deleted_at",
-            )
-            .bind(trade.id)
-            .bind(user_id)
-            .bind(trade.deleted_at)
-            .fetch_one(&mut *tx)
-            .await?;
-        } else {
-            // New trade - validate task belongs to user or anonymous user
-            if let Some(task_id) = trade.task_id {
-                let task_valid: Option<(Uuid,)> = sqlx::query_as(
-                    "SELECT id FROM tasks
-                     WHERE id = $1 AND (user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true))",
-                )
-                .bind(task_id)
-                .bind(user_id)
-                .fetch_optional(&mut *tx)
-                .await?;
-
-                if task_valid.is_none() {
-                    return Err(sqlx::Error::RowNotFound);
-                }
-            }
-
-            // Validate reward belongs to user
-            if let Some(reward_id) = trade.reward_id {
-                let reward_valid: Option<(Uuid,)> = sqlx::query_as(
-                    "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
-                )
-                .bind(reward_id)
-                .bind(user_id)
-                .fetch_optional(&mut *tx)
-                .await?;
-
-                if reward_valid.is_none() {
-                    return Err(sqlx::Error::RowNotFound);
-                }
-            }
-
-            // Insert the trade
-            trade_row = sqlx::query_as(
-                "INSERT INTO trades (id, user_id, task_id, reward_id, amount, created_at, deleted_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 RETURNING id, task_id, reward_id, amount, created_at, updated_at, deleted_at",
-            )
-            .bind(trade.id)
-            .bind(user_id)
-            .bind(trade.task_id)
-            .bind(trade.reward_id)
-            .bind(trade.amount)
-            .bind(trade.created_at)
-            .bind(trade.deleted_at)
-            .fetch_one(&mut *tx)
-            .await?;
-
-            // Only add to balance if not soft-deleted
-            balance_delta = if trade.deleted_at.is_none() {
-                trade.amount
-            } else {
-                0
-            };
-        }
-
-        // Update user balance
-        let (new_balance,): (f64,) = sqlx::query_as(
-            "UPDATE users SET soy_balance = soy_balance + $2 WHERE id = $1 RETURNING soy_balance",
-        )
-        .bind(user_id)
-        .bind(balance_delta)
-        .fetch_one(&mut *tx)
-        .await?;
-
-        tx.commit().await?;
-
-        Ok((trade_row, new_balance))
+        .bind(trade.task_id)
+        .bind(trade.reward_id)
+        .bind(trade.amount)
+        .bind(trade.created_at)
+        .bind(trade.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
     }
 
-    /// Get user balance
-    pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
-        sqlx::query_as("SELECT soy_balance, tofu_balance FROM users WHERE id = $1")
+    /// Recalculate user balance from all non-deleted trades within a transaction
+    pub async fn recalculate_balance_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+    ) -> Result<f64, sqlx::Error> {
+        // Sum all non-deleted trades
+        let (total,): (Option<i64>,) = sqlx::query_as(
+            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        let balance = total.unwrap_or(0) as f64;
+
+        // Update user balance
+        sqlx::query("UPDATE users SET soy_balance = $2 WHERE id = $1")
             .bind(user_id)
-            .fetch_one(&self.pool)
-            .await
+            .bind(balance)
+            .execute(&mut **tx)
+            .await?;
+
+        Ok(balance)
     }
 }
 

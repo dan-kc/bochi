@@ -94,6 +94,10 @@ class TradeStore extends EntityStore<Trade> {
   async updateAllTradesUserId(newUserId: string, fromUserId?: string): Promise<string[]> {
     return this.updateAllUserId(newUserId, fromUserId);
   }
+
+  async purgeDeletedTrades(): Promise<void> {
+    return this.purgeDeleted();
+  }
 }
 
 // ============ Singleton Export ============

@@ -2,13 +2,12 @@ use std::{any::Any, sync::Arc};
 use tracing::error;
 
 use super::objects::{
-    RewardObject, SyncPushResponse, SyncPushTradesResponse, SyncTaskInput, SyncTradeInput,
-    TaskObject, TradeObject,
+    RewardObject, SyncInput, SyncResponse, TaskObject, TradeObject, UserBalanceResponse,
 };
 use crate::{
     database::{
         self, CreateRewardOptions, CreateTaskOptions, CreateTradeWithRewardOptions,
-        CreateTradeWithTaskOptions, UpsertTaskOptions, UpsertTradeOptions,
+        CreateTradeWithTaskOptions,
     },
     router::AuthenticatedUser,
 };
@@ -266,11 +265,12 @@ impl MutationRoot {
         }
     }
 
-    async fn sync_push(
+    /// Unified sync mutation - atomically processes tasks and trades in a single transaction
+    async fn sync(
         &self,
         ctx: &async_graphql::Context<'_>,
-        tasks: Vec<SyncTaskInput>,
-    ) -> Result<SyncPushResponse, async_graphql::Error> {
+        input: SyncInput,
+    ) -> Result<SyncResponse, async_graphql::Error> {
         let database = ctx.data::<database::Database>().map_err(|e| {
             error!("Database pool not found in context: {:?}", e);
             Error::Internal.into_graphql_error()
@@ -284,190 +284,183 @@ impl MutationRoot {
             })?
             .user_id;
 
+        // Begin transaction for atomicity
+        let mut tx = database.begin_transaction().await.map_err(|e| {
+            error!("Failed to begin transaction: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
+
         let mut result_tasks = Vec::new();
+        let mut result_trades = Vec::new();
 
-        for task_input in tasks {
-            // Validate task ID is a valid UUID
-            let task_id = task_input.id.parse::<Uuid>().map_err(|_| {
-                Error::Validation(format!("Invalid task id format: {}", task_input.id))
-                    .into_graphql_error()
-            })?;
+        // Process tasks first (trades may reference these)
+        if let Some(tasks) = input.tasks {
+            for task_input in tasks {
+                // Validate task ID is a valid UUID
+                let task_id = task_input.id.parse::<Uuid>().map_err(|_| {
+                    Error::Validation(format!("Invalid task id format: {}", task_input.id))
+                        .into_graphql_error()
+                })?;
 
-            // Validate name length
-            let name_len = task_input.name.chars().count();
-            if name_len > 100 || name_len < 1 {
-                let msg = format!(
-                    "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
-                    name_len
-                );
-                return Err(Error::Validation(msg).into_graphql_error());
-            }
-
-            // Validate description length
-            let desc_len = task_input.description.chars().count();
-            if desc_len > 10000 {
-                let msg = format!(
-                    "Description is too long ({} characters), max 10,000.",
-                    desc_len
-                );
-                return Err(Error::Validation(msg).into_graphql_error());
-            }
-
-            // Validate min_daily_frequency
-            if let Some(freq) = task_input.min_daily_frequency {
-                if freq < 0.0 || freq > 100.0 {
+                // Validate name length
+                let name_len = task_input.name.chars().count();
+                if name_len > 100 || name_len < 1 {
                     let msg = format!(
-                        "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
-                        freq as f32
+                        "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
+                        name_len
                     );
                     return Err(Error::Validation(msg).into_graphql_error());
                 }
-            }
 
-            // Habit validation: habits cannot have completed_at
-            if task_input.habit && task_input.completed_at.is_some() {
-                let msg = "Habits cannot have a 'completed_at' timestamp. Either set 'habit' to false or remove 'completed_at'.".to_string();
-                return Err(Error::Validation(msg).into_graphql_error());
-            }
+                // Validate description length
+                let desc_len = task_input.description.chars().count();
+                if desc_len > 10000 {
+                    let msg = format!(
+                        "Description is too long ({} characters), max 10,000.",
+                        desc_len
+                    );
+                    return Err(Error::Validation(msg).into_graphql_error());
+                }
 
-            // Habit validation: non-habits cannot have min_daily_frequency
-            if !task_input.habit && task_input.min_daily_frequency.is_some() {
-                let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
-                return Err(Error::Validation(msg).into_graphql_error());
-            }
+                // Validate min_daily_frequency
+                if let Some(freq) = task_input.min_daily_frequency {
+                    if freq < 0.0 || freq > 100.0 {
+                        let msg = format!(
+                            "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
+                            freq as f32
+                        );
+                        return Err(Error::Validation(msg).into_graphql_error());
+                    }
+                }
 
-            // Check if this task already exists and belongs to this user
-            let existing_task = database
-                .get_task_by_id(user_id, task_id)
-                .await
-                .map_err(|e| {
-                    error!("Database Error: {:?}", e);
-                    Error::Internal.into_graphql_error()
-                })?;
+                // Habit validation: habits cannot have completed_at
+                if task_input.habit && task_input.completed_at.is_some() {
+                    let msg = "Habits cannot have a 'completed_at' timestamp. Either set 'habit' to false or remove 'completed_at'.".to_string();
+                    return Err(Error::Validation(msg).into_graphql_error());
+                }
 
-            // Save name for comparison after move
-            let input_name = task_input.name.clone();
+                // Habit validation: non-habits cannot have min_daily_frequency
+                if !task_input.habit && task_input.min_daily_frequency.is_some() {
+                    let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
+                    return Err(Error::Validation(msg).into_graphql_error());
+                }
 
-            // If task doesn't exist for this user, check if it exists for any user
-            // by attempting upsert - the upsert query handles ownership check
-            let upsert_opts = UpsertTaskOptions {
-                id: task_id,
-                name: task_input.name,
-                description: task_input.description,
-                created_at: task_input.created_at,
-                deleted_at: task_input.deleted_at,
-                hidden_until: task_input.hidden_until,
-                due_by: task_input.due_by,
-                min_daily_frequency: task_input.min_daily_frequency,
-                difficulty_rank: task_input.difficulty_rank,
-                completed_at: task_input.completed_at,
-                habit: task_input.habit,
-            };
+                let upsert_opts = database::UpsertTaskOptions {
+                    id: task_id,
+                    name: task_input.name,
+                    description: task_input.description,
+                    created_at: task_input.created_at,
+                    deleted_at: task_input.deleted_at,
+                    hidden_until: task_input.hidden_until,
+                    due_by: task_input.due_by,
+                    min_daily_frequency: task_input.min_daily_frequency,
+                    difficulty_rank: task_input.difficulty_rank,
+                    completed_at: task_input.completed_at,
+                    habit: task_input.habit,
+                };
 
-            let task_row = database
-                .upsert_task(user_id, upsert_opts)
-                .await
-                .map_err(|e| {
-                    error!("Database Error: {:?}", e);
-                    Error::Internal.into_graphql_error()
-                })?;
+                let task_row = database::Database::upsert_task_tx(&mut tx, user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting task: {:?}", e);
+                        Error::Internal.into_graphql_error()
+                    })?;
 
-            // Only include task if it belongs to this user (upsert returns the task regardless)
-            // Check by comparing if we actually modified it or if it was owned by someone else
-            if existing_task.is_some() || task_row.name == input_name {
                 result_tasks.push(task_row.into());
             }
         }
 
-        let server_time = Utc::now().naive_utc();
+        // Process trades second (they may reference tasks created above)
+        if let Some(trades) = input.trades {
+            for trade_input in trades {
+                // Validate trade ID is a valid UUID
+                let trade_id = trade_input.id.parse::<Uuid>().map_err(|_| {
+                    Error::Validation(format!("Invalid trade id format: {}", trade_input.id))
+                        .into_graphql_error()
+                })?;
 
-        Ok(SyncPushResponse {
-            tasks: result_tasks,
-            server_time,
-        })
-    }
+                // Validate task_id if provided
+                let task_id = if let Some(task_id_str) = &trade_input.task_id {
+                    Some(task_id_str.parse::<Uuid>().map_err(|_| {
+                        Error::Validation(format!("Invalid task_id format: {}", task_id_str))
+                            .into_graphql_error()
+                    })?)
+                } else {
+                    None
+                };
 
-    async fn sync_push_trades(
-        &self,
-        ctx: &async_graphql::Context<'_>,
-        trades: Vec<SyncTradeInput>,
-    ) -> Result<SyncPushTradesResponse, async_graphql::Error> {
-        let database = ctx.data::<database::Database>().map_err(|e| {
-            error!("Database pool not found in context: {:?}", e);
+                // Validate reward_id if provided
+                let reward_id = if let Some(reward_id_str) = &trade_input.reward_id {
+                    Some(reward_id_str.parse::<Uuid>().map_err(|_| {
+                        Error::Validation(format!("Invalid reward_id format: {}", reward_id_str))
+                            .into_graphql_error()
+                    })?)
+                } else {
+                    None
+                };
+
+                // Trade must have either task_id or reward_id
+                if task_id.is_none() && reward_id.is_none() {
+                    let msg = "Trade must have a task_id or reward_id".to_string();
+                    return Err(Error::Validation(msg).into_graphql_error());
+                }
+
+                let upsert_opts = database::UpsertTradeOptions {
+                    id: trade_id,
+                    task_id,
+                    reward_id,
+                    amount: trade_input.amount,
+                    created_at: trade_input.created_at,
+                    deleted_at: trade_input.deleted_at,
+                };
+
+                let trade_row = database::Database::upsert_trade_tx(&mut tx, user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting trade: {:?}", e);
+                        // Return validation error for foreign key issues
+                        if matches!(e, sqlx::Error::RowNotFound) {
+                            Error::Validation("Referenced task or reward not found".to_string())
+                                .into_graphql_error()
+                        } else {
+                            Error::Internal.into_graphql_error()
+                        }
+                    })?;
+
+                result_trades.push(trade_row.into());
+            }
+        }
+
+        // Recalculate balance from all trades
+        let new_balance = database::Database::recalculate_balance_tx(&mut tx, user_id)
+            .await
+            .map_err(|e| {
+                error!("Database Error recalculating balance: {:?}", e);
+                Error::Internal.into_graphql_error()
+            })?;
+
+        // Commit the transaction
+        tx.commit().await.map_err(|e| {
+            error!("Failed to commit transaction: {:?}", e);
             Error::Internal.into_graphql_error()
         })?;
 
-        let user_id = ctx
-            .data::<AuthenticatedUser>()
-            .map_err(|e| {
-                error!("User not found in context: {:?}", e);
-                Error::Internal.into_graphql_error()
-            })?
-            .user_id;
-
-        let mut result_trades = Vec::new();
-        let mut final_balance = 0.0;
-
-        for trade_input in trades {
-            // Validate trade ID is a valid UUID
-            let trade_id = trade_input.id.parse::<Uuid>().map_err(|_| {
-                Error::Validation(format!("Invalid trade id format: {}", trade_input.id))
-                    .into_graphql_error()
-            })?;
-
-            // Validate task_id if provided
-            let task_id = if let Some(task_id_str) = &trade_input.task_id {
-                Some(task_id_str.parse::<Uuid>().map_err(|_| {
-                    Error::Validation(format!("Invalid task_id format: {}", task_id_str))
-                        .into_graphql_error()
-                })?)
-            } else {
-                None
-            };
-
-            // Validate reward_id if provided
-            let reward_id = if let Some(reward_id_str) = &trade_input.reward_id {
-                Some(reward_id_str.parse::<Uuid>().map_err(|_| {
-                    Error::Validation(format!("Invalid reward_id format: {}", reward_id_str))
-                        .into_graphql_error()
-                })?)
-            } else {
-                None
-            };
-
-            // Trade must have either task_id or reward_id
-            if task_id.is_none() && reward_id.is_none() {
-                let msg = "Trade must have a task_id or reward_id".to_string();
-                return Err(Error::Validation(msg).into_graphql_error());
-            }
-
-            let upsert_opts = UpsertTradeOptions {
-                id: trade_id,
-                task_id,
-                reward_id,
-                amount: trade_input.amount,
-                created_at: trade_input.created_at,
-                deleted_at: trade_input.deleted_at,
-            };
-
-            let (trade_row, new_balance) = database
-                .upsert_trade_and_update_balance(user_id, upsert_opts)
-                .await
-                .map_err(|e| {
-                    error!("Database Error: {:?}", e);
-                    Error::Internal.into_graphql_error()
-                })?;
-
-            result_trades.push(trade_row.into());
-            final_balance = new_balance;
-        }
+        // Get current tofu balance (not modified by trades)
+        let balance_row = database.get_user_balance(user_id).await.map_err(|e| {
+            error!("Database Error getting balance: {:?}", e);
+            Error::Internal.into_graphql_error()
+        })?;
 
         let server_time = Utc::now().naive_utc();
 
-        Ok(SyncPushTradesResponse {
+        Ok(SyncResponse {
+            tasks: result_tasks,
             trades: result_trades,
+            balance: UserBalanceResponse {
+                soy_balance: new_balance,
+                tofu_balance: balance_row.tofu_balance,
+            },
             server_time,
-            new_balance: final_balance,
         })
     }
 }

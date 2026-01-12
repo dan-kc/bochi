@@ -7,6 +7,10 @@ import type {
   SyncPullTradesResponse,
   SyncPushTradesResponse,
   BalanceResponse,
+  SyncResponse,
+  SyncInput,
+  SyncTaskInput,
+  SyncTradeInput,
 } from "./sync/types";
 import { getStoredTokens } from "./storage";
 
@@ -470,6 +474,252 @@ class ApiClient {
     return {
       soy_balance: result.balance.soyBalance,
       tofu_balance: result.balance.tofuBalance,
+    };
+  }
+
+  // ============ Unified Sync (GraphQL) ============
+
+  async sync(since: string | null): Promise<SyncResponse> {
+    const query = `
+      query Sync($since: NaiveDateTime) {
+        sync(since: $since) {
+          tasks {
+            id
+            name
+            description
+            createdAt
+            updatedAt
+            deletedAt
+            hiddenUntil
+            dueBy
+            minDailyFrequency
+            difficultyRank
+            completedAt
+            habit
+          }
+          trades {
+            id
+            taskId
+            rewardId
+            amount
+            createdAt
+            updatedAt
+            deletedAt
+          }
+          balance {
+            soyBalance
+            tofuBalance
+          }
+          serverTime
+        }
+      }
+    `;
+
+    const sinceParsed = since ? since.replace(/Z$/, "") : null;
+
+    const result = await this.graphqlRequest<{
+      sync: {
+        tasks: Array<{
+          id: string;
+          name: string;
+          description: string;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+          hiddenUntil: string | null;
+          dueBy: string | null;
+          minDailyFrequency: number | null;
+          difficultyRank: string | null;
+          completedAt: string | null;
+          habit: boolean;
+        }>;
+        trades: Array<{
+          id: string;
+          taskId: string | null;
+          rewardId: string | null;
+          amount: number;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+        }>;
+        balance: {
+          soyBalance: number;
+          tofuBalance: number;
+        };
+        serverTime: string;
+      };
+    }>(query, { since: sinceParsed });
+
+    return {
+      tasks: result.sync.tasks.map((t) => ({
+        id: t.id,
+        user_id: "",
+        name: t.name,
+        description: t.description,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+        hidden_until: t.hiddenUntil,
+        due_by: t.dueBy,
+        min_daily_frequency: t.minDailyFrequency,
+        difficulty_rank: t.difficultyRank,
+        completed_at: t.completedAt,
+        habit: t.habit,
+      })),
+      trades: result.sync.trades.map((t) => ({
+        id: t.id,
+        user_id: "",
+        task_id: t.taskId,
+        reward_id: t.rewardId,
+        amount: t.amount,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      balance: {
+        soy_balance: result.sync.balance.soyBalance,
+        tofu_balance: result.sync.balance.tofuBalance,
+      },
+      server_time: result.sync.serverTime,
+    };
+  }
+
+  async syncPush(input: SyncInput): Promise<SyncResponse> {
+    const mutation = `
+      mutation Sync($input: SyncInput!) {
+        sync(input: $input) {
+          tasks {
+            id
+            name
+            description
+            createdAt
+            updatedAt
+            deletedAt
+            hiddenUntil
+            dueBy
+            minDailyFrequency
+            difficultyRank
+            completedAt
+            habit
+          }
+          trades {
+            id
+            taskId
+            rewardId
+            amount
+            createdAt
+            updatedAt
+            deletedAt
+          }
+          balance {
+            soyBalance
+            tofuBalance
+          }
+          serverTime
+        }
+      }
+    `;
+
+    const toNaiveDateTime = (date: string | null): string | null =>
+      date ? date.replace(/Z$/, "") : null;
+
+    // Transform tasks to GraphQL input format
+    const taskInputs: SyncTaskInput[] | undefined = input.tasks?.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      createdAt: toNaiveDateTime(t.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(t.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(t.deletedAt),
+      hiddenUntil: toNaiveDateTime(t.hiddenUntil),
+      dueBy: toNaiveDateTime(t.dueBy),
+      minDailyFrequency: t.minDailyFrequency,
+      difficultyRank: t.difficultyRank,
+      completedAt: toNaiveDateTime(t.completedAt),
+      habit: t.habit,
+    }));
+
+    // Transform trades to GraphQL input format
+    const tradeInputs: SyncTradeInput[] | undefined = input.trades?.map(
+      (t) => ({
+        id: t.id,
+        taskId: t.taskId,
+        rewardId: t.rewardId,
+        amount: t.amount,
+        createdAt: toNaiveDateTime(t.createdAt) ?? "",
+        deletedAt: toNaiveDateTime(t.deletedAt),
+      }),
+    );
+
+    const result = await this.graphqlRequest<{
+      sync: {
+        tasks: Array<{
+          id: string;
+          name: string;
+          description: string;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+          hiddenUntil: string | null;
+          dueBy: string | null;
+          minDailyFrequency: number | null;
+          difficultyRank: string | null;
+          completedAt: string | null;
+          habit: boolean;
+        }>;
+        trades: Array<{
+          id: string;
+          taskId: string | null;
+          rewardId: string | null;
+          amount: number;
+          createdAt: string;
+          updatedAt: string;
+          deletedAt: string | null;
+        }>;
+        balance: {
+          soyBalance: number;
+          tofuBalance: number;
+        };
+        serverTime: string;
+      };
+    }>(mutation, {
+      input: {
+        tasks: taskInputs,
+        trades: tradeInputs,
+      },
+    });
+
+    return {
+      tasks: result.sync.tasks.map((t) => ({
+        id: t.id,
+        user_id: "",
+        name: t.name,
+        description: t.description,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+        hidden_until: t.hiddenUntil,
+        due_by: t.dueBy,
+        min_daily_frequency: t.minDailyFrequency,
+        difficulty_rank: t.difficultyRank,
+        completed_at: t.completedAt,
+        habit: t.habit,
+      })),
+      trades: result.sync.trades.map((t) => ({
+        id: t.id,
+        user_id: "",
+        task_id: t.taskId,
+        reward_id: t.rewardId,
+        amount: t.amount,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      balance: {
+        soy_balance: result.sync.balance.soyBalance,
+        tofu_balance: result.sync.balance.tofuBalance,
+      },
+      server_time: result.sync.serverTime,
     };
   }
 }

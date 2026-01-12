@@ -23,8 +23,8 @@ idle → syncing → synced
 - Silent failure if offline or already syncing
 
 ### 2. Full Sync Reset Timer (every 24 hours)
-- Clears `LAST_FULL_SYNC_KEY` from storage
-- Next sync will see no full sync record → forces full sync
+- Clears `lastSyncTime` from state
+- Next sync will force full sync
 
 ### 3. Debounced Push (2-second debounce)
 - Triggered by `notifyChange()` after local create/update/delete
@@ -35,7 +35,7 @@ idle → syncing → synced
 - `syncAndWait()` - sync and return promise when complete
 
 ### 5. Login Sync
-- Clears `lastSyncTime` if user changed
+- Clears sync state if user changed
 - Forces full pull on authentication
 
 ### 6. Tab/App Resume
@@ -50,44 +50,43 @@ idle → syncing → synced
 When `executeSync()` runs:
 
 ### Step 0: Check If Full Sync Needed
-1. Read `LAST_FULL_SYNC_KEY` from storage
+1. Read sync state from storage
 2. Clear `lastSyncTime` (forcing full sync) if ANY of:
-   - `LAST_FULL_SYNC_KEY` doesn't exist (first sync ever)
+   - `lastSyncTime` doesn't exist (first sync ever)
    - More than 24 hours since last full sync
-   - User switched accounts (handled in SyncContext)
-   - 24-hour reset timer fired (clears `LAST_FULL_SYNC_KEY`)
+   - User switched accounts
 
 ### Step 1: Pull Remote Changes
-1. Call `api.pullTasks(lastSync)`
-2. If `lastSync === null` → server returns ALL tasks
-3. If `lastSync !== null` → server returns only tasks modified since
+1. Call `api.sync(lastSyncTime)`
+2. If `lastSyncTime === null` → server returns ALL tasks and trades
+3. If `lastSyncTime !== null` → server returns only entities modified since
 
-### Step 2: Merge Server Tasks
-1. If `pullResponse.tasks.length > 0`:
-   - Call `taskStore.mergeTasks(pullResponse.tasks)`
-   - Updates in-memory store
-   - Persists to AsyncStorage/localStorage
-   - Notifies React subscribers
+### Step 2: Merge Server Data
+1. If tasks returned → `taskStore.mergeTasks(response.tasks)`
+2. If trades returned → `tradeStore.mergeTrades(response.trades)`
+3. Update balance from response
 
-### Step 3: Push Dirty Local Tasks
-1. Get dirty task IDs from `getDirtyTaskIds()`
-2. Get task objects from `taskStore.getDirtyTasks(dirtyIds)`
-3. If dirty tasks exist:
-   - Call `api.pushTasks(dirtyTasks)`
+### Step 3: Push Dirty Local Entities
+1. Get dirty IDs from sync state (`dirtyTaskIds`, `dirtyTradeIds`)
+2. Build push payload with dirty tasks and trades
+3. If any dirty entities exist:
+   - Call `api.syncPush(input)` with unified payload
+   - Server processes in transaction (tasks first, then trades)
    - Receive server-resolved versions
-   - Merge resolved tasks back into store
+   - Merge resolved entities back into stores
 
 ### Step 4: Clean Up Local State
-1. Call `clearAllDirtyFlags()`
+1. Call `clearAllDirty()` to reset dirty tracking
 2. Call `taskStore.purgeDeletedTasks()`
+3. Call `tradeStore.purgeDeletedTrades()`
 
 ### Step 5: Update Sync Timestamp
-1. Store `pullResponse.server_time` as `lastSyncTime`
+1. Store `response.serverTime` as `lastSyncTime`
 2. Set status to `"synced"`
 3. Trigger `onSyncComplete` callback
 
 ### Step 6: Record Full Sync
-1. If this was a full sync → record timestamp in `LAST_FULL_SYNC_KEY`
+1. If this was a full sync → record timestamp in `lastFullSyncTime`
 
 ---
 
@@ -96,8 +95,8 @@ When `executeSync()` runs:
 When `executeBackgroundPull()` runs:
 
 1. Skip if already syncing
-2. Call `api.pullTasks(lastSync)`
-3. If tasks returned → merge into store
+2. Call `api.sync(lastSyncTime)`
+3. If entities returned → merge into stores
 4. Update `lastSyncTime`
 5. Silent failure on error (no status change)
 
@@ -105,12 +104,12 @@ When `executeBackgroundPull()` runs:
 
 ## Dirty Flag Flow
 
-1. User modifies task locally
-2. Task ID added to `tofustash_dirty_tasks` set
+1. User modifies task or trade locally
+2. Entity ID added to appropriate dirty set in sync state
 3. `notifyChange()` called → debounce timer starts
 4. After 2s idle → `executeSync()` runs
-5. Dirty tasks pushed to server
-6. `clearAllDirtyFlags()` removes all dirty markers
+5. Dirty entities pushed to server atomically
+6. `clearAllDirty()` removes all dirty markers
 
 ---
 
@@ -118,34 +117,75 @@ When `executeBackgroundPull()` runs:
 
 | Key | Contents |
 |-----|----------|
-| `tofustash_dirty_tasks` | JSON array of modified task IDs |
-| `tofustash_last_sync` | ISO datetime of last sync |
-| `tofustash_last_full_sync` | Milliseconds timestamp of last full sync |
+| `tofustash_sync_state` | JSON object with sync state (see below) |
 | `tofustash_tasks` | Complete task data |
+| `tofustash_trades` | Complete trade data |
+
+### Sync State Structure
+
+```typescript
+interface SyncState {
+  lastSyncTime: string | null;      // ISO datetime of last sync
+  lastFullSyncTime: number | null;  // Milliseconds timestamp
+  dirtyTaskIds: string[];           // Task IDs pending push
+  dirtyTradeIds: string[];          // Trade IDs pending push
+}
+```
 
 ---
 
 ## GraphQL Endpoints
 
-### Pull Query
+### Unified Pull Query
 ```graphql
-query SyncPull($since: NaiveDateTime) {
-  syncPull(since: $since) {
-    tasks { id, name, ... }
-    server_time
+query Sync($since: NaiveDateTime) {
+  sync(since: $since) {
+    tasks { id, name, description, ... }
+    trades { id, taskId, rewardId, amount, ... }
+    balance { soyBalance, tofuBalance }
+    serverTime
   }
 }
 ```
 
-### Push Mutation
+### Unified Push Mutation
 ```graphql
-mutation SyncPush($tasks: [SyncTaskInput!]!) {
-  syncPush(tasks: $tasks) {
+mutation Sync($input: SyncInput!) {
+  sync(input: $input) {
     tasks { id, name, ... }
-    server_time
+    trades { id, taskId, ... }
+    balance { soyBalance, tofuBalance }
+    serverTime
   }
 }
 ```
+
+### SyncInput Structure
+```graphql
+input SyncInput {
+  tasks: [SyncTaskInput!]
+  trades: [SyncTradeInput!]
+}
+```
+
+---
+
+## Unified Sync Benefits
+
+### Atomic Transactions
+- All entities pushed in single database transaction
+- Partial failures roll back everything
+- No inconsistent state between entity types
+
+### Dependency Ordering
+- Server processes tasks before trades
+- Trades can reference tasks created in same push
+- Foreign key constraints always satisfied
+
+### Simplified Client Logic
+- Single sync timestamp for all entity types
+- One API call for push, one for pull
+- Consolidated dirty tracking in single state object
 
 ---
 
@@ -153,21 +193,21 @@ mutation SyncPush($tasks: [SyncTaskInput!]!) {
 
 ### Incremental Sync
 - `lastSyncTime` exists
-- Server returns only tasks modified since that timestamp
+- Server returns only entities modified since that timestamp
 - Fast, minimal data transfer
 
 ### Full Sync
 - `lastSyncTime` is null
-- Server returns ALL tasks for the user
-- `mergeTasks()` adds any missing entries to local store
+- Server returns ALL tasks and trades for the user
+- `mergeTasks()`/`mergeTrades()` adds any missing entries to local store
 - Existing local entries are updated with server data
 
-**Recovery scenario:** If local `tofustash_tasks` JSON is missing entries (e.g., cleared storage, corrupted data, new device), a full sync restores them:
+**Recovery scenario:** If local storage is missing entries (e.g., cleared storage, corrupted data, new device), a full sync restores them:
 
-1. Server returns complete task list
-2. `mergeTasks()` iterates each server task
-3. Tasks not in local `allIds` are added
-4. Tasks already local are updated
+1. Server returns complete entity lists
+2. Merge functions iterate each server entity
+3. Entities not in local store are added
+4. Entities already local are updated
 5. Result: local store matches server
 
 ---
@@ -246,7 +286,7 @@ The sync endpoint must accept data from old clients that don't send the new fiel
 In the GraphQL resolver or service layer, normalize input before validation:
 
 ```rust
-// In sync_tasks mutation handler
+// In sync mutation handler
 fn normalize_task_input(input: SyncTaskInput) -> SyncTaskInput {
     // Infer habit from min_daily_frequency if not provided
     let habit = input.habit.unwrap_or_else(|| input.min_daily_frequency.is_some());
