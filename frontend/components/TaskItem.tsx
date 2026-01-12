@@ -2,6 +2,8 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Task } from "@/lib/task";
 import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
+import type { DisplayMode } from "@/lib/taskSorting";
+import { formatShortDate } from "@/lib/taskSorting";
 
 interface TaskItemProps {
   task: Task;
@@ -9,6 +11,7 @@ interface TaskItemProps {
   onComplete?: (task: Task) => void;
   onSetDifficulty?: (task: Task) => void;
   isDifficultyView?: boolean;
+  displayMode?: DisplayMode;
 }
 
 function formatDate(dateString: string | null): string {
@@ -21,34 +24,102 @@ function formatDate(dateString: string | null): string {
   });
 }
 
-function PriceDisplay({ taskId }: { taskId: string }) {
+
+function InfoDisplay({
+  task,
+  displayMode,
+}: {
+  task: Task;
+  displayMode: DisplayMode;
+}) {
   const priceContext = usePriceUpdateOptional();
-  if (!priceContext) return null;
 
-  const priceData = priceContext.prices[taskId];
-  if (!priceData) return null;
+  if (displayMode === "price") {
+    if (!priceContext) return null;
+    const priceData = priceContext.prices[task.id];
+    if (!priceData) return null;
 
-  const { current, previous } = priceData;
-  const isUp = current > previous;
-  const isDown = current < previous;
+    const { current, previous } = priceData;
+    const isUp = current > previous;
+    const isDown = current < previous;
 
-  return (
-    <View className="flex-row items-center bg-amber-50 border border-amber-200 px-2 py-1 rounded">
-      {isUp && (
-        <Ionicons name="arrow-up" size={12} color="#22c55e" />
-      )}
-      {isDown && (
-        <Ionicons name="arrow-down" size={12} color="#ef4444" />
-      )}
-      <Text
-        className={`text-xs font-medium ml-0.5 ${
-          isUp ? "text-green-600" : isDown ? "text-red-600" : "text-amber-700"
-        }`}
-      >
-        {current} soy (was {previous})
-      </Text>
-    </View>
-  );
+    return (
+      <View className="flex-row items-center bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+        {isUp && <Ionicons name="arrow-up" size={12} color="#22c55e" />}
+        {isDown && <Ionicons name="arrow-down" size={12} color="#ef4444" />}
+        <Text
+          className={`text-xs font-medium ml-0.5 ${
+            isUp ? "text-green-600" : isDown ? "text-red-600" : "text-amber-700"
+          }`}
+        >
+          {current} soy (was {previous})
+        </Text>
+      </View>
+    );
+  }
+
+  if (displayMode === "frequency") {
+    if (task.min_daily_frequency == null) {
+      return (
+        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+          <Text className="text-xs font-medium text-gray-500">no frequency</Text>
+        </View>
+      );
+    }
+    return (
+      <View className="flex-row items-center bg-green-50 border border-green-200 px-2 py-1 rounded">
+        <Text className="text-xs font-medium text-green-700">
+          {task.min_daily_frequency} /day
+        </Text>
+      </View>
+    );
+  }
+
+  if (displayMode === "created_at") {
+    return (
+      <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+        <Text className="text-xs font-medium text-gray-700">
+          {formatShortDate(task.created_at)}
+        </Text>
+      </View>
+    );
+  }
+
+  if (displayMode === "due_by") {
+    if (!task.due_by) {
+      return (
+        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+          <Text className="text-xs font-medium text-gray-500">no due date</Text>
+        </View>
+      );
+    }
+    return (
+      <View className="flex-row items-center bg-blue-50 border border-blue-200 px-2 py-1 rounded">
+        <Text className="text-xs font-medium text-blue-700">
+          Due: {formatShortDate(task.due_by)}
+        </Text>
+      </View>
+    );
+  }
+
+  if (displayMode === "difficulty") {
+    if (task.difficulty_rank == null) {
+      return (
+        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
+          <Text className="text-xs font-medium text-gray-500">not set</Text>
+        </View>
+      );
+    }
+    return (
+      <View className="flex-row items-center bg-purple-50 border border-purple-200 px-2 py-1 rounded">
+        <Text className="text-xs font-medium text-purple-700 font-mono">
+          {task.difficulty_rank}
+        </Text>
+      </View>
+    );
+  }
+
+  return null;
 }
 
 export function TaskItem({
@@ -57,6 +128,7 @@ export function TaskItem({
   onComplete,
   onSetDifficulty,
   isDifficultyView,
+  displayMode = "price",
 }: TaskItemProps) {
   const hasDueBy = task.due_by !== null;
   const hasHiddenUntil = task.hidden_until !== null;
@@ -82,7 +154,7 @@ export function TaskItem({
               {task.name}
             </Text>
             <View className="flex-row items-center gap-2 ml-2">
-              <PriceDisplay taskId={task.id} />
+              <InfoDisplay task={task} displayMode={displayMode} />
               {isUnrankedInDifficultyView && (
                 <View className="bg-gray-200 px-2 py-1 rounded">
                   <Text className="text-gray-600 text-xs font-medium">

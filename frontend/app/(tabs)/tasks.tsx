@@ -9,10 +9,13 @@ import { TaskForm } from "@/components/TaskForm";
 import { DifficultyRanker } from "@/components/DifficultyRanker";
 import { SyncStatusIcon } from "@/components/SyncStatusIcon";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
+import { TaskTabs } from "@/components/TaskTabs";
+import { SortDropdown } from "@/components/SortDropdown";
 import type { Task, TaskInput } from "@/lib/task";
 import { isHabit } from "@/lib/task";
-
-type SortMode = "newest" | "difficulty";
+import { type TabType, SORT_OPTIONS } from "@/lib/sortOptions";
+import { sortTasks, getDisplayMode } from "@/lib/taskSorting";
+import { useSortPreference } from "@/lib/store/sortPreferencesStore";
 
 export default function Tasks() {
   const {
@@ -30,23 +33,29 @@ export default function Tasks() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isRankingVisible, setIsRankingVisible] = useState(false);
   const [taskToRank, setTaskToRank] = useState<Task | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [activeTab, setActiveTab] = useState<TabType>("both");
+  const [sortKey, setSortKey] = useSortPreference(activeTab);
 
   // Price update context
-  const { updatePrices } = usePriceUpdate();
+  const { updatePrices, prices } = usePriceUpdate();
 
-  // Filter out completed non-habit tasks
-  const activeTasks = useMemo(
-    () => tasks.filter((t) => !t.completed_at || isHabit(t)),
-    [tasks],
-  );
-  const activeRankedTasks = useMemo(
-    () => rankedTasks.filter((t) => !t.completed_at || isHabit(t)),
-    [rankedTasks],
-  );
+  // Filter out completed non-habit tasks, then filter by tab and sort
+  const displayTasks = useMemo(() => {
+    // First filter out completed non-habits
+    let filtered = tasks.filter((t) => !t.completed_at || isHabit(t));
 
-  // Use sorted tasks based on mode
-  const displayTasks = sortMode === "difficulty" ? activeRankedTasks : activeTasks;
+    // Then filter by tab
+    if (activeTab === "habit") {
+      filtered = filtered.filter((t) => t.habit);
+    } else if (activeTab === "todo") {
+      filtered = filtered.filter((t) => !t.habit);
+    }
+
+    // Finally sort
+    return sortTasks(filtered, sortKey, prices);
+  }, [tasks, activeTab, sortKey, prices]);
+
+  const displayMode = getDisplayMode(sortKey);
 
   // Update prices when tasks change
   useEffect(() => {
@@ -117,14 +126,6 @@ export default function Tasks() {
     setTaskToRank(null);
   }, []);
 
-  const handleSetDifficulty = useCallback(
-    (task: Task) => {
-      setTaskToRank(task);
-      setIsRankingVisible(true);
-    },
-    [],
-  );
-
   const handleComplete = useCallback(
     async (task: Task) => {
       await completeTask(task);
@@ -146,11 +147,10 @@ export default function Tasks() {
         task={item}
         onPress={handleTaskPress}
         onComplete={handleComplete}
-        onSetDifficulty={sortMode === "difficulty" ? handleSetDifficulty : undefined}
-        isDifficultyView={sortMode === "difficulty"}
+        displayMode={displayMode}
       />
     ),
-    [handleTaskPress, handleComplete, handleSetDifficulty, sortMode],
+    [handleTaskPress, handleComplete, displayMode],
   );
 
   const keyExtractor = useCallback((item: Task) => item.id, []);
@@ -166,48 +166,24 @@ export default function Tasks() {
               <SyncStatusIcon />
             </View>
           </View>
-          <View className="flex-row gap-2">
-            <Pressable
-              onPress={() => setSortMode("newest")}
-              className={`flex-1 py-2 px-3 rounded-lg items-center border ${
-                sortMode === "newest"
-                  ? "bg-blue-500 border-blue-500"
-                  : "bg-white border-gray-300"
-              }`}
-            >
-              <Text
-                className={`font-medium text-sm ${
-                  sortMode === "newest" ? "text-white" : "text-gray-700"
-                }`}
-              >
-                Newest
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setSortMode("difficulty")}
-              className={`flex-1 py-2 px-3 rounded-lg items-center border ${
-                sortMode === "difficulty"
-                  ? "bg-orange-500 border-orange-500"
-                  : "bg-white border-gray-300"
-              }`}
-            >
-              <Text
-                className={`font-medium text-sm ${
-                  sortMode === "difficulty" ? "text-white" : "text-gray-700"
-                }`}
-              >
-                By Difficulty
-              </Text>
-            </Pressable>
+          <View className="flex-row justify-between items-center">
+            <TaskTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            <SortDropdown
+              options={SORT_OPTIONS[activeTab]}
+              selectedKey={sortKey}
+              onSelect={setSortKey}
+            />
           </View>
         </View>
 
         {displayTasks.length === 0 ? (
           <View className="flex-1 items-center justify-center p-4">
             <Text className="text-gray-500 text-center mb-4">
-              {sortMode === "difficulty"
-                ? "No ranked tasks yet. Create tasks and set their difficulty."
-                : "No tasks yet. Add your first task to get started."}
+              {activeTab === "habit"
+                ? "No habits yet. Add your first habit to get started."
+                : activeTab === "todo"
+                  ? "No todos yet. Add your first todo to get started."
+                  : "No tasks yet. Add your first task to get started."}
             </Text>
           </View>
         ) : (
@@ -215,7 +191,7 @@ export default function Tasks() {
             data={displayTasks}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
-            extraData={sortMode}
+            extraData={{ activeTab, sortKey, displayMode }}
             contentContainerStyle={{ padding: 16 }}
             estimatedItemSize={100}
           />

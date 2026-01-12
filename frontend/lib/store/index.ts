@@ -7,3 +7,7 @@ export {
   useTaskStore,
   useTasksSortedByDifficulty,
 } from "./hooks";
+export {
+  sortPreferencesStore,
+  useSortPreference,
+} from "./sortPreferencesStore";
