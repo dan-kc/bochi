@@ -10,6 +10,16 @@ export const LOCAL_USER_ID = "local-user";
 // ============ Task Normalization ============
 
 function normalizeTask(task: Partial<Task>): Task {
+  // V1 (2025-01): Added habit field with constraints:
+  // - Habits (habit=true): can have min_daily_frequency, cannot have completed_at
+  // - Non-habits (habit=false): cannot have min_daily_frequency, can have completed_at
+  //
+  // For legacy data, enforce constraints by:
+  // 1. If min_daily_frequency exists → must be a habit
+  // 2. If habit → clear completed_at (habits use trades, not completed_at)
+  const habit = task.min_daily_frequency != null ? true : (task.habit ?? false);
+  const completed_at = habit ? null : (task.completed_at ?? null);
+
   return {
     id: task.id ?? "",
     user_id: task.user_id ?? "",
@@ -22,8 +32,8 @@ function normalizeTask(task: Partial<Task>): Task {
     due_by: task.due_by ?? null,
     min_daily_frequency: task.min_daily_frequency ?? null,
     difficulty_rank: task.difficulty_rank ?? null,
-    completed_at: task.completed_at ?? null,
-    habit: task.habit ?? false,
+    completed_at,
+    habit,
   };
 }
 

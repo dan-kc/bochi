@@ -177,3 +177,51 @@ mutation SyncPush($tasks: [SyncTaskInput!]!) {
 - Server-side last-write-wins based on `updated_at`
 - Server returns resolved version after push
 - Client merges server's version back into store
+
+---
+
+## Schema Migration (Local Storage)
+
+Local-first apps can't run server-side migrations on user devices. Instead, schema changes are handled through **normalize functions** that run on every load.
+
+### How It Works
+
+1. Each entity store has a `normalize()` function that transforms raw JSON into complete objects
+2. When data is loaded from storage, `normalize()` fills in missing fields with defaults
+3. **After normalizing, data is persisted back** to storage, migrating it to the current schema
+4. Future loads read already-migrated data
+
+### Adding New Fields
+
+When adding a new field to an entity:
+
+1. Add the field to the TypeScript type
+2. Update the `normalize()` function with backwards-compatible logic
+3. Document the version and migration logic in a comment
+
+```typescript
+function normalizeTask(task: Partial<Task>): Task {
+  // V1 (2025-01): Added habit field. Infer from min_daily_frequency for pre-V1 data.
+  const habit = task.habit ?? (task.min_daily_frequency != null);
+
+  return {
+    // ... other fields ...
+    habit,
+  };
+}
+```
+
+### Key Principles
+
+- **Normalize is idempotent**: Safe to run repeatedly on same data
+- **Write-back on load**: `readStorageSync()` and `readStorageAsync()` persist normalized data
+- **Never remove migration logic**: Users may have years-old cached data
+- **Document versions**: Comment each field with when it was added and how old data is handled
+
+### Migration Flow
+
+```
+App loads → Read JSON from storage → normalize() each item → Write back to storage → Use in app
+```
+
+This ensures users on any app version with any data version will have their local storage migrated to the current schema on first load.

@@ -66,6 +66,10 @@ export class EntityStore<T extends BaseEntity> {
       const data = localStorage.getItem(this.config.storageKey);
       const rawItems: Partial<T>[] = data ? JSON.parse(data) : [];
       const items = rawItems.map(this.config.normalize);
+
+      // Persist normalized data back (migrates old schema to current)
+      localStorage.setItem(this.config.storageKey, JSON.stringify(items));
+
       return this.normalizeState(items);
     }
     return { byId: {}, allIds: [] };
@@ -76,11 +80,19 @@ export class EntityStore<T extends BaseEntity> {
       const data = localStorage.getItem(this.config.storageKey);
       const rawItems: Partial<T>[] = data ? JSON.parse(data) : [];
       const items = rawItems.map(this.config.normalize);
+
+      // Persist normalized data back (migrates old schema to current)
+      localStorage.setItem(this.config.storageKey, JSON.stringify(items));
+
       return this.normalizeState(items);
     } else {
       const data = await AsyncStorage.getItem(this.config.storageKey);
       const rawItems: Partial<T>[] = data ? JSON.parse(data) : [];
       const items = rawItems.map(this.config.normalize);
+
+      // Persist normalized data back (migrates old schema to current)
+      await AsyncStorage.setItem(this.config.storageKey, JSON.stringify(items));
+
       return this.normalizeState(items);
     }
   }
