@@ -180,48 +180,169 @@ mutation SyncPush($tasks: [SyncTaskInput!]!) {
 
 ---
 
-## Schema Migration (Local Storage)
+## Schema Migration Strategy
 
-Local-first apps can't run server-side migrations on user devices. Instead, schema changes are handled through **normalize functions** that run on every load.
+Schema changes in a local-first app require coordination across three layers:
 
-### How It Works
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Schema Change                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        ▼                     ▼                     ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│   Database    │    │    Backend    │    │   Frontend    │
+│  (Flyway)     │    │  (API Input)  │    │ (Local Store) │
+└───────────────┘    └───────────────┘    └───────────────┘
+│                    │                    │
+│ - Add column       │ - Accept old       │ - normalize()
+│ - Set defaults     │   format input     │   transforms
+│ - Add constraints  │ - Transform to     │ - Write-back
+│                    │   new format       │   persists
+└────────────────────┴────────────────────┴─────────────────
+```
 
-1. Each entity store has a `normalize()` function that transforms raw JSON into complete objects
-2. When data is loaded from storage, `normalize()` fills in missing fields with defaults
-3. **After normalizing, data is persisted back** to storage, migrating it to the current schema
+### The Problem
+
+When you add a new field (e.g., `habit` boolean):
+
+1. **Old database rows** - don't have the field
+2. **Old clients** - send data without the field
+3. **Old local storage** - has cached data without the field
+
+All three must handle missing data gracefully.
+
+---
+
+### Layer 1: Database Migration (Flyway)
+
+Run a Flyway migration to add the column with a default value:
+
+```sql
+-- V75__add_habit_to_tasks.sql
+ALTER TABLE tasks ADD COLUMN habit BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Backfill: tasks with min_daily_frequency were habits
+UPDATE tasks SET habit = TRUE WHERE min_daily_frequency IS NOT NULL;
+
+-- Add constraints after backfill
+ALTER TABLE tasks ADD CONSTRAINT habit_no_completed_at
+  CHECK (NOT (habit = TRUE AND completed_at IS NOT NULL));
+ALTER TABLE tasks ADD CONSTRAINT non_habit_no_frequency
+  CHECK (NOT (habit = FALSE AND min_daily_frequency IS NOT NULL));
+```
+
+**Key principle**: Set sensible defaults and backfill existing rows.
+
+---
+
+### Layer 2: Backend API Compatibility
+
+The sync endpoint must accept data from old clients that don't send the new field.
+
+**Strategy: Transform on ingestion, validate after**
+
+In the GraphQL resolver or service layer, normalize input before validation:
+
+```rust
+// In sync_tasks mutation handler
+fn normalize_task_input(input: SyncTaskInput) -> SyncTaskInput {
+    // Infer habit from min_daily_frequency if not provided
+    let habit = input.habit.unwrap_or_else(|| input.min_daily_frequency.is_some());
+
+    // Enforce constraint: habits can't have completed_at
+    let completed_at = if habit { None } else { input.completed_at };
+
+    SyncTaskInput { habit: Some(habit), completed_at, ..input }
+}
+```
+
+**Key principles**:
+- **Lenient on input**: Accept old formats, missing fields
+- **Strict on storage**: Transform to valid current schema before saving
+- **Same logic as frontend**: Backend normalize mirrors frontend normalize
+
+---
+
+### Layer 3: Frontend Local Storage
+
+Local-first apps can't run migrations on user devices. Instead, use **normalize functions** that run on every load.
+
+#### How It Works
+
+1. Each entity store has a `normalize()` function
+2. When data is loaded from storage, `normalize()` fills in missing fields
+3. **After normalizing, data is persisted back** to storage
 4. Future loads read already-migrated data
 
-### Adding New Fields
-
-When adding a new field to an entity:
-
-1. Add the field to the TypeScript type
-2. Update the `normalize()` function with backwards-compatible logic
-3. Document the version and migration logic in a comment
+#### Example
 
 ```typescript
 function normalizeTask(task: Partial<Task>): Task {
-  // V1 (2025-01): Added habit field. Infer from min_daily_frequency for pre-V1 data.
-  const habit = task.habit ?? (task.min_daily_frequency != null);
+  // V1 (2025-01): Added habit field with constraints.
+  // Enforce: min_daily_frequency exists → must be habit
+  // Enforce: habit → clear completed_at
+  const habit = task.min_daily_frequency != null ? true : (task.habit ?? false);
+  const completed_at = habit ? null : (task.completed_at ?? null);
 
   return {
     // ... other fields ...
     habit,
+    completed_at,
   };
 }
 ```
 
-### Key Principles
+#### Key Principles
 
-- **Normalize is idempotent**: Safe to run repeatedly on same data
-- **Write-back on load**: `readStorageSync()` and `readStorageAsync()` persist normalized data
+- **Normalize is idempotent**: Safe to run repeatedly
+- **Write-back on load**: `readStorageSync()` persists normalized data
 - **Never remove migration logic**: Users may have years-old cached data
-- **Document versions**: Comment each field with when it was added and how old data is handled
+- **Enforce constraints**: Don't just fill defaults—fix invalid states
 
-### Migration Flow
+---
 
-```
-App loads → Read JSON from storage → normalize() each item → Write back to storage → Use in app
-```
+### Coordinated Rollout Process
 
-This ensures users on any app version with any data version will have their local storage migrated to the current schema on first load.
+When adding a new field with constraints:
+
+#### Step 1: Database Migration
+- Add column with DEFAULT (no constraint yet)
+- Backfill existing rows
+- Deploy migration
+
+#### Step 2: Backend Update
+- Add field to GraphQL input type (optional)
+- Add normalize/transform logic to accept old format
+- Update validation to enforce constraints
+- Deploy backend
+
+#### Step 3: Frontend Update
+- Add field to TypeScript type
+- Update normalize() with migration logic
+- Deploy frontend (web auto-updates, mobile via app stores)
+
+#### Step 4: Add Database Constraints (optional, later)
+- Once all clients are updated, add strict DB constraints
+- This is optional—backend validation may be sufficient
+
+---
+
+### Deprecation Timeline
+
+For breaking changes that can't be auto-migrated:
+
+1. **Week 0**: Deploy backend that accepts both old and new format
+2. **Week 1-4**: Monitor logs for old format usage
+3. **Week 4+**: Once old format usage drops to ~0%, consider removing support
+4. **Never**: For constraints that can be auto-fixed, keep migration logic forever
+
+---
+
+### Testing Schema Changes
+
+1. **Unit tests**: Test normalize() with old data shapes
+2. **Integration tests**: Test sync endpoint with old client payloads
+3. **Manual test**: Clear local storage, verify full sync works
+4. **Manual test**: Keep old local storage, verify migration works
