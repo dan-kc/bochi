@@ -1,3 +1,9 @@
+Use neverThrow for all error handling on frontend.
+
+# General
+
+the commands to interact with the project like cargo and npm are in @scripts.nix
+
 # Sync email, isPremium
 
 I want to also sync email and isPremium. I want to display both on the settings tab.
@@ -60,4 +66,6 @@ Each trade should look like
 
 |[type][name]     amount | where type is "Bought" or "Sold"
 |tags                    |
+
+
 

@@ -1,4 +1,3 @@
-use crate::graphql::mutations::{CreateRewardInput, CreateTaskInput};
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres, Transaction};
 use url::form_urlencoded;
@@ -531,20 +530,6 @@ pub struct CreateTaskOptions {
     pub difficulty_rank: Option<String>,
     pub habit: bool,
 }
-impl CreateTaskOptions {
-    pub fn new(input: CreateTaskInput, user_id: Uuid) -> Self {
-        Self {
-            user_id,
-            name: input.name,
-            hidden_until: input.hidden_until,
-            due_by: input.due_by,
-            description: input.description,
-            min_daily_frequency: input.min_daily_frequency,
-            difficulty_rank: input.difficulty_rank,
-            habit: input.habit,
-        }
-    }
-}
 
 pub struct CreateTradeWithTaskOptions {
     user_id: Uuid,
@@ -582,17 +567,6 @@ pub struct CreateRewardOptions {
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
-}
-impl CreateRewardOptions {
-    pub fn new(input: CreateRewardInput, user_id: Uuid) -> Self {
-        Self {
-            user_id,
-            name: input.name,
-            hidden_until: input.hidden_until,
-            description: input.description,
-            max_daily_frequency: input.max_daily_frequency,
-        }
-    }
 }
 
 pub struct UpsertTaskOptions {

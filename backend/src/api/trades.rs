@@ -1,0 +1,143 @@
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
+use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use tracing::error;
+use uuid::Uuid;
+
+use crate::{
+    database::{CreateTradeWithRewardOptions, CreateTradeWithTaskOptions},
+    router::{App, AuthenticatedUser},
+};
+
+use super::ApiError;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTradeRequest {
+    pub task_id: Option<String>,
+    pub reward_id: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeResponse {
+    pub id: String,
+    pub amount: i32,
+    pub created_at: NaiveDateTime,
+    pub tradable_item: TradableItem,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TradableItem {
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    // Task fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_by: Option<NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_daily_frequency: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub difficulty_rank: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub habit: Option<bool>,
+    // Reward fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_daily_frequency: Option<f32>,
+}
+
+pub async fn create_trade(
+    State(app): State<App>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(input): Json<CreateTradeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    // Validate: must have exactly one of task_id or reward_id
+    if (input.task_id.is_some() && input.reward_id.is_some())
+        || (input.task_id.is_none() && input.reward_id.is_none())
+    {
+        let msg = "Must have exactly one of either `task_id` or `reward_id`".to_string();
+        return Err(ApiError::Validation(msg));
+    }
+
+    if let Some(task_id_str) = input.task_id {
+        let task_id = task_id_str.parse::<Uuid>().map_err(|_| {
+            ApiError::Validation("Invalid task_id format".to_string())
+        })?;
+
+        let opts = CreateTradeWithTaskOptions::new(user.user_id, task_id, 1000);
+        let trade_row = app.database.create_trade_with_task(opts).await.map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
+        Ok((
+            StatusCode::CREATED,
+            Json(TradeResponse {
+                id: trade_row.id.to_string(),
+                amount: trade_row.amount,
+                created_at: trade_row.created_at,
+                tradable_item: TradableItem {
+                    item_type: "Task".to_string(),
+                    id: trade_row.task_id.to_string(),
+                    name: trade_row.task_name,
+                    description: trade_row.task_description,
+                    created_at: trade_row.task_created_at,
+                    updated_at: trade_row.task_updated_at,
+                    deleted_at: trade_row.task_deleted_at,
+                    hidden_until: trade_row.task_hidden_until,
+                    due_by: trade_row.task_due_by,
+                    min_daily_frequency: trade_row.task_min_daily_frequency,
+                    difficulty_rank: trade_row.task_difficulty_rank,
+                    completed_at: None, // Task completion tracked elsewhere, not on trade creation
+                    habit: Some(trade_row.task_habit),
+                    max_daily_frequency: None,
+                },
+            }),
+        ))
+    } else {
+        let reward_id_str = input.reward_id.unwrap();
+        let reward_id = reward_id_str.parse::<Uuid>().map_err(|_| {
+            ApiError::Validation("Invalid reward_id format".to_string())
+        })?;
+
+        let opts = CreateTradeWithRewardOptions::new(user.user_id, reward_id, 1000);
+        let trade_row = app.database.create_trade_with_reward(opts).await.map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
+        Ok((
+            StatusCode::CREATED,
+            Json(TradeResponse {
+                id: trade_row.id.to_string(),
+                amount: trade_row.amount,
+                created_at: trade_row.created_at,
+                tradable_item: TradableItem {
+                    item_type: "Reward".to_string(),
+                    id: trade_row.reward_id.to_string(),
+                    name: trade_row.reward_name,
+                    description: trade_row.reward_description,
+                    created_at: trade_row.reward_created_at,
+                    updated_at: trade_row.reward_updated_at,
+                    deleted_at: trade_row.reward_deleted_at,
+                    hidden_until: trade_row.reward_hidden_until,
+                    due_by: None,
+                    min_daily_frequency: None,
+                    difficulty_rank: None,
+                    completed_at: None,
+                    habit: None,
+                    max_daily_frequency: trade_row.reward_max_daily_frequency,
+                },
+            }),
+        ))
+    }
+}

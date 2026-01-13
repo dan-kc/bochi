@@ -30,7 +30,7 @@ export default function Tasks() {
     setIsEditing,
   } = useTasks();
 
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isTaskFormVisible, setIsTaskFormVisible] = useState(false);
   const [isRankingVisible, setIsRankingVisible] = useState(false);
   const [taskToRank, setTaskToRank] = useState<Task | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("both");
@@ -65,14 +65,14 @@ export default function Tasks() {
   const handleAddTask = useCallback(() => {
     selectTask(null);
     setIsEditing(false);
-    setIsModalVisible(true);
+    setIsTaskFormVisible(true);
   }, [selectTask, setIsEditing]);
 
   const handleTaskPress = useCallback(
     (task: Task) => {
       selectTask(task);
       setIsEditing(true);
-      setIsModalVisible(true);
+      setIsTaskFormVisible(true);
     },
     [selectTask, setIsEditing],
   );
@@ -81,11 +81,11 @@ export default function Tasks() {
     async (input: TaskInput) => {
       if (selectedTask) {
         await updateTask(selectedTask.id, input);
-        setIsModalVisible(false);
+        setIsTaskFormVisible(false);
         selectTask(null);
       } else {
         const newTask = await createTask(input);
-        setIsModalVisible(false);
+        setIsTaskFormVisible(false);
         selectTask(null);
         // After creating a new task, offer to set difficulty
         if (rankedTasks.length > 0) {
@@ -98,14 +98,14 @@ export default function Tasks() {
   );
 
   const handleCancel = useCallback(() => {
-    setIsModalVisible(false);
+    setIsTaskFormVisible(false);
     selectTask(null);
   }, [selectTask]);
 
   const handleDelete = useCallback(async () => {
     if (selectedTask) {
       await deleteTask(selectedTask.id);
-      setIsModalVisible(false);
+      setIsTaskFormVisible(false);
       selectTask(null);
     }
   }, [selectedTask, deleteTask, selectTask]);
@@ -135,7 +135,7 @@ export default function Tasks() {
 
   const handleRerank = useCallback(() => {
     if (selectedTask) {
-      setIsModalVisible(false);
+      setIsTaskFormVisible(false);
       setTaskToRank(selectedTask);
       setIsRankingVisible(true);
     }
@@ -207,7 +207,7 @@ export default function Tasks() {
         </View>
 
         <Modal
-          visible={isModalVisible}
+          visible={isTaskFormVisible}
           animationType="slide"
           presentationStyle="pageSheet"
           onRequestClose={handleCancel}

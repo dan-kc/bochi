@@ -1,12 +1,6 @@
-use crate::{
-    database,
-    graphql::{mutations::MutationRoot, queries::QueryRoot},
-    routes,
-    security::jwt::JWTManager,
-};
-use async_graphql::{EmptySubscription, Schema};
+use crate::{api, database, routes, security::jwt::JWTManager};
 use axum::{
-    extract::{Extension, Request, State},
+    extract::{Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
@@ -16,8 +10,7 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{info, Level};
 use uuid::Uuid;
 
-/// Stuff we need in every route and all middleware. This is seperate to what we need in gql
-/// resolvers.
+/// Stuff we need in every route and all middleware.
 #[derive(Clone)]
 pub struct App {
     pub jwt_manager: JWTManager,
@@ -35,17 +28,9 @@ impl App {
 pub async fn router() -> axum::Router {
     let database = database::Database::new().await;
     let jwt_manager = JWTManager::new();
-    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(database.clone())
-        .data(jwt_manager.clone())
-        .finish();
     let app = App::new(jwt_manager, database);
 
     info!("connected to db");
-
-    let graphql_middleware_stack = tower::ServiceBuilder::new()
-        .layer(axum::middleware::from_fn_with_state(app.clone(), auth))
-        .layer(Extension(schema));
 
     let auth_router = axum::Router::new()
         .route("/register", post(routes::register))
@@ -54,6 +39,18 @@ pub async fn router() -> axum::Router {
         .route("/refresh-tokens", post(routes::refresh_tokens))
         .route("/anonymous", post(routes::anonymous))
         .route("/claim", post(routes::claim));
+
+    // REST API routes (require authentication)
+    let api_router = axum::Router::new()
+        .route("/balance", get(api::balance::get_balance))
+        .route("/tasks", post(api::tasks::create_task))
+        .route("/rewards", post(api::rewards::create_reward))
+        .route("/trades", post(api::trades::create_trade))
+        .route(
+            "/sync",
+            get(api::sync::get_sync).post(api::sync::post_sync),
+        )
+        .layer(axum::middleware::from_fn_with_state(app.clone(), auth));
 
     let cors = CorsLayer::new()
         .allow_origin(
@@ -84,11 +81,8 @@ pub async fn router() -> axum::Router {
 
     axum::Router::new()
         .route("/health", get(routes::health))
-        .route(
-            "/graphql",
-            post(routes::graphql).layer(graphql_middleware_stack),
-        )
         .nest("/auth", auth_router)
+        .nest("/api", api_router)
         .layer(cors)
         .layer(
             // This will make all routes implicitly have a:

@@ -1,6 +1,6 @@
 use tracing::info;
+mod api;
 mod database;
-mod graphql;
 mod observability;
 mod router;
 mod routes;

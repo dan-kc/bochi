@@ -2,22 +2,18 @@ use std::fmt::Display;
 use std::sync::OnceLock;
 
 use crate::{
-    graphql::{mutations::MutationRoot, queries::QueryRoot},
-    router::{App, AuthenticatedUser},
+    router::App,
     security::{self, jwt::create_random_string, parse_refresh_token},
 };
-use async_graphql::{EmptySubscription, Schema};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     debug_handler,
     extract::State,
     http::{header::SET_COOKIE, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    Extension, Json,
+    Json,
 };
 use convert_case::Casing;
 use regex::Regex;
-use tracing::info;
 
 /// Create a secure HttpOnly cookie for auth tokens
 fn create_auth_cookie(name: &str, value: &str, max_age_seconds: i64) -> HeaderValue {
@@ -368,46 +364,6 @@ pub async fn health() -> Response {
     let health = Health { healthy: true };
 
     (StatusCode::OK, Json(health)).into_response()
-}
-
-pub type ServiceSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
-
-#[debug_handler]
-pub async fn graphql(
-    Extension(schema): Extension<ServiceSchema>,
-    Extension(auth_status): Extension<AuthenticatedUser>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
-    let mut inner_req = req.into_inner();
-
-    // Try to get operation name from request, otherwise parse the query
-    let operation_name = inner_req
-        .operation_name
-        .clone()
-        .or_else(|| {
-            inner_req.parsed_query().ok().and_then(|doc| {
-                doc.operations.iter().next().and_then(|(_, op)| {
-                    let op_type = match op.node.ty {
-                        async_graphql::parser::types::OperationType::Query => "query",
-                        async_graphql::parser::types::OperationType::Mutation => "mutation",
-                        async_graphql::parser::types::OperationType::Subscription => "subscription",
-                    };
-                    // Get the first field name from the selection set
-                    op.node.selection_set.node.items.first().and_then(|sel| {
-                        if let async_graphql::parser::types::Selection::Field(field) = &sel.node {
-                            Some(format!("{}:{}", op_type, field.node.name.node))
-                        } else {
-                            None
-                        }
-                    })
-                })
-            })
-        })
-        .unwrap_or_else(|| "unknown".to_string());
-
-    info!(graphql.operation_name = %operation_name, "GraphQL operation");
-
-    schema.execute(inner_req.data(auth_status)).await.into()
 }
 
 #[derive(serde::Deserialize)]
