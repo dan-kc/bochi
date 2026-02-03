@@ -3,10 +3,10 @@ import { normalizeTrade } from "./tradeStore";
 import type { Trade } from "../trade";
 
 describe("normalizeTrade", () => {
-  describe("migration from old schemas", () => {
-    test("handles minimal data (only id and amount)", () => {
-      const oldData = { id: "1", amount: 100 };
-      const result = normalizeTrade(oldData);
+  describe("providing defaults for missing fields", () => {
+    test("provides defaults for minimal data", () => {
+      const data = { id: "1", amount: 100 };
+      const result = normalizeTrade(data);
 
       expect(result.id).toBe("1");
       expect(result.amount).toBe(100);
@@ -16,34 +16,24 @@ describe("normalizeTrade", () => {
       expect(result.deleted_at).toBeNull();
     });
 
-    test("handles missing habit_id field (older trade format)", () => {
-      const oldData = {
-        id: "1",
-        user_id: "u1",
-        amount: 50,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      };
-      const result = normalizeTrade(oldData);
+    test("generates timestamps when missing", () => {
+      const data = { id: "1", amount: 50 };
+      const before = new Date().toISOString();
+      const result = normalizeTrade(data);
+      const after = new Date().toISOString();
 
-      expect(result.habit_id).toBeNull();
-      expect(result.reward_id).toBeNull();
+      expect(new Date(result.created_at).toISOString()).toBe(result.created_at);
+      expect(new Date(result.updated_at).toISOString()).toBe(result.updated_at);
+      expect(result.created_at >= before).toBe(true);
+      expect(result.created_at <= after).toBe(true);
     });
 
-    test("handles missing reward_id field", () => {
-      const oldData = {
-        id: "1",
-        user_id: "u1",
-        habit_id: "habit-1",
-        amount: 25,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-        deleted_at: null,
-      };
-      const result = normalizeTrade(oldData);
+    test("handles empty object", () => {
+      const result = normalizeTrade({});
 
-      expect(result.reward_id).toBeNull();
-      expect(result.habit_id).toBe("habit-1");
+      expect(result.id).toBe("");
+      expect(result.user_id).toBe("");
+      expect(result.amount).toBe(0);
     });
   });
 
@@ -70,7 +60,7 @@ describe("normalizeTrade", () => {
         user_id: "u1",
         habit_id: null,
         reward_id: "reward-chocolate",
-        amount: -50, // spending
+        amount: -50,
         created_at: "2024-01-01T00:00:00Z",
         updated_at: "2024-01-01T00:00:00Z",
         deleted_at: null,
@@ -93,7 +83,7 @@ describe("normalizeTrade", () => {
       expect(result.deleted_at).toBe("2024-01-15T00:00:00Z");
     });
 
-    test("preserves zero amount correctly", () => {
+    test("preserves zero amount", () => {
       const data = { id: "1", amount: 0 };
       const result = normalizeTrade(data);
 
@@ -105,47 +95,6 @@ describe("normalizeTrade", () => {
       const result = normalizeTrade(data);
 
       expect(result.amount).toBe(-100);
-    });
-  });
-
-  describe("edge cases", () => {
-    test("handles empty object", () => {
-      const result = normalizeTrade({});
-
-      expect(result.id).toBe("");
-      expect(result.user_id).toBe("");
-      expect(result.amount).toBe(0);
-    });
-
-    test("generates timestamps for created_at and updated_at when missing", () => {
-      const data = { id: "1", amount: 50 };
-      const before = new Date().toISOString();
-      const result = normalizeTrade(data);
-      const after = new Date().toISOString();
-
-      // Timestamps should be valid ISO strings
-      expect(new Date(result.created_at).toISOString()).toBe(result.created_at);
-      expect(new Date(result.updated_at).toISOString()).toBe(result.updated_at);
-
-      // Should be approximately now
-      expect(result.created_at >= before).toBe(true);
-      expect(result.created_at <= after).toBe(true);
-    });
-
-    test("handles unknown extra fields gracefully", () => {
-      const dataWithExtra = {
-        id: "1",
-        amount: 25,
-        task_id: "old-field-name", // hypothetical old field
-        legacyData: { foo: "bar" },
-      } as Partial<Trade>;
-      const result = normalizeTrade(dataWithExtra);
-
-      expect(result.id).toBe("1");
-      expect(result.amount).toBe(25);
-      // Extra fields should not appear in result
-      expect("task_id" in result).toBe(false);
-      expect("legacyData" in result).toBe(false);
     });
   });
 });

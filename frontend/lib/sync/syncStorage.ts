@@ -46,8 +46,7 @@ export function getDefaultSyncState(): SyncState {
 }
 
 /**
- * Parse and migrate sync state from raw JSON string.
- * Handles migrations from older schema versions.
+ * Parse sync state from raw JSON string.
  * Exported for testing.
  */
 export function parseSyncState(data: string | null): SyncState {
@@ -55,17 +54,7 @@ export function parseSyncState(data: string | null): SyncState {
     return getDefaultSyncState();
   }
   try {
-    const parsed = JSON.parse(data) as SyncState;
-    // Migrate old 'tasks' key to 'habits' if present
-    const dirtyWithLegacy = parsed.dirty as unknown as { tasks?: string[]; habits?: string[]; trades?: string[] };
-    if (dirtyWithLegacy.tasks) {
-      parsed.dirty.habits = dirtyWithLegacy.tasks;
-      delete dirtyWithLegacy.tasks;
-    }
-    // Ensure dirty arrays exist (migration safety)
-    parsed.dirty.habits = parsed.dirty.habits ?? [];
-    parsed.dirty.trades = parsed.dirty.trades ?? [];
-    return parsed;
+    return JSON.parse(data) as SyncState;
   } catch {
     return getDefaultSyncState();
   }
@@ -176,25 +165,6 @@ export async function recordFullSyncCompleted(): Promise<void> {
  */
 export async function clearFullSyncTimestamp(): Promise<void> {
   await removeItem(LAST_FULL_SYNC_KEY);
-}
-
-// ============ Cleanup old storage keys ============
-
-/**
- * Remove old storage keys from previous sync implementation.
- * Call this on app start to clean up.
- */
-export async function cleanupOldSyncStorage(): Promise<void> {
-  const oldKeys = [
-    "tofustash_last_sync",
-    "tofustash_trade_last_sync",
-    "tofustash_dirty_tasks",
-    "tofustash_dirty_trades",
-    "tofustash_tasks", // Old tasks storage key
-  ];
-  for (const key of oldKeys) {
-    await removeItem(key);
-  }
 }
 
 // ============ Habit exports ============

@@ -9,7 +9,6 @@ import {
   checkAndPrepareFullSyncIfNeeded,
   recordFullSyncCompleted,
   clearFullSyncTimestamp,
-  cleanupOldSyncStorage,
 } from "./syncStorage";
 import type { SyncCallbacks, SyncInput, SyncHabitInput, SyncTradeInput } from "./types";
 
@@ -30,8 +29,6 @@ export class SyncService {
     this.userId = userId;
     this.startBackgroundSync();
     this.startFullSyncResetTimer();
-    // Clean up old storage keys from previous implementation
-    cleanupOldSyncStorage().catch(console.error);
   }
 
   private startBackgroundSync(): void {

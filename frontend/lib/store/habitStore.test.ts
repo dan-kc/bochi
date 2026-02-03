@@ -3,10 +3,10 @@ import { normalizeHabit } from "./habitStore";
 import type { Habit } from "../habit";
 
 describe("normalizeHabit", () => {
-  describe("migration from old schemas", () => {
-    test("handles minimal data (v1 migration - only id and name)", () => {
-      const oldData = { id: "1", name: "Exercise" };
-      const result = normalizeHabit(oldData);
+  describe("providing defaults for missing fields", () => {
+    test("provides defaults for minimal data", () => {
+      const data = { id: "1", name: "Exercise" };
+      const result = normalizeHabit(data);
 
       expect(result.id).toBe("1");
       expect(result.name).toBe("Exercise");
@@ -18,39 +18,24 @@ describe("normalizeHabit", () => {
       expect(result.difficulty_rank).toBeNull();
     });
 
-    test("handles missing hidden_until field (added later)", () => {
-      const oldData = {
-        id: "1",
-        user_id: "u1",
-        name: "Read",
-        description: "Read a book",
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-        deleted_at: null,
-      };
-      const result = normalizeHabit(oldData);
+    test("generates timestamps when missing", () => {
+      const data = { id: "1", name: "New Habit" };
+      const before = new Date().toISOString();
+      const result = normalizeHabit(data);
+      const after = new Date().toISOString();
 
-      expect(result.hidden_until).toBeNull();
-      expect(result.min_daily_frequency).toBeNull();
-      expect(result.difficulty_rank).toBeNull();
+      expect(new Date(result.created_at).toISOString()).toBe(result.created_at);
+      expect(new Date(result.updated_at).toISOString()).toBe(result.updated_at);
+      expect(result.created_at >= before).toBe(true);
+      expect(result.created_at <= after).toBe(true);
     });
 
-    test("handles missing difficulty_rank field", () => {
-      const oldData = {
-        id: "1",
-        user_id: "u1",
-        name: "Meditate",
-        description: "",
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-        deleted_at: null,
-        hidden_until: null,
-        min_daily_frequency: 1,
-      };
-      const result = normalizeHabit(oldData);
+    test("handles empty object", () => {
+      const result = normalizeHabit({});
 
-      expect(result.difficulty_rank).toBeNull();
-      expect(result.min_daily_frequency).toBe(1);
+      expect(result.id).toBe("");
+      expect(result.name).toBe("");
+      expect(result.user_id).toBe("");
     });
   });
 
@@ -85,7 +70,6 @@ describe("normalizeHabit", () => {
     });
 
     test("preserves zero values correctly", () => {
-      // Ensure 0 is not treated as falsy and replaced with default
       const data = {
         id: "1",
         name: "Test",
@@ -93,7 +77,6 @@ describe("normalizeHabit", () => {
       };
       const result = normalizeHabit(data);
 
-      // 0 is falsy, so ?? will use 0 (correct behavior)
       expect(result.min_daily_frequency).toBe(0);
     });
 
@@ -102,46 +85,6 @@ describe("normalizeHabit", () => {
       const result = normalizeHabit(data);
 
       expect(result.name).toBe("");
-    });
-  });
-
-  describe("edge cases", () => {
-    test("handles empty object", () => {
-      const result = normalizeHabit({});
-
-      expect(result.id).toBe("");
-      expect(result.name).toBe("");
-      expect(result.user_id).toBe("");
-    });
-
-    test("generates timestamps for created_at and updated_at when missing", () => {
-      const data = { id: "1", name: "New Habit" };
-      const before = new Date().toISOString();
-      const result = normalizeHabit(data);
-      const after = new Date().toISOString();
-
-      // Timestamps should be valid ISO strings
-      expect(new Date(result.created_at).toISOString()).toBe(result.created_at);
-      expect(new Date(result.updated_at).toISOString()).toBe(result.updated_at);
-
-      // Should be approximately now
-      expect(result.created_at >= before).toBe(true);
-      expect(result.created_at <= after).toBe(true);
-    });
-
-    test("handles unknown extra fields gracefully", () => {
-      const dataWithExtra = {
-        id: "1",
-        name: "Test",
-        unknownField: "should be ignored",
-        anotherExtra: 123,
-      } as Partial<Habit>;
-      const result = normalizeHabit(dataWithExtra);
-
-      expect(result.id).toBe("1");
-      expect(result.name).toBe("Test");
-      // Extra fields should not appear in result (TypeScript enforces this)
-      expect("unknownField" in result).toBe(false);
     });
   });
 });
