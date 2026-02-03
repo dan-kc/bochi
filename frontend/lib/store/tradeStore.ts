@@ -6,7 +6,7 @@ const TRADES_STORAGE_KEY = "tofustash_trades";
 
 // ============ Trade Normalization ============
 
-function normalizeTrade(trade: Partial<Trade>): Trade {
+export function normalizeTrade(trade: Partial<Trade>): Trade {
   return {
     id: trade.id ?? "",
     user_id: trade.user_id ?? "",

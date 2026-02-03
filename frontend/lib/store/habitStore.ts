@@ -9,7 +9,7 @@ export const LOCAL_USER_ID = "local-user";
 
 // ============ Habit Normalization ============
 
-function normalizeHabit(habit: Partial<Habit>): Habit {
+export function normalizeHabit(habit: Partial<Habit>): Habit {
   return {
     id: habit.id ?? "",
     user_id: habit.user_id ?? "",

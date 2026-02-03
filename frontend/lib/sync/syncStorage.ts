@@ -35,7 +35,7 @@ async function removeItem(key: string): Promise<void> {
 const SYNC_STATE_KEY = "tofustash_sync_state";
 const LAST_FULL_SYNC_KEY = "tofustash_last_full_sync";
 
-function getDefaultSyncState(): SyncState {
+export function getDefaultSyncState(): SyncState {
   return {
     lastSync: null,
     dirty: {
@@ -45,23 +45,35 @@ function getDefaultSyncState(): SyncState {
   };
 }
 
-export async function getSyncState(): Promise<SyncState> {
-  const data = await getItem(SYNC_STATE_KEY);
+/**
+ * Parse and migrate sync state from raw JSON string.
+ * Handles migrations from older schema versions.
+ * Exported for testing.
+ */
+export function parseSyncState(data: string | null): SyncState {
   if (!data) {
     return getDefaultSyncState();
   }
   try {
     const parsed = JSON.parse(data) as SyncState;
     // Migrate old 'tasks' key to 'habits' if present
-    const dirtyWithLegacy = parsed.dirty as unknown as { tasks?: string[]; habits: string[]; trades: string[] };
+    const dirtyWithLegacy = parsed.dirty as unknown as { tasks?: string[]; habits?: string[]; trades?: string[] };
     if (dirtyWithLegacy.tasks) {
       parsed.dirty.habits = dirtyWithLegacy.tasks;
       delete dirtyWithLegacy.tasks;
     }
+    // Ensure dirty arrays exist (migration safety)
+    parsed.dirty.habits = parsed.dirty.habits ?? [];
+    parsed.dirty.trades = parsed.dirty.trades ?? [];
     return parsed;
   } catch {
     return getDefaultSyncState();
   }
+}
+
+export async function getSyncState(): Promise<SyncState> {
+  const data = await getItem(SYNC_STATE_KEY);
+  return parseSyncState(data);
 }
 
 export async function setSyncState(state: SyncState): Promise<void> {

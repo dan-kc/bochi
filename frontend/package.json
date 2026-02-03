@@ -9,7 +9,9 @@
     "ios": "dotenv -- sh -c 'expo start --ios --port $FRONTEND_PORT --host $HOST'",
     "web": "dotenv -- sh -c 'BROWSER=none expo start --web --port $FRONTEND_PORT --host $HOST'",
     "typecheck": "tsc --noEmit",
-    "lint": "expo lint && npm run typecheck"
+    "lint": "expo lint && npm run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -53,7 +55,8 @@
     "dotenv-cli": "^8.0.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.18"
   },
   "private": true
 }
