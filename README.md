@@ -25,6 +25,8 @@ The app uses a unified sync system for offline-first operation:
 
 Client-side state is stored in a single `tofustash_sync_state` JSON blob containing the last sync timestamp and dirty entity IDs.
 
+For details on sync internals and schema migration strategy, see [frontend/lib/sync/README.md](frontend/lib/sync/README.md).
+
 ## Development
 
 Local dev commands are found in scripts.nix.
