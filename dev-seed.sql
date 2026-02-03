@@ -16,37 +16,23 @@ INSERT INTO tags (id, user_id, name, color_hex) VALUES
 ('bbbb1111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'Health', '#00FF00  '),
 ('bbbb2222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'Learning', '#0000FF  ');
 
--- Tasks for Alice
-INSERT INTO tasks (id, user_id, name, description, due_by, min_daily_frequency, hidden_until) VALUES
-('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Complete project proposal', 'Write and submit the Q1 project proposal to management', '2025-01-15 17:00:00', NULL, NULL),
-('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Review pull requests', 'Go through pending PRs on the main repo', NULL, NULL, NULL),
-('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Exercise', 'Daily workout routine', NULL, 1.0, NULL),
-('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Read documentation', 'Catch up on new API documentation', NULL, NULL, '2025-01-10 09:00:00'),
-('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Team standup', 'Daily team sync meeting', NULL, 1.0, NULL);
+-- Habits for Alice
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
+('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Complete project proposal', 'Write and submit the Q1 project proposal to management', NULL, NULL, 'a0'),
+('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Review pull requests', 'Go through pending PRs on the main repo', NULL, NULL, 'a1'),
+('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Exercise', 'Daily workout routine', 1.0, NULL, 'a2'),
+('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Read documentation', 'Catch up on new API documentation', NULL, '2025-01-10 09:00:00', 'a3'),
+('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Team standup', 'Daily team sync meeting', 1.0, NULL, 'a4');
 
--- Tasks for Bob
-INSERT INTO tasks (id, user_id, name, description, due_by, min_daily_frequency, hidden_until) VALUES
-('bbbb0001-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Morning meditation', 'Start the day with 15 minutes of mindfulness', NULL, 1.0, NULL),
-('bbbb0002-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Learn Rust', 'Complete chapter 5 of the Rust book', '2025-02-01 23:59:59', NULL, NULL),
-('bbbb0003-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Grocery shopping', 'Buy vegetables and fruits for the week', '2025-01-07 18:00:00', NULL, NULL);
+-- Habits for Bob
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
+('bbbb0001-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Morning meditation', 'Start the day with 15 minutes of mindfulness', 1.0, NULL, 'a0'),
+('bbbb0002-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Learn Rust', 'Complete chapter 5 of the Rust book', NULL, NULL, 'a1'),
+('bbbb0003-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Grocery shopping', 'Buy vegetables and fruits for the week', NULL, NULL, 'a2');
 
--- Tasks for Charlie
-INSERT INTO tasks (id, user_id, name, description, due_by, min_daily_frequency, hidden_until) VALUES
-('cccc0001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'Setup new laptop', 'Install dev tools and configure environment', '2025-01-08 12:00:00', NULL, NULL);
-
--- Task Tags (linking tasks to tags)
-INSERT INTO task_tags (task_id, tag_id) VALUES
-('aaaa0001-0000-0000-0000-000000000001', 'aaaa1111-1111-1111-1111-111111111111'),
-('aaaa0001-0000-0000-0000-000000000001', 'aaaa3333-3333-3333-3333-333333333333'),
-('aaaa0002-0000-0000-0000-000000000002', 'aaaa1111-1111-1111-1111-111111111111'),
-('aaaa0003-0000-0000-0000-000000000003', 'aaaa2222-2222-2222-2222-222222222222'),
-('aaaa0005-0000-0000-0000-000000000005', 'aaaa1111-1111-1111-1111-111111111111'),
-('bbbb0001-0000-0000-0000-000000000001', 'bbbb1111-1111-1111-1111-111111111111'),
-('bbbb0002-0000-0000-0000-000000000002', 'bbbb2222-2222-2222-2222-222222222222');
-
--- Task Dependencies (task depends on another task)
-INSERT INTO task_dependencies (task_id, depends_on_task_id) VALUES
-('aaaa0002-0000-0000-0000-000000000002', 'aaaa0001-0000-0000-0000-000000000001');
+-- Habits for Charlie
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
+('cccc0001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'Setup new laptop', 'Install dev tools and configure environment', NULL, NULL, 'a0');
 
 -- Rewards for Alice
 INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, hidden_until) VALUES
@@ -59,11 +45,11 @@ INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, hidden
 ('bbbb1000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Snack time', 'Have a healthy snack', 4.0, NULL),
 ('bbbb1000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'YouTube break', 'Watch YouTube for 15 minutes', 2.0, NULL);
 
--- Trades (task completions and reward claims)
-INSERT INTO trades (id, task_id, reward_id, amount) VALUES
-('aaaa2000-0000-0000-0000-000000000001', 'aaaa0003-0000-0000-0000-000000000003', NULL, 10),
-('aaaa2000-0000-0000-0000-000000000002', 'aaaa0005-0000-0000-0000-000000000005', NULL, 5),
-('aaaa2000-0000-0000-0000-000000000003', NULL, 'aaaa1000-0000-0000-0000-000000000001', -5),
-('bbbb2000-0000-0000-0000-000000000001', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
-('bbbb2000-0000-0000-0000-000000000002', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
-('bbbb2000-0000-0000-0000-000000000003', NULL, 'bbbb1000-0000-0000-0000-000000000001', -10);
+-- Trades (habit completions and reward claims)
+INSERT INTO trades (id, user_id, habit_id, reward_id, amount) VALUES
+('aaaa2000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'aaaa0003-0000-0000-0000-000000000003', NULL, 10),
+('aaaa2000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'aaaa0005-0000-0000-0000-000000000005', NULL, 5),
+('aaaa2000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', NULL, 'aaaa1000-0000-0000-0000-000000000001', -5),
+('bbbb2000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
+('bbbb2000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
+('bbbb2000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', NULL, 'bbbb1000-0000-0000-0000-000000000001', -10);

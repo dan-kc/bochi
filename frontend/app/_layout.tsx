@@ -1,7 +1,7 @@
 import { Slot } from "expo-router";
 import { AuthProvider } from "@/lib/AuthContext";
 import { SyncProvider } from "@/lib/sync";
-import { TaskProvider } from "@/lib/TaskContext";
+import { HabitProvider } from "@/lib/HabitContext";
 import { PriceUpdateProvider } from "@/lib/PriceUpdateContext";
 import "../global.css";
 
@@ -10,9 +10,9 @@ export default function RootLayout() {
     <AuthProvider>
       <SyncProvider>
         <PriceUpdateProvider>
-          <TaskProvider>
+          <HabitProvider>
             <Slot />
-          </TaskProvider>
+          </HabitProvider>
         </PriceUpdateProvider>
       </SyncProvider>
     </AuthProvider>

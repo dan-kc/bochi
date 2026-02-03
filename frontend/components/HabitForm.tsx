@@ -13,8 +13,8 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { z } from "zod";
-import type { Task, TaskInput } from "@/lib/task";
-import { createEmptyTaskInput } from "@/lib/task";
+import type { Habit, HabitInput } from "@/lib/habit";
+import { createEmptyHabitInput } from "@/lib/habit";
 
 function formatDateForInput(date: Date | null): string {
   if (!date) return "";
@@ -135,15 +135,15 @@ function DatePickerField({
   );
 }
 
-interface TaskFormProps {
-  task?: Task | null;
-  onSave: (input: TaskInput) => Promise<void>;
+interface HabitFormProps {
+  habit?: Habit | null;
+  onSave: (input: HabitInput) => Promise<void>;
   onCancel: () => void;
   onDelete?: () => Promise<void>;
   onRerank?: () => void;
 }
 
-const taskSchema = z.object({
+const habitSchema = z.object({
   name: z
     .string()
     .min(1, "Name is required")
@@ -157,21 +157,13 @@ const taskSchema = z.object({
       message: "Hidden until must be a future date",
     })
     .nullable(),
-  due_by: z
-    .date()
-    .refine((date) => date > new Date(), {
-      message: "Due by must be a future date",
-    })
-    .nullable(),
   min_daily_frequency: z
     .number()
     .gt(0, "Frequency must be greater than 0")
     .lte(100, "Frequency must be 100 or less")
     .nullable(),
-  habit: z.boolean(),
 });
 
-type TaskMode = "task" | "habit";
 type FrequencyPeriod = "day" | "week" | "month";
 
 const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
@@ -180,30 +172,26 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
-export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFormProps) {
+export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [hiddenUntil, setHiddenUntil] = useState<Date | null>(null);
-  const [dueBy, setDueBy] = useState<Date | null>(null);
   const [minDailyFrequency, setMinDailyFrequency] = useState("");
   const [frequencyPeriod, setFrequencyPeriod] = useState<FrequencyPeriod>("day");
-  const [mode, setMode] = useState<TaskMode>("task");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
-  const isEditing = !!task;
-  const isEditingHabit = isEditing && task?.habit;
+  const isEditing = !!habit;
 
   useEffect(() => {
-    if (task) {
-      setName(task.name);
-      setDescription(task.description);
-      setHiddenUntil(task.hidden_until ? new Date(task.hidden_until) : null);
-      setDueBy(task.due_by ? new Date(task.due_by) : null);
+    if (habit) {
+      setName(habit.name);
+      setDescription(habit.description);
+      setHiddenUntil(habit.hidden_until ? new Date(habit.hidden_until) : null);
 
-      if (task.min_daily_frequency !== null) {
-        const dailyFreq = task.min_daily_frequency;
+      if (habit.min_daily_frequency !== null) {
+        const dailyFreq = habit.min_daily_frequency;
         // Determine best period to display based on the stored daily frequency
         let bestPeriod: FrequencyPeriod = "day";
         let displayValue = dailyFreq;
@@ -225,22 +213,15 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
         setMinDailyFrequency("");
         setFrequencyPeriod("day");
       }
-      setMode(task.habit ? "habit" : "task");
     } else {
-      const empty = createEmptyTaskInput();
+      const empty = createEmptyHabitInput();
       setName(empty.name);
       setDescription(empty.description);
       setHiddenUntil(null);
-      setDueBy(null);
       setMinDailyFrequency("");
       setFrequencyPeriod("day");
-      setMode("task");
     }
-  }, [task]);
-
-  const handleModeChange = (newMode: TaskMode) => {
-    setMode(newMode);
-  };
+  }, [habit]);
 
   const handleSave = async () => {
     setErrors({});
@@ -256,12 +237,10 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
       name: name.trim(),
       description: description.trim(),
       hidden_until: hiddenUntil,
-      due_by: mode === "task" ? dueBy : null,
-      min_daily_frequency: mode === "habit" ? frequency : null,
-      habit: mode === "habit",
+      min_daily_frequency: frequency,
     };
 
-    const result = taskSchema.safeParse(input);
+    const result = habitSchema.safeParse(input);
 
     if (!result.success) {
       const fieldErrors: Record<string, string[]> = {};
@@ -276,20 +255,18 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
       return;
     }
 
-    const taskInput: TaskInput = {
+    const habitInput: HabitInput = {
       name: result.data.name,
       description: result.data.description,
       hidden_until: result.data.hidden_until?.toISOString() ?? null,
-      due_by: result.data.due_by?.toISOString() ?? null,
       min_daily_frequency: result.data.min_daily_frequency,
-      habit: result.data.habit,
     };
 
     setIsSaving(true);
     try {
-      await onSave(taskInput);
+      await onSave(habitInput);
     } catch (error) {
-      setErrors({ general: ["Failed to save task"] });
+      setErrors({ general: ["Failed to save habit"] });
     } finally {
       setIsSaving(false);
     }
@@ -302,7 +279,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
     try {
       await onDelete();
     } catch (error) {
-      setErrors({ general: ["Failed to delete task"] });
+      setErrors({ general: ["Failed to delete habit"] });
     } finally {
       setIsDeleting(false);
     }
@@ -320,13 +297,11 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
       <ScrollView className="flex-1 p-4">
         <View className="flex-row items-center justify-between mb-6">
           <Text className="text-2xl font-bold text-gray-900">
-            {isEditing ? "Edit" : "New"} {mode === "habit" ? "Habit" : "Task"}
+            {isEditing ? "Edit" : "New"} Habit
           </Text>
-          {mode === "habit" && (
-            <View className="bg-purple-100 px-3 py-1 rounded-full">
-              <Text className="text-purple-700 font-medium text-sm">Habit</Text>
-            </View>
-          )}
+          <View className="bg-purple-100 px-3 py-1 rounded-full">
+            <Text className="text-purple-700 font-medium text-sm">Habit</Text>
+          </View>
         </View>
 
         {allErrors.length > 0 && (
@@ -346,7 +321,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
             </Text>
             <TextInput
               className={`border rounded-lg px-4 py-3 text-base ${errors.name ? "border-red-500" : "border-gray-300"}`}
-              placeholder="Task name"
+              placeholder="Habit name"
               value={name}
               onChangeText={setName}
               editable={!isLoading}
@@ -363,7 +338,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
             </Text>
             <TextInput
               className={`border rounded-lg px-4 py-3 text-base ${errors.description ? "border-red-500" : "border-gray-300"}`}
-              placeholder="Task description"
+              placeholder="Habit description"
               value={description}
               onChangeText={setDescription}
               multiline
@@ -377,118 +352,49 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
             </Text>
           </View>
 
-          {!isEditingHabit && (
-            <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Type</Text>
-              <View className="flex-row gap-2">
+          <View>
+            <Text className="text-sm font-medium text-gray-700 mb-1">
+              Frequency
+            </Text>
+            <View className="flex-row gap-2 mb-2">
+              <TextInput
+                className={`flex-1 border rounded-lg px-4 py-3 text-base ${errors.min_daily_frequency ? "border-red-500" : "border-gray-300"}`}
+                placeholder="e.g., 1, 2, 3"
+                value={minDailyFrequency}
+                onChangeText={setMinDailyFrequency}
+                keyboardType="decimal-pad"
+                editable={!isLoading}
+              />
+              <Text className="self-center text-gray-500">per</Text>
+            </View>
+            <View className="flex-row gap-2">
+              {(["day", "week", "month"] as const).map((period) => (
                 <Pressable
-                  onPress={() => handleModeChange("task")}
+                  key={period}
+                  onPress={() => setFrequencyPeriod(period)}
                   disabled={isLoading}
-                  className={`flex-1 py-3 px-4 rounded-lg items-center border ${
-                    mode === "task"
-                      ? "bg-blue-500 border-blue-500"
-                      : "bg-white border-gray-300"
-                  }`}
-                >
-                  <Text
-                    className={`font-semibold ${
-                      mode === "task" ? "text-white" : "text-gray-700"
-                    }`}
-                  >
-                    Task
-                  </Text>
-                  <Text
-                    className={`text-xs mt-1 ${
-                      mode === "task" ? "text-blue-100" : "text-gray-500"
-                    }`}
-                  >
-                    One-time
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleModeChange("habit")}
-                  disabled={isLoading}
-                  className={`flex-1 py-3 px-4 rounded-lg items-center border ${
-                    mode === "habit"
+                  className={`flex-1 py-2 px-3 rounded-lg items-center border ${
+                    frequencyPeriod === period
                       ? "bg-purple-500 border-purple-500"
                       : "bg-white border-gray-300"
                   }`}
                 >
                   <Text
-                    className={`font-semibold ${
-                      mode === "habit" ? "text-white" : "text-gray-700"
+                    className={`font-medium ${
+                      frequencyPeriod === period ? "text-white" : "text-gray-700"
                     }`}
                   >
-                    Habit
-                  </Text>
-                  <Text
-                    className={`text-xs mt-1 ${
-                      mode === "habit" ? "text-purple-100" : "text-gray-500"
-                    }`}
-                  >
-                    Recurring daily goal
+                    {period.charAt(0).toUpperCase() + period.slice(1)}
                   </Text>
                 </Pressable>
-              </View>
+              ))}
             </View>
-          )}
-
-          {mode === "task" && (
-            <DatePickerField
-              label="Due By"
-              value={dueBy}
-              onChange={setDueBy}
-              hasError={!!errors.due_by}
-              disabled={isLoading}
-              placeholder="Select due date"
-            />
-          )}
-
-          {mode === "habit" && (
-            <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
-                Frequency *
-              </Text>
-              <View className="flex-row gap-2 mb-2">
-                <TextInput
-                  className={`flex-1 border rounded-lg px-4 py-3 text-base ${errors.min_daily_frequency ? "border-red-500" : "border-gray-300"}`}
-                  placeholder="e.g., 1, 2, 3"
-                  value={minDailyFrequency}
-                  onChangeText={setMinDailyFrequency}
-                  keyboardType="decimal-pad"
-                  editable={!isLoading}
-                />
-                <Text className="self-center text-gray-500">per</Text>
-              </View>
-              <View className="flex-row gap-2">
-                {(["day", "week", "month"] as const).map((period) => (
-                  <Pressable
-                    key={period}
-                    onPress={() => setFrequencyPeriod(period)}
-                    disabled={isLoading}
-                    className={`flex-1 py-2 px-3 rounded-lg items-center border ${
-                      frequencyPeriod === period
-                        ? "bg-purple-500 border-purple-500"
-                        : "bg-white border-gray-300"
-                    }`}
-                  >
-                    <Text
-                      className={`font-medium ${
-                        frequencyPeriod === period ? "text-white" : "text-gray-700"
-                      }`}
-                    >
-                      {period.charAt(0).toUpperCase() + period.slice(1)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text className="text-xs text-gray-500 mt-2">
-                {frequencyPeriod === "day" && "Times per day (e.g., 1 = once daily, 2 = twice daily)"}
-                {frequencyPeriod === "week" && "Times per week (e.g., 3 = three times a week)"}
-                {frequencyPeriod === "month" && "Times per month (e.g., 2 = twice a month)"}
-              </Text>
-            </View>
-          )}
+            <Text className="text-xs text-gray-500 mt-2">
+              {frequencyPeriod === "day" && "Times per day (e.g., 1 = once daily, 2 = twice daily)"}
+              {frequencyPeriod === "week" && "Times per week (e.g., 3 = three times a week)"}
+              {frequencyPeriod === "month" && "Times per month (e.g., 2 = twice a month)"}
+            </Text>
+          </View>
 
           <DatePickerField
             label="Hidden Until"
@@ -512,9 +418,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
             <Pressable
               onPress={handleSave}
               disabled={isLoading}
-              className={`flex-1 py-3 px-6 rounded-lg items-center ${
-                mode === "habit" ? "bg-purple-500" : "bg-blue-500"
-              }`}
+              className="flex-1 py-3 px-6 rounded-lg items-center bg-purple-500"
             >
               {isSaving ? (
                 <ActivityIndicator color="white" />
@@ -533,7 +437,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
               className="border border-orange-300 py-3 px-6 rounded-lg items-center mt-2"
             >
               <Text className="text-orange-600 font-semibold text-base">
-                {task?.difficulty_rank ? "Re-rank Difficulty" : "Set Difficulty"}
+                {habit?.difficulty_rank ? "Re-rank Difficulty" : "Set Difficulty"}
               </Text>
             </Pressable>
           )}
@@ -548,7 +452,7 @@ export function TaskForm({ task, onSave, onCancel, onDelete, onRerank }: TaskFor
                 <ActivityIndicator color="#dc2626" />
               ) : (
                 <Text className="text-red-600 font-semibold text-base">
-                  Delete {mode === "habit" ? "Habit" : "Task"}
+                  Delete Habit
                 </Text>
               )}
             </Pressable>

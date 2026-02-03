@@ -163,7 +163,7 @@ class ApiClient {
       : "/api/sync";
 
     const result = await this.authenticatedRequest<{
-      tasks: Array<{
+      habits: Array<{
         id: string;
         name: string;
         description: string;
@@ -171,15 +171,12 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
         hiddenUntil: string | null;
-        dueBy: string | null;
         minDailyFrequency: number | null;
         difficultyRank: string | null;
-        completedAt: string | null;
-        habit: boolean;
       }>;
       trades: Array<{
         id: string;
-        taskId: string | null;
+        habitId: string | null;
         rewardId: string | null;
         amount: number;
         createdAt: string;
@@ -194,25 +191,22 @@ class ApiClient {
     }>(url, { method: "GET" });
 
     return {
-      tasks: result.tasks.map((t) => ({
-        id: t.id,
+      habits: result.habits.map((h) => ({
+        id: h.id,
         user_id: "",
-        name: t.name,
-        description: t.description,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-        hidden_until: t.hiddenUntil,
-        due_by: t.dueBy,
-        min_daily_frequency: t.minDailyFrequency,
-        difficulty_rank: t.difficultyRank,
-        completed_at: t.completedAt,
-        habit: t.habit,
+        name: h.name,
+        description: h.description,
+        created_at: h.createdAt,
+        updated_at: h.updatedAt,
+        deleted_at: h.deletedAt,
+        hidden_until: h.hiddenUntil,
+        min_daily_frequency: h.minDailyFrequency,
+        difficulty_rank: h.difficultyRank,
       })),
       trades: result.trades.map((t) => ({
         id: t.id,
         user_id: "",
-        task_id: t.taskId,
+        habit_id: t.habitId,
         reward_id: t.rewardId,
         amount: t.amount,
         created_at: t.createdAt,
@@ -231,26 +225,23 @@ class ApiClient {
     const toNaiveDateTime = (date: string | null): string | null =>
       date ? date.replace(/Z$/, "") : null;
 
-    // Transform tasks to REST input format (camelCase)
-    const taskInputs = input.tasks?.map((t) => ({
-      id: t.id,
-      name: t.name,
-      description: t.description,
-      createdAt: toNaiveDateTime(t.createdAt) ?? "",
-      updatedAt: toNaiveDateTime(t.updatedAt) ?? "",
-      deletedAt: toNaiveDateTime(t.deletedAt),
-      hiddenUntil: toNaiveDateTime(t.hiddenUntil),
-      dueBy: toNaiveDateTime(t.dueBy),
-      minDailyFrequency: t.minDailyFrequency,
-      difficultyRank: t.difficultyRank,
-      completedAt: toNaiveDateTime(t.completedAt),
-      habit: t.habit,
+    // Transform habits to REST input format (camelCase)
+    const habitInputs = input.habits?.map((h) => ({
+      id: h.id,
+      name: h.name,
+      description: h.description,
+      createdAt: toNaiveDateTime(h.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(h.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(h.deletedAt),
+      hiddenUntil: toNaiveDateTime(h.hiddenUntil),
+      minDailyFrequency: h.minDailyFrequency,
+      difficultyRank: h.difficultyRank,
     }));
 
     // Transform trades to REST input format (camelCase)
     const tradeInputs = input.trades?.map((t) => ({
       id: t.id,
-      taskId: t.taskId,
+      habitId: t.habitId,
       rewardId: t.rewardId,
       amount: t.amount,
       createdAt: toNaiveDateTime(t.createdAt) ?? "",
@@ -258,7 +249,7 @@ class ApiClient {
     }));
 
     const result = await this.authenticatedRequest<{
-      tasks: Array<{
+      habits: Array<{
         id: string;
         name: string;
         description: string;
@@ -266,15 +257,12 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
         hiddenUntil: string | null;
-        dueBy: string | null;
         minDailyFrequency: number | null;
         difficultyRank: string | null;
-        completedAt: string | null;
-        habit: boolean;
       }>;
       trades: Array<{
         id: string;
-        taskId: string | null;
+        habitId: string | null;
         rewardId: string | null;
         amount: number;
         createdAt: string;
@@ -289,31 +277,28 @@ class ApiClient {
     }>("/api/sync", {
       method: "POST",
       body: JSON.stringify({
-        tasks: taskInputs,
+        habits: habitInputs,
         trades: tradeInputs,
       }),
     });
 
     return {
-      tasks: result.tasks.map((t) => ({
-        id: t.id,
+      habits: result.habits.map((h) => ({
+        id: h.id,
         user_id: "",
-        name: t.name,
-        description: t.description,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-        hidden_until: t.hiddenUntil,
-        due_by: t.dueBy,
-        min_daily_frequency: t.minDailyFrequency,
-        difficulty_rank: t.difficultyRank,
-        completed_at: t.completedAt,
-        habit: t.habit,
+        name: h.name,
+        description: h.description,
+        created_at: h.createdAt,
+        updated_at: h.updatedAt,
+        deleted_at: h.deletedAt,
+        hidden_until: h.hiddenUntil,
+        min_daily_frequency: h.minDailyFrequency,
+        difficulty_rank: h.difficultyRank,
       })),
       trades: result.trades.map((t) => ({
         id: t.id,
         user_id: "",
-        task_id: t.taskId,
+        habit_id: t.habitId,
         reward_id: t.rewardId,
         amount: t.amount,
         created_at: t.createdAt,

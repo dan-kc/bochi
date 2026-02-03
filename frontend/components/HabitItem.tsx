@@ -1,15 +1,15 @@
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { Task } from "@/lib/task";
+import type { Habit } from "@/lib/habit";
 import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
-import type { DisplayMode } from "@/lib/taskSorting";
-import { formatShortDate } from "@/lib/taskSorting";
+import type { DisplayMode } from "@/lib/habitSorting";
+import { formatShortDate } from "@/lib/habitSorting";
 
-interface TaskItemProps {
-  task: Task;
-  onPress: (task: Task) => void;
-  onComplete?: (task: Task) => void;
-  onSetDifficulty?: (task: Task) => void;
+interface HabitItemProps {
+  habit: Habit;
+  onPress: (habit: Habit) => void;
+  onComplete?: (habit: Habit) => void;
+  onSetDifficulty?: (habit: Habit) => void;
   isDifficultyView?: boolean;
   displayMode?: DisplayMode;
 }
@@ -26,17 +26,17 @@ function formatDate(dateString: string | null): string {
 
 
 function InfoDisplay({
-  task,
+  habit,
   displayMode,
 }: {
-  task: Task;
+  habit: Habit;
   displayMode: DisplayMode;
 }) {
   const priceContext = usePriceUpdateOptional();
 
   if (displayMode === "price") {
     if (!priceContext) return null;
-    const priceData = priceContext.prices[task.id];
+    const priceData = priceContext.prices[habit.id];
     if (!priceData) return null;
 
     const { current, previous } = priceData;
@@ -59,7 +59,7 @@ function InfoDisplay({
   }
 
   if (displayMode === "frequency") {
-    if (task.min_daily_frequency == null) {
+    if (habit.min_daily_frequency == null) {
       return (
         <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
           <Text className="text-xs font-medium text-gray-500">no frequency</Text>
@@ -69,7 +69,7 @@ function InfoDisplay({
     return (
       <View className="flex-row items-center bg-green-50 border border-green-200 px-2 py-1 rounded">
         <Text className="text-xs font-medium text-green-700">
-          {task.min_daily_frequency} /day
+          {habit.min_daily_frequency} /day
         </Text>
       </View>
     );
@@ -79,31 +79,14 @@ function InfoDisplay({
     return (
       <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
         <Text className="text-xs font-medium text-gray-700">
-          {formatShortDate(task.created_at)}
-        </Text>
-      </View>
-    );
-  }
-
-  if (displayMode === "due_by") {
-    if (!task.due_by) {
-      return (
-        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-          <Text className="text-xs font-medium text-gray-500">no due date</Text>
-        </View>
-      );
-    }
-    return (
-      <View className="flex-row items-center bg-blue-50 border border-blue-200 px-2 py-1 rounded">
-        <Text className="text-xs font-medium text-blue-700">
-          Due: {formatShortDate(task.due_by)}
+          {formatShortDate(habit.created_at)}
         </Text>
       </View>
     );
   }
 
   if (displayMode === "difficulty") {
-    if (task.difficulty_rank == null) {
+    if (habit.difficulty_rank == null) {
       return (
         <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
           <Text className="text-xs font-medium text-gray-500">not set</Text>
@@ -113,7 +96,7 @@ function InfoDisplay({
     return (
       <View className="flex-row items-center bg-purple-50 border border-purple-200 px-2 py-1 rounded">
         <Text className="text-xs font-medium text-purple-700 font-mono">
-          {task.difficulty_rank}
+          {habit.difficulty_rank}
         </Text>
       </View>
     );
@@ -122,25 +105,24 @@ function InfoDisplay({
   return null;
 }
 
-export function TaskItem({
-  task,
+export function HabitItem({
+  habit,
   onPress,
   onComplete,
   onSetDifficulty,
   isDifficultyView,
   displayMode = "price",
-}: TaskItemProps) {
-  const hasDueBy = task.due_by !== null;
-  const hasHiddenUntil = task.hidden_until !== null;
+}: HabitItemProps) {
+  const hasHiddenUntil = habit.hidden_until !== null;
   // Use != null to catch both null and undefined
-  const hasDifficultyRank = task.difficulty_rank != null;
+  const hasDifficultyRank = habit.difficulty_rank != null;
   const isUnrankedInDifficultyView = isDifficultyView && !hasDifficultyRank;
   const priceContext = usePriceUpdateOptional();
-  const currentPrice = priceContext?.prices[task.id]?.current;
+  const currentPrice = priceContext?.prices[habit.id]?.current;
 
   return (
     <Pressable
-      onPress={() => onPress(task)}
+      onPress={() => onPress(habit)}
       className={`border rounded-lg p-4 mb-3 ${
         isUnrankedInDifficultyView
           ? "bg-gray-50 border-gray-300"
@@ -151,10 +133,10 @@ export function TaskItem({
         <View className={hovered ? "opacity-80" : ""}>
           <View className="flex-row justify-between items-start">
             <Text className="text-lg font-semibold text-gray-900 mb-1 flex-1">
-              {task.name}
+              {habit.name}
             </Text>
             <View className="flex-row items-center gap-2 ml-2">
-              <InfoDisplay task={task} displayMode={displayMode} />
+              <InfoDisplay habit={habit} displayMode={displayMode} />
               {isUnrankedInDifficultyView && (
                 <View className="bg-gray-200 px-2 py-1 rounded">
                   <Text className="text-gray-600 text-xs font-medium">
@@ -164,41 +146,34 @@ export function TaskItem({
               )}
             </View>
           </View>
-          {task.description ? (
+          {habit.description ? (
             <Text
               className="text-gray-600 text-sm mb-2"
               numberOfLines={2}
               ellipsizeMode="tail"
             >
-              {task.description}
+              {habit.description}
             </Text>
           ) : null}
           <View className="flex-row flex-wrap gap-2">
-            {hasDueBy && (
-              <View className="bg-blue-100 px-2 py-1 rounded">
-                <Text className="text-blue-700 text-xs">
-                  Due: {formatDate(task.due_by)}
-                </Text>
-              </View>
-            )}
             {hasHiddenUntil && (
               <View className="bg-gray-100 px-2 py-1 rounded">
                 <Text className="text-gray-600 text-xs">
-                  Hidden until: {formatDate(task.hidden_until)}
+                  Hidden until: {formatDate(habit.hidden_until)}
                 </Text>
               </View>
             )}
-            {task.min_daily_frequency !== null && (
+            {habit.min_daily_frequency !== null && (
               <View className="bg-green-100 px-2 py-1 rounded">
                 <Text className="text-green-700 text-xs">
-                  {task.min_daily_frequency}x/day
+                  {habit.min_daily_frequency}x/day
                 </Text>
               </View>
             )}
             {hasDifficultyRank && isDifficultyView && (
               <View className="bg-purple-100 px-2 py-1 rounded">
                 <Text className="text-purple-700 text-xs font-mono">
-                  {task.difficulty_rank}
+                  {habit.difficulty_rank}
                 </Text>
               </View>
             )}
@@ -206,7 +181,7 @@ export function TaskItem({
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
-                  onSetDifficulty(task);
+                  onSetDifficulty(habit);
                 }}
                 className="bg-orange-50 border border-orange-200 px-2 py-1 rounded"
               >
@@ -217,7 +192,7 @@ export function TaskItem({
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
-                  onComplete(task);
+                  onComplete(habit);
                 }}
                 className="bg-green-500 px-3 py-1 rounded ml-auto"
               >

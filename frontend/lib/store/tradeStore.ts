@@ -10,7 +10,7 @@ function normalizeTrade(trade: Partial<Trade>): Trade {
   return {
     id: trade.id ?? "",
     user_id: trade.user_id ?? "",
-    task_id: trade.task_id ?? null,
+    habit_id: trade.habit_id ?? null,
     reward_id: trade.reward_id ?? null,
     amount: trade.amount ?? 0,
     created_at: trade.created_at ?? new Date().toISOString(),
@@ -43,7 +43,7 @@ class TradeStore extends EntityStore<Trade> {
     return this.getById(id);
   }
 
-  getTradesInPeriod(userId: string, taskId: string, days: number): number {
+  getTradesInPeriod(userId: string, habitId: string, days: number): number {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
@@ -52,7 +52,7 @@ class TradeStore extends EntityStore<Trade> {
       .filter(
         (t) =>
           t.user_id === userId &&
-          t.task_id === taskId &&
+          t.habit_id === habitId &&
           !t.deleted_at &&
           new Date(t.created_at) >= cutoff,
       ).length;
@@ -65,7 +65,7 @@ class TradeStore extends EntityStore<Trade> {
     const trade: Trade = {
       id: generateUUID(),
       user_id: userId,
-      task_id: input.task_id ?? null,
+      habit_id: input.habit_id ?? null,
       reward_id: input.reward_id ?? null,
       amount: input.amount,
       created_at: now,

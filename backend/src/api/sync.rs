@@ -27,13 +27,13 @@ pub struct SyncQueryParams {
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPushRequest {
-    pub tasks: Option<Vec<SyncTaskInput>>,
+    pub habits: Option<Vec<SyncHabitInput>>,
     pub trades: Option<Vec<SyncTradeInput>>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncTaskInput {
+pub struct SyncHabitInput {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -41,18 +41,15 @@ pub struct SyncTaskInput {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub completed_at: Option<NaiveDateTime>,
-    pub habit: bool,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncTradeInput {
     pub id: String,
-    pub task_id: Option<String>,
+    pub habit_id: Option<String>,
     pub reward_id: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
@@ -62,7 +59,7 @@ pub struct SyncTradeInput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResponse {
-    pub tasks: Vec<TaskOutput>,
+    pub habits: Vec<HabitOutput>,
     pub trades: Vec<TradeOutput>,
     pub balance: BalanceOutput,
     pub server_time: NaiveDateTime,
@@ -70,7 +67,7 @@ pub struct SyncResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskOutput {
+pub struct HabitOutput {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -78,18 +75,15 @@ pub struct TaskOutput {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub completed_at: Option<NaiveDateTime>,
-    pub habit: bool,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TradeOutput {
     pub id: String,
-    pub task_id: Option<String>,
+    pub habit_id: Option<String>,
     pub reward_id: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
@@ -114,9 +108,9 @@ pub async fn get_sync(
     Extension(user): Extension<AuthenticatedUser>,
     Query(params): Query<SyncQueryParams>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let task_rows = app
+    let habit_rows = app
         .database
-        .get_tasks_since(user.user_id, params.since)
+        .get_habits_since(user.user_id, params.since)
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
@@ -137,9 +131,9 @@ pub async fn get_sync(
         ApiError::Internal
     })?;
 
-    let tasks: Vec<TaskOutput> = task_rows
+    let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
-        .map(|row| TaskOutput {
+        .map(|row| HabitOutput {
             id: row.id.to_string(),
             name: row.name,
             description: row.description,
@@ -147,11 +141,8 @@ pub async fn get_sync(
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
             hidden_until: row.hidden_until,
-            due_by: row.due_by,
             min_daily_frequency: row.min_daily_frequency,
             difficulty_rank: row.difficulty_rank,
-            completed_at: row.completed_at,
-            habit: row.habit,
         })
         .collect();
 
@@ -159,7 +150,7 @@ pub async fn get_sync(
         .into_iter()
         .map(|row| TradeOutput {
             id: row.id.to_string(),
-            task_id: row.task_id.map(|id| id.to_string()),
+            habit_id: row.habit_id.map(|id| id.to_string()),
             reward_id: row.reward_id.map(|id| id.to_string()),
             amount: row.amount,
             created_at: row.created_at,
@@ -171,7 +162,7 @@ pub async fn get_sync(
     let server_time = Utc::now().naive_utc();
 
     Ok(Json(SyncResponse {
-        tasks,
+        habits,
         trades,
         balance: BalanceOutput {
             soy_balance: balance_row.soy_balance,
@@ -193,19 +184,19 @@ pub async fn post_sync(
         ApiError::Internal
     })?;
 
-    let mut result_tasks = Vec::new();
+    let mut result_habits = Vec::new();
     let mut result_trades = Vec::new();
 
-    // Process tasks first (trades may reference these)
-    if let Some(tasks) = input.tasks {
-        for task_input in tasks {
-            // Validate task ID is a valid UUID
-            let task_id = task_input.id.parse::<Uuid>().map_err(|_| {
-                ApiError::Validation(format!("Invalid task id format: {}", task_input.id))
+    // Process habits first (trades may reference these)
+    if let Some(habits) = input.habits {
+        for habit_input in habits {
+            // Validate habit ID is a valid UUID
+            let habit_id = habit_input.id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!("Invalid habit id format: {}", habit_input.id))
             })?;
 
             // Validate name length
-            let name_len = task_input.name.chars().count();
+            let name_len = habit_input.name.chars().count();
             if name_len > 100 || name_len < 1 {
                 let msg = format!(
                     "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
@@ -215,7 +206,7 @@ pub async fn post_sync(
             }
 
             // Validate description length
-            let desc_len = task_input.description.chars().count();
+            let desc_len = habit_input.description.chars().count();
             if desc_len > 10000 {
                 let msg = format!(
                     "Description is too long ({} characters), max 10,000.",
@@ -225,7 +216,7 @@ pub async fn post_sync(
             }
 
             // Validate min_daily_frequency
-            if let Some(freq) = task_input.min_daily_frequency {
+            if let Some(freq) = habit_input.min_daily_frequency {
                 if freq < 0.0 || freq > 100.0 {
                     let msg = format!(
                         "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
@@ -235,58 +226,40 @@ pub async fn post_sync(
                 }
             }
 
-            // Habit validation: habits cannot have completed_at
-            if task_input.habit && task_input.completed_at.is_some() {
-                let msg = "Habits cannot have a 'completed_at' timestamp. Either set 'habit' to false or remove 'completed_at'.".to_string();
-                return Err(ApiError::Validation(msg));
-            }
-
-            // Habit validation: non-habits cannot have min_daily_frequency
-            if !task_input.habit && task_input.min_daily_frequency.is_some() {
-                let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
-                return Err(ApiError::Validation(msg));
-            }
-
-            let upsert_opts = database::UpsertTaskOptions {
-                id: task_id,
-                name: task_input.name,
-                description: task_input.description,
-                created_at: task_input.created_at,
-                deleted_at: task_input.deleted_at,
-                hidden_until: task_input.hidden_until,
-                due_by: task_input.due_by,
-                min_daily_frequency: task_input.min_daily_frequency,
-                difficulty_rank: task_input.difficulty_rank,
-                completed_at: task_input.completed_at,
-                habit: task_input.habit,
+            let upsert_opts = database::UpsertHabitOptions {
+                id: habit_id,
+                name: habit_input.name,
+                description: habit_input.description,
+                created_at: habit_input.created_at,
+                deleted_at: habit_input.deleted_at,
+                hidden_until: habit_input.hidden_until,
+                min_daily_frequency: habit_input.min_daily_frequency,
+                difficulty_rank: habit_input.difficulty_rank,
             };
 
-            let task_row =
-                Database::upsert_task_tx(&mut tx, user.user_id, &upsert_opts)
+            let habit_row =
+                Database::upsert_habit_tx(&mut tx, user.user_id, &upsert_opts)
                     .await
                     .map_err(|e| {
-                        error!("Database Error upserting task: {:?}", e);
+                        error!("Database Error upserting habit: {:?}", e);
                         ApiError::Internal
                     })?;
 
-            result_tasks.push(TaskOutput {
-                id: task_row.id.to_string(),
-                name: task_row.name,
-                description: task_row.description,
-                created_at: task_row.created_at,
-                updated_at: task_row.updated_at,
-                deleted_at: task_row.deleted_at,
-                hidden_until: task_row.hidden_until,
-                due_by: task_row.due_by,
-                min_daily_frequency: task_row.min_daily_frequency,
-                difficulty_rank: task_row.difficulty_rank,
-                completed_at: task_row.completed_at,
-                habit: task_row.habit,
+            result_habits.push(HabitOutput {
+                id: habit_row.id.to_string(),
+                name: habit_row.name,
+                description: habit_row.description,
+                created_at: habit_row.created_at,
+                updated_at: habit_row.updated_at,
+                deleted_at: habit_row.deleted_at,
+                hidden_until: habit_row.hidden_until,
+                min_daily_frequency: habit_row.min_daily_frequency,
+                difficulty_rank: habit_row.difficulty_rank,
             });
         }
     }
 
-    // Process trades second (they may reference tasks created above)
+    // Process trades second (they may reference habits created above)
     if let Some(trades) = input.trades {
         for trade_input in trades {
             // Validate trade ID is a valid UUID
@@ -294,10 +267,10 @@ pub async fn post_sync(
                 ApiError::Validation(format!("Invalid trade id format: {}", trade_input.id))
             })?;
 
-            // Validate task_id if provided
-            let task_id = if let Some(task_id_str) = &trade_input.task_id {
-                Some(task_id_str.parse::<Uuid>().map_err(|_| {
-                    ApiError::Validation(format!("Invalid task_id format: {}", task_id_str))
+            // Validate habit_id if provided
+            let habit_id = if let Some(habit_id_str) = &trade_input.habit_id {
+                Some(habit_id_str.parse::<Uuid>().map_err(|_| {
+                    ApiError::Validation(format!("Invalid habit_id format: {}", habit_id_str))
                 })?)
             } else {
                 None
@@ -312,15 +285,15 @@ pub async fn post_sync(
                 None
             };
 
-            // Trade must have either task_id or reward_id
-            if task_id.is_none() && reward_id.is_none() {
-                let msg = "Trade must have a task_id or reward_id".to_string();
+            // Trade must have either habit_id or reward_id
+            if habit_id.is_none() && reward_id.is_none() {
+                let msg = "Trade must have a habit_id or reward_id".to_string();
                 return Err(ApiError::Validation(msg));
             }
 
             let upsert_opts = database::UpsertTradeOptions {
                 id: trade_id,
-                task_id,
+                habit_id,
                 reward_id,
                 amount: trade_input.amount,
                 created_at: trade_input.created_at,
@@ -337,7 +310,7 @@ pub async fn post_sync(
 
             result_trades.push(TradeOutput {
                 id: trade_row.id.to_string(),
-                task_id: trade_row.task_id.map(|id| id.to_string()),
+                habit_id: trade_row.habit_id.map(|id| id.to_string()),
                 reward_id: trade_row.reward_id.map(|id| id.to_string()),
                 amount: trade_row.amount,
                 created_at: trade_row.created_at,
@@ -370,7 +343,7 @@ pub async fn post_sync(
     let server_time = Utc::now().naive_utc();
 
     Ok(Json(SyncResponse {
-        tasks: result_tasks,
+        habits: result_habits,
         trades: result_trades,
         balance: BalanceOutput {
             soy_balance: new_balance,

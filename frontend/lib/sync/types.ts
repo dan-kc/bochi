@@ -1,4 +1,4 @@
-import type { Task } from "../task";
+import type { Habit } from "../habit";
 import type { Trade } from "../trade";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
@@ -18,13 +18,13 @@ export interface BalanceResponse {
 // ============================================================================
 
 export interface SyncResponse {
-  tasks: Task[];
+  habits: Habit[];
   trades: Trade[];
   balance: BalanceResponse;
   server_time: string;
 }
 
-export interface SyncTaskInput {
+export interface SyncHabitInput {
   id: string;
   name: string;
   description: string;
@@ -32,16 +32,13 @@ export interface SyncTaskInput {
   updatedAt: string;
   deletedAt: string | null;
   hiddenUntil: string | null;
-  dueBy: string | null;
   minDailyFrequency: number | null;
   difficultyRank: string | null;
-  completedAt: string | null;
-  habit: boolean;
 }
 
 export interface SyncTradeInput {
   id: string;
-  taskId: string | null;
+  habitId: string | null;
   rewardId: string | null;
   amount: number;
   createdAt: string;
@@ -49,7 +46,7 @@ export interface SyncTradeInput {
 }
 
 export interface SyncInput {
-  tasks?: SyncTaskInput[];
+  habits?: SyncHabitInput[];
   trades?: SyncTradeInput[];
 }
 
@@ -60,36 +57,7 @@ export interface SyncInput {
 export interface SyncState {
   lastSync: string | null;
   dirty: {
-    tasks: string[];
+    habits: string[];
     trades: string[];
   };
-}
-
-// ============================================================================
-// Legacy Types (to be removed after cleanup)
-// ============================================================================
-
-export interface SyncPullResponse {
-  tasks: Task[];
-  server_time: string;
-}
-
-export interface SyncPushRequest {
-  tasks: Task[];
-}
-
-export interface SyncPushResponse {
-  tasks: Task[];
-  server_time: string;
-}
-
-export interface SyncPullTradesResponse {
-  trades: Trade[];
-  server_time: string;
-}
-
-export interface SyncPushTradesResponse {
-  trades: Trade[];
-  server_time: string;
-  new_balance: number;
 }

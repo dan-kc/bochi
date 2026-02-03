@@ -1,4 +1,4 @@
-import type { Task } from "./task";
+import type { Habit } from "./habit";
 import type { SortKey } from "./sortOptions";
 
 export interface PriceData {
@@ -6,14 +6,14 @@ export interface PriceData {
   previous: number;
 }
 
-export type DisplayMode = "price" | "frequency" | "created_at" | "due_by" | "difficulty";
+export type DisplayMode = "price" | "frequency" | "created_at" | "difficulty";
 
-export function sortTasks(
-  tasks: Task[],
+export function sortHabits(
+  habits: Habit[],
   sortKey: SortKey,
   prices: Record<string, PriceData>
-): Task[] {
-  return [...tasks].sort((a, b) => {
+): Habit[] {
+  return [...habits].sort((a, b) => {
     switch (sortKey) {
       case "price_desc":
         return (prices[b.id]?.current ?? 0) - (prices[a.id]?.current ?? 0);
@@ -39,16 +39,6 @@ export function sortTasks(
         if (a.min_daily_frequency == null) return 1;
         if (b.min_daily_frequency == null) return -1;
         return a.min_daily_frequency - b.min_daily_frequency;
-      case "due_soonest":
-        if (!a.due_by && !b.due_by) return 0;
-        if (!a.due_by) return 1;
-        if (!b.due_by) return -1;
-        return new Date(a.due_by).getTime() - new Date(b.due_by).getTime();
-      case "due_latest":
-        if (!a.due_by && !b.due_by) return 0;
-        if (!a.due_by) return 1;
-        if (!b.due_by) return -1;
-        return new Date(b.due_by).getTime() - new Date(a.due_by).getTime();
       case "difficulty_desc":
         if (a.difficulty_rank == null && b.difficulty_rank == null) return 0;
         if (a.difficulty_rank == null) return 1;
@@ -78,9 +68,6 @@ export function getDisplayMode(sortKey: SortKey): DisplayMode {
     case "newest":
     case "oldest":
       return "created_at";
-    case "due_soonest":
-    case "due_latest":
-      return "due_by";
     case "difficulty_desc":
     case "difficulty_asc":
       return "difficulty";

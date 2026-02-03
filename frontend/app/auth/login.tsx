@@ -14,8 +14,8 @@ import { Link, router } from "expo-router";
 import { useAuth } from "@/lib/AuthContext";
 import { useSync } from "@/lib/sync";
 import { validateAuthInput, getErrorMessage } from "@/lib/validation";
-import { taskStore } from "@/lib/store/taskStore";
-import { markTasksDirty, clearAllDirtyFlags, clearLastSyncTime } from "@/lib/sync/syncStorage";
+import { habitStore } from "@/lib/store/habitStore";
+import { markHabitsDirty, clearAllDirtyFlags, clearLastSyncTime } from "@/lib/sync/syncStorage";
 import type { ApiError } from "@/lib/api";
 
 export default function Login() {
@@ -31,34 +31,34 @@ export default function Login() {
     password: string;
   } | null>(null);
 
-  const localTaskCount = user ? taskStore.getTaskCount(user.id) : 0;
+  const localHabitCount = user ? habitStore.getHabitCount(user.id) : 0;
 
   const performLogin = async (
     loginEmail: string,
     loginPassword: string,
-    mergeTasks: boolean,
+    mergeHabits: boolean,
   ) => {
     setIsLoading(true);
     try {
-      if (mergeTasks && user) {
-        // Prepare tasks for merge BEFORE login
+      if (mergeHabits && user) {
+        // Prepare habits for merge BEFORE login
         // This must happen before login() because login() triggers an immediate sync
         // via SyncProvider's useEffect. If we don't prepare first, the sync will:
-        // 1. Use the old lastSyncTime (missing existing tasks on server)
-        // 2. Not push local tasks (they won't be marked dirty yet)
-        const taskIds = await taskStore.updateAllTasksUserId("");
-        await markTasksDirty(taskIds);
+        // 1. Use the old lastSyncTime (missing existing habits on server)
+        // 2. Not push local habits (they won't be marked dirty yet)
+        const habitIds = await habitStore.updateAllHabitsUserId("");
+        await markHabitsDirty(habitIds);
         await clearLastSyncTime(); // Force full sync
 
         // Now login - this triggers sync with correct state
         await login(loginEmail, loginPassword);
 
         // Wait for sync to complete before navigating
-        // This ensures tasks are pushed to the server
+        // This ensures habits are pushed to the server
         await waitForSync();
       } else {
-        // Clear local tasks before login
-        await taskStore.clearAllTasks();
+        // Clear local habits before login
+        await habitStore.clearAllHabits();
         await clearAllDirtyFlags();
         await clearLastSyncTime();
 
@@ -94,15 +94,15 @@ export default function Login() {
       return;
     }
 
-    // Check if user is anonymous and has local tasks
-    if (isAnonymous && localTaskCount > 0) {
+    // Check if user is anonymous and has local habits
+    if (isAnonymous && localHabitCount > 0) {
       // Show merge dialog
       setPendingLogin({ email, password });
       setShowMergeModal(true);
       return;
     }
 
-    // No local tasks or not anonymous - proceed with login
+    // No local habits or not anonymous - proceed with login
     await performLogin(email, password, false);
   };
 
@@ -213,7 +213,7 @@ export default function Login() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Merge Tasks Modal */}
+      {/* Merge Habits Modal */}
       <Modal
         visible={showMergeModal}
         transparent
@@ -226,10 +226,10 @@ export default function Login() {
         <View className="flex-1 bg-black/50 justify-center items-center p-6">
           <View className="bg-white rounded-2xl p-6 max-w-sm w-full">
             <Text className="text-xl font-bold text-gray-900 mb-2">
-              Merge Your Tasks?
+              Merge Your Habits?
             </Text>
             <Text className="text-gray-600 mb-4">
-              You have {localTaskCount} task{localTaskCount !== 1 ? "s" : ""} on
+              You have {localHabitCount} habit{localHabitCount !== 1 ? "s" : ""} on
               this device. Would you like to add them to your account?
             </Text>
 
@@ -243,7 +243,7 @@ export default function Login() {
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text className="text-white font-semibold">
-                    Yes, merge my tasks
+                    Yes, merge my habits
                   </Text>
                 )}
               </Pressable>

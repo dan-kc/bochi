@@ -1,71 +1,38 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore, useCallback } from "react";
-import {
-  type TabType,
-  type SortKey,
-  DEFAULT_SORT,
-  isValidSortForTab,
-} from "../sortOptions";
+import { type SortKey, DEFAULT_SORT } from "../sortOptions";
 
-const STORAGE_KEYS: Record<TabType, string> = {
-  both: "tofustash_sort_both",
-  habit: "tofustash_sort_habit",
-  todo: "tofustash_sort_todo",
-};
+const STORAGE_KEY = "tofustash_sort_habit";
 
 type Listener = () => void;
 
-interface SortPreferencesState {
-  both: SortKey;
-  habit: SortKey;
-  todo: SortKey;
-}
-
-function readStorageSync(): SortPreferencesState {
+function readStorageSync(): SortKey {
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    return {
-      both:
-        (localStorage.getItem(STORAGE_KEYS.both) as SortKey) ||
-        DEFAULT_SORT.both,
-      habit:
-        (localStorage.getItem(STORAGE_KEYS.habit) as SortKey) ||
-        DEFAULT_SORT.habit,
-      todo:
-        (localStorage.getItem(STORAGE_KEYS.todo) as SortKey) ||
-        DEFAULT_SORT.todo,
-    };
+    return (localStorage.getItem(STORAGE_KEY) as SortKey) || DEFAULT_SORT;
   }
-  return { ...DEFAULT_SORT };
+  return DEFAULT_SORT;
 }
 
-async function readStorageAsync(): Promise<SortPreferencesState> {
+async function readStorageAsync(): Promise<SortKey> {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     return readStorageSync();
   } else {
-    const [both, habit, todo] = await Promise.all([
-      AsyncStorage.getItem(STORAGE_KEYS.both),
-      AsyncStorage.getItem(STORAGE_KEYS.habit),
-      AsyncStorage.getItem(STORAGE_KEYS.todo),
-    ]);
-    return {
-      both: (both as SortKey) || DEFAULT_SORT.both,
-      habit: (habit as SortKey) || DEFAULT_SORT.habit,
-      todo: (todo as SortKey) || DEFAULT_SORT.todo,
-    };
+    const value = await AsyncStorage.getItem(STORAGE_KEY);
+    return (value as SortKey) || DEFAULT_SORT;
   }
 }
 
-async function writeStorage(tab: TabType, sortKey: SortKey): Promise<void> {
+async function writeStorage(sortKey: SortKey): Promise<void> {
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEYS[tab], sortKey);
+    localStorage.setItem(STORAGE_KEY, sortKey);
   } else {
-    await AsyncStorage.setItem(STORAGE_KEYS[tab], sortKey);
+    await AsyncStorage.setItem(STORAGE_KEY, sortKey);
   }
 }
 
 class SortPreferencesStore {
-  private state: SortPreferencesState = { ...DEFAULT_SORT };
+  private state: SortKey = DEFAULT_SORT;
   private listeners = new Set<Listener>();
   private initialized = false;
 
@@ -89,14 +56,8 @@ class SortPreferencesStore {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
 
     window.addEventListener("storage", (e) => {
-      const tab = (Object.keys(STORAGE_KEYS) as TabType[]).find(
-        (t) => STORAGE_KEYS[t] === e.key
-      );
-      if (tab && e.newValue) {
-        this.state = {
-          ...this.state,
-          [tab]: e.newValue as SortKey,
-        };
+      if (e.key === STORAGE_KEY && e.newValue) {
+        this.state = e.newValue as SortKey;
         this.notify();
       }
     });
@@ -113,31 +74,21 @@ class SortPreferencesStore {
     return () => this.listeners.delete(listener);
   };
 
-  getSnapshot = (): SortPreferencesState => {
+  getSnapshot = (): SortKey => {
     return this.state;
   };
 
-  getServerSnapshot = (): SortPreferencesState => {
+  getServerSnapshot = (): SortKey => {
     return this.state;
   };
 
-  getSortForTab(tab: TabType): SortKey {
-    const stored = this.state[tab];
-    if (isValidSortForTab(tab, stored)) {
-      return stored;
-    }
-    return DEFAULT_SORT[tab];
+  getSort(): SortKey {
+    return this.state;
   }
 
-  async setSortForTab(tab: TabType, sortKey: SortKey): Promise<void> {
-    if (!isValidSortForTab(tab, sortKey)) {
-      return;
-    }
-    this.state = {
-      ...this.state,
-      [tab]: sortKey,
-    };
-    await writeStorage(tab, sortKey);
+  async setSort(sortKey: SortKey): Promise<void> {
+    this.state = sortKey;
+    await writeStorage(sortKey);
     this.notify();
   }
 
@@ -149,25 +100,16 @@ class SortPreferencesStore {
 
 export const sortPreferencesStore = new SortPreferencesStore();
 
-export function useSortPreference(
-  tab: TabType
-): [SortKey, (sortKey: SortKey) => void] {
-  const state = useSyncExternalStore(
+export function useSortPreference(): [SortKey, (sortKey: SortKey) => void] {
+  const sortKey = useSyncExternalStore(
     sortPreferencesStore.subscribe,
     sortPreferencesStore.getSnapshot,
     sortPreferencesStore.getServerSnapshot
   );
 
-  const sortKey = isValidSortForTab(tab, state[tab])
-    ? state[tab]
-    : DEFAULT_SORT[tab];
-
-  const setSortKey = useCallback(
-    (newSortKey: SortKey) => {
-      sortPreferencesStore.setSortForTab(tab, newSortKey);
-    },
-    [tab]
-  );
+  const setSortKey = useCallback((newSortKey: SortKey) => {
+    sortPreferencesStore.setSort(newSortKey);
+  }, []);
 
   return [sortKey, setSortKey];
 }

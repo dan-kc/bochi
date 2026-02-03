@@ -52,22 +52,20 @@ impl Database {
         Ok(user_id)
     }
 
-    pub async fn create_task(
+    pub async fn create_habit(
         &self,
-        create_task_options: CreateTaskOptions,
-    ) -> Result<TaskRow, sqlx::Error> {
+        create_habit_options: CreateHabitOptions,
+    ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO tasks
-            (user_id, name, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, habit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, completed_at, habit",
+            "INSERT INTO habits
+            (user_id, name, hidden_until, description, min_daily_frequency, difficulty_rank) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, description, min_daily_frequency, difficulty_rank",
         )
-        .bind(create_task_options.user_id)
-        .bind(create_task_options.name)
-        .bind(create_task_options.hidden_until)
-        .bind(create_task_options.due_by)
-        .bind(create_task_options.description)
-        .bind(create_task_options.min_daily_frequency)
-        .bind(create_task_options.difficulty_rank)
-        .bind(create_task_options.habit)
+        .bind(create_habit_options.user_id)
+        .bind(create_habit_options.name)
+        .bind(create_habit_options.hidden_until)
+        .bind(create_habit_options.description)
+        .bind(create_habit_options.min_daily_frequency)
+        .bind(create_habit_options.difficulty_rank)
         .fetch_one(&self.pool)
         .await
     }
@@ -89,30 +87,30 @@ impl Database {
         .await
     }
 
-    pub async fn create_trade_with_task(
+    pub async fn create_trade_with_habit(
         &self,
-        create_trade_options: CreateTradeWithTaskOptions,
-    ) -> Result<TradeWithTaskRow, sqlx::Error> {
+        create_trade_options: CreateTradeWithHabitOptions,
+    ) -> Result<TradeWithHabitRow, sqlx::Error> {
         sqlx::query_as(
             // We `SELECT $1, $2, $3` here instead of `SELECT column names`. This is valid SQL.
             // We do this because we can only do a where clause if we SELECT. We don't want
-            // to use any of the values from the tasks table for the insert, so we just provide
+            // to use any of the values from the habits table for the insert, so we just provide
             // literal values that, after the validation is done, gets used by the insert
             // statement.
             "WITH new_trade AS (
-                INSERT INTO trades (task_id, amount, user_id)
+                INSERT INTO trades (habit_id, amount, user_id)
                 SELECT $1, $2, $3
-                FROM tasks
-                WHERE tasks.id = $1 AND tasks.user_id = $3
-                RETURNING id, task_id, reward_id, amount, created_at
+                FROM habits
+                WHERE habits.id = $1 AND habits.user_id = $3
+                RETURNING id, habit_id, reward_id, amount, created_at
             )
             SELECT
                 nt.*,
-                t.name AS task_name, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at, t.hidden_until AS task_hidden_until, t.due_by AS task_due_by, t.description AS task_description, t.min_daily_frequency AS task_min_daily_frequency, t.difficulty_rank AS task_difficulty_rank, t.habit AS task_habit
+                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.hidden_until AS habit_hidden_until, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_rank AS habit_difficulty_rank
             FROM new_trade nt
-            JOIN tasks t ON nt.task_id = t.id",
+            JOIN habits h ON nt.habit_id = h.id",
         )
-        .bind(create_trade_options.task_id)
+        .bind(create_trade_options.habit_id)
         .bind(create_trade_options.amount)
         .bind(create_trade_options.user_id)
         .fetch_one(&self.pool)
@@ -129,7 +127,7 @@ impl Database {
                 SELECT $1, $2, $3
                 FROM rewards
                 WHERE rewards.id = $1 AND rewards.user_id = $3
-                RETURNING id, task_id, reward_id, amount, created_at
+                RETURNING id, habit_id, reward_id, amount, created_at
             )
             SELECT
                 nt.*,
@@ -196,7 +194,7 @@ impl Database {
     ) -> Result<RefreshTokenRow, sqlx::Error> {
         sqlx::query_as(
             "
-            SELECT refresh_tokens.key, refresh_tokens.created_at, refresh_tokens.expires_at 
+            SELECT refresh_tokens.key, refresh_tokens.created_at, refresh_tokens.expires_at
             FROM refresh_tokens
             INNER JOIN users ON refresh_tokens.user_id = users.id
             WHERE refresh_tokens.name = $1
@@ -282,17 +280,17 @@ impl Database {
     // Sync Operations
     // ============================================================================
 
-    /// Get all tasks for a user, optionally filtered by updated_at > since
-    pub async fn get_tasks_since(
+    /// Get all habits for a user, optionally filtered by updated_at > since
+    pub async fn get_habits_since(
         &self,
         user_id: Uuid,
         since: Option<NaiveDateTime>,
-    ) -> Result<Vec<TaskRow>, sqlx::Error> {
+    ) -> Result<Vec<HabitRow>, sqlx::Error> {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, completed_at, habit
-                     FROM tasks
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, description, min_daily_frequency, difficulty_rank
+                     FROM habits
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
                 )
@@ -303,8 +301,8 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, completed_at, habit
-                     FROM tasks
+                    "SELECT id, name, created_at, updated_at, deleted_at, hidden_until, description, min_daily_frequency, difficulty_rank
+                     FROM habits
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
                 )
@@ -328,7 +326,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -340,7 +338,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, task_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -369,71 +367,56 @@ impl Database {
         self.pool.begin().await
     }
 
-    /// Upsert a task within a transaction
-    pub async fn upsert_task_tx(
+    /// Upsert a habit within a transaction
+    pub async fn upsert_habit_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
-        task: &UpsertTaskOptions,
-    ) -> Result<TaskRow, sqlx::Error> {
+        habit: &UpsertHabitOptions,
+    ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, hidden_until, due_by, min_daily_frequency, difficulty_rank, completed_at, habit)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, hidden_until, min_daily_frequency, difficulty_rank)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (id) DO UPDATE SET
                 user_id = CASE
-                    WHEN tasks.user_id = $2 THEN tasks.user_id
-                    WHEN EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN $2
-                    ELSE tasks.user_id
+                    WHEN habits.user_id = $2 THEN habits.user_id
+                    WHEN EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN $2
+                    ELSE habits.user_id
                 END,
                 name = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.name
-                    ELSE tasks.name
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.name
+                    ELSE habits.name
                 END,
                 description = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.description
-                    ELSE tasks.description
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.description
+                    ELSE habits.description
                 END,
                 deleted_at = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.deleted_at
-                    ELSE tasks.deleted_at
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.deleted_at
+                    ELSE habits.deleted_at
                 END,
                 hidden_until = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.hidden_until
-                    ELSE tasks.hidden_until
-                END,
-                due_by = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.due_by
-                    ELSE tasks.due_by
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.hidden_until
+                    ELSE habits.hidden_until
                 END,
                 min_daily_frequency = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.min_daily_frequency
-                    ELSE tasks.min_daily_frequency
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.min_daily_frequency
+                    ELSE habits.min_daily_frequency
                 END,
                 difficulty_rank = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.difficulty_rank
-                    ELSE tasks.difficulty_rank
-                END,
-                completed_at = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.completed_at
-                    ELSE tasks.completed_at
-                END,
-                habit = CASE
-                    WHEN tasks.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true) THEN EXCLUDED.habit
-                    ELSE tasks.habit
+                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.difficulty_rank
+                    ELSE habits.difficulty_rank
                 END
-             RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, due_by, description, min_daily_frequency, difficulty_rank, completed_at, habit",
+             RETURNING id, name, created_at, updated_at, deleted_at, hidden_until, description, min_daily_frequency, difficulty_rank",
         )
-        .bind(task.id)
+        .bind(habit.id)
         .bind(user_id)
-        .bind(&task.name)
-        .bind(&task.description)
-        .bind(task.created_at)
-        .bind(task.deleted_at)
-        .bind(task.hidden_until)
-        .bind(task.due_by)
-        .bind(task.min_daily_frequency)
-        .bind(&task.difficulty_rank)
-        .bind(task.completed_at)
-        .bind(task.habit)
+        .bind(&habit.name)
+        .bind(&habit.description)
+        .bind(habit.created_at)
+        .bind(habit.deleted_at)
+        .bind(habit.hidden_until)
+        .bind(habit.min_daily_frequency)
+        .bind(&habit.difficulty_rank)
         .fetch_one(&mut **tx)
         .await
     }
@@ -444,18 +427,18 @@ impl Database {
         user_id: Uuid,
         trade: &UpsertTradeOptions,
     ) -> Result<TradeRow, sqlx::Error> {
-        // Validate task belongs to user if task_id is provided
-        if let Some(task_id) = trade.task_id {
-            let task_valid: Option<(Uuid,)> = sqlx::query_as(
-                "SELECT id FROM tasks
-                 WHERE id = $1 AND (user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = tasks.user_id AND is_anonymous = true))",
+        // Validate habit belongs to user if habit_id is provided
+        if let Some(habit_id) = trade.habit_id {
+            let habit_valid: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM habits
+                 WHERE id = $1 AND (user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true))",
             )
-            .bind(task_id)
+            .bind(habit_id)
             .bind(user_id)
             .fetch_optional(&mut **tx)
             .await?;
 
-            if task_valid.is_none() {
+            if habit_valid.is_none() {
                 return Err(sqlx::Error::RowNotFound);
             }
         }
@@ -477,15 +460,15 @@ impl Database {
 
         // Upsert the trade
         sqlx::query_as(
-            "INSERT INTO trades (id, user_id, task_id, reward_id, amount, created_at, deleted_at)
+            "INSERT INTO trades (id, user_id, habit_id, reward_id, amount, created_at, deleted_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (id) DO UPDATE SET
                 deleted_at = EXCLUDED.deleted_at
-             RETURNING id, task_id, reward_id, amount, created_at, updated_at, deleted_at",
+             RETURNING id, habit_id, reward_id, amount, created_at, updated_at, deleted_at",
         )
         .bind(trade.id)
         .bind(user_id)
-        .bind(trade.task_id)
+        .bind(trade.habit_id)
         .bind(trade.reward_id)
         .bind(trade.amount)
         .bind(trade.created_at)
@@ -520,28 +503,26 @@ impl Database {
     }
 }
 
-pub struct CreateTaskOptions {
+pub struct CreateHabitOptions {
     pub user_id: Uuid,
     pub name: String,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub habit: bool,
 }
 
-pub struct CreateTradeWithTaskOptions {
+pub struct CreateTradeWithHabitOptions {
     user_id: Uuid,
-    task_id: Uuid,
+    habit_id: Uuid,
     amount: i32,
 }
-impl CreateTradeWithTaskOptions {
-    pub fn new(user_id: Uuid, task_id: Uuid, amount: i32) -> Self {
+impl CreateTradeWithHabitOptions {
+    pub fn new(user_id: Uuid, habit_id: Uuid, amount: i32) -> Self {
         Self {
-            user_id: user_id,
-            task_id: task_id,
-            amount: amount,
+            user_id,
+            habit_id,
+            amount,
         }
     }
 }
@@ -554,9 +535,9 @@ pub struct CreateTradeWithRewardOptions {
 impl CreateTradeWithRewardOptions {
     pub fn new(user_id: Uuid, reward_id: Uuid, amount: i32) -> Self {
         Self {
-            user_id: user_id,
-            reward_id: reward_id,
-            amount: amount,
+            user_id,
+            reward_id,
+            amount,
         }
     }
 }
@@ -569,23 +550,20 @@ pub struct CreateRewardOptions {
     pub max_daily_frequency: Option<f32>,
 }
 
-pub struct UpsertTaskOptions {
+pub struct UpsertHabitOptions {
     pub id: Uuid,
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub completed_at: Option<NaiveDateTime>,
-    pub habit: bool,
 }
 
 pub struct UpsertTradeOptions {
     pub id: Uuid,
-    pub task_id: Option<Uuid>,
+    pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
@@ -595,7 +573,7 @@ pub struct UpsertTradeOptions {
 #[derive(sqlx::FromRow)]
 pub struct TradeRow {
     pub id: Uuid,
-    pub task_id: Option<Uuid>,
+    pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
@@ -629,19 +607,16 @@ pub struct RefreshTokenRow {
 }
 
 #[derive(sqlx::FromRow)]
-pub struct TaskRow {
+pub struct HabitRow {
     pub id: Uuid,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub completed_at: Option<NaiveDateTime>,
-    pub habit: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -657,23 +632,21 @@ pub struct RewardRow {
 }
 
 #[derive(sqlx::FromRow)]
-pub struct TradeWithTaskRow {
+pub struct TradeWithHabitRow {
     pub id: Uuid,
     pub created_at: NaiveDateTime,
     pub amount: i32,
-    pub task_id: Uuid,
+    pub habit_id: Uuid,
 
-    // Task join
-    pub task_name: String,
-    pub task_created_at: NaiveDateTime,
-    pub task_updated_at: NaiveDateTime,
-    pub task_deleted_at: Option<NaiveDateTime>,
-    pub task_hidden_until: Option<NaiveDateTime>,
-    pub task_due_by: Option<NaiveDateTime>,
-    pub task_description: String,
-    pub task_min_daily_frequency: Option<f64>,
-    pub task_difficulty_rank: Option<String>,
-    pub task_habit: bool,
+    // Habit join
+    pub habit_name: String,
+    pub habit_created_at: NaiveDateTime,
+    pub habit_updated_at: NaiveDateTime,
+    pub habit_deleted_at: Option<NaiveDateTime>,
+    pub habit_hidden_until: Option<NaiveDateTime>,
+    pub habit_description: String,
+    pub habit_min_daily_frequency: Option<f64>,
+    pub habit_difficulty_rank: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]

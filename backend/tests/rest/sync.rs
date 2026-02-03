@@ -18,22 +18,21 @@ async fn test_sync_pull_returns_all_entity_types() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // Create a task first
-    let task_body = json!({
-        "name": "Test Task",
-        "description": "A test task",
-        "habit": false
+    // Create a habit first
+    let habit_body = json!({
+        "name": "Test Habit",
+        "description": "A test habit"
     });
-    let (_, task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
-    let task_id = task_json.get("id").unwrap().as_str().unwrap();
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
-    // Create a trade for that task using POST /api/sync
+    // Create a trade for that habit using POST /api/sync
     let trade_id = uuid::Uuid::new_v4().to_string();
     let sync_body = json!({
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -45,17 +44,17 @@ async fn test_sync_pull_returns_all_entity_types() {
 
     assert_eq!(status, StatusCode::OK);
 
-    // Check tasks
-    let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].get("id").unwrap(), task_id);
-    assert_eq!(tasks[0].get("name").unwrap(), "Test Task");
+    // Check habits
+    let habits = json.get("habits").unwrap().as_array().unwrap();
+    assert_eq!(habits.len(), 1);
+    assert_eq!(habits[0].get("id").unwrap(), habit_id);
+    assert_eq!(habits[0].get("name").unwrap(), "Test Habit");
 
     // Check trades
     let trades = json.get("trades").unwrap().as_array().unwrap();
     assert_eq!(trades.len(), 1);
     assert_eq!(trades[0].get("id").unwrap(), &trade_id);
-    assert_eq!(trades[0].get("taskId").unwrap(), task_id);
+    assert_eq!(trades[0].get("habitId").unwrap(), habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 500);
 
     // Check balance
@@ -76,13 +75,12 @@ async fn test_sync_pull_with_since_filters_all_entities() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // Create first task
-    let task_body = json!({
-        "name": "Old Task",
-        "description": "Created before timestamp",
-        "habit": false
+    // Create first habit
+    let habit_body = json!({
+        "name": "Old Habit",
+        "description": "Created before timestamp"
     });
-    make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+    make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
 
     // Get current server time
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
@@ -93,26 +91,25 @@ async fn test_sync_pull_with_since_filters_all_entities() {
         .unwrap()
         .to_string();
 
-    // Create a new task after getting the timestamp
-    let task_body_2 = json!({
-        "name": "New Task",
-        "description": "Created after timestamp",
-        "habit": false
+    // Create a new habit after getting the timestamp
+    let habit_body_2 = json!({
+        "name": "New Habit",
+        "description": "Created after timestamp"
     });
-    let (_, new_task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body_2).await;
-    let new_task_id = new_task_json.get("id").unwrap().as_str().unwrap();
+    let (_, new_habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body_2).await;
+    let new_habit_id = new_habit_json.get("id").unwrap().as_str().unwrap();
 
-    // Pull since the timestamp - should only get the new task
+    // Pull since the timestamp - should only get the new habit
     let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
 
-    let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].get("id").unwrap(), new_task_id);
-    assert_eq!(tasks[0].get("name").unwrap(), "New Task");
+    let habits = json.get("habits").unwrap().as_array().unwrap();
+    assert_eq!(habits.len(), 1);
+    assert_eq!(habits[0].get("id").unwrap(), new_habit_id);
+    assert_eq!(habits[0].get("name").unwrap(), "New Habit");
 
     // No new trades since timestamp
     let trades = json.get("trades").unwrap().as_array().unwrap();
@@ -130,7 +127,7 @@ async fn test_sync_pull_empty_for_new_user() {
     let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 0);
+    assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 0.0);
     assert_eq!(
@@ -151,28 +148,27 @@ async fn test_sync_pull_requires_authentication() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_sync_push_creates_task_and_trade_atomically() {
-    let email = generate_email_from_fn!(test_sync_push_creates_task_and_trade_atomically);
+async fn test_sync_push_creates_habit_and_trade_atomically() {
+    let email = generate_email_from_fn!(test_sync_push_creates_habit_and_trade_atomically);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
 
     let body = json!({
-        "tasks": [{
-            "id": task_id,
-            "name": "New Task",
+        "habits": [{
+            "id": habit_id,
+            "name": "New Habit",
             "description": "Created atomically",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -182,17 +178,17 @@ async fn test_sync_push_creates_task_and_trade_atomically() {
 
     assert_eq!(status, StatusCode::OK);
 
-    // Check task was created
-    let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].get("id").unwrap(), &task_id);
-    assert_eq!(tasks[0].get("name").unwrap(), "New Task");
+    // Check habit was created
+    let habits = json.get("habits").unwrap().as_array().unwrap();
+    assert_eq!(habits.len(), 1);
+    assert_eq!(habits[0].get("id").unwrap(), &habit_id);
+    assert_eq!(habits[0].get("name").unwrap(), "New Habit");
 
     // Check trade was created
     let trades = json.get("trades").unwrap().as_array().unwrap();
     assert_eq!(trades.len(), 1);
     assert_eq!(trades[0].get("id").unwrap(), &trade_id);
-    assert_eq!(trades[0].get("taskId").unwrap(), &task_id);
+    assert_eq!(trades[0].get("habitId").unwrap(), &habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 500);
 
     // Check balance updated
@@ -200,29 +196,28 @@ async fn test_sync_push_creates_task_and_trade_atomically() {
 }
 
 #[tokio::test]
-async fn test_sync_push_ordering_task_before_trade() {
-    let email = generate_email_from_fn!(test_sync_push_ordering_task_before_trade);
+async fn test_sync_push_ordering_habit_before_trade() {
+    let email = generate_email_from_fn!(test_sync_push_ordering_habit_before_trade);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
 
-    // Send trade that references a task that will be created in the same request
+    // Send trade that references a habit that will be created in the same request
     let body = json!({
-        "tasks": [{
-            "id": task_id,
-            "name": "Task Created First",
+        "habits": [{
+            "id": habit_id,
+            "name": "Habit Created First",
             "description": "Even though trade references it",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 300,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -237,7 +232,7 @@ async fn test_sync_push_ordering_task_before_trade() {
         json
     );
 
-    assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 300.0);
 }
@@ -250,23 +245,22 @@ async fn test_sync_push_partial_failure_rolls_back() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
-    let non_existent_task_id = uuid::Uuid::new_v4().to_string();
+    let non_existent_habit_id = uuid::Uuid::new_v4().to_string();
 
-    // Try to create a task and a trade that references a non-existent task
+    // Try to create a habit and a trade that references a non-existent habit
     let body = json!({
-        "tasks": [{
-            "id": task_id,
+        "habits": [{
+            "id": habit_id,
             "name": "This Should Not Be Saved",
             "description": "Because trade will fail",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": non_existent_task_id,
+            "habitId": non_existent_habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -282,13 +276,13 @@ async fn test_sync_push_partial_failure_rolls_back() {
         json
     );
 
-    // Now verify the task was NOT saved by pulling
+    // Now verify the habit was NOT saved by pulling
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    let tasks = pull_json.get("tasks").unwrap().as_array().unwrap();
+    let habits = pull_json.get("habits").unwrap().as_array().unwrap();
     assert_eq!(
-        tasks.len(),
+        habits.len(),
         0,
-        "Task should not have been saved due to rollback"
+        "Habit should not have been saved due to rollback"
     );
 }
 
@@ -312,7 +306,7 @@ async fn test_sync_push_empty_input_succeeds() {
         json
     );
 
-    assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 0);
+    assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
     assert!(json.get("serverTime").unwrap().is_string());
 }
@@ -325,30 +319,29 @@ async fn test_sync_push_updates_balance_correctly() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade1_id = uuid::Uuid::new_v4().to_string();
     let trade2_id = uuid::Uuid::new_v4().to_string();
 
-    // Create task and two trades in one sync
+    // Create habit and two trades in one sync
     let body = json!({
-        "tasks": [{
-            "id": task_id,
-            "name": "Task",
+        "habits": [{
+            "id": habit_id,
+            "name": "Habit",
             "description": "For balance test",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [
             {
                 "id": trade1_id,
-                "taskId": task_id,
+                "habitId": habit_id,
                 "amount": 500,
                 "createdAt": "2025-01-01T10:00:00"
             },
             {
                 "id": trade2_id,
-                "taskId": task_id,
+                "habitId": habit_id,
                 "amount": 300,
                 "createdAt": "2025-01-01T10:01:00"
             }
@@ -368,13 +361,12 @@ async fn test_sync_push_updates_balance_correctly() {
 #[tokio::test]
 async fn test_sync_push_requires_authentication() {
     let body = json!({
-        "tasks": [{
+        "habits": [{
             "id": uuid::Uuid::new_v4().to_string(),
             "name": "Test",
             "description": "Test",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }]
     });
 
@@ -383,20 +375,20 @@ async fn test_sync_push_requires_authentication() {
 }
 
 #[tokio::test]
-async fn test_sync_push_trade_invalid_task_reference_fails() {
-    let email = generate_email_from_fn!(test_sync_push_trade_invalid_task_reference_fails);
+async fn test_sync_push_trade_invalid_habit_reference_fails() {
+    let email = generate_email_from_fn!(test_sync_push_trade_invalid_habit_reference_fails);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let trade_id = uuid::Uuid::new_v4().to_string();
-    let non_existent_task_id = uuid::Uuid::new_v4().to_string();
+    let non_existent_habit_id = uuid::Uuid::new_v4().to_string();
 
     let body = json!({
         "trades": [{
             "id": trade_id,
-            "taskId": non_existent_task_id,
+            "habitId": non_existent_habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -406,34 +398,33 @@ async fn test_sync_push_trade_invalid_task_reference_fails() {
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
-        "Should have error for invalid task reference"
+        "Should have error for invalid habit reference"
     );
     assert!(
         json.get("errors").is_some(),
-        "Should have errors for invalid task reference"
+        "Should have errors for invalid habit reference"
     );
 }
 
 #[tokio::test]
-async fn test_sync_push_validates_task_fields() {
-    let email = generate_email_from_fn!(test_sync_push_validates_task_fields);
+async fn test_sync_push_validates_habit_fields() {
+    let email = generate_email_from_fn!(test_sync_push_validates_habit_fields);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     // Name too long (>100 chars)
     let long_name = "a".repeat(101);
 
     let body = json!({
-        "tasks": [{
-            "id": task_id,
+        "habits": [{
+            "id": habit_id,
             "name": long_name,
             "description": "Valid description",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }]
     });
 
@@ -458,21 +449,20 @@ async fn test_sync_push_idempotent_same_ids() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
 
     let body = json!({
-        "tasks": [{
-            "id": task_id,
+        "habits": [{
+            "id": habit_id,
             "name": "Original Name",
             "description": "Original",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -492,9 +482,9 @@ async fn test_sync_push_idempotent_same_ids() {
     // Balance should still be 500 (not 1000)
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 500.0);
 
-    // Verify only one task and one trade exist
+    // Verify only one habit and one trade exist
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    assert_eq!(pull_json.get("tasks").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(pull_json.get("habits").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(
         pull_json.get("trades").unwrap().as_array().unwrap().len(),
         1
@@ -513,22 +503,21 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
 
     // Push
     let push_body = json!({
-        "tasks": [{
-            "id": task_id,
-            "name": "Roundtrip Task",
+        "habits": [{
+            "id": habit_id,
+            "name": "Roundtrip Habit",
             "description": "Testing roundtrip",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 750,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -541,16 +530,16 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
     let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
     assert_eq!(status, StatusCode::OK);
 
-    let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].get("id").unwrap(), &task_id);
-    assert_eq!(tasks[0].get("name").unwrap(), "Roundtrip Task");
-    assert_eq!(tasks[0].get("description").unwrap(), "Testing roundtrip");
+    let habits = json.get("habits").unwrap().as_array().unwrap();
+    assert_eq!(habits.len(), 1);
+    assert_eq!(habits[0].get("id").unwrap(), &habit_id);
+    assert_eq!(habits[0].get("name").unwrap(), "Roundtrip Habit");
+    assert_eq!(habits[0].get("description").unwrap(), "Testing roundtrip");
 
     let trades = json.get("trades").unwrap().as_array().unwrap();
     assert_eq!(trades.len(), 1);
     assert_eq!(trades[0].get("id").unwrap(), &trade_id);
-    assert_eq!(trades[0].get("taskId").unwrap(), &task_id);
+    assert_eq!(trades[0].get("habitId").unwrap(), &habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 750);
 
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 750.0);
@@ -565,15 +554,14 @@ async fn test_sync_incremental_after_push() {
     let access_token = get_access_token_for_user(&email, &password).await;
 
     // First push
-    let task1_id = uuid::Uuid::new_v4().to_string();
+    let habit1_id = uuid::Uuid::new_v4().to_string();
     let push1_body = json!({
-        "tasks": [{
-            "id": task1_id,
-            "name": "First Task",
+        "habits": [{
+            "id": habit1_id,
+            "name": "First Habit",
             "description": "Created first",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }]
     });
 
@@ -586,16 +574,15 @@ async fn test_sync_incremental_after_push() {
         .unwrap()
         .to_string();
 
-    // Second push with new task
-    let task2_id = uuid::Uuid::new_v4().to_string();
+    // Second push with new habit
+    let habit2_id = uuid::Uuid::new_v4().to_string();
     let push2_body = json!({
-        "tasks": [{
-            "id": task2_id,
-            "name": "Second Task",
+        "habits": [{
+            "id": habit2_id,
+            "name": "Second Habit",
             "description": "Created second",
             "createdAt": "2025-01-01T11:00:00",
-            "updatedAt": "2025-01-01T11:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T11:00:00"
         }]
     });
 
@@ -606,11 +593,11 @@ async fn test_sync_incremental_after_push() {
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
     assert_eq!(status, StatusCode::OK);
 
-    let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    // Should only get the second task (created after server_time)
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].get("id").unwrap(), &task2_id);
-    assert_eq!(tasks[0].get("name").unwrap(), "Second Task");
+    let habits = json.get("habits").unwrap().as_array().unwrap();
+    // Should only get the second habit (created after server_time)
+    assert_eq!(habits.len(), 1);
+    assert_eq!(habits[0].get("id").unwrap(), &habit2_id);
+    assert_eq!(habits[0].get("name").unwrap(), "Second Habit");
 }
 
 // ============================================================================
@@ -629,21 +616,20 @@ async fn test_sync_only_returns_own_data() {
     let token2 = get_access_token_for_user(&email2, &password).await;
 
     // User 1 creates data
-    let task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
 
     let push_body = json!({
-        "tasks": [{
-            "id": task_id,
-            "name": "User 1's Task",
+        "habits": [{
+            "id": habit_id,
+            "name": "User 1's Habit",
             "description": "Private",
             "createdAt": "2025-01-01T10:00:00",
-            "updatedAt": "2025-01-01T10:00:00",
-            "habit": false
+            "updatedAt": "2025-01-01T10:00:00"
         }],
         "trades": [{
             "id": trade_id,
-            "taskId": task_id,
+            "habitId": habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
         }]
@@ -657,7 +643,7 @@ async fn test_sync_only_returns_own_data() {
     assert_eq!(status, StatusCode::OK);
 
     // User 2 should see nothing
-    assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 0);
+    assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 0.0);
 }

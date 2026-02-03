@@ -7,28 +7,27 @@ use axum::http::StatusCode;
 use serde_json::{json, Value};
 
 #[tokio::test]
-async fn test_create_trade_with_task_success() {
-    let email = generate_email_from_fn!(test_create_trade_with_task_success);
+async fn test_create_trade_with_habit_success() {
+    let email = generate_email_from_fn!(test_create_trade_with_habit_success);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // First create a task
-    let task_body = json!({
-        "name": "Test Task",
-        "description": "A test task for trading",
-        "habit": false
+    // First create a habit
+    let habit_body = json!({
+        "name": "Test Habit",
+        "description": "A test habit for trading"
     });
 
-    let (status, task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+    let (status, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
     assert_eq!(status, StatusCode::CREATED);
-    let task_id = task_json.get("id").unwrap().as_str().unwrap();
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
-    // Now create a trade with the task
+    // Now create a trade with the habit
     let trade_body = json!({
-        "taskId": task_id
+        "habitId": habit_id
     });
 
     let (status, json) =
@@ -40,12 +39,12 @@ async fn test_create_trade_with_task_success() {
     assert!(json.get("createdAt").is_some());
 
     let tradable_item = json.get("tradableItem").unwrap();
-    assert_eq!(tradable_item.get("type").unwrap(), "Task");
-    assert_eq!(tradable_item.get("id").unwrap(), task_id);
-    assert_eq!(tradable_item.get("name").unwrap(), "Test Task");
+    assert_eq!(tradable_item.get("type").unwrap(), "Habit");
+    assert_eq!(tradable_item.get("id").unwrap(), habit_id);
+    assert_eq!(tradable_item.get("name").unwrap(), "Test Habit");
     assert_eq!(
         tradable_item.get("description").unwrap(),
-        "A test task for trading"
+        "A test habit for trading"
     );
 }
 
@@ -94,22 +93,21 @@ async fn test_create_trade_with_reward_success() {
 }
 
 #[tokio::test]
-async fn test_create_trade_with_both_task_and_reward() {
-    let email = generate_email_from_fn!(test_create_trade_with_both_task_and_reward);
+async fn test_create_trade_with_both_habit_and_reward() {
+    let email = generate_email_from_fn!(test_create_trade_with_both_habit_and_reward);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // Create a task
-    let task_body = json!({
-        "name": "Test Task",
-        "description": "A test task",
-        "habit": false
+    // Create a habit
+    let habit_body = json!({
+        "name": "Test Habit",
+        "description": "A test habit"
     });
-    let (_, task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
-    let task_id = task_json.get("id").unwrap().as_str().unwrap();
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
     // Create a reward
     let reward_body = json!({
@@ -122,7 +120,7 @@ async fn test_create_trade_with_both_task_and_reward() {
 
     // Try to create a trade with both
     let trade_body = json!({
-        "taskId": task_id,
+        "habitId": habit_id,
         "rewardId": reward_id
     });
 
@@ -139,7 +137,7 @@ async fn test_create_trade_with_both_task_and_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `task_id` or `reward_id`".to_string()
+            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`".to_string()
         )
     );
     assert_eq!(
@@ -149,14 +147,14 @@ async fn test_create_trade_with_both_task_and_reward() {
 }
 
 #[tokio::test]
-async fn test_create_trade_with_neither_task_nor_reward() {
-    let email = generate_email_from_fn!(test_create_trade_with_neither_task_nor_reward);
+async fn test_create_trade_with_neither_habit_nor_reward() {
+    let email = generate_email_from_fn!(test_create_trade_with_neither_habit_nor_reward);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // Try to create a trade with neither task nor reward
+    // Try to create a trade with neither habit nor reward
     let trade_body = json!({});
 
     let (status, json) =
@@ -172,7 +170,7 @@ async fn test_create_trade_with_neither_task_nor_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `task_id` or `reward_id`".to_string()
+            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`".to_string()
         )
     );
     assert_eq!(
@@ -184,7 +182,7 @@ async fn test_create_trade_with_neither_task_nor_reward() {
 #[tokio::test]
 async fn test_create_trade_without_authentication() {
     let trade_body = json!({
-        "taskId": "079d9887-79f9-4bdf-a341-2d5990a694e1"
+        "habitId": "079d9887-79f9-4bdf-a341-2d5990a694e1"
     });
 
     let (status, _) = make_unauthenticated_post_request("/api/trades", trade_body).await;
@@ -192,16 +190,16 @@ async fn test_create_trade_without_authentication() {
 }
 
 #[tokio::test]
-async fn test_create_trade_with_nonexistent_task() {
-    let email = generate_email_from_fn!(test_create_trade_with_nonexistent_task);
+async fn test_create_trade_with_nonexistent_habit() {
+    let email = generate_email_from_fn!(test_create_trade_with_nonexistent_habit);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    // Try to create a trade with a nonexistent task ID
+    // Try to create a trade with a nonexistent habit ID
     let trade_body = json!({
-        "taskId": "2d452d8f-f87a-4d6b-b16a-acdfcbea1fff"
+        "habitId": "2d452d8f-f87a-4d6b-b16a-acdfcbea1fff"
     });
 
     let (status, json) =

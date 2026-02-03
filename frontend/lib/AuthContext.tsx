@@ -19,7 +19,7 @@ import {
   getOrCreateDeviceId,
   type StoredUserInfo,
 } from "./storage";
-import { taskStore } from "./store/taskStore";
+import { habitStore } from "./store/habitStore";
 
 interface User {
   id: string;
@@ -255,8 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await storeExtendedTokens({ ...tokens, isAnonymous: true });
       }
 
-      // Migrate any tasks created while offline (with "local-user" ID) to this new user
-      await taskStore.migrateLocalUserTasks(user.id);
+      // Migrate any habits created while offline (with "local-user" ID) to this new user
+      await habitStore.migrateLocalUserHabits(user.id);
 
       setUser(user);
       console.log("[Auth] Anonymous auth succeeded");
@@ -417,9 +417,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Logout API call failed, but we still want to clear local state
     } finally {
-      // Clear the in-memory task store before clearing storage
-      // This prevents tasks from being written back during anonymous auth
-      await taskStore.clearAllTasks();
+      // Clear the in-memory habit store before clearing storage
+      // This prevents habits from being written back during anonymous auth
+      await habitStore.clearAllHabits();
 
       if (isWebPlatform()) {
         // Clear all localStorage for a fresh start

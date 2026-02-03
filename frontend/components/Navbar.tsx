@@ -5,15 +5,14 @@ export default function Navbar() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "Home", path: "/" },
-    { name: "Tasks", path: "/tasks" },
+    { name: "Habits", path: "/" },
     { name: "Settings", path: "/settings" },
   ] as const;
 
   return (
     <View className="bg-white border-b border-gray-200 px-6 py-4">
       <View className="flex-row justify-between items-center max-w-7xl mx-auto w-full">
-        <Text className="text-xl font-bold text-gray-900">TOFUTOFU</Text>
+        <Text className="text-xl font-bold text-gray-900">TOFUSTASH</Text>
         <View className="flex-row gap-6">
           {navItems.map((item) => {
             const isActive = pathname === item.path;

@@ -11,7 +11,7 @@ let
       fi
       DB_NAME="$1"
       echo "Truncating all tables in ''${DB_NAME} database..."
-      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, rewards, tags, task_dependencies, task_tags, tasks, trades, users CASCADE;"
+      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d "''${DB_NAME}" -c "TRUNCATE refresh_tokens, rewards, tags, habits, trades, users CASCADE;"
       echo "Database cleaned!"
     '';
 

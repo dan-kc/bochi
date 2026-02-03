@@ -1,128 +1,128 @@
 import { useSyncExternalStore, useCallback, useRef } from "react";
-import { taskStore } from "./taskStore";
-import type { Task } from "../task";
+import { habitStore } from "./habitStore";
+import type { Habit } from "../habit";
 
 // ============ Core Subscription Hook ============
 
 /**
- * Subscribe to the entire task state.
- * Re-renders on ANY task change.
+ * Subscribe to the entire habit state.
+ * Re-renders on ANY habit change.
  */
-export function useTaskStore() {
+export function useHabitStore() {
   return useSyncExternalStore(
-    taskStore.subscribe,
-    taskStore.getSnapshot,
-    taskStore.getServerSnapshot,
+    habitStore.subscribe,
+    habitStore.getSnapshot,
+    habitStore.getServerSnapshot,
   );
 }
 
 // ============ Fine-Grained Hooks ============
 
 /**
- * Subscribe to all tasks for a user (filtered, sorted).
+ * Subscribe to all habits for a user (filtered, sorted).
  * Only re-renders when the filtered list changes.
  */
-export function useTasks(userId: string): Task[] {
+export function useHabits(userId: string): Habit[] {
   const getSnapshot = useCallback(() => {
-    return taskStore.getAllTasks(userId);
+    return habitStore.getAllHabits(userId);
   }, [userId]);
 
   // Use a ref to cache the previous result for shallow comparison
-  const cacheRef = useRef<{ tasks: Task[]; serialized: string }>({
-    tasks: [],
+  const cacheRef = useRef<{ habits: Habit[]; serialized: string }>({
+    habits: [],
     serialized: "[]",
   });
 
   const getSnapshotWithCache = useCallback(() => {
-    const tasks = taskStore.getAllTasks(userId);
+    const habits = habitStore.getAllHabits(userId);
     // Serialize for comparison (only IDs and updated_at for efficiency)
     const serialized = JSON.stringify(
-      tasks.map((t) => `${t.id}:${t.updated_at}`),
+      habits.map((h) => `${h.id}:${h.updated_at}`),
     );
 
     if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { tasks, serialized };
+      cacheRef.current = { habits, serialized };
     }
-    return cacheRef.current.tasks;
+    return cacheRef.current.habits;
   }, [userId]);
 
   return useSyncExternalStore(
-    taskStore.subscribe,
+    habitStore.subscribe,
     getSnapshotWithCache,
     getSnapshotWithCache,
   );
 }
 
 /**
- * Subscribe to a single task by ID.
- * Only re-renders when THIS specific task changes.
+ * Subscribe to a single habit by ID.
+ * Only re-renders when THIS specific habit changes.
  */
-export function useTask(taskId: string): Task | undefined {
+export function useHabit(habitId: string): Habit | undefined {
   const getSnapshot = useCallback(() => {
-    return taskStore.getTaskById(taskId);
-  }, [taskId]);
+    return habitStore.getHabitById(habitId);
+  }, [habitId]);
 
   // Cache to prevent unnecessary re-renders
-  const cacheRef = useRef<{ task: Task | undefined; updatedAt: string }>({
-    task: undefined,
+  const cacheRef = useRef<{ habit: Habit | undefined; updatedAt: string }>({
+    habit: undefined,
     updatedAt: "",
   });
 
   const getSnapshotWithCache = useCallback(() => {
-    const task = taskStore.getTaskById(taskId);
-    const updatedAt = task?.updated_at ?? "";
+    const habit = habitStore.getHabitById(habitId);
+    const updatedAt = habit?.updated_at ?? "";
 
     if (updatedAt !== cacheRef.current.updatedAt) {
-      cacheRef.current = { task, updatedAt };
+      cacheRef.current = { habit, updatedAt };
     }
-    return cacheRef.current.task;
-  }, [taskId]);
+    return cacheRef.current.habit;
+  }, [habitId]);
 
   return useSyncExternalStore(
-    taskStore.subscribe,
+    habitStore.subscribe,
     getSnapshotWithCache,
     getSnapshotWithCache,
   );
 }
 
 /**
- * Subscribe to task count for a user.
+ * Subscribe to habit count for a user.
  * Only re-renders when count changes.
  */
-export function useTaskCount(userId: string): number {
+export function useHabitCount(userId: string): number {
   const getSnapshot = useCallback(() => {
-    return taskStore.getAllTasks(userId).length;
+    return habitStore.getAllHabits(userId).length;
   }, [userId]);
 
-  return useSyncExternalStore(taskStore.subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(habitStore.subscribe, getSnapshot, getSnapshot);
 }
 
 /**
- * Subscribe to tasks sorted by difficulty for a user.
- * Sorted from hardest to easiest, with unranked tasks at the bottom.
+ * Subscribe to habits sorted by difficulty for a user.
+ * Sorted from hardest to easiest, with unranked habits at the bottom.
  */
-export function useTasksSortedByDifficulty(userId: string): Task[] {
+export function useHabitsSortedByDifficulty(userId: string): Habit[] {
   // Use a ref to cache the previous result for shallow comparison
-  const cacheRef = useRef<{ tasks: Task[]; serialized: string }>({
-    tasks: [],
+  const cacheRef = useRef<{ habits: Habit[]; serialized: string }>({
+    habits: [],
     serialized: "[]",
   });
 
   const getSnapshotWithCache = useCallback(() => {
-    const tasks = taskStore.getTasksSortedByDifficulty(userId);
-    // Use updated_at to detect any task field change (not just difficulty_rank)
+    const habits = habitStore.getHabitsSortedByDifficulty(userId);
+    // Use updated_at to detect any habit field change (not just difficulty_rank)
     const serialized = JSON.stringify(
-      tasks.map((t) => `${t.id}:${t.updated_at}`),
+      habits.map((h) => `${h.id}:${h.updated_at}`),
     );
 
     if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { tasks, serialized };
+      cacheRef.current = { habits, serialized };
     }
-    return cacheRef.current.tasks;
+    return cacheRef.current.habits;
   }, [userId]);
 
   return useSyncExternalStore(
-    taskStore.subscribe,
+    habitStore.subscribe,
     getSnapshotWithCache,
     getSnapshotWithCache,
   );
@@ -130,11 +130,11 @@ export function useTasksSortedByDifficulty(userId: string): Task[] {
 
 // ============ Actions (no subscription, just mutations) ============
 
-export function useTaskActions() {
+export function useHabitActions() {
   return {
-    createTask: taskStore.createTask.bind(taskStore),
-    updateTask: taskStore.updateTask.bind(taskStore),
-    deleteTask: taskStore.deleteTask.bind(taskStore),
-    reload: taskStore.reload.bind(taskStore),
+    createHabit: habitStore.createHabit.bind(habitStore),
+    updateHabit: habitStore.updateHabit.bind(habitStore),
+    deleteHabit: habitStore.deleteHabit.bind(habitStore),
+    reload: habitStore.reload.bind(habitStore),
   };
 }

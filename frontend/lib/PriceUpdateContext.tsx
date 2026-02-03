@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { calculateReward } from "./rewardCalculation";
-import type { Task } from "./task";
+import type { Habit } from "./habit";
 
 /** Time bucket size in milliseconds (30 minutes) */
 const TIME_BUCKET_MS = 30 * 60 * 1000;
@@ -18,14 +18,14 @@ interface PriceData {
 }
 
 interface PriceUpdateContextType {
-  /** Map of task ID to price data */
+  /** Map of habit ID to price data */
   prices: Record<string, PriceData>;
   /** Current time bucket */
   timeBucket: number;
   /** Seconds until next price update */
   secondsUntilUpdate: number;
-  /** Update prices for given tasks */
-  updatePrices: (tasks: Task[]) => void;
+  /** Update prices for given habits */
+  updatePrices: (habits: Habit[]) => void;
 }
 
 const PriceUpdateContext = createContext<PriceUpdateContextType | null>(null);
@@ -61,39 +61,36 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
   const [secondsUntilUpdate, setSecondsUntilUpdate] = useState(() =>
     Math.ceil(getMsUntilNextHalfHour() / 1000)
   );
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [allHabits, setAllHabits] = useState<Habit[]>([]);
 
-  // Calculate prices for tasks, comparing current bucket against previous bucket
+  // Calculate prices for habits, comparing current bucket against previous bucket
   const calculatePrices = useCallback(
-    (tasks: Task[], bucket: number) => {
-      const now = new Date();
+    (habits: Habit[], bucket: number) => {
       const newPrices: Record<string, PriceData> = {};
       const previousBucket = bucket - 1;
 
-      for (const task of tasks) {
+      for (const habit of habits) {
         // For now, we pass 0 completions - this can be enhanced later
         // when trade/completion tracking is available
         const completionsInPeriod = 0;
 
         // Calculate current price
         const current = calculateReward(
-          task,
-          tasks,
+          habit,
+          habits,
           completionsInPeriod,
           bucket,
-          now
         );
 
         // Calculate what the price was in the previous time bucket
         const previous = calculateReward(
-          task,
-          tasks,
+          habit,
+          habits,
           completionsInPeriod,
           previousBucket,
-          now
         );
 
-        newPrices[task.id] = {
+        newPrices[habit.id] = {
           current,
           previous,
         };
@@ -104,11 +101,11 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // Update prices when tasks change or time bucket changes
+  // Update prices when habits change or time bucket changes
   const updatePrices = useCallback(
-    (tasks: Task[]) => {
-      setAllTasks(tasks);
-      setPrices(calculatePrices(tasks, timeBucket));
+    (habits: Habit[]) => {
+      setAllHabits(habits);
+      setPrices(calculatePrices(habits, timeBucket));
     },
     [timeBucket, calculatePrices]
   );
@@ -125,12 +122,12 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
       if (newBucket !== timeBucket) {
         setTimeBucket(newBucket);
         // Recalculate prices with new bucket
-        setPrices(calculatePrices(allTasks, newBucket));
+        setPrices(calculatePrices(allHabits, newBucket));
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeBucket, allTasks, calculatePrices]);
+  }, [timeBucket, allHabits, calculatePrices]);
 
   return (
     <PriceUpdateContext.Provider

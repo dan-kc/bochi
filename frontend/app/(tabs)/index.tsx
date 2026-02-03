@@ -2,196 +2,177 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
-import { useTasks } from "@/lib/TaskContext";
+import { useHabitsContext } from "@/lib/HabitContext";
 import { usePriceUpdate } from "@/lib/PriceUpdateContext";
-import { TaskItem } from "@/components/TaskItem";
-import { TaskForm } from "@/components/TaskForm";
+import { HabitItem } from "@/components/HabitItem";
+import { HabitForm } from "@/components/HabitForm";
 import { DifficultyRanker } from "@/components/DifficultyRanker";
 import { SyncStatusIcon } from "@/components/SyncStatusIcon";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
-import { TaskTabs } from "@/components/TaskTabs";
 import { SortDropdown } from "@/components/SortDropdown";
-import type { Task, TaskInput } from "@/lib/task";
-import { isHabit } from "@/lib/task";
-import { type TabType, SORT_OPTIONS } from "@/lib/sortOptions";
-import { sortTasks, getDisplayMode } from "@/lib/taskSorting";
+import type { Habit, HabitInput } from "@/lib/habit";
+import { SORT_OPTIONS } from "@/lib/sortOptions";
+import { sortHabits, getDisplayMode } from "@/lib/habitSorting";
 import { useSortPreference } from "@/lib/store/sortPreferencesStore";
 
-export default function Tasks() {
+export default function Habits() {
   const {
-    tasks,
-    rankedTasks,
-    selectedTask,
-    createTask,
-    updateTask,
-    deleteTask,
-    completeTask,
-    selectTask,
+    habits,
+    rankedHabits,
+    selectedHabit,
+    createHabit,
+    updateHabit,
+    deleteHabit,
+    completeHabit,
+    selectHabit,
     setIsEditing,
-  } = useTasks();
+  } = useHabitsContext();
 
-  const [isTaskFormVisible, setIsTaskFormVisible] = useState(false);
+  const [isHabitFormVisible, setIsHabitFormVisible] = useState(false);
   const [isRankingVisible, setIsRankingVisible] = useState(false);
-  const [taskToRank, setTaskToRank] = useState<Task | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>("both");
-  const [sortKey, setSortKey] = useSortPreference(activeTab);
+  const [habitToRank, setHabitToRank] = useState<Habit | null>(null);
+  const [sortKey, setSortKey] = useSortPreference();
 
   // Price update context
   const { updatePrices, prices } = usePriceUpdate();
 
-  // Filter out completed non-habit tasks, then filter by tab and sort
-  const displayTasks = useMemo(() => {
-    // First filter out completed non-habits
-    let filtered = tasks.filter((t) => !t.completed_at || isHabit(t));
-
-    // Then filter by tab
-    if (activeTab === "habit") {
-      filtered = filtered.filter((t) => t.habit);
-    } else if (activeTab === "todo") {
-      filtered = filtered.filter((t) => !t.habit);
-    }
-
-    // Finally sort
-    return sortTasks(filtered, sortKey, prices);
-  }, [tasks, activeTab, sortKey, prices]);
+  // Sort habits
+  const displayHabits = useMemo(() => {
+    return sortHabits(habits, sortKey, prices);
+  }, [habits, sortKey, prices]);
 
   const displayMode = getDisplayMode(sortKey);
 
-  // Update prices when tasks change
+  // Update prices when habits change
   useEffect(() => {
-    updatePrices(tasks);
-  }, [tasks, updatePrices]);
+    updatePrices(habits);
+  }, [habits, updatePrices]);
 
-  const handleAddTask = useCallback(() => {
-    selectTask(null);
+  const handleAddHabit = useCallback(() => {
+    selectHabit(null);
     setIsEditing(false);
-    setIsTaskFormVisible(true);
-  }, [selectTask, setIsEditing]);
+    setIsHabitFormVisible(true);
+  }, [selectHabit, setIsEditing]);
 
-  const handleTaskPress = useCallback(
-    (task: Task) => {
-      selectTask(task);
+  const handleHabitPress = useCallback(
+    (habit: Habit) => {
+      selectHabit(habit);
       setIsEditing(true);
-      setIsTaskFormVisible(true);
+      setIsHabitFormVisible(true);
     },
-    [selectTask, setIsEditing],
+    [selectHabit, setIsEditing],
   );
 
   const handleSave = useCallback(
-    async (input: TaskInput) => {
-      if (selectedTask) {
-        await updateTask(selectedTask.id, input);
-        setIsTaskFormVisible(false);
-        selectTask(null);
+    async (input: HabitInput) => {
+      if (selectedHabit) {
+        await updateHabit(selectedHabit.id, input);
+        setIsHabitFormVisible(false);
+        selectHabit(null);
       } else {
-        const newTask = await createTask(input);
-        setIsTaskFormVisible(false);
-        selectTask(null);
-        // After creating a new task, offer to set difficulty
-        if (rankedTasks.length > 0) {
-          setTaskToRank(newTask);
+        const newHabit = await createHabit(input);
+        setIsHabitFormVisible(false);
+        selectHabit(null);
+        // After creating a new habit, offer to set difficulty
+        if (rankedHabits.length > 0) {
+          setHabitToRank(newHabit);
           setIsRankingVisible(true);
         }
       }
     },
-    [selectedTask, updateTask, createTask, selectTask, rankedTasks.length],
+    [selectedHabit, updateHabit, createHabit, selectHabit, rankedHabits.length],
   );
 
   const handleCancel = useCallback(() => {
-    setIsTaskFormVisible(false);
-    selectTask(null);
-  }, [selectTask]);
+    setIsHabitFormVisible(false);
+    selectHabit(null);
+  }, [selectHabit]);
 
   const handleDelete = useCallback(async () => {
-    if (selectedTask) {
-      await deleteTask(selectedTask.id);
-      setIsTaskFormVisible(false);
-      selectTask(null);
+    if (selectedHabit) {
+      await deleteHabit(selectedHabit.id);
+      setIsHabitFormVisible(false);
+      selectHabit(null);
     }
-  }, [selectedTask, deleteTask, selectTask]);
+  }, [selectedHabit, deleteHabit, selectHabit]);
 
   const handleRankComplete = useCallback(
     async (rank: string) => {
-      if (taskToRank) {
-        await updateTask(taskToRank.id, { difficulty_rank: rank });
+      if (habitToRank) {
+        await updateHabit(habitToRank.id, { difficulty_rank: rank });
       }
       setIsRankingVisible(false);
-      setTaskToRank(null);
+      setHabitToRank(null);
     },
-    [taskToRank, updateTask],
+    [habitToRank, updateHabit],
   );
 
   const handleRankSkip = useCallback(() => {
     setIsRankingVisible(false);
-    setTaskToRank(null);
+    setHabitToRank(null);
   }, []);
 
   const handleComplete = useCallback(
-    async (task: Task) => {
-      await completeTask(task);
+    async (habit: Habit) => {
+      await completeHabit(habit);
     },
-    [completeTask],
+    [completeHabit],
   );
 
   const handleRerank = useCallback(() => {
-    if (selectedTask) {
-      setIsTaskFormVisible(false);
-      setTaskToRank(selectedTask);
+    if (selectedHabit) {
+      setIsHabitFormVisible(false);
+      setHabitToRank(selectedHabit);
       setIsRankingVisible(true);
     }
-  }, [selectedTask]);
+  }, [selectedHabit]);
 
   const renderItem = useCallback(
-    ({ item }: { item: Task }) => (
-      <TaskItem
-        task={item}
-        onPress={handleTaskPress}
+    ({ item }: { item: Habit }) => (
+      <HabitItem
+        habit={item}
+        onPress={handleHabitPress}
         onComplete={handleComplete}
         displayMode={displayMode}
       />
     ),
-    [handleTaskPress, handleComplete, displayMode],
+    [handleHabitPress, handleComplete, displayMode],
   );
 
-  const keyExtractor = useCallback((item: Task) => item.id, []);
+  const keyExtractor = useCallback((item: Habit) => item.id, []);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
       <View className="flex-1">
         <View className="p-4 border-b border-gray-200">
           <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-2xl font-bold text-gray-900">Tasks</Text>
+            <Text className="text-2xl font-bold text-gray-900">Habits</Text>
             <View className="flex-row items-center gap-2">
               <BalanceDisplay />
               <SyncStatusIcon />
             </View>
           </View>
-          <View className="flex-row justify-between items-center">
-            <TaskTabs activeTab={activeTab} onTabChange={setActiveTab} />
+          <View className="flex-row justify-end items-center">
             <SortDropdown
-              options={SORT_OPTIONS[activeTab]}
+              options={SORT_OPTIONS}
               selectedKey={sortKey}
               onSelect={setSortKey}
             />
           </View>
         </View>
 
-        {displayTasks.length === 0 ? (
+        {displayHabits.length === 0 ? (
           <View className="flex-1 items-center justify-center p-4">
             <Text className="text-gray-500 text-center mb-4">
-              {activeTab === "habit"
-                ? "No habits yet. Add your first habit to get started."
-                : activeTab === "todo"
-                  ? "No todos yet. Add your first todo to get started."
-                  : "No tasks yet. Add your first task to get started."}
+              No habits yet. Add your first habit to get started.
             </Text>
           </View>
         ) : (
           <LegendList
-            data={displayTasks}
+            data={displayHabits}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
-            extraData={{ activeTab, sortKey, displayMode }}
+            extraData={{ sortKey, displayMode }}
             contentContainerStyle={{ padding: 16 }}
             estimatedItemSize={100}
           />
@@ -199,26 +180,26 @@ export default function Tasks() {
 
         <View className="p-4 border-t border-gray-200">
           <Pressable
-            onPress={handleAddTask}
-            className="bg-blue-500 py-3 px-6 rounded-lg items-center"
+            onPress={handleAddHabit}
+            className="bg-purple-500 py-3 px-6 rounded-lg items-center"
           >
-            <Text className="text-white font-semibold text-base">Add Task</Text>
+            <Text className="text-white font-semibold text-base">Add Habit</Text>
           </Pressable>
         </View>
 
         <Modal
-          visible={isTaskFormVisible}
+          visible={isHabitFormVisible}
           animationType="slide"
           presentationStyle="pageSheet"
           onRequestClose={handleCancel}
         >
           <SafeAreaView className="flex-1 bg-white">
-            <TaskForm
-              task={selectedTask}
+            <HabitForm
+              habit={selectedHabit}
               onSave={handleSave}
               onCancel={handleCancel}
-              onDelete={selectedTask ? handleDelete : undefined}
-              onRerank={selectedTask ? handleRerank : undefined}
+              onDelete={selectedHabit ? handleDelete : undefined}
+              onRerank={selectedHabit ? handleRerank : undefined}
             />
           </SafeAreaView>
         </Modal>
@@ -230,10 +211,10 @@ export default function Tasks() {
           onRequestClose={handleRankSkip}
         >
           <SafeAreaView className="flex-1 bg-white">
-            {taskToRank && (
+            {habitToRank && (
               <DifficultyRanker
-                task={taskToRank}
-                existingTasks={rankedTasks.filter(t => t.id !== taskToRank.id && t.difficulty_rank !== null)}
+                habit={habitToRank}
+                existingHabits={rankedHabits.filter(h => h.id !== habitToRank.id && h.difficulty_rank !== null)}
                 onComplete={handleRankComplete}
                 onSkip={handleRankSkip}
               />

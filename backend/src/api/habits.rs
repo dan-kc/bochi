@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    database::CreateTaskOptions,
+    database::CreateHabitOptions,
     router::{App, AuthenticatedUser},
 };
 
@@ -12,19 +12,17 @@ use super::ApiError;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateTaskRequest {
+pub struct CreateHabitRequest {
     pub name: String,
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub habit: bool,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskResponse {
+pub struct HabitResponse {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -32,17 +30,14 @@ pub struct TaskResponse {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
-    pub due_by: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
-    pub completed_at: Option<NaiveDateTime>,
-    pub habit: bool,
 }
 
-pub async fn create_task(
+pub async fn create_habit(
     State(app): State<App>,
     Extension(user): Extension<AuthenticatedUser>,
-    Json(input): Json<CreateTaskRequest>,
+    Json(input): Json<CreateHabitRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     // Validate name length
     let name_len = input.name.chars().count();
@@ -76,23 +71,6 @@ pub async fn create_task(
         }
     }
 
-    // Validate due_by is in the future
-    if let Some(due_at) = input.due_by {
-        if due_at <= now {
-            let msg = format!(
-                "The 'due_by' date ({}) has already passed or is the current moment. Please select a future date.",
-                due_at
-            );
-            return Err(ApiError::Validation(msg));
-        }
-    }
-
-    // Habit validation: non-habits cannot have min_daily_frequency
-    if !input.habit && input.min_daily_frequency.is_some() {
-        let msg = "Non-habit tasks cannot have 'min_daily_frequency'. Either set 'habit' to true or remove 'min_daily_frequency'.".to_string();
-        return Err(ApiError::Validation(msg));
-    }
-
     // Validate min_daily_frequency range
     if let Some(freq) = input.min_daily_frequency {
         if freq < 0.0 || freq > 100.0 {
@@ -104,37 +82,32 @@ pub async fn create_task(
         }
     }
 
-    let opts = CreateTaskOptions {
+    let opts = CreateHabitOptions {
         user_id: user.user_id,
         name: input.name,
         description: input.description,
         hidden_until: input.hidden_until,
-        due_by: input.due_by,
         min_daily_frequency: input.min_daily_frequency,
         difficulty_rank: input.difficulty_rank,
-        habit: input.habit,
     };
 
-    let task_row = app.database.create_task(opts).await.map_err(|e| {
+    let habit_row = app.database.create_habit(opts).await.map_err(|e| {
         error!("Database Error: {:?}", e);
         ApiError::Internal
     })?;
 
     Ok((
         StatusCode::CREATED,
-        Json(TaskResponse {
-            id: task_row.id.to_string(),
-            name: task_row.name,
-            description: task_row.description,
-            created_at: task_row.created_at,
-            updated_at: task_row.updated_at,
-            deleted_at: task_row.deleted_at,
-            hidden_until: task_row.hidden_until,
-            due_by: task_row.due_by,
-            min_daily_frequency: task_row.min_daily_frequency,
-            difficulty_rank: task_row.difficulty_rank,
-            completed_at: task_row.completed_at,
-            habit: task_row.habit,
+        Json(HabitResponse {
+            id: habit_row.id.to_string(),
+            name: habit_row.name,
+            description: habit_row.description,
+            created_at: habit_row.created_at,
+            updated_at: habit_row.updated_at,
+            deleted_at: habit_row.deleted_at,
+            hidden_until: habit_row.hidden_until,
+            min_daily_frequency: habit_row.min_daily_frequency,
+            difficulty_rank: habit_row.difficulty_rank,
         }),
     ))
 }

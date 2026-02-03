@@ -1,11 +1,11 @@
-export { taskStore, LOCAL_USER_ID } from "./taskStore";
+export { habitStore, LOCAL_USER_ID } from "./habitStore";
 export {
-  useTasks,
-  useTask,
-  useTaskCount,
-  useTaskActions,
-  useTaskStore,
-  useTasksSortedByDifficulty,
+  useHabits,
+  useHabit,
+  useHabitCount,
+  useHabitActions,
+  useHabitStore,
+  useHabitsSortedByDifficulty,
 } from "./hooks";
 export {
   sortPreferencesStore,

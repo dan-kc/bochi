@@ -7,7 +7,7 @@
 Truncates all tables in the provided database.
 
 - **Usage**: `clean tofustash` or `clean tofustash_test`
-- **What it does**: Removes all data from tables (refresh_tokens, tags, task_dependencies, task_tags, tasks, trades, users) using CASCADE
+- **What it does**: Removes all data from tables (refresh_tokens, rewards, tags, habits, trades, users) using CASCADE
 
 #### `nuke <database_name>`
 
@@ -24,7 +24,7 @@ Drops and recreates the provided database, then applies migrations.
 
 Displays the schema of a database table.
 
-- **Usage**: `schema users` or `schema tasks`
+- **Usage**: `schema users` or `schema habits`
 - **What it does**: Shows detailed table structure using PostgreSQL's `\d+` command
 
 ### Development Environment

@@ -1,50 +1,28 @@
-# Welcome to your Expo app 👋
+# Tofustash Frontend
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A local-first React Native application for Web, Android, and iOS.
 
-## Get started
+## Development
 
-1. Install dependencies
+Run all commands from the **project root** (not from the frontend directory). Node is only available through the nix devshell wrappers.
 
-   ```bash
-   npm install
-   ```
+### Commands
 
-2. Start the app
+- `npm run web` - Start web development server
+- `npm run lint` - Run ESLint
+- `npm run typecheck` - Run TypeScript type checking
+- `npm start` - Start Expo development server
 
-   ```bash
-   npx expo start
-   ```
+### Architecture
 
-In the output, you'll find options to open the app in a
+- **React Native / Expo** - Cross-platform mobile and web framework
+- **Local-first sync** - Habits and trades sync to the server when online, work offline
+- **Entity stores** - State management using `useSyncExternalStore` pattern
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Key Directories
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `app/` - Expo Router pages and layouts
+- `components/` - Reusable UI components
+- `lib/` - Core logic, stores, sync, and utilities
+  - `store/` - Entity stores (habitStore, tradeStore, etc.)
+  - `sync/` - Sync service and storage

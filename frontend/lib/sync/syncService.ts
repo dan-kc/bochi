@@ -1,5 +1,5 @@
 import { api } from "../api";
-import { taskStore } from "../store/taskStore";
+import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
 import { balanceStore } from "../store/balanceStore";
 import {
@@ -11,7 +11,7 @@ import {
   clearFullSyncTimestamp,
   cleanupOldSyncStorage,
 } from "./syncStorage";
-import type { SyncCallbacks, SyncInput, SyncTaskInput, SyncTradeInput } from "./types";
+import type { SyncCallbacks, SyncInput, SyncHabitInput, SyncTradeInput } from "./types";
 
 const DEBOUNCE_MS = 2000;
 const BACKGROUND_SYNC_INTERVAL_MS = 5000; // 5 seconds
@@ -59,8 +59,8 @@ export class SyncService {
       const response = await api.sync(syncState.lastSync);
 
       // Merge all entities
-      if (response.tasks.length > 0) {
-        await taskStore.mergeTasks(response.tasks, this.userId);
+      if (response.habits.length > 0) {
+        await habitStore.mergeHabits(response.habits, this.userId);
       }
       if (response.trades.length > 0) {
         await tradeStore.mergeTrades(response.trades, this.userId);
@@ -79,7 +79,7 @@ export class SyncService {
   }
 
   /**
-   * Called after any local task change.
+   * Called after any local habit change.
    * Starts/resets the debounce timer.
    */
   notifyChange(): void {
@@ -151,9 +151,9 @@ export class SyncService {
       // Step 2: Pull all changes from server
       const pullResponse = await api.sync(syncState.lastSync);
 
-      // Step 3: Merge all entities (order matters: tasks before trades)
-      if (pullResponse.tasks.length > 0) {
-        await taskStore.mergeTasks(pullResponse.tasks, this.userId);
+      // Step 3: Merge all entities (order matters: habits before trades)
+      if (pullResponse.habits.length > 0) {
+        await habitStore.mergeHabits(pullResponse.habits, this.userId);
       }
       if (pullResponse.trades.length > 0) {
         await tradeStore.mergeTrades(pullResponse.trades, this.userId);
@@ -164,19 +164,19 @@ export class SyncService {
       );
 
       // Step 4: Gather dirty entities
-      const dirtyTaskIds = new Set(syncState.dirty.tasks);
+      const dirtyHabitIds = new Set(syncState.dirty.habits);
       const dirtyTradeIds = new Set(syncState.dirty.trades);
-      const dirtyTasks = taskStore.getDirtyTasks(dirtyTaskIds);
+      const dirtyHabits = habitStore.getDirtyHabits(dirtyHabitIds);
       const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
 
       // Step 5: Push dirty entities if any
-      if (dirtyTasks.length > 0 || dirtyTrades.length > 0) {
-        const input = this.buildSyncInput(dirtyTasks, dirtyTrades);
+      if (dirtyHabits.length > 0 || dirtyTrades.length > 0) {
+        const input = this.buildSyncInput(dirtyHabits, dirtyTrades);
         const pushResponse = await api.syncPush(input);
 
         // Step 6: Merge server's resolved versions
-        if (pushResponse.tasks.length > 0) {
-          await taskStore.mergeTasks(pushResponse.tasks, this.userId);
+        if (pushResponse.habits.length > 0) {
+          await habitStore.mergeHabits(pushResponse.habits, this.userId);
         }
         if (pushResponse.trades.length > 0) {
           await tradeStore.mergeTrades(pushResponse.trades, this.userId);
@@ -192,7 +192,7 @@ export class SyncService {
       await setLastSyncTime(pullResponse.server_time);
 
       // Step 8: Purge soft-deleted entities
-      await taskStore.purgeDeletedTasks();
+      await habitStore.purgeDeletedHabits();
       await tradeStore.purgeDeletedTrades();
 
       // Step 9: Notify success
@@ -216,24 +216,21 @@ export class SyncService {
   }
 
   private buildSyncInput(
-    tasks: ReturnType<typeof taskStore.getDirtyTasks>,
+    habits: ReturnType<typeof habitStore.getDirtyHabits>,
     trades: ReturnType<typeof tradeStore.getDirtyTrades>,
   ): SyncInput {
-    const taskInputs: SyncTaskInput[] | undefined =
-      tasks.length > 0
-        ? tasks.map((t) => ({
-            id: t.id,
-            name: t.name,
-            description: t.description,
-            createdAt: t.created_at,
-            updatedAt: t.updated_at,
-            deletedAt: t.deleted_at,
-            hiddenUntil: t.hidden_until,
-            dueBy: t.due_by,
-            minDailyFrequency: t.min_daily_frequency,
-            difficultyRank: t.difficulty_rank,
-            completedAt: t.completed_at,
-            habit: t.habit,
+    const habitInputs: SyncHabitInput[] | undefined =
+      habits.length > 0
+        ? habits.map((h) => ({
+            id: h.id,
+            name: h.name,
+            description: h.description,
+            createdAt: h.created_at,
+            updatedAt: h.updated_at,
+            deletedAt: h.deleted_at,
+            hiddenUntil: h.hidden_until,
+            minDailyFrequency: h.min_daily_frequency,
+            difficultyRank: h.difficulty_rank,
           }))
         : undefined;
 
@@ -241,7 +238,7 @@ export class SyncService {
       trades.length > 0
         ? trades.map((t) => ({
             id: t.id,
-            taskId: t.task_id,
+            habitId: t.habit_id,
             rewardId: t.reward_id,
             amount: t.amount,
             createdAt: t.created_at,
@@ -250,7 +247,7 @@ export class SyncService {
         : undefined;
 
     return {
-      tasks: taskInputs,
+      habits: habitInputs,
       trades: tradeInputs,
     };
   }

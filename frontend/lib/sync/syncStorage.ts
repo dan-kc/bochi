@@ -39,7 +39,7 @@ function getDefaultSyncState(): SyncState {
   return {
     lastSync: null,
     dirty: {
-      tasks: [],
+      habits: [],
       trades: [],
     },
   };
@@ -51,7 +51,14 @@ export async function getSyncState(): Promise<SyncState> {
     return getDefaultSyncState();
   }
   try {
-    return JSON.parse(data) as SyncState;
+    const parsed = JSON.parse(data) as SyncState;
+    // Migrate old 'tasks' key to 'habits' if present
+    const dirtyWithLegacy = parsed.dirty as unknown as { tasks?: string[]; habits: string[]; trades: string[] };
+    if (dirtyWithLegacy.tasks) {
+      parsed.dirty.habits = dirtyWithLegacy.tasks;
+      delete dirtyWithLegacy.tasks;
+    }
+    return parsed;
   } catch {
     return getDefaultSyncState();
   }
@@ -62,7 +69,7 @@ export async function setSyncState(state: SyncState): Promise<void> {
 }
 
 export async function markDirty(
-  entityType: "tasks" | "trades",
+  entityType: "habits" | "trades",
   id: string,
 ): Promise<void> {
   const state = await getSyncState();
@@ -73,7 +80,7 @@ export async function markDirty(
 }
 
 export async function markManyDirty(
-  entityType: "tasks" | "trades",
+  entityType: "habits" | "trades",
   ids: string[],
 ): Promise<void> {
   const state = await getSyncState();
@@ -90,7 +97,7 @@ export async function markManyDirty(
 }
 
 export async function getDirtyIds(
-  entityType: "tasks" | "trades",
+  entityType: "habits" | "trades",
 ): Promise<Set<string>> {
   const state = await getSyncState();
   return new Set(state.dirty[entityType]);
@@ -98,7 +105,7 @@ export async function getDirtyIds(
 
 export async function clearAllDirty(): Promise<void> {
   const state = await getSyncState();
-  state.dirty = { tasks: [], trades: [] };
+  state.dirty = { habits: [], trades: [] };
   await setSyncState(state);
 }
 
@@ -171,25 +178,25 @@ export async function cleanupOldSyncStorage(): Promise<void> {
     "tofustash_trade_last_sync",
     "tofustash_dirty_tasks",
     "tofustash_dirty_trades",
+    "tofustash_tasks", // Old tasks storage key
   ];
   for (const key of oldKeys) {
     await removeItem(key);
   }
 }
 
-// ============ Legacy exports (for backwards compatibility during migration) ============
-// These wrap the new unified functions for stores that haven't been updated yet
+// ============ Habit exports ============
 
-export async function getDirtyTaskIds(): Promise<Set<string>> {
-  return getDirtyIds("tasks");
+export async function getDirtyHabitIds(): Promise<Set<string>> {
+  return getDirtyIds("habits");
 }
 
-export async function markTaskDirty(id: string): Promise<void> {
-  return markDirty("tasks", id);
+export async function markHabitDirty(id: string): Promise<void> {
+  return markDirty("habits", id);
 }
 
-export async function markTasksDirty(ids: string[]): Promise<void> {
-  return markManyDirty("tasks", ids);
+export async function markHabitsDirty(ids: string[]): Promise<void> {
+  return markManyDirty("habits", ids);
 }
 
 export async function clearDirtyFlag(_id: string): Promise<void> {
@@ -200,6 +207,8 @@ export async function clearDirtyFlag(_id: string): Promise<void> {
 export async function clearAllDirtyFlags(): Promise<void> {
   return clearAllDirty();
 }
+
+// ============ Trade exports ============
 
 export async function getDirtyTradeIds(): Promise<Set<string>> {
   return getDirtyIds("trades");
