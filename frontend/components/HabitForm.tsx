@@ -396,14 +396,16 @@ export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: Habit
             </Text>
           </View>
 
-          <DatePickerField
-            label="Hidden Until"
-            value={hiddenUntil}
-            onChange={setHiddenUntil}
-            hasError={!!errors.hidden_until}
-            disabled={isLoading}
-            placeholder="Select date to hide until"
-          />
+          {isEditing && (
+            <DatePickerField
+              label="Hidden Until"
+              value={hiddenUntil}
+              onChange={setHiddenUntil}
+              hasError={!!errors.hidden_until}
+              disabled={isLoading}
+              placeholder="Select date to hide until"
+            />
+          )}
 
           <View className="flex-row gap-3 mt-4">
             <Pressable
