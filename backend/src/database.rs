@@ -276,6 +276,59 @@ impl Database {
         Ok(is_anonymous)
     }
 
+    /// Returns the user by ID.
+    pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<UserRow, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
+    }
+
+    /// Updates a user's password.
+    pub async fn update_user_password(
+        &self,
+        user_id: Uuid,
+        hashed_password: &str,
+    ) -> Result<(), sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE users SET password = $2 WHERE id = $1 AND is_anonymous = false",
+        )
+        .bind(user_id)
+        .bind(hashed_password)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    /// Updates a user's email.
+    pub async fn update_user_email(
+        &self,
+        user_id: Uuid,
+        email: &str,
+    ) -> Result<(), sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE users SET email = $2 WHERE id = $1 AND is_anonymous = false",
+        )
+        .bind(user_id)
+        .bind(email)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
     // ============================================================================
     // Sync Operations
     // ============================================================================

@@ -92,6 +92,10 @@ pub enum Error {
     FailedToClaim,
     AccountAlreadyClaimed,
     Unauthorized,
+    IncorrectPassword,
+    FailedToChangePassword,
+    FailedToChangeEmail,
+    AccountIsAnonymous,
 }
 impl Error {
     fn status_code(&self) -> StatusCode {
@@ -101,6 +105,9 @@ impl Error {
             Self::InvalidDeviceId => StatusCode::BAD_REQUEST,
             Self::FailedToClaim => StatusCode::BAD_REQUEST,
             Self::AccountAlreadyClaimed => StatusCode::BAD_REQUEST,
+            Self::FailedToChangePassword => StatusCode::BAD_REQUEST,
+            Self::FailedToChangeEmail => StatusCode::BAD_REQUEST,
+            Self::AccountIsAnonymous => StatusCode::BAD_REQUEST,
 
             Self::FailedToCreateUser => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToLogin => StatusCode::INTERNAL_SERVER_ERROR,
@@ -110,6 +117,7 @@ impl Error {
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::IncorrectPassword => StatusCode::UNAUTHORIZED,
         }
     }
 }
@@ -137,6 +145,16 @@ impl Display for Error {
                 write!(f, "Account has already been claimed.")
             }
             Self::Unauthorized => write!(f, "Unauthorized."),
+            Self::IncorrectPassword => write!(f, "Incorrect password."),
+            Self::FailedToChangePassword => {
+                write!(f, "Failed to change password. Please try again.")
+            }
+            Self::FailedToChangeEmail => {
+                write!(f, "Failed to change email. Please try again.")
+            }
+            Self::AccountIsAnonymous => {
+                write!(f, "This action requires a registered account.")
+            }
         }
     }
 }
@@ -203,6 +221,8 @@ pub enum ValidationError {
     EmailTooLong,
     PasswordTooLong,
     PasswordTooShort,
+    NewPasswordSameAsOld,
+    NewEmailSameAsOld,
 }
 impl Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -219,6 +239,12 @@ impl Display for ValidationError {
             ),
             Self::PasswordTooShort => write!(f,
                  "Password too short. The min password length is 8."
+            ),
+            Self::NewPasswordSameAsOld => write!(f,
+                 "New password must be different from current password."
+            ),
+            Self::NewEmailSameAsOld => write!(f,
+                 "New email must be different from current email."
             ),
         }
     }
@@ -609,4 +635,176 @@ pub async fn claim(
         }),
     )
         .into_response())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordInput {
+    current_password: String,
+    new_password: String,
+}
+
+#[derive(serde::Serialize)]
+struct ChangePasswordResponse {
+    success: bool,
+}
+
+#[debug_handler]
+pub async fn change_password(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(input): Json<ChangePasswordInput>,
+) -> Result<Response, Error> {
+    // Extract user_id from access token (from header or cookie)
+    let jwt_from_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
+
+    let jwt_from_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|cookie_header| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with("access_token="))
+                .and_then(|s| s.strip_prefix("access_token="))
+        });
+
+    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
+
+    // Validate new password
+    let mut errors = vec![];
+    if !input.new_password.is_ascii() {
+        errors.push(ValidationError::PasswordNotAscii);
+    }
+    if input.new_password.len() > 64 {
+        errors.push(ValidationError::PasswordTooLong);
+    }
+    if input.new_password.len() < 8 {
+        errors.push(ValidationError::PasswordTooShort);
+    }
+    if input.current_password == input.new_password {
+        errors.push(ValidationError::NewPasswordSameAsOld);
+    }
+    if !errors.is_empty() {
+        return Err(Error::ValidationErrorList(errors));
+    }
+
+    // Get user from database
+    let user = app
+        .database
+        .get_user_by_id(user_id)
+        .await
+        .map_err(|_| Error::Unauthorized)?;
+
+    // Check if user is anonymous
+    if user.is_anonymous {
+        return Err(Error::AccountIsAnonymous);
+    }
+
+    // Verify current password
+    let stored_password = user.password.ok_or(Error::FailedToChangePassword)?;
+    if !security::check_password(&stored_password, &input.current_password) {
+        return Err(Error::IncorrectPassword);
+    }
+
+    // Hash and update password
+    let hashed_password = security::hash_password(&input.new_password);
+    app.database
+        .update_user_password(user_id, &hashed_password)
+        .await
+        .map_err(|_| Error::FailedToChangePassword)?;
+
+    Ok(Json(ChangePasswordResponse { success: true }).into_response())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeEmailInput {
+    new_email: String,
+    password: String,
+}
+
+#[derive(serde::Serialize)]
+struct ChangeEmailResponse {
+    success: bool,
+}
+
+#[debug_handler]
+pub async fn change_email(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(input): Json<ChangeEmailInput>,
+) -> Result<Response, Error> {
+    // Extract user_id from access token (from header or cookie)
+    let jwt_from_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
+
+    let jwt_from_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|cookie_header| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with("access_token="))
+                .and_then(|s| s.strip_prefix("access_token="))
+        });
+
+    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
+
+    // Validate new email
+    let mut errors = vec![];
+    let is_valid_email = email_regex().is_match(input.new_email.as_str());
+    if !is_valid_email {
+        errors.push(ValidationError::InvalidEmailAddress);
+    }
+    if input.new_email.len() > 254 {
+        errors.push(ValidationError::EmailTooLong);
+    }
+    if !errors.is_empty() {
+        return Err(Error::ValidationErrorList(errors));
+    }
+
+    // Get user from database
+    let user = app
+        .database
+        .get_user_by_id(user_id)
+        .await
+        .map_err(|_| Error::Unauthorized)?;
+
+    // Check if user is anonymous
+    if user.is_anonymous {
+        return Err(Error::AccountIsAnonymous);
+    }
+
+    // Check if new email is same as current
+    if user.email.as_deref() == Some(input.new_email.as_str()) {
+        return Err(Error::ValidationErrorList(vec![ValidationError::NewEmailSameAsOld]));
+    }
+
+    // Verify password
+    let stored_password = user.password.ok_or(Error::FailedToChangeEmail)?;
+    if !security::check_password(&stored_password, &input.password) {
+        return Err(Error::IncorrectPassword);
+    }
+
+    // Check if email already exists (return generic error to prevent enumeration)
+    if app.database.get_user_from_email(&input.new_email).await.is_ok() {
+        return Err(Error::FailedToChangeEmail);
+    }
+
+    // Update email
+    app.database
+        .update_user_email(user_id, &input.new_email)
+        .await
+        .map_err(|_| Error::FailedToChangeEmail)?;
+
+    Ok(Json(ChangeEmailResponse { success: true }).into_response())
 }
