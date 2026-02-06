@@ -2,6 +2,7 @@ import { api } from "../api";
 import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
 import { balanceStore } from "../store/balanceStore";
+import { userStore } from "../store/userStore";
 import {
   getSyncState,
   clearAllDirty,
@@ -72,6 +73,7 @@ export class SyncService {
         response.balance.soy_balance,
         response.balance.tofu_balance,
       );
+      await userStore.setUser(response.email, response.isPremium);
 
       await setLastSyncTime(response.server_time);
       this.callbacks.onSyncComplete(response.server_time);
@@ -172,6 +174,7 @@ export class SyncService {
         pullResponse.balance.soy_balance,
         pullResponse.balance.tofu_balance,
       );
+      await userStore.setUser(pullResponse.email, pullResponse.isPremium);
 
       // Step 5: Push dirty entities if any
       if (dirtyHabits.length > 0 || dirtyTrades.length > 0) {
@@ -189,6 +192,7 @@ export class SyncService {
           pushResponse.balance.soy_balance,
           pushResponse.balance.tofu_balance,
         );
+        await userStore.setUser(pushResponse.email, pushResponse.isPremium);
       }
 
       // Step 7: Clear dirty flags and update timestamp

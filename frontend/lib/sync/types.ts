@@ -22,6 +22,8 @@ export interface SyncResponse {
   trades: Trade[];
   balance: BalanceResponse;
   server_time: string;
+  email: string | null;
+  isPremium: boolean;
 }
 
 export interface SyncHabitInput {

@@ -212,7 +212,7 @@ impl Database {
 
     /// Returns the user from email.
     pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id FROM users WHERE email = $1")
+        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?
@@ -234,7 +234,7 @@ impl Database {
     /// Returns the user from device_id.
     pub async fn get_user_from_device_id(&self, device_id: Uuid) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, email, password, is_anonymous, device_id FROM users WHERE device_id = $1",
+            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE device_id = $1",
         )
         .bind(device_id)
         .fetch_optional(&self.pool)
@@ -353,6 +353,14 @@ impl Database {
     /// Get user balance
     pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
         sqlx::query_as("SELECT soy_balance, tofu_balance FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// Get user profile (email and premium status)
+    pub async fn get_user_profile(&self, user_id: Uuid) -> Result<UserProfileRow, sqlx::Error> {
+        sqlx::query_as("SELECT email, premium FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
@@ -588,14 +596,20 @@ pub struct UserBalanceRow {
 }
 
 #[derive(sqlx::FromRow)]
+pub struct UserProfileRow {
+    pub email: Option<String>,
+    pub premium: bool,
+}
+
+#[derive(sqlx::FromRow)]
 pub struct UserRow {
     pub id: Uuid,
-    #[allow(dead_code)]
     pub email: Option<String>,
     pub password: Option<String>,
     pub is_anonymous: bool,
     #[allow(dead_code)]
     pub device_id: Option<Uuid>,
+    pub premium: bool,
 }
 
 #[derive(sqlx::FromRow)]

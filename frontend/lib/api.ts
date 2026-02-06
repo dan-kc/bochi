@@ -188,6 +188,8 @@ class ApiClient {
         tofuBalance: number;
       };
       serverTime: string;
+      email: string | null;
+      isPremium: boolean;
     }>(url, { method: "GET" });
 
     return {
@@ -218,6 +220,8 @@ class ApiClient {
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,
+      email: result.email,
+      isPremium: result.isPremium,
     };
   }
 
@@ -274,6 +278,8 @@ class ApiClient {
         tofuBalance: number;
       };
       serverTime: string;
+      email: string | null;
+      isPremium: boolean;
     }>("/api/sync", {
       method: "POST",
       body: JSON.stringify({
@@ -310,6 +316,8 @@ class ApiClient {
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,
+      email: result.email,
+      isPremium: result.isPremium,
     };
   }
 }

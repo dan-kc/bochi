@@ -63,6 +63,8 @@ pub struct SyncResponse {
     pub trades: Vec<TradeOutput>,
     pub balance: BalanceOutput,
     pub server_time: NaiveDateTime,
+    pub email: Option<String>,
+    pub is_premium: bool,
 }
 
 #[derive(Serialize)]
@@ -131,6 +133,11 @@ pub async fn get_sync(
         ApiError::Internal
     })?;
 
+    let profile_row = app.database.get_user_profile(user.user_id).await.map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
         .map(|row| HabitOutput {
@@ -169,6 +176,8 @@ pub async fn get_sync(
             tofu_balance: balance_row.tofu_balance,
         },
         server_time,
+        email: profile_row.email,
+        is_premium: profile_row.premium,
     }))
 }
 
@@ -340,6 +349,11 @@ pub async fn post_sync(
         ApiError::Internal
     })?;
 
+    let profile_row = app.database.get_user_profile(user.user_id).await.map_err(|e| {
+        error!("Database Error getting profile: {:?}", e);
+        ApiError::Internal
+    })?;
+
     let server_time = Utc::now().naive_utc();
 
     Ok(Json(SyncResponse {
@@ -350,5 +364,7 @@ pub async fn post_sync(
             tofu_balance: balance_row.tofu_balance,
         },
         server_time,
+        email: profile_row.email,
+        is_premium: profile_row.premium,
     }))
 }

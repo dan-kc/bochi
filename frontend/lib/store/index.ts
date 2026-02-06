@@ -11,3 +11,4 @@ export {
   sortPreferencesStore,
   useSortPreference,
 } from "./sortPreferencesStore";
+export { userStore } from "./userStore";
