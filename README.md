@@ -1,4 +1,4 @@
-Tofustash is a gamefied productivity tool to handle your habits and todos. It is themed on personal finance and the stock exchange. You earn "soy" that is the in game currency. It is awarded for completing tasks (habits or todos), and it is spent on rewards like "eat a chocolcate bar".
+Tofustash is a gamified productivity tool to handle your habits. It is themed on personal finance and the stock exchange. You earn "soy" that is the in game currency. It is awarded for completing habits, and it is spent on rewards like "eat a chocolate bar".
 
 ## Frontend
 
@@ -16,9 +16,9 @@ Postgresql, with migrations are handled with flyway.
 
 The app uses a unified sync system for offline-first operation:
 
-- **Single endpoint**: All entity types (tasks, trades) sync through one GraphQL `sync` query/mutation
+- **Single endpoint**: All entity types (habits, trades) sync through one REST `/sync` endpoint
 - **Atomic transactions**: Push operations process all entities in a single database transaction
-- **Dependency ordering**: Tasks are processed before trades to handle foreign key constraints
+- **Dependency ordering**: Habits are processed before trades to handle foreign key constraints
 - **Conflict resolution**: Last-write-wins based on `updated_at` timestamps
 - **Incremental sync**: Uses `since` parameter to fetch only changes after last sync
 - **Full sync**: Automatically triggered every 24 hours to ensure consistency

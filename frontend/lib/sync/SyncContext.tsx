@@ -44,7 +44,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
       previousUserIdRef.current = user.id;
 
       // When user changes, clear lastSyncTime to force a full sync
-      // This ensures we pull ALL tasks for the new user, not just recent changes
+      // This ensures we pull ALL habits for the new user, not just recent changes
       if (userChanged) {
         clearLastSyncTime();
         setLastSyncTime(null);
@@ -70,8 +70,8 @@ export function SyncProvider({ children }: SyncProviderProps) {
           },
           onSyncComplete: (serverTime) => {
             setLastSyncTime(serverTime);
-            // No need to refresh tasks - taskStore is reactive!
-            // React components using useTasks() will automatically re-render
+            // No need to refresh habits - habitStore is reactive!
+            // React components using useHabits() will automatically re-render
           },
         },
         user.id,

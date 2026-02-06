@@ -31,9 +31,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="tasks"
+        name="habits"
         options={{
-          title: "Tasks",
+          title: "Habits",
         }}
       />
       <Tabs.Screen

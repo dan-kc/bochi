@@ -76,7 +76,7 @@ export default function ClaimAccount() {
             Create Your Account
           </Text>
           <Text className="text-gray-600 mb-8">
-            Keep your tasks safe and sync them across all your devices.
+            Keep your habits safe and sync them across all your devices.
           </Text>
 
           {errors.length > 0 && (
@@ -153,7 +153,7 @@ export default function ClaimAccount() {
 
           <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
             <Text className="text-blue-800 text-sm">
-              Your existing tasks will be kept and synced to your new account.
+              Your existing habits will be kept and synced to your new account.
             </Text>
           </View>
 

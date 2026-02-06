@@ -116,7 +116,7 @@ export default function ProfileCard({
         Get Started with Tofustash
       </Text>
       <Text className="text-orange-100 mb-4">
-        Sign up to sync your tasks across devices and unlock premium features.
+        Sign up to sync your habits across devices and unlock premium features.
       </Text>
       <View className="flex-row gap-3">
         <Pressable

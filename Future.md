@@ -1,3 +1,7 @@
+Check it currently works
+
+Remove hidden until, 
+
 Use neverThrow for all error handling on frontend.
 
 # General
