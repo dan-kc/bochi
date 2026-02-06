@@ -74,13 +74,11 @@ export default function Habits() {
         setIsHabitFormVisible(false);
         selectHabit(null);
         // After creating a new habit, offer to set difficulty
-        if (rankedHabits.length > 0) {
-          setHabitToRank(newHabit);
-          setIsRankingVisible(true);
-        }
+        setHabitToRank(newHabit);
+        setIsRankingVisible(true);
       }
     },
-    [selectedHabit, updateHabit, createHabit, selectHabit, rankedHabits.length],
+    [selectedHabit, updateHabit, createHabit, selectHabit],
   );
 
   const handleCancel = useCallback(() => {
@@ -199,7 +197,7 @@ export default function Habits() {
               onSave={handleSave}
               onCancel={handleCancel}
               onDelete={selectedHabit ? handleDelete : undefined}
-              onRerank={selectedHabit ? handleRerank : undefined}
+              onRerank={selectedHabit && habits.length > 1 ? handleRerank : undefined}
             />
           </SafeAreaView>
         </Modal>

@@ -55,12 +55,18 @@ export class SyncService {
       const syncState = await getSyncState();
       const response = await api.sync(syncState.lastSync);
 
-      // Merge all entities
-      if (response.habits.length > 0) {
-        await habitStore.mergeHabits(response.habits, this.userId);
+      // Filter out dirty entities to preserve local changes
+      const dirtyHabitIds = new Set(syncState.dirty.habits);
+      const dirtyTradeIds = new Set(syncState.dirty.trades);
+      const cleanHabits = response.habits.filter((h) => !dirtyHabitIds.has(h.id));
+      const cleanTrades = response.trades.filter((t) => !dirtyTradeIds.has(t.id));
+
+      // Merge only non-dirty entities
+      if (cleanHabits.length > 0) {
+        await habitStore.mergeHabits(cleanHabits, this.userId);
       }
-      if (response.trades.length > 0) {
-        await tradeStore.mergeTrades(response.trades, this.userId);
+      if (cleanTrades.length > 0) {
+        await tradeStore.mergeTrades(cleanTrades, this.userId);
       }
       await balanceStore.setBalance(
         response.balance.soy_balance,
@@ -145,10 +151,17 @@ export class SyncService {
       // Step 1: Get current sync state
       const syncState = await getSyncState();
 
-      // Step 2: Pull all changes from server
+      // Step 2: Snapshot dirty entities BEFORE pulling
+      // This preserves local changes that haven't been pushed yet
+      const dirtyHabitIds = new Set(syncState.dirty.habits);
+      const dirtyTradeIds = new Set(syncState.dirty.trades);
+      const dirtyHabits = habitStore.getDirtyHabits(dirtyHabitIds);
+      const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
+
+      // Step 3: Pull all changes from server
       const pullResponse = await api.sync(syncState.lastSync);
 
-      // Step 3: Merge all entities (order matters: habits before trades)
+      // Step 4: Merge all entities (order matters: habits before trades)
       if (pullResponse.habits.length > 0) {
         await habitStore.mergeHabits(pullResponse.habits, this.userId);
       }
@@ -159,12 +172,6 @@ export class SyncService {
         pullResponse.balance.soy_balance,
         pullResponse.balance.tofu_balance,
       );
-
-      // Step 4: Gather dirty entities
-      const dirtyHabitIds = new Set(syncState.dirty.habits);
-      const dirtyTradeIds = new Set(syncState.dirty.trades);
-      const dirtyHabits = habitStore.getDirtyHabits(dirtyHabitIds);
-      const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
 
       // Step 5: Push dirty entities if any
       if (dirtyHabits.length > 0 || dirtyTrades.length > 0) {

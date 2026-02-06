@@ -31,12 +31,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="habits"
-        options={{
-          title: "Habits",
-        }}
-      />
-      <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
