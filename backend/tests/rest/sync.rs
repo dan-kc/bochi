@@ -1312,6 +1312,440 @@ async fn test_sync_tags_data_isolation() {
     assert_eq!(json.get("tags").unwrap().as_array().unwrap().len(), 0);
 }
 
+// ============================================================================
+// Reward Sync Pull Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_pull_includes_rewards() {
+    let email = generate_email_from_fn!(test_sync_pull_includes_rewards);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create a reward via sync push
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let sync_body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Chocolate Bar",
+            "description": "Eat a chocolate bar",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "maxDailyFrequency": 50.0,
+            "damageRank": "aaa"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+
+    // Now test GET /api/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Check rewards
+    let rewards = json.get("rewards").unwrap().as_array().unwrap();
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].get("id").unwrap(), &reward_id);
+    assert_eq!(rewards[0].get("name").unwrap(), "Chocolate Bar");
+    assert_eq!(rewards[0].get("maxDailyFrequency").unwrap(), 50.0);
+    assert_eq!(rewards[0].get("damageRank").unwrap(), "aaa");
+}
+
+#[tokio::test]
+async fn test_sync_pull_includes_reward_tags() {
+    let email = generate_email_from_fn!(test_sync_pull_includes_reward_tags);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create reward, tag, and association via sync push
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let sync_body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Chocolate Bar",
+            "description": "A treat",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Treats",
+            "colorHex": "#FF5733FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "rewardTags": [{
+            "rewardId": reward_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+
+    // Now test GET /api/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Check rewardTags
+    let reward_tags = json.get("rewardTags").unwrap().as_array().unwrap();
+    assert_eq!(reward_tags.len(), 1);
+    assert_eq!(reward_tags[0].get("rewardId").unwrap(), &reward_id);
+    assert_eq!(reward_tags[0].get("tagId").unwrap(), &tag_id);
+}
+
+#[tokio::test]
+async fn test_sync_pull_rewards_filtered_by_since() {
+    let email = generate_email_from_fn!(test_sync_pull_rewards_filtered_by_since);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create first reward
+    let reward1_id = uuid::Uuid::new_v4().to_string();
+    let sync_body1 = json!({
+        "rewards": [{
+            "id": reward1_id,
+            "name": "Old Reward",
+            "description": "Created before timestamp",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+
+    // Create second reward after getting timestamp
+    let reward2_id = uuid::Uuid::new_v4().to_string();
+    let sync_body2 = json!({
+        "rewards": [{
+            "id": reward2_id,
+            "name": "New Reward",
+            "description": "Created after timestamp",
+            "createdAt": "2025-01-01T11:00:00",
+            "updatedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+
+    // Pull since timestamp - should only get new reward
+    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    let (status, json) = make_authenticated_get_request(&access_token, &url).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let rewards = json.get("rewards").unwrap().as_array().unwrap();
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].get("id").unwrap(), &reward2_id);
+    assert_eq!(rewards[0].get("name").unwrap(), "New Reward");
+}
+
+// ============================================================================
+// Reward Sync Push Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_push_creates_reward() {
+    let email = generate_email_from_fn!(test_sync_push_creates_reward);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Chocolate Bar",
+            "description": "A sweet treat",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "maxDailyFrequency": 25.0,
+            "damageRank": "bbb"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let rewards = json.get("rewards").unwrap().as_array().unwrap();
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].get("id").unwrap(), &reward_id);
+    assert_eq!(rewards[0].get("name").unwrap(), "Chocolate Bar");
+    assert_eq!(rewards[0].get("description").unwrap(), "A sweet treat");
+    assert_eq!(rewards[0].get("maxDailyFrequency").unwrap(), 25.0);
+    assert_eq!(rewards[0].get("damageRank").unwrap(), "bbb");
+}
+
+#[tokio::test]
+async fn test_sync_push_updates_reward() {
+    let email = generate_email_from_fn!(test_sync_push_updates_reward);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+
+    // Create reward
+    let body1 = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Original",
+            "description": "Original description",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+
+    // Update reward
+    let body2 = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Updated",
+            "description": "Updated description",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "damageRank": "ccc"
+        }]
+    });
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let rewards = json.get("rewards").unwrap().as_array().unwrap();
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].get("name").unwrap(), "Updated");
+    assert_eq!(rewards[0].get("description").unwrap(), "Updated description");
+    assert_eq!(rewards[0].get("damageRank").unwrap(), "ccc");
+}
+
+#[tokio::test]
+async fn test_sync_push_soft_deletes_reward() {
+    let email = generate_email_from_fn!(test_sync_push_soft_deletes_reward);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+
+    // Create reward
+    let body1 = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "ToDelete",
+            "description": "Will be deleted",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+
+    // Soft delete reward
+    let body2 = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "ToDelete",
+            "description": "Will be deleted",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "deletedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let rewards = json.get("rewards").unwrap().as_array().unwrap();
+    assert_eq!(rewards.len(), 1);
+    assert!(rewards[0].get("deletedAt").is_some());
+    assert!(!rewards[0].get("deletedAt").unwrap().is_null());
+}
+
+#[tokio::test]
+async fn test_sync_push_creates_reward_tag_association() {
+    let email = generate_email_from_fn!(test_sync_push_creates_reward_tag_association);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Chocolate Bar",
+            "description": "A treat",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Treats",
+            "colorHex": "#FF5733FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "rewardTags": [{
+            "rewardId": reward_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let reward_tags = json.get("rewardTags").unwrap().as_array().unwrap();
+    assert_eq!(reward_tags.len(), 1);
+    assert_eq!(reward_tags[0].get("rewardId").unwrap(), &reward_id);
+    assert_eq!(reward_tags[0].get("tagId").unwrap(), &tag_id);
+}
+
+#[tokio::test]
+async fn test_sync_push_reward_tag_validates_reward_exists() {
+    let email = generate_email_from_fn!(test_sync_push_reward_tag_validates_reward_exists);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let non_existent_reward_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Test",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "rewardTags": [{
+            "rewardId": non_existent_reward_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert!(
+        status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Expected error for non-existent reward reference"
+    );
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_push_reward_validates_name_length() {
+    let email = generate_email_from_fn!(test_sync_push_reward_validates_name_length);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let long_name = "a".repeat(101);
+
+    let body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": long_name,
+            "description": "Valid description",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_rewards_data_isolation() {
+    let email1 = "test_sync_rewards_isolation_user1@test.com".to_string();
+    let email2 = "test_sync_rewards_isolation_user2@test.com".to_string();
+    let password = "password123";
+
+    register_user(&email1, password).await;
+    register_user(&email2, password).await;
+    let token1 = get_access_token_for_user(&email1, &password).await;
+    let token2 = get_access_token_for_user(&email2, &password).await;
+
+    // User 1 creates a reward
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Private Reward",
+            "description": "Only for user 1",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&token1, "/api/sync", body).await;
+
+    // User 2 tries to pull
+    let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User 2 should not see User 1's reward
+    assert_eq!(json.get("rewards").unwrap().as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn test_sync_push_reward_idempotent() {
+    let email = generate_email_from_fn!(test_sync_push_reward_idempotent);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let reward_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "rewards": [{
+            "id": reward_id,
+            "name": "Chocolate",
+            "description": "Sweet treat",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    // First push
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Second push with same data
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Verify only one reward exists
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("rewards").unwrap().as_array().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn test_sync_push_atomicity_with_tags() {
     let email = generate_email_from_fn!(test_sync_push_atomicity_with_tags);

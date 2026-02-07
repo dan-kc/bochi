@@ -2,8 +2,11 @@ import { useSyncExternalStore, useCallback, useRef } from "react";
 import { habitStore } from "./habitStore";
 import { tagStore } from "./tagStore";
 import { habitTagStore } from "./habitTagStore";
+import { rewardStore } from "./rewardStore";
+import { rewardTagStore } from "./rewardTagStore";
 import type { Habit } from "../habit";
 import type { Tag } from "../tag";
+import type { Reward } from "../reward";
 
 // ============ Core Subscription Hook ============
 
@@ -250,5 +253,143 @@ export function useHabitTagActions() {
   return {
     addTagToHabit: habitTagStore.addTagToHabit.bind(habitTagStore),
     removeTagFromHabit: habitTagStore.removeTagFromHabit.bind(habitTagStore),
+  };
+}
+
+// ============ Reward Hooks ============
+
+/**
+ * Subscribe to all rewards for a user.
+ * Only re-renders when the reward list changes.
+ */
+export function useRewards(userId: string): Reward[] {
+  const cacheRef = useRef<{ rewards: Reward[]; serialized: string }>({
+    rewards: [],
+    serialized: "[]",
+  });
+
+  const getSnapshotWithCache = useCallback(() => {
+    const rewards = rewardStore.getAllRewards(userId);
+    const serialized = JSON.stringify(
+      rewards.map((r) => `${r.id}:${r.updated_at}`),
+    );
+
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { rewards, serialized };
+    }
+    return cacheRef.current.rewards;
+  }, [userId]);
+
+  return useSyncExternalStore(
+    rewardStore.subscribe,
+    getSnapshotWithCache,
+    getSnapshotWithCache,
+  );
+}
+
+/**
+ * Subscribe to a single reward by ID.
+ * Only re-renders when THIS specific reward changes.
+ */
+export function useReward(rewardId: string): Reward | undefined {
+  const cacheRef = useRef<{ reward: Reward | undefined; updatedAt: string }>({
+    reward: undefined,
+    updatedAt: "",
+  });
+
+  const getSnapshotWithCache = useCallback(() => {
+    const reward = rewardStore.getRewardById(rewardId);
+    const updatedAt = reward?.updated_at ?? "";
+
+    if (updatedAt !== cacheRef.current.updatedAt) {
+      cacheRef.current = { reward, updatedAt };
+    }
+    return cacheRef.current.reward;
+  }, [rewardId]);
+
+  return useSyncExternalStore(
+    rewardStore.subscribe,
+    getSnapshotWithCache,
+    getSnapshotWithCache,
+  );
+}
+
+/**
+ * Subscribe to rewards sorted by damage for a user.
+ * Sorted from highest damage to lowest, with unranked rewards at the bottom.
+ */
+export function useRewardsSortedByDamage(userId: string): Reward[] {
+  const cacheRef = useRef<{ rewards: Reward[]; serialized: string }>({
+    rewards: [],
+    serialized: "[]",
+  });
+
+  const getSnapshotWithCache = useCallback(() => {
+    const rewards = rewardStore.getRewardsSortedByDamage(userId);
+    const serialized = JSON.stringify(
+      rewards.map((r) => `${r.id}:${r.updated_at}`),
+    );
+
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { rewards, serialized };
+    }
+    return cacheRef.current.rewards;
+  }, [userId]);
+
+  return useSyncExternalStore(
+    rewardStore.subscribe,
+    getSnapshotWithCache,
+    getSnapshotWithCache,
+  );
+}
+
+export function useRewardActions() {
+  return {
+    createReward: rewardStore.createReward.bind(rewardStore),
+    updateReward: rewardStore.updateReward.bind(rewardStore),
+    deleteReward: rewardStore.deleteReward.bind(rewardStore),
+    reload: rewardStore.reload.bind(rewardStore),
+  };
+}
+
+// ============ Reward Tag Hooks ============
+
+/**
+ * Subscribe to tags for a specific reward.
+ * Only re-renders when THIS reward's tags change.
+ */
+export function useTagsForReward(rewardId: string): Tag[] {
+  const cacheRef = useRef<{ tags: Tag[]; serialized: string }>({
+    tags: [],
+    serialized: "[]",
+  });
+
+  const getSnapshot = useCallback(() => {
+    const tagIds = rewardTagStore.getTagIdsForReward(rewardId);
+    const tags = tagIds
+      .map((id) => tagStore.getTagById(id))
+      .filter((t): t is Tag => t != null && !t.deleted_at);
+
+    const serialized = JSON.stringify(
+      tags.map((t) => `${t.id}:${t.updated_at}`),
+    );
+
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { tags, serialized };
+    }
+    return cacheRef.current.tags;
+  }, [rewardId]);
+
+  // Subscribe to rewardTagStore changes
+  useSyncExternalStore(rewardTagStore.subscribe, getSnapshot, getSnapshot);
+
+  // Subscribe to tagStore changes and return the result
+  return useSyncExternalStore(tagStore.subscribe, getSnapshot, getSnapshot);
+}
+
+export function useRewardTagActions() {
+  return {
+    addTagToReward: rewardTagStore.addTagToReward.bind(rewardTagStore),
+    removeTagFromReward: rewardTagStore.removeTagFromReward.bind(rewardTagStore),
   };
 }

@@ -234,6 +234,24 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
       }>;
+      rewards: Array<{
+        id: string;
+        name: string;
+        description: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+        hiddenUntil: string | null;
+        maxDailyFrequency: number | null;
+        damageRank: string | null;
+      }>;
+      rewardTags: Array<{
+        rewardId: string;
+        tagId: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
       balance: {
         tofuBalance: number;
       };
@@ -281,6 +299,26 @@ class ApiClient {
         created_at: ht.createdAt,
         updated_at: ht.updatedAt,
         deleted_at: ht.deletedAt,
+      })),
+      rewards: result.rewards.map((r) => ({
+        id: r.id,
+        user_id: "",
+        name: r.name,
+        description: r.description,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+        deleted_at: r.deletedAt,
+        hidden_until: r.hiddenUntil,
+        max_daily_frequency: r.maxDailyFrequency,
+        damage_rank: r.damageRank,
+      })),
+      rewardTags: result.rewardTags.map((rt) => ({
+        reward_id: rt.rewardId,
+        tag_id: rt.tagId,
+        user_id: "",
+        created_at: rt.createdAt,
+        updated_at: rt.updatedAt,
+        deleted_at: rt.deletedAt,
       })),
       balance: {
         tofu_balance: result.balance.tofuBalance,
@@ -337,6 +375,28 @@ class ApiClient {
       deletedAt: toNaiveDateTime(ht.deletedAt),
     }));
 
+    // Transform rewards to REST input format (camelCase)
+    const rewardInputs = input.rewards?.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      createdAt: toNaiveDateTime(r.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(r.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(r.deletedAt),
+      hiddenUntil: toNaiveDateTime(r.hiddenUntil),
+      maxDailyFrequency: r.maxDailyFrequency,
+      damageRank: r.damageRank,
+    }));
+
+    // Transform rewardTags to REST input format (camelCase)
+    const rewardTagInputs = input.rewardTags?.map((rt) => ({
+      rewardId: rt.rewardId,
+      tagId: rt.tagId,
+      createdAt: toNaiveDateTime(rt.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(rt.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(rt.deletedAt),
+    }));
+
     const result = await this.authenticatedRequest<{
       habits: Array<{
         id: string;
@@ -373,6 +433,24 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
       }>;
+      rewards: Array<{
+        id: string;
+        name: string;
+        description: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+        hiddenUntil: string | null;
+        maxDailyFrequency: number | null;
+        damageRank: string | null;
+      }>;
+      rewardTags: Array<{
+        rewardId: string;
+        tagId: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
       balance: {
         tofuBalance: number;
       };
@@ -386,6 +464,8 @@ class ApiClient {
         trades: tradeInputs,
         tags: tagInputs,
         habitTags: habitTagInputs,
+        rewards: rewardInputs,
+        rewardTags: rewardTagInputs,
       }),
     });
 
@@ -428,6 +508,26 @@ class ApiClient {
         created_at: ht.createdAt,
         updated_at: ht.updatedAt,
         deleted_at: ht.deletedAt,
+      })),
+      rewards: result.rewards.map((r) => ({
+        id: r.id,
+        user_id: "",
+        name: r.name,
+        description: r.description,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+        deleted_at: r.deletedAt,
+        hidden_until: r.hiddenUntil,
+        max_daily_frequency: r.maxDailyFrequency,
+        damage_rank: r.damageRank,
+      })),
+      rewardTags: result.rewardTags.map((rt) => ({
+        reward_id: rt.rewardId,
+        tag_id: rt.tagId,
+        user_id: "",
+        created_at: rt.createdAt,
+        updated_at: rt.updatedAt,
+        deleted_at: rt.deletedAt,
       })),
       balance: {
         tofu_balance: result.balance.tofuBalance,

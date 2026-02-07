@@ -76,13 +76,14 @@ impl Database {
     ) -> Result<RewardRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO rewards
-            (user_id, name, description, hidden_until, max_daily_frequency) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency",
+            (user_id, name, description, hidden_until, max_daily_frequency, damage_rank) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency, damage_rank",
         )
         .bind(create_reward_options.user_id)
         .bind(create_reward_options.name)
         .bind(create_reward_options.description)
         .bind(create_reward_options.hidden_until)
         .bind(create_reward_options.max_daily_frequency)
+        .bind(create_reward_options.damage_rank)
         .fetch_one(&self.pool)
         .await
     }
@@ -699,6 +700,156 @@ impl Database {
         .fetch_one(&mut **tx)
         .await
     }
+
+    // ============================================================================
+    // Reward Sync Operations
+    // ============================================================================
+
+    /// Get all rewards for a user, optionally filtered by updated_at > since
+    pub async fn get_rewards_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<RewardRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency, damage_rank
+                     FROM rewards
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency, damage_rank
+                     FROM rewards
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Get all reward_tags for a user's rewards, optionally filtered by updated_at > since
+    pub async fn get_reward_tags_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<RewardTagRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
+                     FROM reward_tags rt
+                     JOIN rewards r ON rt.reward_id = r.id
+                     WHERE r.user_id = $1 AND rt.updated_at > $2
+                     ORDER BY rt.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
+                     FROM reward_tags rt
+                     JOIN rewards r ON rt.reward_id = r.id
+                     WHERE r.user_id = $1
+                     ORDER BY rt.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Upsert a reward within a transaction
+    pub async fn upsert_reward_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        reward: &UpsertRewardOptions,
+    ) -> Result<RewardRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO rewards (id, user_id, name, description, created_at, deleted_at, hidden_until, max_daily_frequency, damage_rank)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO UPDATE SET
+                name = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.name ELSE rewards.name END,
+                description = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.description ELSE rewards.description END,
+                deleted_at = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.deleted_at ELSE rewards.deleted_at END,
+                hidden_until = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.hidden_until ELSE rewards.hidden_until END,
+                max_daily_frequency = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.max_daily_frequency ELSE rewards.max_daily_frequency END,
+                damage_rank = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.damage_rank ELSE rewards.damage_rank END
+             RETURNING id, name, description, created_at, updated_at, deleted_at, hidden_until, max_daily_frequency, damage_rank",
+        )
+        .bind(reward.id)
+        .bind(user_id)
+        .bind(&reward.name)
+        .bind(&reward.description)
+        .bind(reward.created_at)
+        .bind(reward.deleted_at)
+        .bind(reward.hidden_until)
+        .bind(reward.max_daily_frequency.map(|f| f as f32))
+        .bind(&reward.damage_rank)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    /// Upsert a reward_tag association within a transaction
+    pub async fn upsert_reward_tag_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        reward_tag: &UpsertRewardTagOptions,
+    ) -> Result<RewardTagRow, sqlx::Error> {
+        // Validate reward belongs to user
+        let reward_valid: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
+        )
+        .bind(reward_tag.reward_id)
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if reward_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        // Validate tag belongs to user
+        let tag_valid: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM tags WHERE id = $1 AND user_id = $2",
+        )
+        .bind(reward_tag.tag_id)
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if tag_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        sqlx::query_as(
+            "INSERT INTO reward_tags (reward_id, tag_id, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (reward_id, tag_id) DO UPDATE SET
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING reward_id, tag_id, created_at, updated_at, deleted_at",
+        )
+        .bind(reward_tag.reward_id)
+        .bind(reward_tag.tag_id)
+        .bind(reward_tag.created_at)
+        .bind(reward_tag.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
 }
 
 pub struct CreateHabitOptions {
@@ -746,6 +897,7 @@ pub struct CreateRewardOptions {
     pub description: String,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
+    pub damage_rank: Option<String>,
 }
 
 pub struct UpsertHabitOptions {
@@ -778,6 +930,24 @@ pub struct UpsertTagOptions {
 
 pub struct UpsertHabitTagOptions {
     pub habit_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+pub struct UpsertRewardOptions {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub max_daily_frequency: Option<f64>,
+    pub damage_rank: Option<String>,
+}
+
+pub struct UpsertRewardTagOptions {
+    pub reward_id: Uuid,
     pub tag_id: Uuid,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -847,6 +1017,16 @@ pub struct RewardRow {
     pub deleted_at: Option<NaiveDateTime>,
     pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
+    pub damage_rank: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct RewardTagRow {
+    pub reward_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow)]

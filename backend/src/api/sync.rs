@@ -31,6 +31,8 @@ pub struct SyncPushRequest {
     pub trades: Option<Vec<SyncTradeInput>>,
     pub tags: Option<Vec<SyncTagInput>>,
     pub habit_tags: Option<Vec<SyncHabitTagInput>>,
+    pub rewards: Option<Vec<SyncRewardInput>>,
+    pub reward_tags: Option<Vec<SyncRewardTagInput>>,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +81,30 @@ pub struct SyncHabitTagInput {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRewardInput {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub max_daily_frequency: Option<f64>,
+    pub damage_rank: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRewardTagInput {
+    pub reward_id: String,
+    pub tag_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResponse {
@@ -86,6 +112,8 @@ pub struct SyncResponse {
     pub trades: Vec<TradeOutput>,
     pub tags: Vec<TagOutput>,
     pub habit_tags: Vec<HabitTagOutput>,
+    pub rewards: Vec<RewardOutput>,
+    pub reward_tags: Vec<RewardTagOutput>,
     pub balance: BalanceOutput,
     pub server_time: NaiveDateTime,
     pub email: Option<String>,
@@ -133,6 +161,30 @@ pub struct TagOutput {
 #[serde(rename_all = "camelCase")]
 pub struct HabitTagOutput {
     pub habit_id: String,
+    pub tag_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardOutput {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub hidden_until: Option<NaiveDateTime>,
+    pub max_daily_frequency: Option<f64>,
+    pub damage_rank: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardTagOutput {
+    pub reward_id: String,
     pub tag_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -209,6 +261,24 @@ pub async fn get_sync(
             ApiError::Internal
         })?;
 
+    let reward_rows = app
+        .database
+        .get_rewards_since(user.user_id, params.since)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
+    let reward_tag_rows = app
+        .database
+        .get_reward_tags_since(user.user_id, params.since)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
         .map(|row| HabitOutput {
@@ -260,6 +330,32 @@ pub async fn get_sync(
         })
         .collect();
 
+    let rewards: Vec<RewardOutput> = reward_rows
+        .into_iter()
+        .map(|row| RewardOutput {
+            id: row.id.to_string(),
+            name: row.name,
+            description: row.description,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            hidden_until: row.hidden_until,
+            max_daily_frequency: row.max_daily_frequency.map(|f| f as f64),
+            damage_rank: row.damage_rank,
+        })
+        .collect();
+
+    let reward_tags: Vec<RewardTagOutput> = reward_tag_rows
+        .into_iter()
+        .map(|row| RewardTagOutput {
+            reward_id: row.reward_id.to_string(),
+            tag_id: row.tag_id.to_string(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
     let server_time = Utc::now().naive_utc();
 
     Ok(Json(SyncResponse {
@@ -267,6 +363,8 @@ pub async fn get_sync(
         trades,
         tags,
         habit_tags,
+        rewards,
+        reward_tags,
         balance: BalanceOutput {
             tofu_balance: balance_row.tofu_balance,
         },
@@ -292,6 +390,8 @@ pub async fn post_sync(
     let mut result_trades = Vec::new();
     let mut result_tags = Vec::new();
     let mut result_habit_tags = Vec::new();
+    let mut result_rewards = Vec::new();
+    let mut result_reward_tags = Vec::new();
 
     // Process habits first (trades may reference these)
     if let Some(habits) = input.habits {
@@ -364,7 +464,78 @@ pub async fn post_sync(
         }
     }
 
-    // Process trades second (they may reference habits created above)
+    // Process rewards second (trades may reference these)
+    if let Some(rewards) = input.rewards {
+        for reward_input in rewards {
+            // Validate reward ID is a valid UUID
+            let reward_id = reward_input.id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!("Invalid reward id format: {}", reward_input.id))
+            })?;
+
+            // Validate name length
+            let name_len = reward_input.name.chars().count();
+            if name_len > 100 || name_len < 1 {
+                let msg = format!(
+                    "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
+                    name_len
+                );
+                return Err(ApiError::Validation(msg));
+            }
+
+            // Validate description length
+            let desc_len = reward_input.description.chars().count();
+            if desc_len > 10000 {
+                let msg = format!(
+                    "Description is too long ({} characters), max 10,000.",
+                    desc_len
+                );
+                return Err(ApiError::Validation(msg));
+            }
+
+            // Validate max_daily_frequency
+            if let Some(freq) = reward_input.max_daily_frequency {
+                if freq < 0.0 || freq > 100.0 {
+                    let msg = format!(
+                        "The 'max_daily_frequency' must be between 0 and 100. You sent {}.",
+                        freq as i32
+                    );
+                    return Err(ApiError::Validation(msg));
+                }
+            }
+
+            let upsert_opts = database::UpsertRewardOptions {
+                id: reward_id,
+                name: reward_input.name,
+                description: reward_input.description,
+                created_at: reward_input.created_at,
+                deleted_at: reward_input.deleted_at,
+                hidden_until: reward_input.hidden_until,
+                max_daily_frequency: reward_input.max_daily_frequency,
+                damage_rank: reward_input.damage_rank,
+            };
+
+            let reward_row = Database::upsert_reward_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting reward: {:?}", e);
+                    ApiError::Internal
+                })?;
+
+            result_rewards.push(RewardOutput {
+                id: reward_row.id.to_string(),
+                name: reward_row.name,
+                description: reward_row.description,
+                created_at: reward_row.created_at,
+                updated_at: reward_row.updated_at,
+                deleted_at: reward_row.deleted_at,
+                hidden_until: reward_row.hidden_until,
+                max_daily_frequency: reward_row.max_daily_frequency.map(|f| f as f64),
+                damage_rank: reward_row.damage_rank,
+            });
+        }
+    }
+
+    // Process trades third (they may reference habits or rewards created above)
     if let Some(trades) = input.trades {
         for trade_input in trades {
             // Validate trade ID is a valid UUID
@@ -528,6 +699,53 @@ pub async fn post_sync(
         }
     }
 
+    // Process reward_tags sixth (they reference rewards and tags)
+    if let Some(reward_tags) = input.reward_tags {
+        for reward_tag_input in reward_tags {
+            // Validate reward_id is a valid UUID
+            let reward_id = reward_tag_input.reward_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid reward_id format: {}",
+                    reward_tag_input.reward_id
+                ))
+            })?;
+
+            // Validate tag_id is a valid UUID
+            let tag_id = reward_tag_input.tag_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid tag_id format: {}",
+                    reward_tag_input.tag_id
+                ))
+            })?;
+
+            let upsert_opts = database::UpsertRewardTagOptions {
+                reward_id,
+                tag_id,
+                created_at: reward_tag_input.created_at,
+                deleted_at: reward_tag_input.deleted_at,
+            };
+
+            let reward_tag_row =
+                Database::upsert_reward_tag_tx(&mut tx, user.user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting reward_tag: {:?}", e);
+                        ApiError::Validation(format!(
+                            "Invalid reward or tag reference for reward_id: {}, tag_id: {}",
+                            reward_id, tag_id
+                        ))
+                    })?;
+
+            result_reward_tags.push(RewardTagOutput {
+                reward_id: reward_tag_row.reward_id.to_string(),
+                tag_id: reward_tag_row.tag_id.to_string(),
+                created_at: reward_tag_row.created_at,
+                updated_at: reward_tag_row.updated_at,
+                deleted_at: reward_tag_row.deleted_at,
+            });
+        }
+    }
+
     // Recalculate balance from all trades
     let new_balance = Database::recalculate_balance_tx(&mut tx, user.user_id)
         .await
@@ -558,6 +776,8 @@ pub async fn post_sync(
         trades: result_trades,
         tags: result_tags,
         habit_tags: result_habit_tags,
+        rewards: result_rewards,
+        reward_tags: result_reward_tags,
         balance: BalanceOutput {
             tofu_balance: new_balance,
         },

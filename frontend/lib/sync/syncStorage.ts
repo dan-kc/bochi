@@ -43,6 +43,8 @@ export function getDefaultSyncState(): SyncState {
       trades: [],
       tags: [],
       habitTags: [],
+      rewards: [],
+      rewardTags: [],
     },
   };
 }
@@ -71,7 +73,7 @@ export async function setSyncState(state: SyncState): Promise<void> {
   await setItem(SYNC_STATE_KEY, JSON.stringify(state));
 }
 
-type EntityType = "habits" | "trades" | "tags" | "habitTags";
+type EntityType = "habits" | "trades" | "tags" | "habitTags" | "rewards" | "rewardTags";
 
 export async function markDirty(
   entityType: EntityType,
@@ -118,7 +120,7 @@ export async function getDirtyIds(
 
 export async function clearAllDirty(): Promise<void> {
   const state = await getSyncState();
-  state.dirty = { habits: [], trades: [], tags: [], habitTags: [] };
+  state.dirty = { habits: [], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] };
   await setSyncState(state);
 }
 
@@ -265,4 +267,32 @@ export async function markHabitTagDirty(key: string): Promise<void> {
 
 export async function markHabitTagsDirty(keys: string[]): Promise<void> {
   return markManyDirty("habitTags", keys);
+}
+
+// ============ Reward exports ============
+
+export async function getDirtyRewardIds(): Promise<Set<string>> {
+  return getDirtyIds("rewards");
+}
+
+export async function markRewardDirty(id: string): Promise<void> {
+  return markDirty("rewards", id);
+}
+
+export async function markRewardsDirty(ids: string[]): Promise<void> {
+  return markManyDirty("rewards", ids);
+}
+
+// ============ RewardTag exports ============
+
+export async function getDirtyRewardTagIds(): Promise<Set<string>> {
+  return getDirtyIds("rewardTags");
+}
+
+export async function markRewardTagDirty(key: string): Promise<void> {
+  return markDirty("rewardTags", key);
+}
+
+export async function markRewardTagsDirty(keys: string[]): Promise<void> {
+  return markManyDirty("rewardTags", keys);
 }

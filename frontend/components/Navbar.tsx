@@ -6,6 +6,7 @@ export default function Navbar() {
 
   const navItems = [
     { name: "Habits", path: "/" },
+    { name: "Rewards", path: "/rewards" },
     { name: "Settings", path: "/settings" },
   ] as const;
 

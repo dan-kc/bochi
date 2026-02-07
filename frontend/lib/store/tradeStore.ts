@@ -58,6 +58,21 @@ class TradeStore extends EntityStore<Trade> {
       ).length;
   }
 
+  getRewardPurchasesInPeriod(userId: string, rewardId: string, days: number): number {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    return this.state.allIds
+      .map((id) => this.state.byId[id])
+      .filter(
+        (t) =>
+          t.user_id === userId &&
+          t.reward_id === rewardId &&
+          !t.deleted_at &&
+          new Date(t.created_at) >= cutoff,
+      ).length;
+  }
+
   // ============ Trade Mutations ============
 
   async createTrade(userId: string, input: TradeInput): Promise<Trade> {

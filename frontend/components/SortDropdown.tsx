@@ -1,25 +1,29 @@
 import { useState } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { SortKey, SortOption } from "@/lib/sortOptions";
 
-interface SortDropdownProps {
-  options: SortOption[];
-  selectedKey: SortKey;
-  onSelect: (key: SortKey) => void;
+interface SortOption<K extends string> {
+  key: K;
+  label: string;
 }
 
-export function SortDropdown({
+interface SortDropdownProps<K extends string> {
+  options: SortOption<K>[];
+  selectedKey: K;
+  onSelect: (key: K) => void;
+}
+
+export function SortDropdown<K extends string>({
   options,
   selectedKey,
   onSelect,
-}: SortDropdownProps) {
+}: SortDropdownProps<K>) {
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedOption = options.find((opt) => opt.key === selectedKey);
   const selectedLabel = selectedOption?.label ?? "Sort";
 
-  const handleSelect = (key: SortKey) => {
+  const handleSelect = (key: K) => {
     onSelect(key);
     setIsOpen(false);
   };

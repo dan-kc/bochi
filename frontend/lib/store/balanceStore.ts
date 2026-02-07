@@ -123,11 +123,23 @@ class BalanceStore {
     return this.state.tofu_balance;
   }
 
+  getBalance(): number {
+    return this.state.tofu_balance;
+  }
+
   // ============ Mutations ============
 
   async addTofu(amount: number): Promise<void> {
     this.state = {
       tofu_balance: this.state.tofu_balance + amount,
+    };
+    await writeStorage(this.state);
+    this.notify();
+  }
+
+  async subtractTofu(amount: number): Promise<void> {
+    this.state = {
+      tofu_balance: this.state.tofu_balance - amount,
     };
     await writeStorage(this.state);
     this.notify();

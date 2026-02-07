@@ -5,6 +5,8 @@ import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
 import { tagStore } from "../store/tagStore";
 import { habitTagStore } from "../store/habitTagStore";
+import { rewardStore } from "../store/rewardStore";
+import { rewardTagStore } from "../store/rewardTagStore";
 import { balanceStore } from "../store/balanceStore";
 import { userStore } from "../store/userStore";
 import * as syncStorage from "./syncStorage";
@@ -51,6 +53,22 @@ vi.mock("../store/habitTagStore", () => ({
   },
 }));
 
+vi.mock("../store/rewardStore", () => ({
+  rewardStore: {
+    getDirtyRewards: vi.fn(),
+    mergeRewards: vi.fn(),
+    purgeDeletedRewards: vi.fn(),
+  },
+}));
+
+vi.mock("../store/rewardTagStore", () => ({
+  rewardTagStore: {
+    getDirty: vi.fn(),
+    merge: vi.fn(),
+    purgeDeleted: vi.fn(),
+  },
+}));
+
 vi.mock("../store/balanceStore", () => ({
   balanceStore: {
     setBalance: vi.fn(),
@@ -86,7 +104,7 @@ describe("SyncService", () => {
     // Default mock implementations
     vi.mocked(syncStorage.getSyncState).mockResolvedValue({
       lastSync: "2024-01-01T00:00:00Z",
-      dirty: { habits: [], trades: [], tags: [], habitTags: [] },
+      dirty: { habits: [], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] },
     });
     vi.mocked(syncStorage.checkAndPrepareFullSyncIfNeeded).mockResolvedValue(false);
     vi.mocked(syncStorage.clearAllDirty).mockResolvedValue();
@@ -109,6 +127,14 @@ describe("SyncService", () => {
     vi.mocked(habitTagStore.merge).mockResolvedValue();
     vi.mocked(habitTagStore.purgeDeleted).mockResolvedValue();
 
+    vi.mocked(rewardStore.getDirtyRewards).mockReturnValue([]);
+    vi.mocked(rewardStore.mergeRewards).mockResolvedValue();
+    vi.mocked(rewardStore.purgeDeletedRewards).mockResolvedValue();
+
+    vi.mocked(rewardTagStore.getDirty).mockReturnValue([]);
+    vi.mocked(rewardTagStore.merge).mockResolvedValue();
+    vi.mocked(rewardTagStore.purgeDeleted).mockResolvedValue();
+
     vi.mocked(balanceStore.setBalance).mockResolvedValue();
 
     vi.mocked(userStore.setUser).mockResolvedValue();
@@ -118,6 +144,8 @@ describe("SyncService", () => {
       trades: [],
       tags: [],
       habitTags: [],
+      rewards: [],
+      rewardTags: [],
       balance: { tofu_balance: 100 },
       server_time: "2024-01-01T00:00:01Z",
       email: "test@example.com",
@@ -168,7 +196,7 @@ describe("SyncService", () => {
       // Setup: habit is marked as dirty
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [habitId], trades: [], tags: [], habitTags: [] },
+        dirty: { habits: [habitId], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] },
       });
 
       // Track the order of calls and what values were captured
@@ -196,6 +224,8 @@ describe("SyncService", () => {
         trades: [],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 100 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -207,6 +237,8 @@ describe("SyncService", () => {
         trades: [],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 100 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
@@ -244,7 +276,7 @@ describe("SyncService", () => {
 
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [], trades: [tradeId], tags: [], habitTags: [] },
+        dirty: { habits: [], trades: [tradeId], tags: [], habitTags: [], rewards: [], rewardTags: [] },
       });
 
       const callOrder: string[] = [];
@@ -263,6 +295,8 @@ describe("SyncService", () => {
         trades: [],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 100 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -274,6 +308,8 @@ describe("SyncService", () => {
         trades: [localTrade],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 110 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
@@ -297,13 +333,15 @@ describe("SyncService", () => {
     test("does not call syncPush when there are no dirty entities", async () => {
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [], trades: [], tags: [], habitTags: [] },
+        dirty: { habits: [], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] },
       });
 
       vi.mocked(habitStore.getDirtyHabits).mockReturnValue([]);
       vi.mocked(tradeStore.getDirtyTrades).mockReturnValue([]);
       vi.mocked(tagStore.getDirty).mockReturnValue([]);
       vi.mocked(habitTagStore.getDirty).mockReturnValue([]);
+      vi.mocked(rewardStore.getDirtyRewards).mockReturnValue([]);
+      vi.mocked(rewardTagStore.getDirty).mockReturnValue([]);
 
       await syncService.syncAndWait();
 
@@ -353,7 +391,7 @@ describe("SyncService", () => {
 
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [dirtyHabitId], trades: [], tags: [], habitTags: [] },
+        dirty: { habits: [dirtyHabitId], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] },
       });
 
       // The key: getDirtyHabits returns the local version with correct difficulty
@@ -364,6 +402,8 @@ describe("SyncService", () => {
         trades: [],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 100 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -375,6 +415,8 @@ describe("SyncService", () => {
         trades: [],
         tags: [],
         habitTags: [],
+        rewards: [],
+        rewardTags: [],
         balance: { tofu_balance: 100 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",

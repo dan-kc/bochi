@@ -3,6 +3,8 @@ import { AuthProvider } from "@/lib/AuthContext";
 import { SyncProvider } from "@/lib/sync";
 import { HabitProvider } from "@/lib/HabitContext";
 import { PriceUpdateProvider } from "@/lib/PriceUpdateContext";
+import { RewardProvider } from "@/lib/RewardContext";
+import { RewardPriceUpdateProvider } from "@/lib/RewardPriceUpdateContext";
 import "../global.css";
 
 export default function RootLayout() {
@@ -11,7 +13,11 @@ export default function RootLayout() {
       <SyncProvider>
         <PriceUpdateProvider>
           <HabitProvider>
-            <Slot />
+            <RewardPriceUpdateProvider>
+              <RewardProvider>
+                <Slot />
+              </RewardProvider>
+            </RewardPriceUpdateProvider>
           </HabitProvider>
         </PriceUpdateProvider>
       </SyncProvider>

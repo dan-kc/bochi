@@ -3,9 +3,12 @@ import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
 import { tagStore } from "../store/tagStore";
 import { habitTagStore } from "../store/habitTagStore";
+import { rewardStore } from "../store/rewardStore";
+import { rewardTagStore } from "../store/rewardTagStore";
 import { balanceStore } from "../store/balanceStore";
 import { userStore } from "../store/userStore";
 import { habitTagKey } from "../habitTag";
+import { rewardTagKey } from "../rewardTag";
 import {
   getSyncState,
   clearAllDirty,
@@ -21,6 +24,8 @@ import type {
   SyncTradeInput,
   SyncTagInput,
   SyncHabitTagInput,
+  SyncRewardInput,
+  SyncRewardTagInput,
 } from "./types";
 
 const DEBOUNCE_MS = 2000;
@@ -71,11 +76,17 @@ export class SyncService {
       const dirtyTradeIds = new Set(syncState.dirty.trades);
       const dirtyTagIds = new Set(syncState.dirty.tags || []);
       const dirtyHabitTagKeys = new Set(syncState.dirty.habitTags || []);
+      const dirtyRewardIds = new Set(syncState.dirty.rewards || []);
+      const dirtyRewardTagKeys = new Set(syncState.dirty.rewardTags || []);
       const cleanHabits = response.habits.filter((h) => !dirtyHabitIds.has(h.id));
       const cleanTrades = response.trades.filter((t) => !dirtyTradeIds.has(t.id));
       const cleanTags = (response.tags || []).filter((t) => !dirtyTagIds.has(t.id));
       const cleanHabitTags = (response.habitTags || []).filter(
         (ht) => !dirtyHabitTagKeys.has(habitTagKey(ht.habit_id, ht.tag_id)),
+      );
+      const cleanRewards = (response.rewards || []).filter((r) => !dirtyRewardIds.has(r.id));
+      const cleanRewardTags = (response.rewardTags || []).filter(
+        (rt) => !dirtyRewardTagKeys.has(rewardTagKey(rt.reward_id, rt.tag_id)),
       );
 
       // Merge only non-dirty entities
@@ -90,6 +101,12 @@ export class SyncService {
       }
       if (cleanHabitTags.length > 0) {
         await habitTagStore.merge(cleanHabitTags, this.userId);
+      }
+      if (cleanRewards.length > 0) {
+        await rewardStore.mergeRewards(cleanRewards, this.userId);
+      }
+      if (cleanRewardTags.length > 0) {
+        await rewardTagStore.merge(cleanRewardTags, this.userId);
       }
       await balanceStore.setBalance(response.balance.tofu_balance);
       await userStore.setUser(response.email, response.isPremium);
@@ -178,15 +195,19 @@ export class SyncService {
       const dirtyTradeIds = new Set(syncState.dirty.trades);
       const dirtyTagIds = new Set(syncState.dirty.tags || []);
       const dirtyHabitTagKeys = new Set(syncState.dirty.habitTags || []);
+      const dirtyRewardIds = new Set(syncState.dirty.rewards || []);
+      const dirtyRewardTagKeys = new Set(syncState.dirty.rewardTags || []);
       const dirtyHabits = habitStore.getDirtyHabits(dirtyHabitIds);
       const dirtyTrades = tradeStore.getDirtyTrades(dirtyTradeIds);
       const dirtyTags = tagStore.getDirty(dirtyTagIds);
       const dirtyHabitTags = habitTagStore.getDirty(dirtyHabitTagKeys);
+      const dirtyRewards = rewardStore.getDirtyRewards(dirtyRewardIds);
+      const dirtyRewardTags = rewardTagStore.getDirty(dirtyRewardTagKeys);
 
       // Step 3: Pull all changes from server
       const pullResponse = await api.sync(syncState.lastSync);
 
-      // Step 4: Merge all entities (order matters: habits/tags before trades/habitTags)
+      // Step 4: Merge all entities (order matters: habits/tags/rewards before trades/habitTags/rewardTags)
       if (pullResponse.habits.length > 0) {
         await habitStore.mergeHabits(pullResponse.habits, this.userId);
       }
@@ -199,6 +220,12 @@ export class SyncService {
       if ((pullResponse.habitTags || []).length > 0) {
         await habitTagStore.merge(pullResponse.habitTags, this.userId);
       }
+      if ((pullResponse.rewards || []).length > 0) {
+        await rewardStore.mergeRewards(pullResponse.rewards, this.userId);
+      }
+      if ((pullResponse.rewardTags || []).length > 0) {
+        await rewardTagStore.merge(pullResponse.rewardTags, this.userId);
+      }
       await balanceStore.setBalance(pullResponse.balance.tofu_balance);
       await userStore.setUser(pullResponse.email, pullResponse.isPremium);
 
@@ -207,13 +234,17 @@ export class SyncService {
         dirtyHabits.length > 0 ||
         dirtyTrades.length > 0 ||
         dirtyTags.length > 0 ||
-        dirtyHabitTags.length > 0;
+        dirtyHabitTags.length > 0 ||
+        dirtyRewards.length > 0 ||
+        dirtyRewardTags.length > 0;
       if (hasDirty) {
         const input = this.buildSyncInput(
           dirtyHabits,
           dirtyTrades,
           dirtyTags,
           dirtyHabitTags,
+          dirtyRewards,
+          dirtyRewardTags,
         );
         const pushResponse = await api.syncPush(input);
 
@@ -230,6 +261,12 @@ export class SyncService {
         if ((pushResponse.habitTags || []).length > 0) {
           await habitTagStore.merge(pushResponse.habitTags, this.userId);
         }
+        if ((pushResponse.rewards || []).length > 0) {
+          await rewardStore.mergeRewards(pushResponse.rewards, this.userId);
+        }
+        if ((pushResponse.rewardTags || []).length > 0) {
+          await rewardTagStore.merge(pushResponse.rewardTags, this.userId);
+        }
         await balanceStore.setBalance(pushResponse.balance.tofu_balance);
         await userStore.setUser(pushResponse.email, pushResponse.isPremium);
       }
@@ -243,6 +280,8 @@ export class SyncService {
       await tradeStore.purgeDeletedTrades();
       await tagStore.purgeDeleted();
       await habitTagStore.purgeDeleted();
+      await rewardStore.purgeDeletedRewards();
+      await rewardTagStore.purgeDeleted();
 
       // Step 9: Notify success
       this.callbacks.onStatusChange("synced");
@@ -269,6 +308,8 @@ export class SyncService {
     trades: ReturnType<typeof tradeStore.getDirtyTrades>,
     tags: ReturnType<typeof tagStore.getDirty>,
     habitTags: ReturnType<typeof habitTagStore.getDirty>,
+    rewards: ReturnType<typeof rewardStore.getDirtyRewards>,
+    rewardTags: ReturnType<typeof rewardTagStore.getDirty>,
   ): SyncInput {
     const habitInputs: SyncHabitInput[] | undefined =
       habits.length > 0
@@ -320,11 +361,39 @@ export class SyncService {
           }))
         : undefined;
 
+    const rewardInputs: SyncRewardInput[] | undefined =
+      rewards.length > 0
+        ? rewards.map((r) => ({
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            deletedAt: r.deleted_at,
+            hiddenUntil: r.hidden_until,
+            maxDailyFrequency: r.max_daily_frequency,
+            damageRank: r.damage_rank,
+          }))
+        : undefined;
+
+    const rewardTagInputs: SyncRewardTagInput[] | undefined =
+      rewardTags.length > 0
+        ? rewardTags.map((rt) => ({
+            rewardId: rt.reward_id,
+            tagId: rt.tag_id,
+            createdAt: rt.created_at,
+            updatedAt: rt.updated_at,
+            deletedAt: rt.deleted_at,
+          }))
+        : undefined;
+
     return {
       habits: habitInputs,
       trades: tradeInputs,
       tags: tagInputs,
       habitTags: habitTagInputs,
+      rewards: rewardInputs,
+      rewardTags: rewardTagInputs,
     };
   }
 }

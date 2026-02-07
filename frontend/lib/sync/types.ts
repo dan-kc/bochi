@@ -2,6 +2,8 @@ import type { Habit } from "../habit";
 import type { Trade } from "../trade";
 import type { Tag } from "../tag";
 import type { HabitTag } from "../habitTag";
+import type { Reward } from "../reward";
+import type { RewardTag } from "../rewardTag";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
@@ -23,6 +25,8 @@ export interface SyncResponse {
   trades: Trade[];
   tags: Tag[];
   habitTags: HabitTag[];
+  rewards: Reward[];
+  rewardTags: RewardTag[];
   balance: BalanceResponse;
   server_time: string;
   email: string | null;
@@ -67,11 +71,33 @@ export interface SyncHabitTagInput {
   deletedAt: string | null;
 }
 
+export interface SyncRewardInput {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  hiddenUntil: string | null;
+  maxDailyFrequency: number | null;
+  damageRank: string | null;
+}
+
+export interface SyncRewardTagInput {
+  rewardId: string;
+  tagId: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface SyncInput {
   habits?: SyncHabitInput[];
   trades?: SyncTradeInput[];
   tags?: SyncTagInput[];
   habitTags?: SyncHabitTagInput[];
+  rewards?: SyncRewardInput[];
+  rewardTags?: SyncRewardTagInput[];
 }
 
 // ============================================================================
@@ -85,5 +111,7 @@ export interface SyncState {
     trades: string[];
     tags: string[];
     habitTags: string[];
+    rewards: string[];
+    rewardTags: string[];
   };
 }

@@ -86,6 +86,8 @@ describe("getDefaultSyncState", () => {
       trades: [],
       tags: [],
       habitTags: [],
+      rewards: [],
+      rewardTags: [],
     });
   });
 

@@ -1,4 +1,5 @@
 export { habitStore, LOCAL_USER_ID } from "./habitStore";
+export { rewardStore } from "./rewardStore";
 export {
   useHabits,
   useHabit,
@@ -6,6 +7,12 @@ export {
   useHabitActions,
   useHabitStore,
   useHabitsSortedByDifficulty,
+  useRewards,
+  useReward,
+  useRewardActions,
+  useRewardsSortedByDamage,
+  useTagsForReward,
+  useRewardTagActions,
 } from "./hooks";
 export {
   sortPreferencesStore,
