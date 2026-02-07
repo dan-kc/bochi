@@ -8,6 +8,9 @@ import {
 } from "react";
 import { calculateReward } from "./rewardCalculation";
 import type { Habit } from "./habit";
+import { tradeStore } from "./store/tradeStore";
+import { useAuth } from "./AuthContext";
+import { LOCAL_USER_ID } from "./store";
 
 /** Time bucket size in milliseconds (30 minutes) */
 const TIME_BUCKET_MS = 30 * 60 * 1000;
@@ -56,6 +59,9 @@ function getAlignedTimeBucket(now: Date = new Date()): number {
 }
 
 export function PriceUpdateProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? LOCAL_USER_ID;
+
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [timeBucket, setTimeBucket] = useState(() => getAlignedTimeBucket());
   const [secondsUntilUpdate, setSecondsUntilUpdate] = useState(() =>
@@ -70,9 +76,8 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
       const previousBucket = bucket - 1;
 
       for (const habit of habits) {
-        // For now, we pass 0 completions - this can be enhanced later
-        // when trade/completion tracking is available
-        const completionsInPeriod = 0;
+        // Get real completion count from trade store (last 7 days)
+        const completionsInPeriod = tradeStore.getTradesInPeriod(userId, habit.id, 7);
 
         // Calculate current price
         const current = calculateReward(
@@ -98,7 +103,7 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
 
       return newPrices;
     },
-    []
+    [userId]
   );
 
   // Update prices when habits change or time bucket changes
