@@ -293,13 +293,12 @@ impl Database {
         user_id: Uuid,
         hashed_password: &str,
     ) -> Result<(), sqlx::Error> {
-        let result = sqlx::query(
-            "UPDATE users SET password = $2 WHERE id = $1 AND is_anonymous = false",
-        )
-        .bind(user_id)
-        .bind(hashed_password)
-        .execute(&self.pool)
-        .await?;
+        let result =
+            sqlx::query("UPDATE users SET password = $2 WHERE id = $1 AND is_anonymous = false")
+                .bind(user_id)
+                .bind(hashed_password)
+                .execute(&self.pool)
+                .await?;
 
         if result.rows_affected() == 0 {
             return Err(sqlx::Error::RowNotFound);
@@ -309,18 +308,13 @@ impl Database {
     }
 
     /// Updates a user's email.
-    pub async fn update_user_email(
-        &self,
-        user_id: Uuid,
-        email: &str,
-    ) -> Result<(), sqlx::Error> {
-        let result = sqlx::query(
-            "UPDATE users SET email = $2 WHERE id = $1 AND is_anonymous = false",
-        )
-        .bind(user_id)
-        .bind(email)
-        .execute(&self.pool)
-        .await?;
+    pub async fn update_user_email(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error> {
+        let result =
+            sqlx::query("UPDATE users SET email = $2 WHERE id = $1 AND is_anonymous = false")
+                .bind(user_id)
+                .bind(email)
+                .execute(&self.pool)
+                .await?;
 
         if result.rows_affected() == 0 {
             return Err(sqlx::Error::RowNotFound);
@@ -506,13 +500,12 @@ impl Database {
 
         // Validate reward belongs to user if reward_id is provided
         if let Some(reward_id) = trade.reward_id {
-            let reward_valid: Option<(Uuid,)> = sqlx::query_as(
-                "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
-            )
-            .bind(reward_id)
-            .bind(user_id)
-            .fetch_optional(&mut **tx)
-            .await?;
+            let reward_valid: Option<(Uuid,)> =
+                sqlx::query_as("SELECT id FROM rewards WHERE id = $1 AND user_id = $2")
+                    .bind(reward_id)
+                    .bind(user_id)
+                    .fetch_optional(&mut **tx)
+                    .await?;
 
             if reward_valid.is_none() {
                 return Err(sqlx::Error::RowNotFound);

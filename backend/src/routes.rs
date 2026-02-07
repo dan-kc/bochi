@@ -37,9 +37,15 @@ fn create_clear_cookie(name: &str) -> HeaderValue {
 fn auth_cookie_headers(access_token: &str, refresh_token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     // Access token expires in 15 minutes (900 seconds)
-    headers.append(SET_COOKIE, create_auth_cookie("access_token", access_token, 900));
+    headers.append(
+        SET_COOKIE,
+        create_auth_cookie("access_token", access_token, 900),
+    );
     // Refresh token expires in 7 days (604800 seconds)
-    headers.append(SET_COOKIE, create_auth_cookie("refresh_token", refresh_token, 604800));
+    headers.append(
+        SET_COOKIE,
+        create_auth_cookie("refresh_token", refresh_token, 604800),
+    );
     headers
 }
 
@@ -337,8 +343,8 @@ pub async fn refresh_tokens(
         .or_else(|| extract_refresh_token_from_cookies(&headers))
         .ok_or(Error::InvalidRefreshToken)?;
 
-    let (user_id, name, refresh_token) = parse_refresh_token(token.as_str())
-        .map_err(|_| Error::InvalidRefreshToken)?;
+    let (user_id, name, refresh_token) =
+        parse_refresh_token(token.as_str()).map_err(|_| Error::InvalidRefreshToken)?;
     // Check if token is valid
     if let Ok(refresh_token_row) = app
         .database
@@ -413,7 +419,10 @@ pub async fn login(
 
     if let Ok(user) = app.database.get_user_from_email(input.email.as_str()).await {
         // Anonymous users don't have a password, so they can't login with password
-        let stored_password = user.password.as_deref().ok_or(Error::InvalidLoginCredentials)?;
+        let stored_password = user
+            .password
+            .as_deref()
+            .ok_or(Error::InvalidLoginCredentials)?;
         if !security::check_password(stored_password, input.password.as_str()) {
             return Err(Error::InvalidLoginCredentials);
         }
@@ -469,8 +478,8 @@ pub async fn logout(
         .ok_or(Error::InvalidRefreshToken)?;
 
     // Parse refresh token to get user_id, name, and uuid part
-    let (user_id, name, refresh_token) = parse_refresh_token(token.as_str())
-        .map_err(|_| Error::InvalidRefreshToken)?;
+    let (user_id, name, refresh_token) =
+        parse_refresh_token(token.as_str()).map_err(|_| Error::InvalidRefreshToken)?;
 
     // Validate the refresh token exists and matches
     let refresh_token_row = app
@@ -568,7 +577,9 @@ pub async fn claim(
                 .and_then(|s| s.strip_prefix("access_token="))
         });
 
-    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let jwt = jwt_from_header
+        .or(jwt_from_cookie)
+        .ok_or(Error::Unauthorized)?;
     let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
 
     // Validate email and password
@@ -672,7 +683,9 @@ pub async fn change_password(
                 .and_then(|s| s.strip_prefix("access_token="))
         });
 
-    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let jwt = jwt_from_header
+        .or(jwt_from_cookie)
+        .ok_or(Error::Unauthorized)?;
     let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
 
     // Validate new password
@@ -756,7 +769,9 @@ pub async fn change_email(
                 .and_then(|s| s.strip_prefix("access_token="))
         });
 
-    let jwt = jwt_from_header.or(jwt_from_cookie).ok_or(Error::Unauthorized)?;
+    let jwt = jwt_from_header
+        .or(jwt_from_cookie)
+        .ok_or(Error::Unauthorized)?;
     let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
 
     // Validate new email
@@ -786,7 +801,9 @@ pub async fn change_email(
 
     // Check if new email is same as current
     if user.email.as_deref() == Some(input.new_email.as_str()) {
-        return Err(Error::ValidationErrorList(vec![ValidationError::NewEmailSameAsOld]));
+        return Err(Error::ValidationErrorList(vec![
+            ValidationError::NewEmailSameAsOld,
+        ]));
     }
 
     // Verify password
@@ -796,7 +813,12 @@ pub async fn change_email(
     }
 
     // Check if email already exists (return generic error to prevent enumeration)
-    if app.database.get_user_from_email(&input.new_email).await.is_ok() {
+    if app
+        .database
+        .get_user_from_email(&input.new_email)
+        .await
+        .is_ok()
+    {
         return Err(Error::FailedToChangeEmail);
     }
 

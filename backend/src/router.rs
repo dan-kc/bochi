@@ -48,10 +48,7 @@ pub async fn router() -> axum::Router {
         .route("/habits", post(api::habits::create_habit))
         .route("/rewards", post(api::rewards::create_reward))
         .route("/trades", post(api::trades::create_trade))
-        .route(
-            "/sync",
-            get(api::sync::get_sync).post(api::sync::post_sync),
-        )
+        .route("/sync", get(api::sync::get_sync).post(api::sync::post_sync))
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth));
 
     let cors = CorsLayer::new()

@@ -5,7 +5,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    database::{CreateTradeWithRewardOptions, CreateTradeWithHabitOptions},
+    database::{CreateTradeWithHabitOptions, CreateTradeWithRewardOptions},
     router::{App, AuthenticatedUser},
 };
 
@@ -63,15 +63,19 @@ pub async fn create_trade(
     }
 
     if let Some(habit_id_str) = input.habit_id {
-        let habit_id = habit_id_str.parse::<Uuid>().map_err(|_| {
-            ApiError::Validation("Invalid habit_id format".to_string())
-        })?;
+        let habit_id = habit_id_str
+            .parse::<Uuid>()
+            .map_err(|_| ApiError::Validation("Invalid habit_id format".to_string()))?;
 
         let opts = CreateTradeWithHabitOptions::new(user.user_id, habit_id, 1000);
-        let trade_row = app.database.create_trade_with_habit(opts).await.map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+        let trade_row = app
+            .database
+            .create_trade_with_habit(opts)
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
 
         Ok((
             StatusCode::CREATED,
@@ -96,15 +100,19 @@ pub async fn create_trade(
         ))
     } else {
         let reward_id_str = input.reward_id.unwrap();
-        let reward_id = reward_id_str.parse::<Uuid>().map_err(|_| {
-            ApiError::Validation("Invalid reward_id format".to_string())
-        })?;
+        let reward_id = reward_id_str
+            .parse::<Uuid>()
+            .map_err(|_| ApiError::Validation("Invalid reward_id format".to_string()))?;
 
         let opts = CreateTradeWithRewardOptions::new(user.user_id, reward_id, 1000);
-        let trade_row = app.database.create_trade_with_reward(opts).await.map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+        let trade_row = app
+            .database
+            .create_trade_with_reward(opts)
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
 
         Ok((
             StatusCode::CREATED,

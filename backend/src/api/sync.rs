@@ -128,15 +128,23 @@ pub async fn get_sync(
             ApiError::Internal
         })?;
 
-    let balance_row = app.database.get_user_balance(user.user_id).await.map_err(|e| {
-        error!("Database Error: {:?}", e);
-        ApiError::Internal
-    })?;
+    let balance_row = app
+        .database
+        .get_user_balance(user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
 
-    let profile_row = app.database.get_user_profile(user.user_id).await.map_err(|e| {
-        error!("Database Error: {:?}", e);
-        ApiError::Internal
-    })?;
+    let profile_row = app
+        .database
+        .get_user_profile(user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
 
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
@@ -246,13 +254,12 @@ pub async fn post_sync(
                 difficulty_rank: habit_input.difficulty_rank,
             };
 
-            let habit_row =
-                Database::upsert_habit_tx(&mut tx, user.user_id, &upsert_opts)
-                    .await
-                    .map_err(|e| {
-                        error!("Database Error upserting habit: {:?}", e);
-                        ApiError::Internal
-                    })?;
+            let habit_row = Database::upsert_habit_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting habit: {:?}", e);
+                    ApiError::Internal
+                })?;
 
             result_habits.push(HabitOutput {
                 id: habit_row.id.to_string(),
@@ -309,13 +316,12 @@ pub async fn post_sync(
                 deleted_at: trade_input.deleted_at,
             };
 
-            let trade_row =
-                Database::upsert_trade_tx(&mut tx, user.user_id, &upsert_opts)
-                    .await
-                    .map_err(|e| {
-                        error!("Database Error upserting trade: {:?}", e);
-                        ApiError::Internal
-                    })?;
+            let trade_row = Database::upsert_trade_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting trade: {:?}", e);
+                    ApiError::Internal
+                })?;
 
             result_trades.push(TradeOutput {
                 id: trade_row.id.to_string(),
@@ -344,15 +350,23 @@ pub async fn post_sync(
     })?;
 
     // Get current tofu balance (not modified by trades)
-    let balance_row = app.database.get_user_balance(user.user_id).await.map_err(|e| {
-        error!("Database Error getting balance: {:?}", e);
-        ApiError::Internal
-    })?;
+    let balance_row = app
+        .database
+        .get_user_balance(user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error getting balance: {:?}", e);
+            ApiError::Internal
+        })?;
 
-    let profile_row = app.database.get_user_profile(user.user_id).await.map_err(|e| {
-        error!("Database Error getting profile: {:?}", e);
-        ApiError::Internal
-    })?;
+    let profile_row = app
+        .database
+        .get_user_profile(user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error getting profile: {:?}", e);
+            ApiError::Internal
+        })?;
 
     let server_time = Utc::now().naive_utc();
 
