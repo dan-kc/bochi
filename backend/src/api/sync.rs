@@ -142,7 +142,6 @@ pub struct HabitTagOutput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceOutput {
-    pub soy_balance: f64,
     pub tofu_balance: f64,
 }
 
@@ -269,7 +268,6 @@ pub async fn get_sync(
         tags,
         habit_tags,
         balance: BalanceOutput {
-            soy_balance: balance_row.soy_balance,
             tofu_balance: balance_row.tofu_balance,
         },
         server_time,
@@ -544,16 +542,6 @@ pub async fn post_sync(
         ApiError::Internal
     })?;
 
-    // Get current tofu balance (not modified by trades)
-    let balance_row = app
-        .database
-        .get_user_balance(user.user_id)
-        .await
-        .map_err(|e| {
-            error!("Database Error getting balance: {:?}", e);
-            ApiError::Internal
-        })?;
-
     let profile_row = app
         .database
         .get_user_profile(user.user_id)
@@ -571,8 +559,7 @@ pub async fn post_sync(
         tags: result_tags,
         habit_tags: result_habit_tags,
         balance: BalanceOutput {
-            soy_balance: new_balance,
-            tofu_balance: balance_row.tofu_balance,
+            tofu_balance: new_balance,
         },
         server_time,
         email: profile_row.email,

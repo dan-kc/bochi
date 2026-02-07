@@ -16,7 +16,6 @@ async fn test_get_balance_success() {
     let (status, json) = make_authenticated_get_request(&access_token, "/api/balance").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json.get("soyBalance").unwrap(), 0.0);
     assert_eq!(json.get("tofuBalance").unwrap(), 0.0);
 }
 

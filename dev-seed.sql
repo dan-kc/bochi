@@ -1,9 +1,9 @@
 -- Fixture data for tofustash development
 
-INSERT INTO users (id, email, password, premium, theme_preference, soy_balance, tofu_balance) VALUES
-('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto', 100.0, 50.0),
-('22222222-2222-2222-2222-222222222222', 'bob@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', true, 'dark', 250.0, 120.0),
-('33333333-3333-3333-3333-333333333333', 'charlie@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'light', 0.0, 0.0);
+INSERT INTO users (id, email, password, premium, theme_preference, tofu_balance) VALUES
+('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto', 150.0),
+('22222222-2222-2222-2222-222222222222', 'bob@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', true, 'dark', 370.0),
+('33333333-3333-3333-3333-333333333333', 'charlie@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'light', 0.0);
 
 -- Tags for Alice
 INSERT INTO tags (id, user_id, name, color_hex) VALUES

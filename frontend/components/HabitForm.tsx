@@ -280,7 +280,7 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
     setIsSaving(true);
     try {
       await onSave(habitInput);
-    } catch (error) {
+    } catch {
       setErrors({ general: ["Failed to save habit"] });
     } finally {
       setIsSaving(false);
@@ -293,7 +293,7 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
     setIsDeleting(true);
     try {
       await onDelete();
-    } catch (error) {
+    } catch {
       setErrors({ general: ["Failed to delete habit"] });
     } finally {
       setIsDeleting(false);

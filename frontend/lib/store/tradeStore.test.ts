@@ -54,7 +54,7 @@ describe("normalizeTrade", () => {
       expect(result).toEqual(completeData);
     });
 
-    test("preserves reward_id when set (spending soy)", () => {
+    test("preserves reward_id when set (spending tofu)", () => {
       const spendTrade = {
         id: "1",
         user_id: "u1",

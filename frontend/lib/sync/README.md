@@ -146,7 +146,7 @@ Query: ?since=<ISO datetime>
 Response: {
   habits: [...],
   trades: [...],
-  balance: { soy_balance, tofu_balance },
+  balance: { tofu_balance },
   server_time: "..."
 }
 ```

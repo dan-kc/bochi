@@ -13,7 +13,6 @@ import {
   useTagActions,
   useHabitTagActions,
 } from "@/lib/store/hooks";
-import { habitTagStore } from "@/lib/store/habitTagStore";
 import { generateRandomColor } from "@/lib/tag";
 import type { Tag } from "@/lib/tag";
 
@@ -124,7 +123,9 @@ export function TagSelectionModal({
           )}
           {filteredTags.length === 0 && search && (
             <View className="py-8 items-center">
-              <Text className="text-gray-500">No tags matching "{search}"</Text>
+              <Text className="text-gray-500">
+                No tags matching &quot;{search}&quot;
+              </Text>
             </View>
           )}
           {filteredTags.map((tag) => {

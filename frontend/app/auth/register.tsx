@@ -11,11 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
 import { useAuth } from "@/lib/AuthContext";
-import {
-  validateAuthInput,
-  getErrorMessage,
-  type ValidationError,
-} from "@/lib/validation";
+import { validateAuthInput, getErrorMessage } from "@/lib/validation";
 import type { ApiError } from "@/lib/api";
 
 export default function Register() {

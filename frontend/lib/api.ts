@@ -183,12 +183,10 @@ class ApiClient {
 
   async getBalance(): Promise<BalanceResponse> {
     const result = await this.authenticatedRequest<{
-      soyBalance: number;
       tofuBalance: number;
     }>("/api/balance", { method: "GET" });
 
     return {
-      soy_balance: result.soyBalance,
       tofu_balance: result.tofuBalance,
     };
   }
@@ -237,7 +235,6 @@ class ApiClient {
         deletedAt: string | null;
       }>;
       balance: {
-        soyBalance: number;
         tofuBalance: number;
       };
       serverTime: string;
@@ -286,7 +283,6 @@ class ApiClient {
         deleted_at: ht.deletedAt,
       })),
       balance: {
-        soy_balance: result.balance.soyBalance,
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,
@@ -378,7 +374,6 @@ class ApiClient {
         deletedAt: string | null;
       }>;
       balance: {
-        soyBalance: number;
         tofuBalance: number;
       };
       serverTime: string;
@@ -435,7 +430,6 @@ class ApiClient {
         deleted_at: ht.deletedAt,
       })),
       balance: {
-        soy_balance: result.balance.soyBalance,
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,

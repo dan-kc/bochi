@@ -91,10 +91,7 @@ export class SyncService {
       if (cleanHabitTags.length > 0) {
         await habitTagStore.merge(cleanHabitTags, this.userId);
       }
-      await balanceStore.setBalance(
-        response.balance.soy_balance,
-        response.balance.tofu_balance,
-      );
+      await balanceStore.setBalance(response.balance.tofu_balance);
       await userStore.setUser(response.email, response.isPremium);
 
       await setLastSyncTime(response.server_time);
@@ -202,10 +199,7 @@ export class SyncService {
       if ((pullResponse.habitTags || []).length > 0) {
         await habitTagStore.merge(pullResponse.habitTags, this.userId);
       }
-      await balanceStore.setBalance(
-        pullResponse.balance.soy_balance,
-        pullResponse.balance.tofu_balance,
-      );
+      await balanceStore.setBalance(pullResponse.balance.tofu_balance);
       await userStore.setUser(pullResponse.email, pullResponse.isPremium);
 
       // Step 5: Push dirty entities if any
@@ -236,10 +230,7 @@ export class SyncService {
         if ((pushResponse.habitTags || []).length > 0) {
           await habitTagStore.merge(pushResponse.habitTags, this.userId);
         }
-        await balanceStore.setBalance(
-          pushResponse.balance.soy_balance,
-          pushResponse.balance.tofu_balance,
-        );
+        await balanceStore.setBalance(pushResponse.balance.tofu_balance);
         await userStore.setUser(pushResponse.email, pushResponse.isPremium);
       }
 

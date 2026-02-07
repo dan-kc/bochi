@@ -53,7 +53,7 @@ function InfoDisplay({
             isUp ? "text-green-600" : isDown ? "text-red-600" : "text-amber-700"
           }`}
         >
-          {current} soy (was {previous})
+          {current} tofu (was {previous})
         </Text>
       </View>
     );
@@ -199,7 +199,7 @@ export function HabitItem({
                 className="bg-green-500 px-3 py-1 rounded ml-auto"
               >
                 <Text className="text-white text-xs font-semibold">
-                  +{currentPrice ?? "..."} soy
+                  +{currentPrice ?? "..."} tofu
                 </Text>
               </Pressable>
             )}

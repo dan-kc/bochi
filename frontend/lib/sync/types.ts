@@ -11,7 +11,6 @@ export interface SyncCallbacks {
 }
 
 export interface BalanceResponse {
-  soy_balance: number;
   tofu_balance: number;
 }
 

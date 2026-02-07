@@ -1,7 +1,7 @@
 /**
  * Reward Calculation Formula
  *
- * Calculates dynamic soy rewards for completing habits based on:
+ * Calculates dynamic tofu rewards for completing habits based on:
  * 1. Difficulty (main factor) - higher difficulty = larger reward
  * 2. Habit frequency - not meeting target frequency = larger reward (capped at ±50%)
  * 3. Deterministic "random" element - varies by ±15% based on habit ID + time bucket
@@ -12,7 +12,7 @@
 
 import type { Habit } from './habit';
 
-/** Base reward amount in soy */
+/** Base reward amount in tofu */
 const BASE_REWARD = 100;
 
 /** Difficulty multiplier range: easiest habit = 1x, hardest = 10x */
@@ -178,7 +178,7 @@ export function calculateRandomMultiplier(
  * @param allHabits - All habits for the user (for difficulty ranking)
  * @param completionsInPeriod - Habit completions in last 7 days
  * @param timeBucket - The time bucket for random element (use getCurrentTimeBucket())
- * @returns The reward amount in soy (rounded to integer)
+ * @returns The reward amount in tofu (rounded to integer)
  */
 export function calculateReward(
   habit: Habit,

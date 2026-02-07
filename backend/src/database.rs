@@ -399,7 +399,7 @@ impl Database {
 
     /// Get user balance
     pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
-        sqlx::query_as("SELECT soy_balance, tofu_balance FROM users WHERE id = $1")
+        sqlx::query_as("SELECT tofu_balance FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
@@ -619,7 +619,7 @@ impl Database {
         let balance = total.unwrap_or(0) as f64;
 
         // Update user balance
-        sqlx::query("UPDATE users SET soy_balance = $2 WHERE id = $1")
+        sqlx::query("UPDATE users SET tofu_balance = $2 WHERE id = $1")
             .bind(user_id)
             .bind(balance)
             .execute(&mut **tx)
@@ -796,7 +796,6 @@ pub struct TradeRow {
 
 #[derive(sqlx::FromRow)]
 pub struct UserBalanceRow {
-    pub soy_balance: f64,
     pub tofu_balance: f64,
 }
 

@@ -6,7 +6,6 @@ const BALANCE_STORAGE_KEY = "tofustash_balance";
 // ============ Types ============
 
 interface BalanceState {
-  soy_balance: number;
   tofu_balance: number;
 }
 
@@ -19,13 +18,15 @@ function readStorageSync(): BalanceState {
     const data = localStorage.getItem(BALANCE_STORAGE_KEY);
     if (data) {
       const parsed = JSON.parse(data);
+      // Migration: combine soy_balance into tofu_balance if present
+      const migratedTofu =
+        (parsed.tofu_balance ?? 0) + (parsed.soy_balance ?? 0);
       return {
-        soy_balance: parsed.soy_balance ?? 0,
-        tofu_balance: parsed.tofu_balance ?? 0,
+        tofu_balance: migratedTofu,
       };
     }
   }
-  return { soy_balance: 0, tofu_balance: 0 };
+  return { tofu_balance: 0 };
 }
 
 async function readStorageAsync(): Promise<BalanceState> {
@@ -35,12 +36,14 @@ async function readStorageAsync(): Promise<BalanceState> {
     const data = await AsyncStorage.getItem(BALANCE_STORAGE_KEY);
     if (data) {
       const parsed = JSON.parse(data);
+      // Migration: combine soy_balance into tofu_balance if present
+      const migratedTofu =
+        (parsed.tofu_balance ?? 0) + (parsed.soy_balance ?? 0);
       return {
-        soy_balance: parsed.soy_balance ?? 0,
-        tofu_balance: parsed.tofu_balance ?? 0,
+        tofu_balance: migratedTofu,
       };
     }
-    return { soy_balance: 0, tofu_balance: 0 };
+    return { tofu_balance: 0 };
   }
 }
 
@@ -56,7 +59,7 @@ async function writeStorage(state: BalanceState): Promise<void> {
 // ============ Store Class ============
 
 class BalanceStore {
-  private state: BalanceState = { soy_balance: 0, tofu_balance: 0 };
+  private state: BalanceState = { tofu_balance: 0 };
   private listeners = new Set<Listener>();
   private initialized = false;
 
@@ -82,9 +85,11 @@ class BalanceStore {
     window.addEventListener("storage", (e) => {
       if (e.key === BALANCE_STORAGE_KEY && e.newValue) {
         const parsed = JSON.parse(e.newValue);
+        // Migration: combine soy_balance into tofu_balance if present
+        const migratedTofu =
+          (parsed.tofu_balance ?? 0) + (parsed.soy_balance ?? 0);
         this.state = {
-          soy_balance: parsed.soy_balance ?? 0,
-          tofu_balance: parsed.tofu_balance ?? 0,
+          tofu_balance: migratedTofu,
         };
         this.notify();
       }
@@ -114,38 +119,23 @@ class BalanceStore {
 
   // ============ Selectors ============
 
-  getSoyBalance(): number {
-    return this.state.soy_balance;
-  }
-
   getTofuBalance(): number {
     return this.state.tofu_balance;
   }
 
   // ============ Mutations ============
 
-  async addSoy(amount: number): Promise<void> {
+  async addTofu(amount: number): Promise<void> {
     this.state = {
-      ...this.state,
-      soy_balance: this.state.soy_balance + amount,
+      tofu_balance: this.state.tofu_balance + amount,
     };
     await writeStorage(this.state);
     this.notify();
   }
 
-  async setBalance(soy: number, tofu: number): Promise<void> {
+  async setBalance(tofu: number): Promise<void> {
     this.state = {
-      soy_balance: soy,
       tofu_balance: tofu,
-    };
-    await writeStorage(this.state);
-    this.notify();
-  }
-
-  async setSoyBalance(soy: number): Promise<void> {
-    this.state = {
-      ...this.state,
-      soy_balance: soy,
     };
     await writeStorage(this.state);
     this.notify();
@@ -157,7 +147,7 @@ class BalanceStore {
   }
 
   async clear(): Promise<void> {
-    this.state = { soy_balance: 0, tofu_balance: 0 };
+    this.state = { tofu_balance: 0 };
     await writeStorage(this.state);
     this.notify();
   }

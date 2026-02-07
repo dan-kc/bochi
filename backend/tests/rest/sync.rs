@@ -59,8 +59,7 @@ async fn test_sync_pull_returns_all_entity_types() {
 
     // Check balance
     let balance = json.get("balance").unwrap();
-    assert_eq!(balance.get("soyBalance").unwrap(), 500.0);
-    assert_eq!(balance.get("tofuBalance").unwrap(), 0.0);
+    assert_eq!(balance.get("tofuBalance").unwrap(), 500.0);
 
     // Check serverTime
     assert!(json.get("serverTime").is_some());
@@ -133,11 +132,7 @@ async fn test_sync_pull_empty_for_new_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 0.0);
-    assert_eq!(
-        json.get("balance").unwrap().get("tofuBalance").unwrap(),
-        0.0
-    );
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
     assert!(json.get("serverTime").unwrap().is_string());
 
     // User data should still be present
@@ -200,7 +195,7 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
     assert_eq!(trades[0].get("amount").unwrap(), 500);
 
     // Check balance updated
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 500.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
 }
 
 #[tokio::test]
@@ -242,7 +237,7 @@ async fn test_sync_push_ordering_habit_before_trade() {
 
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 1);
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 300.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 300.0);
 }
 
 #[tokio::test]
@@ -363,7 +358,7 @@ async fn test_sync_push_updates_balance_correctly() {
 
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 2);
     // Balance should be sum of both trades: 500 + 300 = 800
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 800.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 800.0);
 }
 
 #[tokio::test]
@@ -481,14 +476,14 @@ async fn test_sync_push_idempotent_same_ids() {
         make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 500.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
 
     // Push same data again - should be idempotent
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
     // Balance should still be 500 (not 1000)
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 500.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
 
     // Verify only one habit and one trade exist
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
@@ -550,7 +545,7 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
     assert_eq!(trades[0].get("habitId").unwrap(), &habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 750);
 
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 750.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 750.0);
 }
 
 #[tokio::test]
@@ -653,7 +648,7 @@ async fn test_sync_only_returns_own_data() {
     // User 2 should see nothing
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
-    assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 0.0);
+    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
 }
 
 // ============================================================================

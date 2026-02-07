@@ -4,7 +4,7 @@ import { balanceStore } from "./store/balanceStore";
 import { calculateReward, getCurrentTimeBucket } from "./rewardCalculation";
 
 /**
- * Complete a habit and award the calculated soy reward.
+ * Complete a habit and award the calculated tofu reward.
  *
  * This function:
  * 1. Calculates the reward based on difficulty, habit frequency, etc.
@@ -15,7 +15,7 @@ import { calculateReward, getCurrentTimeBucket } from "./rewardCalculation";
  * @param allHabits - All user's habits (for difficulty ranking)
  * @param userId - The current user's ID
  * @param onComplete - Optional callback after completion (e.g., to trigger sync)
- * @returns The amount of soy awarded
+ * @returns The amount of tofu awarded
  */
 export async function completeHabit(
   habit: Habit,
@@ -42,7 +42,7 @@ export async function completeHabit(
   });
 
   // Update local balance
-  await balanceStore.addSoy(amount);
+  await balanceStore.addTofu(amount);
 
   // Notify caller to trigger sync
   if (onComplete) {
