@@ -1,24 +1,8 @@
-Check it currently works
-
-Remove hidden until, 
-
-Use neverThrow for all error handling on frontend.
-
-# General
-
-the commands to interact with the project like cargo and npm are in @scripts.nix
-
-# Sync email, isPremium
-
-I want to also sync email and isPremium. I want to display both on the settings tab.
-
 # Add tags
 
-Add tags to all habits.
-Remove the description from habits.
-Make sure that all habits are the same height in the list view. If a habit has lots of text as a title then truncate it with `...`. Bare in mind thin phones.
+Add tags to all habits. They already exist in the db but I need tags to be many to many with habits and many to many with rewards.
+The same tag can be used by rewards and habits. The tags should be synced just like the habits and trades.
 Show all of the tags underneath the text. If there are so many tags that it's running out of space then truncate that too but show the user that there are more.
-The tags should be synced just like the habits and trades.
 When clicking `add tags` after clicking on a habit, it should pop up with a new ui that lists all tags and opens a text box for you to search and filter. It will filter depending on what you type and in the list there should be tickboxes such that you can select multiple.
 Also beside each entry in the list, it should be a color button. Clicking that will bring up a modal that is a color picker.
 You should also be able to add new ones too with a button. Creating new ones will give it a random color hex.
@@ -53,16 +37,15 @@ The frontend should have
 
 This new tab after `habits` and before `settings` will be `trades`. This should list all trades just like the habits. This should look very similar to the habits tab. It should have "Both", "Reward", "Habit" and then the sort by.
 
-
-|Trades                       |
-|Both, Reward, Habit          |
-|              sort by newest | (or oldest, or cheapest or most expensive. Newest is default)
+|Trades |
+|Both, Reward, Habit |
+| sort by newest | (or oldest, or cheapest or most expensive. Newest is default)
 It should also show the balance in the top, just the same as habits view.
 
 Make sure to re-use and abstract out components don't repeat yourself too much.
 Each trade should look like
 
-|[type][name]     amount | where type is "Bought" or "Sold"
-|tags                    |
+|[type][name] amount | where type is "Bought" or "Sold"
+|tags |
 
 # Observability
