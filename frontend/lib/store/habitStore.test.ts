@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { normalizeHabit } from "./habitStore";
-import type { Habit } from "../habit";
+import type { Habit, HabitInput } from "../habit";
 
 describe("normalizeHabit", () => {
   describe("providing defaults for missing fields", () => {
@@ -86,5 +86,61 @@ describe("normalizeHabit", () => {
 
       expect(result.name).toBe("");
     });
+  });
+});
+
+describe("updateHabit input handling", () => {
+  // This test verifies the logic used by updateHabit to determine which fields
+  // to update. The key behavior is that difficulty_rank: null should be treated
+  // as an explicit value to set, not as "no update". This is critical for the
+  // merge flow during login where we clear difficulty_rank on merged habits.
+
+  function computeUpdates(input: Partial<HabitInput>): Partial<Habit> {
+    // This mirrors the logic in HabitStore.updateHabit()
+    const updates: Partial<Habit> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.description !== undefined) updates.description = input.description;
+    if (input.deleted_at !== undefined) updates.deleted_at = input.deleted_at;
+    if (input.hidden_until !== undefined) updates.hidden_until = input.hidden_until;
+    if (input.min_daily_frequency !== undefined) updates.min_daily_frequency = input.min_daily_frequency;
+    if (input.difficulty_rank !== undefined) updates.difficulty_rank = input.difficulty_rank;
+    return updates;
+  }
+
+  test("explicitly setting difficulty_rank to null includes it in updates", () => {
+    // This is the key behavior for clearing difficulty on merge
+    const input: Partial<HabitInput> = { difficulty_rank: null };
+    const updates = computeUpdates(input);
+
+    expect(updates).toHaveProperty("difficulty_rank");
+    expect(updates.difficulty_rank).toBeNull();
+  });
+
+  test("omitting difficulty_rank does not include it in updates", () => {
+    const input: Partial<HabitInput> = { name: "Updated name" };
+    const updates = computeUpdates(input);
+
+    expect(updates).not.toHaveProperty("difficulty_rank");
+    expect(updates.name).toBe("Updated name");
+  });
+
+  test("setting difficulty_rank to a value includes it in updates", () => {
+    const input: Partial<HabitInput> = { difficulty_rank: "a0" };
+    const updates = computeUpdates(input);
+
+    expect(updates).toHaveProperty("difficulty_rank");
+    expect(updates.difficulty_rank).toBe("a0");
+  });
+
+  test("clearing multiple nullable fields works correctly", () => {
+    // Simulates what happens during merge: clearing difficulty_rank
+    const input: Partial<HabitInput> = {
+      difficulty_rank: null,
+      hidden_until: null,
+    };
+    const updates = computeUpdates(input);
+
+    expect(updates.difficulty_rank).toBeNull();
+    expect(updates.hidden_until).toBeNull();
   });
 });

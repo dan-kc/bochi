@@ -47,6 +47,13 @@ export default function Login() {
         // 1. Use the old lastSyncTime (missing existing habits on server)
         // 2. Not push local habits (they won't be marked dirty yet)
         const habitIds = await habitStore.updateAllHabitsUserId("");
+
+        // Clear difficulty ranks for merged habits - they need to be re-ranked
+        // in the context of the existing account's habits
+        for (const habitId of habitIds) {
+          await habitStore.updateHabit(habitId, { difficulty_rank: null });
+        }
+
         await markHabitsDirty(habitIds);
         await clearLastSyncTime(); // Force full sync
 
