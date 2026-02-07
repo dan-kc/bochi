@@ -4,6 +4,7 @@ import { api } from "../api";
 import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
 import { balanceStore } from "../store/balanceStore";
+import { userStore } from "../store/userStore";
 import * as syncStorage from "./syncStorage";
 import type { Habit } from "../habit";
 import type { SyncResponse } from "./types";
@@ -35,6 +36,12 @@ vi.mock("../store/tradeStore", () => ({
 vi.mock("../store/balanceStore", () => ({
   balanceStore: {
     setBalance: vi.fn(),
+  },
+}));
+
+vi.mock("../store/userStore", () => ({
+  userStore: {
+    setUser: vi.fn(),
   },
 }));
 
@@ -78,11 +85,15 @@ describe("SyncService", () => {
 
     vi.mocked(balanceStore.setBalance).mockResolvedValue();
 
+    vi.mocked(userStore.setUser).mockResolvedValue();
+
     const defaultPullResponse: SyncResponse = {
       habits: [],
       trades: [],
       balance: { soy_balance: 100, tofu_balance: 50 },
       server_time: "2024-01-01T00:00:01Z",
+      email: "test@example.com",
+      isPremium: false,
     };
     vi.mocked(api.sync).mockResolvedValue(defaultPullResponse);
     vi.mocked(api.syncPush).mockResolvedValue(defaultPullResponse);
@@ -157,6 +168,8 @@ describe("SyncService", () => {
         trades: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -164,6 +177,8 @@ describe("SyncService", () => {
         trades: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       // Trigger sync and wait for completion
@@ -216,6 +231,8 @@ describe("SyncService", () => {
         trades: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -223,6 +240,8 @@ describe("SyncService", () => {
         trades: [localTrade],
         balance: { soy_balance: 110, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       await syncService.syncAndWait();
@@ -307,6 +326,8 @@ describe("SyncService", () => {
         trades: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -314,6 +335,8 @@ describe("SyncService", () => {
         trades: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
+        email: "test@example.com",
+        isPremium: false,
       });
 
       await syncService.syncAndWait();

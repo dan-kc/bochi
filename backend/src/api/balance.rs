@@ -17,10 +17,14 @@ pub async fn get_balance(
     State(app): State<App>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let balance_row = app.database.get_user_balance(user.user_id).await.map_err(|e| {
-        error!("Database Error: {:?}", e);
-        ApiError::Internal
-    })?;
+    let balance_row = app
+        .database
+        .get_user_balance(user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
 
     Ok(Json(BalanceResponse {
         soy_balance: balance_row.soy_balance,

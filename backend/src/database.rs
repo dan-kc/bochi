@@ -212,7 +212,7 @@ impl Database {
 
     /// Returns the user from email.
     pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id FROM users WHERE email = $1")
+        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?
@@ -234,7 +234,7 @@ impl Database {
     /// Returns the user from device_id.
     pub async fn get_user_from_device_id(&self, device_id: Uuid) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, email, password, is_anonymous, device_id FROM users WHERE device_id = $1",
+            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE device_id = $1",
         )
         .bind(device_id)
         .fetch_optional(&self.pool)
@@ -274,6 +274,53 @@ impl Database {
                 .await?;
 
         Ok(is_anonymous)
+    }
+
+    /// Returns the user by ID.
+    pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<UserRow, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
+    }
+
+    /// Updates a user's password.
+    pub async fn update_user_password(
+        &self,
+        user_id: Uuid,
+        hashed_password: &str,
+    ) -> Result<(), sqlx::Error> {
+        let result =
+            sqlx::query("UPDATE users SET password = $2 WHERE id = $1 AND is_anonymous = false")
+                .bind(user_id)
+                .bind(hashed_password)
+                .execute(&self.pool)
+                .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    /// Updates a user's email.
+    pub async fn update_user_email(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error> {
+        let result =
+            sqlx::query("UPDATE users SET email = $2 WHERE id = $1 AND is_anonymous = false")
+                .bind(user_id)
+                .bind(email)
+                .execute(&self.pool)
+                .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
     }
 
     // ============================================================================
@@ -353,6 +400,14 @@ impl Database {
     /// Get user balance
     pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
         sqlx::query_as("SELECT soy_balance, tofu_balance FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// Get user profile (email and premium status)
+    pub async fn get_user_profile(&self, user_id: Uuid) -> Result<UserProfileRow, sqlx::Error> {
+        sqlx::query_as("SELECT email, premium FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
@@ -445,13 +500,12 @@ impl Database {
 
         // Validate reward belongs to user if reward_id is provided
         if let Some(reward_id) = trade.reward_id {
-            let reward_valid: Option<(Uuid,)> = sqlx::query_as(
-                "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
-            )
-            .bind(reward_id)
-            .bind(user_id)
-            .fetch_optional(&mut **tx)
-            .await?;
+            let reward_valid: Option<(Uuid,)> =
+                sqlx::query_as("SELECT id FROM rewards WHERE id = $1 AND user_id = $2")
+                    .bind(reward_id)
+                    .bind(user_id)
+                    .fetch_optional(&mut **tx)
+                    .await?;
 
             if reward_valid.is_none() {
                 return Err(sqlx::Error::RowNotFound);
@@ -588,14 +642,20 @@ pub struct UserBalanceRow {
 }
 
 #[derive(sqlx::FromRow)]
+pub struct UserProfileRow {
+    pub email: Option<String>,
+    pub premium: bool,
+}
+
+#[derive(sqlx::FromRow)]
 pub struct UserRow {
     pub id: Uuid,
-    #[allow(dead_code)]
     pub email: Option<String>,
     pub password: Option<String>,
     pub is_anonymous: bool,
     #[allow(dead_code)]
     pub device_id: Option<Uuid>,
+    pub premium: bool,
 }
 
 #[derive(sqlx::FromRow)]

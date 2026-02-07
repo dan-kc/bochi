@@ -115,6 +115,44 @@ class ApiClient {
     });
   }
 
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+    accessToken?: string,
+  ): Promise<{ success: boolean }> {
+    // On web, cookie is sent automatically
+    // On native, we need to send the access token
+    const headers: Record<string, string> = {};
+    if (!isWeb && accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    return this.request<{ success: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+      headers,
+    });
+  }
+
+  async changeEmail(
+    newEmail: string,
+    password: string,
+    accessToken?: string,
+  ): Promise<{ success: boolean }> {
+    // On web, cookie is sent automatically
+    // On native, we need to send the access token
+    const headers: Record<string, string> = {};
+    if (!isWeb && accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    return this.request<{ success: boolean }>("/auth/change-email", {
+      method: "POST",
+      body: JSON.stringify({ newEmail, password }),
+      headers,
+    });
+  }
+
   // ============ Authenticated requests ============
 
   private async authenticatedRequest<T>(
@@ -188,6 +226,8 @@ class ApiClient {
         tofuBalance: number;
       };
       serverTime: string;
+      email: string | null;
+      isPremium: boolean;
     }>(url, { method: "GET" });
 
     return {
@@ -218,6 +258,8 @@ class ApiClient {
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,
+      email: result.email,
+      isPremium: result.isPremium,
     };
   }
 
@@ -274,6 +316,8 @@ class ApiClient {
         tofuBalance: number;
       };
       serverTime: string;
+      email: string | null;
+      isPremium: boolean;
     }>("/api/sync", {
       method: "POST",
       body: JSON.stringify({
@@ -310,6 +354,8 @@ class ApiClient {
         tofu_balance: result.balance.tofuBalance,
       },
       server_time: result.serverTime,
+      email: result.email,
+      isPremium: result.isPremium,
     };
   }
 }

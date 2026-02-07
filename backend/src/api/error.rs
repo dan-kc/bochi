@@ -25,7 +25,11 @@ struct ErrorDetail {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, message) = match &self {
-            ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "BAD_USER_INPUT", format!("Validation Error: {}", msg)),
+            ApiError::Validation(msg) => (
+                StatusCode::BAD_REQUEST,
+                "BAD_USER_INPUT",
+                format!("Validation Error: {}", msg),
+            ),
             ApiError::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_SERVER_ERROR",

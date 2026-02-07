@@ -65,6 +65,10 @@ async fn test_sync_pull_returns_all_entity_types() {
     // Check serverTime
     assert!(json.get("serverTime").is_some());
     assert!(json.get("serverTime").unwrap().is_string());
+
+    // Check user data
+    assert_eq!(json.get("email").unwrap(), &email);
+    assert_eq!(json.get("isPremium").unwrap(), false);
 }
 
 #[tokio::test]
@@ -135,6 +139,10 @@ async fn test_sync_pull_empty_for_new_user() {
         0.0
     );
     assert!(json.get("serverTime").unwrap().is_string());
+
+    // User data should still be present
+    assert_eq!(json.get("email").unwrap(), &email);
+    assert_eq!(json.get("isPremium").unwrap(), false);
 }
 
 #[tokio::test]

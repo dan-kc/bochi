@@ -324,15 +324,15 @@ let
       fi
     '';
 
-    # Displays the schema of a database table in tofustash
+    # Displays the schema of a database table in tofustash, or lists all tables if no argument
     schema = pkgs.writeShellScriptBin "schema" ''
       set -e
       if [ -z "$1" ]; then
-        echo "Usage: schema <table name>"
-        exit 1
+        PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -P pager=off -c "\dt"
+      else
+        TABLE_NAME="$1"
+        PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -P pager=off -c "\d+ ''${TABLE_NAME}"
       fi
-      TABLE_NAME="$1"
-      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -P pager=off -c "\d+ ''${TABLE_NAME}"
     '';
 
     # Flyway wrapper with config
