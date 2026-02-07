@@ -4,6 +4,7 @@ import type { Habit } from "@/lib/habit";
 import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
 import type { DisplayMode } from "@/lib/habitSorting";
 import { formatShortDate } from "@/lib/habitSorting";
+import { TagChips } from "./TagChips";
 
 interface HabitItemProps {
   habit: Habit;
@@ -148,14 +149,15 @@ export function HabitItem({
           </View>
           {habit.description ? (
             <Text
-              className="text-gray-600 text-sm mb-2"
+              className="text-gray-600 text-sm mb-1"
               numberOfLines={2}
               ellipsizeMode="tail"
             >
               {habit.description}
             </Text>
           ) : null}
-          <View className="flex-row flex-wrap gap-2">
+          <TagChips habitId={habit.id} />
+          <View className="flex-row flex-wrap gap-2 mt-2">
             {hasHiddenUntil && (
               <View className="bg-gray-100 px-2 py-1 rounded">
                 <Text className="text-gray-600 text-xs">

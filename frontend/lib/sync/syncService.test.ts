@@ -3,6 +3,8 @@ import { SyncService } from "./syncService";
 import { api } from "../api";
 import { habitStore } from "../store/habitStore";
 import { tradeStore } from "../store/tradeStore";
+import { tagStore } from "../store/tagStore";
+import { habitTagStore } from "../store/habitTagStore";
 import { balanceStore } from "../store/balanceStore";
 import { userStore } from "../store/userStore";
 import * as syncStorage from "./syncStorage";
@@ -30,6 +32,22 @@ vi.mock("../store/tradeStore", () => ({
     getDirtyTrades: vi.fn(),
     mergeTrades: vi.fn(),
     purgeDeletedTrades: vi.fn(),
+  },
+}));
+
+vi.mock("../store/tagStore", () => ({
+  tagStore: {
+    getDirty: vi.fn(),
+    merge: vi.fn(),
+    purgeDeleted: vi.fn(),
+  },
+}));
+
+vi.mock("../store/habitTagStore", () => ({
+  habitTagStore: {
+    getDirty: vi.fn(),
+    merge: vi.fn(),
+    purgeDeleted: vi.fn(),
   },
 }));
 
@@ -68,7 +86,7 @@ describe("SyncService", () => {
     // Default mock implementations
     vi.mocked(syncStorage.getSyncState).mockResolvedValue({
       lastSync: "2024-01-01T00:00:00Z",
-      dirty: { habits: [], trades: [] },
+      dirty: { habits: [], trades: [], tags: [], habitTags: [] },
     });
     vi.mocked(syncStorage.checkAndPrepareFullSyncIfNeeded).mockResolvedValue(false);
     vi.mocked(syncStorage.clearAllDirty).mockResolvedValue();
@@ -83,6 +101,14 @@ describe("SyncService", () => {
     vi.mocked(tradeStore.mergeTrades).mockResolvedValue();
     vi.mocked(tradeStore.purgeDeletedTrades).mockResolvedValue();
 
+    vi.mocked(tagStore.getDirty).mockReturnValue([]);
+    vi.mocked(tagStore.merge).mockResolvedValue();
+    vi.mocked(tagStore.purgeDeleted).mockResolvedValue();
+
+    vi.mocked(habitTagStore.getDirty).mockReturnValue([]);
+    vi.mocked(habitTagStore.merge).mockResolvedValue();
+    vi.mocked(habitTagStore.purgeDeleted).mockResolvedValue();
+
     vi.mocked(balanceStore.setBalance).mockResolvedValue();
 
     vi.mocked(userStore.setUser).mockResolvedValue();
@@ -90,6 +116,8 @@ describe("SyncService", () => {
     const defaultPullResponse: SyncResponse = {
       habits: [],
       trades: [],
+      tags: [],
+      habitTags: [],
       balance: { soy_balance: 100, tofu_balance: 50 },
       server_time: "2024-01-01T00:00:01Z",
       email: "test@example.com",
@@ -140,7 +168,7 @@ describe("SyncService", () => {
       // Setup: habit is marked as dirty
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [habitId], trades: [] },
+        dirty: { habits: [habitId], trades: [], tags: [], habitTags: [] },
       });
 
       // Track the order of calls and what values were captured
@@ -166,6 +194,8 @@ describe("SyncService", () => {
       vi.mocked(api.sync).mockResolvedValue({
         habits: [serverHabit], // Server returns habit without difficulty
         trades: [],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -175,6 +205,8 @@ describe("SyncService", () => {
       vi.mocked(api.syncPush).mockResolvedValue({
         habits: [localHabit], // Server echoes back what we sent
         trades: [],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
@@ -212,7 +244,7 @@ describe("SyncService", () => {
 
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [], trades: [tradeId] },
+        dirty: { habits: [], trades: [tradeId], tags: [], habitTags: [] },
       });
 
       const callOrder: string[] = [];
@@ -229,6 +261,8 @@ describe("SyncService", () => {
       vi.mocked(api.sync).mockResolvedValue({
         habits: [],
         trades: [],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -238,6 +272,8 @@ describe("SyncService", () => {
       vi.mocked(api.syncPush).mockResolvedValue({
         habits: [],
         trades: [localTrade],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 110, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
@@ -261,11 +297,13 @@ describe("SyncService", () => {
     test("does not call syncPush when there are no dirty entities", async () => {
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [], trades: [] },
+        dirty: { habits: [], trades: [], tags: [], habitTags: [] },
       });
 
       vi.mocked(habitStore.getDirtyHabits).mockReturnValue([]);
       vi.mocked(tradeStore.getDirtyTrades).mockReturnValue([]);
+      vi.mocked(tagStore.getDirty).mockReturnValue([]);
+      vi.mocked(habitTagStore.getDirty).mockReturnValue([]);
 
       await syncService.syncAndWait();
 
@@ -315,7 +353,7 @@ describe("SyncService", () => {
 
       vi.mocked(syncStorage.getSyncState).mockResolvedValue({
         lastSync: "2024-01-01T00:00:00Z",
-        dirty: { habits: [dirtyHabitId], trades: [] },
+        dirty: { habits: [dirtyHabitId], trades: [], tags: [], habitTags: [] },
       });
 
       // The key: getDirtyHabits returns the local version with correct difficulty
@@ -324,6 +362,8 @@ describe("SyncService", () => {
       vi.mocked(api.sync).mockResolvedValue({
         habits: [serverDirtyHabit, serverCleanHabit],
         trades: [],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
@@ -333,6 +373,8 @@ describe("SyncService", () => {
       vi.mocked(api.syncPush).mockResolvedValue({
         habits: [localDirtyHabit],
         trades: [],
+        tags: [],
+        habitTags: [],
         balance: { soy_balance: 100, tofu_balance: 50 },
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",

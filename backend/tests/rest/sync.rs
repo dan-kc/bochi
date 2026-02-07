@@ -655,3 +655,733 @@ async fn test_sync_only_returns_own_data() {
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("balance").unwrap().get("soyBalance").unwrap(), 0.0);
 }
+
+// ============================================================================
+// Tag Sync Pull Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_pull_includes_tags() {
+    let email = generate_email_from_fn!(test_sync_pull_includes_tags);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create a tag via sync push
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let sync_body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Work",
+            "colorHex": "#FF5733FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+
+    // Now test GET /api/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Check tags
+    let tags = json.get("tags").unwrap().as_array().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].get("id").unwrap(), &tag_id);
+    assert_eq!(tags[0].get("name").unwrap(), "Work");
+    assert_eq!(tags[0].get("colorHex").unwrap(), "#FF5733FF");
+}
+
+#[tokio::test]
+async fn test_sync_pull_includes_habit_tags() {
+    let email = generate_email_from_fn!(test_sync_pull_includes_habit_tags);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create habit, tag, and association via sync push
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let sync_body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily workout",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Health",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+
+    // Now test GET /api/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Check habitTags
+    let habit_tags = json.get("habitTags").unwrap().as_array().unwrap();
+    assert_eq!(habit_tags.len(), 1);
+    assert_eq!(habit_tags[0].get("habitId").unwrap(), &habit_id);
+    assert_eq!(habit_tags[0].get("tagId").unwrap(), &tag_id);
+}
+
+#[tokio::test]
+async fn test_sync_pull_tags_filtered_by_since() {
+    let email = generate_email_from_fn!(test_sync_pull_tags_filtered_by_since);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create first tag
+    let tag1_id = uuid::Uuid::new_v4().to_string();
+    let sync_body1 = json!({
+        "tags": [{
+            "id": tag1_id,
+            "name": "Old Tag",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+
+    // Create second tag after getting timestamp
+    let tag2_id = uuid::Uuid::new_v4().to_string();
+    let sync_body2 = json!({
+        "tags": [{
+            "id": tag2_id,
+            "name": "New Tag",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T11:00:00",
+            "updatedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+
+    // Pull since timestamp - should only get new tag
+    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    let (status, json) = make_authenticated_get_request(&access_token, &url).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let tags = json.get("tags").unwrap().as_array().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].get("id").unwrap(), &tag2_id);
+    assert_eq!(tags[0].get("name").unwrap(), "New Tag");
+}
+
+#[tokio::test]
+async fn test_sync_pull_habit_tags_filtered_by_since() {
+    let email = generate_email_from_fn!(test_sync_pull_habit_tags_filtered_by_since);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Create habit and two tags first
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag1_id = uuid::Uuid::new_v4().to_string();
+    let tag2_id = uuid::Uuid::new_v4().to_string();
+
+    let sync_body1 = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [
+            {
+                "id": tag1_id,
+                "name": "Tag1",
+                "colorHex": "#FF0000FF",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00"
+            },
+            {
+                "id": tag2_id,
+                "name": "Tag2",
+                "colorHex": "#00FF00FF",
+                "createdAt": "2025-01-01T10:00:00",
+                "updatedAt": "2025-01-01T10:00:00"
+            }
+        ],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag1_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+
+    // Add second habit-tag association after timestamp
+    let sync_body2 = json!({
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag2_id,
+            "createdAt": "2025-01-01T11:00:00",
+            "updatedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+
+    // Pull since timestamp - should only get new association
+    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    let (status, json) = make_authenticated_get_request(&access_token, &url).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let habit_tags = json.get("habitTags").unwrap().as_array().unwrap();
+    assert_eq!(habit_tags.len(), 1);
+    assert_eq!(habit_tags[0].get("tagId").unwrap(), &tag2_id);
+}
+
+// ============================================================================
+// Tag Sync Push Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_push_creates_tag() {
+    let email = generate_email_from_fn!(test_sync_push_creates_tag);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Work",
+            "colorHex": "#FF5733FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let tags = json.get("tags").unwrap().as_array().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].get("id").unwrap(), &tag_id);
+    assert_eq!(tags[0].get("name").unwrap(), "Work");
+    assert_eq!(tags[0].get("colorHex").unwrap(), "#FF5733FF");
+}
+
+#[tokio::test]
+async fn test_sync_push_updates_tag() {
+    let email = generate_email_from_fn!(test_sync_push_updates_tag);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    // Create tag
+    let body1 = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Original",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+
+    // Update tag
+    let body2 = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Updated",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let tags = json.get("tags").unwrap().as_array().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].get("name").unwrap(), "Updated");
+    assert_eq!(tags[0].get("colorHex").unwrap(), "#00FF00FF");
+}
+
+#[tokio::test]
+async fn test_sync_push_soft_deletes_tag() {
+    let email = generate_email_from_fn!(test_sync_push_soft_deletes_tag);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    // Create tag
+    let body1 = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "ToDelete",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+
+    // Soft delete tag
+    let body2 = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "ToDelete",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "deletedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let tags = json.get("tags").unwrap().as_array().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert!(tags[0].get("deletedAt").is_some());
+    assert!(!tags[0].get("deletedAt").unwrap().is_null());
+}
+
+#[tokio::test]
+async fn test_sync_push_creates_habit_tag_association() {
+    let email = generate_email_from_fn!(test_sync_push_creates_habit_tag_association);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily workout",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Health",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let habit_tags = json.get("habitTags").unwrap().as_array().unwrap();
+    assert_eq!(habit_tags.len(), 1);
+    assert_eq!(habit_tags[0].get("habitId").unwrap(), &habit_id);
+    assert_eq!(habit_tags[0].get("tagId").unwrap(), &tag_id);
+}
+
+#[tokio::test]
+async fn test_sync_push_soft_deletes_habit_tag_association() {
+    let email = generate_email_from_fn!(test_sync_push_soft_deletes_habit_tag_association);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    // Create habit, tag, and association
+    let body1 = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Health",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+
+    // Soft delete association
+    let body2 = json!({
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "deletedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let habit_tags = json.get("habitTags").unwrap().as_array().unwrap();
+    assert_eq!(habit_tags.len(), 1);
+    assert!(habit_tags[0].get("deletedAt").is_some());
+    assert!(!habit_tags[0].get("deletedAt").unwrap().is_null());
+}
+
+#[tokio::test]
+async fn test_sync_push_tag_validates_name_length() {
+    let email = generate_email_from_fn!(test_sync_push_tag_validates_name_length);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let long_name = "a".repeat(101);
+
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": long_name,
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_push_tag_validates_color_hex_format() {
+    let email = generate_email_from_fn!(test_sync_push_tag_validates_color_hex_format);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Test",
+            "colorHex": "invalid",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_tag_validates_habit_exists() {
+    let email = generate_email_from_fn!(test_sync_push_habit_tag_validates_habit_exists);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let non_existent_habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Test",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": non_existent_habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert!(
+        status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Expected error for non-existent habit reference"
+    );
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_tag_validates_tag_exists() {
+    let email = generate_email_from_fn!(test_sync_push_habit_tag_validates_tag_exists);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let non_existent_tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": non_existent_tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert!(
+        status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Expected error for non-existent tag reference"
+    );
+    assert!(json.get("errors").is_some());
+}
+
+#[tokio::test]
+async fn test_sync_push_tag_idempotent() {
+    let email = generate_email_from_fn!(test_sync_push_tag_idempotent);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Work",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    // First push
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Second push with same data
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Verify only one tag exists
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("tags").unwrap().as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_tag_idempotent() {
+    let email = generate_email_from_fn!(test_sync_push_habit_tag_idempotent);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Daily",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Health",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    // First push
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Second push with same data
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.get("errors").is_none());
+
+    // Verify only one association exists
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("habitTags").unwrap().as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_sync_tags_data_isolation() {
+    let email1 = "test_sync_tags_isolation_user1@test.com".to_string();
+    let email2 = "test_sync_tags_isolation_user2@test.com".to_string();
+    let password = "password123";
+
+    register_user(&email1, password).await;
+    register_user(&email2, password).await;
+    let token1 = get_access_token_for_user(&email1, &password).await;
+    let token2 = get_access_token_for_user(&email2, &password).await;
+
+    // User 1 creates a tag
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tags": [{
+            "id": tag_id,
+            "name": "Private Tag",
+            "colorHex": "#FF0000FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+    make_authenticated_post_request(&token1, "/api/sync", body).await;
+
+    // User 2 tries to pull
+    let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User 2 should not see User 1's tag
+    assert_eq!(json.get("tags").unwrap().as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn test_sync_push_atomicity_with_tags() {
+    let email = generate_email_from_fn!(test_sync_push_atomicity_with_tags);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let non_existent_tag_id = uuid::Uuid::new_v4().to_string();
+
+    // Try to create habit, tag, valid trade, but invalid habit_tag (references non-existent tag)
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Exercise",
+            "description": "Should rollback",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Health",
+            "colorHex": "#00FF00FF",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "trades": [{
+            "id": trade_id,
+            "habitId": habit_id,
+            "amount": 500,
+            "createdAt": "2025-01-01T10:00:00"
+        }],
+        "habitTags": [{
+            "habitId": habit_id,
+            "tagId": non_existent_tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert!(
+        status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
+        "Expected error for invalid habit_tag reference"
+    );
+
+    // Verify everything was rolled back
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(
+        pull_json.get("habits").unwrap().as_array().unwrap().len(),
+        0,
+        "Habit should have been rolled back"
+    );
+    assert_eq!(
+        pull_json.get("tags").unwrap().as_array().unwrap().len(),
+        0,
+        "Tag should have been rolled back"
+    );
+    assert_eq!(
+        pull_json.get("trades").unwrap().as_array().unwrap().len(),
+        0,
+        "Trade should have been rolled back"
+    );
+}

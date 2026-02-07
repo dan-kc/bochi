@@ -414,6 +414,78 @@ impl Database {
     }
 
     // ============================================================================
+    // Tag Sync Operations
+    // ============================================================================
+
+    /// Get all tags for a user, optionally filtered by updated_at > since
+    pub async fn get_tags_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TagRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, color_hex, created_at, updated_at, deleted_at
+                     FROM tags
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, color_hex, created_at, updated_at, deleted_at
+                     FROM tags
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Get all habit_tags for a user's habits, optionally filtered by updated_at > since
+    pub async fn get_habit_tags_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<HabitTagRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT ht.habit_id, ht.tag_id, ht.created_at, ht.updated_at, ht.deleted_at
+                     FROM habit_tags ht
+                     JOIN habits h ON ht.habit_id = h.id
+                     WHERE h.user_id = $1 AND ht.updated_at > $2
+                     ORDER BY ht.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT ht.habit_id, ht.tag_id, ht.created_at, ht.updated_at, ht.deleted_at
+                     FROM habit_tags ht
+                     JOIN habits h ON ht.habit_id = h.id
+                     WHERE h.user_id = $1
+                     ORDER BY ht.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    // ============================================================================
     // Transaction Support for Unified Sync
     // ============================================================================
 
@@ -555,6 +627,78 @@ impl Database {
 
         Ok(balance)
     }
+
+    /// Upsert a tag within a transaction
+    pub async fn upsert_tag_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        tag: &UpsertTagOptions,
+    ) -> Result<TagRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO tags (id, user_id, name, color_hex, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (id) DO UPDATE SET
+                name = CASE WHEN tags.user_id = $2 THEN EXCLUDED.name ELSE tags.name END,
+                color_hex = CASE WHEN tags.user_id = $2 THEN EXCLUDED.color_hex ELSE tags.color_hex END,
+                deleted_at = CASE WHEN tags.user_id = $2 THEN EXCLUDED.deleted_at ELSE tags.deleted_at END
+             RETURNING id, name, color_hex, created_at, updated_at, deleted_at",
+        )
+        .bind(tag.id)
+        .bind(user_id)
+        .bind(&tag.name)
+        .bind(&tag.color_hex)
+        .bind(tag.created_at)
+        .bind(tag.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    /// Upsert a habit_tag association within a transaction
+    pub async fn upsert_habit_tag_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        habit_tag: &UpsertHabitTagOptions,
+    ) -> Result<HabitTagRow, sqlx::Error> {
+        // Validate habit belongs to user
+        let habit_valid: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM habits WHERE id = $1 AND user_id = $2",
+        )
+        .bind(habit_tag.habit_id)
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if habit_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        // Validate tag belongs to user
+        let tag_valid: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM tags WHERE id = $1 AND user_id = $2",
+        )
+        .bind(habit_tag.tag_id)
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if tag_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        sqlx::query_as(
+            "INSERT INTO habit_tags (habit_id, tag_id, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (habit_id, tag_id) DO UPDATE SET
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING habit_id, tag_id, created_at, updated_at, deleted_at",
+        )
+        .bind(habit_tag.habit_id)
+        .bind(habit_tag.tag_id)
+        .bind(habit_tag.created_at)
+        .bind(habit_tag.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
 }
 
 pub struct CreateHabitOptions {
@@ -620,6 +764,21 @@ pub struct UpsertTradeOptions {
     pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
     pub amount: i32,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+pub struct UpsertTagOptions {
+    pub id: Uuid,
+    pub name: String,
+    pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+pub struct UpsertHabitTagOptions {
+    pub habit_id: Uuid,
+    pub tag_id: Uuid,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
 }
@@ -724,4 +883,23 @@ pub struct TradeWithRewardRow {
     pub reward_hidden_until: Option<NaiveDateTime>,
     pub reward_description: String,
     pub reward_max_daily_frequency: Option<f32>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TagRow {
+    pub id: Uuid,
+    pub name: String,
+    pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct HabitTagRow {
+    pub habit_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
 }

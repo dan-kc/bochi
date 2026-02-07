@@ -16,6 +16,7 @@ interface HabitContextType {
   rankedHabits: Habit[];
   selectedHabit: Habit | null;
   isEditing: boolean;
+  userId: string;
   createHabit: (input: HabitInput) => Promise<Habit>;
   updateHabit: (id: string, input: Partial<HabitInput>) => Promise<Habit | null>;
   deleteHabit: (id: string) => Promise<boolean>;
@@ -97,6 +98,7 @@ export function HabitProvider({ children }: { children: ReactNode }) {
         rankedHabits,
         selectedHabit,
         isEditing,
+        userId,
         createHabit,
         updateHabit,
         deleteHabit,

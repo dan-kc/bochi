@@ -1,5 +1,7 @@
 import type { Habit } from "../habit";
 import type { Trade } from "../trade";
+import type { Tag } from "../tag";
+import type { HabitTag } from "../habitTag";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
@@ -20,6 +22,8 @@ export interface BalanceResponse {
 export interface SyncResponse {
   habits: Habit[];
   trades: Trade[];
+  tags: Tag[];
+  habitTags: HabitTag[];
   balance: BalanceResponse;
   server_time: string;
   email: string | null;
@@ -47,9 +51,28 @@ export interface SyncTradeInput {
   deletedAt: string | null;
 }
 
+export interface SyncTagInput {
+  id: string;
+  name: string;
+  colorHex: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface SyncHabitTagInput {
+  habitId: string;
+  tagId: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface SyncInput {
   habits?: SyncHabitInput[];
   trades?: SyncTradeInput[];
+  tags?: SyncTagInput[];
+  habitTags?: SyncHabitTagInput[];
 }
 
 // ============================================================================
@@ -61,5 +84,7 @@ export interface SyncState {
   dirty: {
     habits: string[];
     trades: string[];
+    tags: string[];
+    habitTags: string[];
   };
 }

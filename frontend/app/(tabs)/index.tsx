@@ -20,6 +20,7 @@ export default function Habits() {
     habits,
     rankedHabits,
     selectedHabit,
+    userId,
     createHabit,
     updateHabit,
     deleteHabit,
@@ -194,6 +195,7 @@ export default function Habits() {
           <SafeAreaView className="flex-1 bg-white">
             <HabitForm
               habit={selectedHabit}
+              userId={userId}
               onSave={handleSave}
               onCancel={handleCancel}
               onDelete={selectedHabit ? handleDelete : undefined}

@@ -41,6 +41,8 @@ export function getDefaultSyncState(): SyncState {
     dirty: {
       habits: [],
       trades: [],
+      tags: [],
+      habitTags: [],
     },
   };
 }
@@ -69,11 +71,17 @@ export async function setSyncState(state: SyncState): Promise<void> {
   await setItem(SYNC_STATE_KEY, JSON.stringify(state));
 }
 
+type EntityType = "habits" | "trades" | "tags" | "habitTags";
+
 export async function markDirty(
-  entityType: "habits" | "trades",
+  entityType: EntityType,
   id: string,
 ): Promise<void> {
   const state = await getSyncState();
+  // Ensure the array exists (for backwards compatibility with old state)
+  if (!state.dirty[entityType]) {
+    state.dirty[entityType] = [];
+  }
   if (!state.dirty[entityType].includes(id)) {
     state.dirty[entityType].push(id);
     await setSyncState(state);
@@ -81,10 +89,14 @@ export async function markDirty(
 }
 
 export async function markManyDirty(
-  entityType: "habits" | "trades",
+  entityType: EntityType,
   ids: string[],
 ): Promise<void> {
   const state = await getSyncState();
+  // Ensure the array exists (for backwards compatibility with old state)
+  if (!state.dirty[entityType]) {
+    state.dirty[entityType] = [];
+  }
   let changed = false;
   for (const id of ids) {
     if (!state.dirty[entityType].includes(id)) {
@@ -98,15 +110,15 @@ export async function markManyDirty(
 }
 
 export async function getDirtyIds(
-  entityType: "habits" | "trades",
+  entityType: EntityType,
 ): Promise<Set<string>> {
   const state = await getSyncState();
-  return new Set(state.dirty[entityType]);
+  return new Set(state.dirty[entityType] || []);
 }
 
 export async function clearAllDirty(): Promise<void> {
   const state = await getSyncState();
-  state.dirty = { habits: [], trades: [] };
+  state.dirty = { habits: [], trades: [], tags: [], habitTags: [] };
   await setSyncState(state);
 }
 
@@ -225,4 +237,32 @@ export async function setTradeLastSyncTime(_timestamp: string): Promise<void> {
 
 export async function clearTradeLastSyncTime(): Promise<void> {
   // In unified model, there's only one sync time
+}
+
+// ============ Tag exports ============
+
+export async function getDirtyTagIds(): Promise<Set<string>> {
+  return getDirtyIds("tags");
+}
+
+export async function markTagDirty(id: string): Promise<void> {
+  return markDirty("tags", id);
+}
+
+export async function markTagsDirty(ids: string[]): Promise<void> {
+  return markManyDirty("tags", ids);
+}
+
+// ============ HabitTag exports ============
+
+export async function getDirtyHabitTagIds(): Promise<Set<string>> {
+  return getDirtyIds("habitTags");
+}
+
+export async function markHabitTagDirty(key: string): Promise<void> {
+  return markDirty("habitTags", key);
+}
+
+export async function markHabitTagsDirty(keys: string[]): Promise<void> {
+  return markManyDirty("habitTags", keys);
 }

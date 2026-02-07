@@ -9,12 +9,17 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { z } from "zod";
 import type { Habit, HabitInput } from "@/lib/habit";
 import { createEmptyHabitInput } from "@/lib/habit";
+import type { Tag } from "@/lib/tag";
+import { useTagsForHabit, useTagActions } from "@/lib/store/hooks";
+import { TagSelectionModal } from "./TagSelectionModal";
+import { ColorPickerModal } from "./ColorPickerModal";
 
 function formatDateForInput(date: Date | null): string {
   if (!date) return "";
@@ -137,6 +142,7 @@ function DatePickerField({
 
 interface HabitFormProps {
   habit?: Habit | null;
+  userId: string;
   onSave: (input: HabitInput) => Promise<void>;
   onCancel: () => void;
   onDelete?: () => Promise<void>;
@@ -172,7 +178,7 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
-export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: HabitFormProps) {
+export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [hiddenUntil, setHiddenUntil] = useState<Date | null>(null);
@@ -182,7 +188,16 @@ export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: Habit
   const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
+  // Tag selection state
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
+
   const isEditing = !!habit;
+
+  // Get tags for this habit (only when editing)
+  const habitTags = useTagsForHabit(habit?.id ?? "");
+  const { updateTag } = useTagActions();
 
   useEffect(() => {
     if (habit) {
@@ -288,6 +303,18 @@ export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: Habit
   const isLoading = isSaving || isDeleting;
 
   const allErrors = Object.values(errors).flat();
+
+  const handleColorEdit = (tag: Tag) => {
+    setEditingTag(tag);
+    setShowColorPicker(true);
+  };
+
+  const handleColorSelect = async (color: string) => {
+    if (editingTag) {
+      await updateTag(editingTag.id, { color_hex: color });
+      setEditingTag(null);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -396,6 +423,43 @@ export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: Habit
             </Text>
           </View>
 
+          {/* Tags Section (only for editing) */}
+          {isEditing && habit && (
+            <View>
+              <Text className="text-sm font-medium text-gray-700 mb-2">
+                Tags
+              </Text>
+              <View className="flex-row flex-wrap gap-2 mb-2">
+                {habitTags.length === 0 ? (
+                  <Text className="text-gray-500 text-sm">No tags assigned</Text>
+                ) : (
+                  habitTags.map((tag) => (
+                    <View
+                      key={tag.id}
+                      className="px-3 py-1.5 rounded-full flex-row items-center"
+                      style={{ backgroundColor: tag.color_hex + "30" }}
+                    >
+                      <Text
+                        className="text-sm font-medium"
+                        style={{ color: tag.color_hex }}
+                      >
+                        {tag.name}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+              <Pressable
+                onPress={() => setShowTagModal(true)}
+                disabled={isLoading}
+                className="border border-gray-300 py-2 px-4 rounded-lg flex-row items-center justify-center"
+              >
+                <Ionicons name="pricetags-outline" size={16} color="#6b7280" />
+                <Text className="text-gray-600 ml-2">Manage Tags</Text>
+              </Pressable>
+            </View>
+          )}
+
           {isEditing && (
             <DatePickerField
               label="Hidden Until"
@@ -461,6 +525,29 @@ export function HabitForm({ habit, onSave, onCancel, onDelete, onRerank }: Habit
           )}
         </View>
       </ScrollView>
+
+      {/* Tag Selection Modal */}
+      {isEditing && habit && (
+        <TagSelectionModal
+          visible={showTagModal}
+          onClose={() => setShowTagModal(false)}
+          habitId={habit.id}
+          userId={userId}
+          selectedTagIds={habitTags.map((t) => t.id)}
+          onColorEdit={handleColorEdit}
+        />
+      )}
+
+      {/* Color Picker Modal */}
+      <ColorPickerModal
+        visible={showColorPicker}
+        onClose={() => {
+          setShowColorPicker(false);
+          setEditingTag(null);
+        }}
+        currentColor={editingTag?.color_hex ?? "#6366f1"}
+        onColorSelect={handleColorSelect}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -84,6 +84,8 @@ describe("getDefaultSyncState", () => {
     expect(defaultState.dirty).toEqual({
       habits: [],
       trades: [],
+      tags: [],
+      habitTags: [],
     });
   });
 

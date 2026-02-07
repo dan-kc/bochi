@@ -221,6 +221,21 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
       }>;
+      tags: Array<{
+        id: string;
+        name: string;
+        colorHex: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
+      habitTags: Array<{
+        habitId: string;
+        tagId: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
       balance: {
         soyBalance: number;
         tofuBalance: number;
@@ -252,6 +267,23 @@ class ApiClient {
         created_at: t.createdAt,
         updated_at: t.updatedAt,
         deleted_at: t.deletedAt,
+      })),
+      tags: result.tags.map((t) => ({
+        id: t.id,
+        user_id: "",
+        name: t.name,
+        color_hex: t.colorHex,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      habitTags: result.habitTags.map((ht) => ({
+        habit_id: ht.habitId,
+        tag_id: ht.tagId,
+        user_id: "",
+        created_at: ht.createdAt,
+        updated_at: ht.updatedAt,
+        deleted_at: ht.deletedAt,
       })),
       balance: {
         soy_balance: result.balance.soyBalance,
@@ -290,6 +322,25 @@ class ApiClient {
       deletedAt: toNaiveDateTime(t.deletedAt),
     }));
 
+    // Transform tags to REST input format (camelCase)
+    const tagInputs = input.tags?.map((t) => ({
+      id: t.id,
+      name: t.name,
+      colorHex: t.colorHex,
+      createdAt: toNaiveDateTime(t.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(t.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(t.deletedAt),
+    }));
+
+    // Transform habitTags to REST input format (camelCase)
+    const habitTagInputs = input.habitTags?.map((ht) => ({
+      habitId: ht.habitId,
+      tagId: ht.tagId,
+      createdAt: toNaiveDateTime(ht.createdAt) ?? "",
+      updatedAt: toNaiveDateTime(ht.updatedAt) ?? "",
+      deletedAt: toNaiveDateTime(ht.deletedAt),
+    }));
+
     const result = await this.authenticatedRequest<{
       habits: Array<{
         id: string;
@@ -311,6 +362,21 @@ class ApiClient {
         updatedAt: string;
         deletedAt: string | null;
       }>;
+      tags: Array<{
+        id: string;
+        name: string;
+        colorHex: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
+      habitTags: Array<{
+        habitId: string;
+        tagId: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: string | null;
+      }>;
       balance: {
         soyBalance: number;
         tofuBalance: number;
@@ -323,6 +389,8 @@ class ApiClient {
       body: JSON.stringify({
         habits: habitInputs,
         trades: tradeInputs,
+        tags: tagInputs,
+        habitTags: habitTagInputs,
       }),
     });
 
@@ -348,6 +416,23 @@ class ApiClient {
         created_at: t.createdAt,
         updated_at: t.updatedAt,
         deleted_at: t.deletedAt,
+      })),
+      tags: result.tags.map((t) => ({
+        id: t.id,
+        user_id: "",
+        name: t.name,
+        color_hex: t.colorHex,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+        deleted_at: t.deletedAt,
+      })),
+      habitTags: result.habitTags.map((ht) => ({
+        habit_id: ht.habitId,
+        tag_id: ht.tagId,
+        user_id: "",
+        created_at: ht.createdAt,
+        updated_at: ht.updatedAt,
+        deleted_at: ht.deletedAt,
       })),
       balance: {
         soy_balance: result.balance.soyBalance,

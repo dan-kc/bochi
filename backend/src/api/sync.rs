@@ -29,6 +29,8 @@ pub struct SyncQueryParams {
 pub struct SyncPushRequest {
     pub habits: Option<Vec<SyncHabitInput>>,
     pub trades: Option<Vec<SyncTradeInput>>,
+    pub tags: Option<Vec<SyncTagInput>>,
+    pub habit_tags: Option<Vec<SyncHabitTagInput>>,
 }
 
 #[derive(Deserialize)]
@@ -56,11 +58,34 @@ pub struct SyncTradeInput {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTagInput {
+    pub id: String,
+    pub name: String,
+    pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncHabitTagInput {
+    pub habit_id: String,
+    pub tag_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResponse {
     pub habits: Vec<HabitOutput>,
     pub trades: Vec<TradeOutput>,
+    pub tags: Vec<TagOutput>,
+    pub habit_tags: Vec<HabitTagOutput>,
     pub balance: BalanceOutput,
     pub server_time: NaiveDateTime,
     pub email: Option<String>,
@@ -88,6 +113,27 @@ pub struct TradeOutput {
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
     pub amount: i32,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagOutput {
+    pub id: String,
+    pub name: String,
+    pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitTagOutput {
+    pub habit_id: String,
+    pub tag_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -146,6 +192,24 @@ pub async fn get_sync(
             ApiError::Internal
         })?;
 
+    let tag_rows = app
+        .database
+        .get_tags_since(user.user_id, params.since)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
+    let habit_tag_rows = app
+        .database
+        .get_habit_tags_since(user.user_id, params.since)
+        .await
+        .map_err(|e| {
+            error!("Database Error: {:?}", e);
+            ApiError::Internal
+        })?;
+
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
         .map(|row| HabitOutput {
@@ -174,11 +238,36 @@ pub async fn get_sync(
         })
         .collect();
 
+    let tags: Vec<TagOutput> = tag_rows
+        .into_iter()
+        .map(|row| TagOutput {
+            id: row.id.to_string(),
+            name: row.name,
+            color_hex: row.color_hex.trim().to_string(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
+    let habit_tags: Vec<HabitTagOutput> = habit_tag_rows
+        .into_iter()
+        .map(|row| HabitTagOutput {
+            habit_id: row.habit_id.to_string(),
+            tag_id: row.tag_id.to_string(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
     let server_time = Utc::now().naive_utc();
 
     Ok(Json(SyncResponse {
         habits,
         trades,
+        tags,
+        habit_tags,
         balance: BalanceOutput {
             soy_balance: balance_row.soy_balance,
             tofu_balance: balance_row.tofu_balance,
@@ -203,6 +292,8 @@ pub async fn post_sync(
 
     let mut result_habits = Vec::new();
     let mut result_trades = Vec::new();
+    let mut result_tags = Vec::new();
+    let mut result_habit_tags = Vec::new();
 
     // Process habits first (trades may reference these)
     if let Some(habits) = input.habits {
@@ -335,6 +426,110 @@ pub async fn post_sync(
         }
     }
 
+    // Process tags third (habit_tags may reference these)
+    if let Some(tags) = input.tags {
+        for tag_input in tags {
+            // Validate tag ID is a valid UUID
+            let tag_id = tag_input.id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!("Invalid tag id format: {}", tag_input.id))
+            })?;
+
+            // Validate name length
+            let name_len = tag_input.name.chars().count();
+            if name_len > 100 || name_len < 1 {
+                let msg = format!(
+                    "Tag name must be between 1 and 100 characters. Your current name is {} characters.",
+                    name_len
+                );
+                return Err(ApiError::Validation(msg));
+            }
+
+            // Validate color_hex format (should be #RRGGBBAA)
+            let color_hex = &tag_input.color_hex;
+            let valid_format = color_hex.starts_with('#')
+                && (color_hex.len() == 7 || color_hex.len() == 9)
+                && color_hex[1..].chars().all(|c| c.is_ascii_hexdigit());
+            if !valid_format {
+                let msg = format!(
+                    "Invalid color_hex format: {}. Expected format: #RRGGBB or #RRGGBBAA",
+                    color_hex
+                );
+                return Err(ApiError::Validation(msg));
+            }
+
+            let upsert_opts = database::UpsertTagOptions {
+                id: tag_id,
+                name: tag_input.name,
+                color_hex: tag_input.color_hex,
+                created_at: tag_input.created_at,
+                deleted_at: tag_input.deleted_at,
+            };
+
+            let tag_row = Database::upsert_tag_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting tag: {:?}", e);
+                    ApiError::Internal
+                })?;
+
+            result_tags.push(TagOutput {
+                id: tag_row.id.to_string(),
+                name: tag_row.name,
+                color_hex: tag_row.color_hex.trim().to_string(),
+                created_at: tag_row.created_at,
+                updated_at: tag_row.updated_at,
+                deleted_at: tag_row.deleted_at,
+            });
+        }
+    }
+
+    // Process habit_tags fourth (they reference habits and tags)
+    if let Some(habit_tags) = input.habit_tags {
+        for habit_tag_input in habit_tags {
+            // Validate habit_id is a valid UUID
+            let habit_id = habit_tag_input.habit_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid habit_id format: {}",
+                    habit_tag_input.habit_id
+                ))
+            })?;
+
+            // Validate tag_id is a valid UUID
+            let tag_id = habit_tag_input.tag_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid tag_id format: {}",
+                    habit_tag_input.tag_id
+                ))
+            })?;
+
+            let upsert_opts = database::UpsertHabitTagOptions {
+                habit_id,
+                tag_id,
+                created_at: habit_tag_input.created_at,
+                deleted_at: habit_tag_input.deleted_at,
+            };
+
+            let habit_tag_row =
+                Database::upsert_habit_tag_tx(&mut tx, user.user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting habit_tag: {:?}", e);
+                        ApiError::Validation(format!(
+                            "Invalid habit or tag reference for habit_id: {}, tag_id: {}",
+                            habit_id, tag_id
+                        ))
+                    })?;
+
+            result_habit_tags.push(HabitTagOutput {
+                habit_id: habit_tag_row.habit_id.to_string(),
+                tag_id: habit_tag_row.tag_id.to_string(),
+                created_at: habit_tag_row.created_at,
+                updated_at: habit_tag_row.updated_at,
+                deleted_at: habit_tag_row.deleted_at,
+            });
+        }
+    }
+
     // Recalculate balance from all trades
     let new_balance = Database::recalculate_balance_tx(&mut tx, user.user_id)
         .await
@@ -373,6 +568,8 @@ pub async fn post_sync(
     Ok(Json(SyncResponse {
         habits: result_habits,
         trades: result_trades,
+        tags: result_tags,
+        habit_tags: result_habit_tags,
         balance: BalanceOutput {
             soy_balance: new_balance,
             tofu_balance: balance_row.tofu_balance,
