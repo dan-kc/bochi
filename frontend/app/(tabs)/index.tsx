@@ -12,7 +12,7 @@ import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { SortDropdown } from "@/components/SortDropdown";
 import type { Habit, HabitInput } from "@/lib/habit";
 import { SORT_OPTIONS } from "@/lib/sortOptions";
-import { sortHabits, getDisplayMode } from "@/lib/habitSorting";
+import { sortHabits } from "@/lib/habitSorting";
 import { useSortPreference } from "@/lib/store/sortPreferencesStore";
 
 export default function Habits() {
@@ -24,7 +24,6 @@ export default function Habits() {
     createHabit,
     updateHabit,
     deleteHabit,
-    completeHabit,
     selectHabit,
     setIsEditing,
   } = useHabitsContext();
@@ -41,8 +40,6 @@ export default function Habits() {
   const displayHabits = useMemo(() => {
     return sortHabits(habits, sortKey, prices);
   }, [habits, sortKey, prices]);
-
-  const displayMode = getDisplayMode(sortKey);
 
   // Update prices when habits change
   useEffect(() => {
@@ -111,13 +108,6 @@ export default function Habits() {
     setHabitToRank(null);
   }, []);
 
-  const handleComplete = useCallback(
-    async (habit: Habit) => {
-      await completeHabit(habit);
-    },
-    [completeHabit],
-  );
-
   const handleRerank = useCallback(() => {
     if (selectedHabit) {
       setIsHabitFormVisible(false);
@@ -128,14 +118,9 @@ export default function Habits() {
 
   const renderItem = useCallback(
     ({ item }: { item: Habit }) => (
-      <HabitItem
-        habit={item}
-        onPress={handleHabitPress}
-        onComplete={handleComplete}
-        displayMode={displayMode}
-      />
+      <HabitItem habit={item} onPress={handleHabitPress} />
     ),
-    [handleHabitPress, handleComplete, displayMode],
+    [handleHabitPress],
   );
 
   const keyExtractor = useCallback((item: Habit) => item.id, []);
@@ -171,7 +156,7 @@ export default function Habits() {
             data={displayHabits}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
-            extraData={{ sortKey, displayMode }}
+            extraData={{ sortKey }}
             contentContainerStyle={{ padding: 16 }}
             estimatedItemSize={100}
           />
