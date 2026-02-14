@@ -1,11 +1,19 @@
-Tofustash is a gamified productivity tool to handle your habits. It is themed on personal finance and the stock exchange. You earn "tofu" that is the in game currency. It is awarded for completing habits, and it is spent on rewards like "eat a chocolate bar".
+Tofustash is a gamified productivity tool to handle your habits. It is themed on personal finance and the stock exchange. You earn "tofu" as the in-game currency. It is awarded for completing habits and spent on rewards like "eat a chocolate bar".
 
-When making changes across database/backend/frontend always work in the following order:
-- Change tests if any
-- Change create migrations if any
-- Change backend code until backend tests pass if any
-- Change frontend tests if any
-- Change frontend
+## Workflow
+
+When making changes, follow these steps in order. Skip steps that don't apply.
+
+1. Write/run migrations
+2. Check backend tests pass (migrations must be compatible with old backend)
+3. Write/change backend code and tests
+4. Check backend tests pass
+5. Refactor backend, keeping the codebase DRY
+6. Check backend tests pass
+7. Write/change frontend code and tests
+8. Check frontend tests pass
+9. Refactor frontend, keeping the codebase DRY
+10. Check frontend tests pass
 
 ## Frontend
 
