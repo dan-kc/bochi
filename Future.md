@@ -1,51 +1,45 @@
-# Add tags
+Rewrite the frontend in kotlin.
 
-Add tags to all habits. They already exist in the db but I need tags to be many to many with habits and many to many with rewards.
-The same tag can be used by rewards and habits. The tags should be synced just like the habits and trades.
-Show all of the tags underneath the text. If there are so many tags that it's running out of space then truncate that too but show the user that there are more.
-When clicking `add tags` after clicking on a habit, it should pop up with a new ui that lists all tags and opens a text box for you to search and filter. It will filter depending on what you type and in the list there should be tickboxes such that you can select multiple.
-Also beside each entry in the list, it should be a color button. Clicking that will bring up a modal that is a color picker.
-You should also be able to add new ones too with a button. Creating new ones will give it a random color hex.
+- Language: Kotlin.
+- UI Framework: Jetpack Compose (Declarative).
+- Architecture: MVVM (Model-View-ViewModel).
+- Asynchrony: Coroutines and Flow (for handling background tasks).
+- Networking: Retrofit or Ktor.
+- UI testing with Compose Testing Library
+- Complete with dev scripts that do the following:
 
-first add tests to the backend if any,
-then make the tests pass
-then implement the frontend changes
+First, prepare my dev environment for a new project. I will be creating an android-only app with the following tech stack. It should live in the ./android directory.
+- Add commands in the scripts.nix for interacting with the project. Anything I need for testing, linting, emulation. Also change the flake.nix for anything i need for kotlin development including language servers and formatters - the lot.
+- Inform me of any options for local first implementation details etc.
 
-# Add rewards tab
 
-Plan a big feature change. Add a `rewards` tab. It should look like the habits tab. It should be synced the same as habits, trades and tags. Rewards can be `purchased` with soy.
+# AFTER LAUNCH
 
-They have a price to them similar to the habits. This price is derived from the habits max_daily_frequency against the actual frequency for this habit. This can be calculated with the `trades`. How many trades have been made for this habit and when was the habit created. It should only consider the past 2 months and calculate the rate from that. If a reward has been purchased at a rate far fewer than the max_daily_frequency in the past 2 months, then it should be cheaper.
+# Styling
 
-Rewards can have tags too
+Make all of the styling like the
 
-The rewards tab should have a sort by for: (just like the habits do)
-newest/oldest
-max_daily_frequency rate highest to lowest
-max_daily_frequency rate lowest to highest
-price cheapest to most expensive
-price most expensive to cheapest (default)
+# Add a trades tab (OR JUST MAKE THE BALANCE A TOGGLE THAT BRINGS THIS UP?)
 
-Also they should the information in the habit itself in the List, just like how habits does.
+Add a new tab to the nav menu called trades. It is a page that lists all trades.
 
-First write new tests on the backend.
-Make sure the new tests pass
-Then change the frontend
-The frontend should have
+This should look similar to the habits tab.
 
-# Add a trades tab
+It should have a sort by where you can sort by date (default) or amount.
 
-This new tab after `habits` and before `settings` will be `trades`. This should list all trades just like the habits. This should look very similar to the habits tab. It should have "Both", "Reward", "Habit" and then the sort by.
+This nav entry should be togglable in settings.
 
-|Trades |
-|Both, Reward, Habit |
-| sort by newest | (or oldest, or cheapest or most expensive. Newest is default)
-It should also show the balance in the top, just the same as habits view.
+This setting is saved locally but not synced
 
-Make sure to re-use and abstract out components don't repeat yourself too much.
-Each trade should look like
+Each entry/button in the list should look like
+|[Date][Time] [type]
+|[habit/reward name] ----------------------- amount |
+where type is "Bought" or "Sold"
 
-|[type][name] amount | where type is "Bought" or "Sold"
-|tags |
+If the name is long, then it goes from 2 to up to 4 lines.
 
-# Observability
+The buttons should bring up a modal like the Habits from the bottom of the screen. But it's not a form, It just shows all the info. The modal should have a button to refund.
+
+# General
+
+Plan a big change accross the whole stack.

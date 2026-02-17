@@ -228,6 +228,15 @@ let
       else
         echo "  LSP Mux      ✗ Stopped"
       fi
+
+      # Android physical device
+      if command -v adb &>/dev/null; then
+        DEVICES=$(adb devices 2>/dev/null | grep -v "^List" | grep -v "^$" | wc -l)
+        if [ "$DEVICES" -gt 0 ]; then
+          DEVICE_INFO=$(adb devices 2>/dev/null | grep -v "^List" | grep -v "^$" | head -1 | awk '{print $1}')
+          echo "  Android      ✓ Connected  $DEVICE_INFO"
+        fi
+      fi
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
@@ -360,6 +369,59 @@ let
 
     tf = pkgs.writeShellScriptBin "tf" ''
       tofu -chdir=./infra "$@"
+    '';
+
+    # Android: Gradle wrapper that passes NixOS aapt2 override
+    agradle = pkgs.writeShellScriptBin "agradle" ''
+      set -e
+      cd android
+      AAPT2_FLAG=""
+      if [ -n "$AAPT2_FROM_MAVEN_OVERRIDE" ]; then
+        AAPT2_FLAG="-Pandroid.aapt2FromMavenOverride=$AAPT2_FROM_MAVEN_OVERRIDE"
+      fi
+      ./gradlew $AAPT2_FLAG "$@"
+    '';
+
+    # Android: Build debug APK
+    ab = pkgs.writeShellScriptBin "ab" ''
+      ${agradle}/bin/agradle assembleDebug "$@"
+    '';
+
+    # Android: Build release APK
+    abr = pkgs.writeShellScriptBin "abr" ''
+      ${agradle}/bin/agradle assembleRelease "$@"
+    '';
+
+    # Android: Run JVM unit tests
+    at-android = pkgs.writeShellScriptBin "at" ''
+      ${agradle}/bin/agradle testDebugUnitTest "$@"
+    '';
+
+# Android: Lint Kotlin code
+    alint = pkgs.writeShellScriptBin "alint" ''
+      ${agradle}/bin/agradle ktlintCheck "$@"
+    '';
+
+    # Android: Auto-format Kotlin code
+    afmt = pkgs.writeShellScriptBin "afmt" ''
+      ${agradle}/bin/agradle ktlintFormat "$@"
+    '';
+
+    # Android: Install + launch on device
+    ai = pkgs.writeShellScriptBin "ai" ''
+      ${agradle}/bin/agradle installDebug
+      adb shell am start -n com.tofustash.app/.MainActivity
+    '';
+
+# Android: Build + install + launch
+    arun = pkgs.writeShellScriptBin "arun" ''
+      ${agradle}/bin/agradle installDebug
+      adb shell am start -n com.tofustash.app/.MainActivity
+    '';
+
+    # Android: Clean build artifacts
+    aclean = pkgs.writeShellScriptBin "aclean" ''
+      ${agradle}/bin/agradle clean "$@"
     '';
 
     # drops and recreates the provided database, then applies migrations.
