@@ -81,6 +81,8 @@
             build-tools-36-0-0
             platform-tools
             platforms-android-36
+            emulator
+            system-images-android-36-google-apis-x86-64
           ]
         );
         scripts = import ./scripts.nix {
@@ -120,6 +122,7 @@
               ktlint
               jdk21
               android-sdk
+              # android-studio
             ]
             ++ scripts;
           shellHook = ''

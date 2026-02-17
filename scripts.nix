@@ -424,6 +424,36 @@ let
       ${agradle}/bin/agradle clean "$@"
     '';
 
+    # Android: Create a Pixel 5 AVD (2020 phone, 6.0" 1080x2340)
+    avd-create = pkgs.writeShellScriptBin "avd-create" ''
+      set -e
+      AVD_NAME="pixel5"
+      SYSTEM_IMAGE="system-images;android-36;google_apis;x86_64"
+
+      if avdmanager list avd 2>/dev/null | grep -q "Name: $AVD_NAME"; then
+        echo "AVD '$AVD_NAME' already exists. Delete it first with: avdmanager delete avd -n $AVD_NAME"
+        exit 1
+      fi
+
+      echo "Creating Pixel 5 AVD..."
+      echo "no" | avdmanager create avd \
+        -n "$AVD_NAME" \
+        -k "$SYSTEM_IMAGE" \
+        -d "pixel_5" \
+        --force
+
+      echo "AVD '$AVD_NAME' created. Launch with: aemu"
+    '';
+
+    # Android: Launch emulator in a new window (detached)
+    aemu = pkgs.writeShellScriptBin "aemu" ''
+      AVD_NAME="''${1:-pixel5}"
+      echo "Launching emulator '$AVD_NAME'..."
+      nohup emulator -avd "$AVD_NAME" -gpu auto &>/dev/null &
+      disown
+      echo "Emulator starting in background (PID: $!)"
+    '';
+
     # drops and recreates the provided database, then applies migrations.
     nuke = pkgs.writeShellScriptBin "nuke" ''
       set -e
