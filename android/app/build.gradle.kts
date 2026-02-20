@@ -17,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
     }
 
     buildTypes {
@@ -76,7 +77,6 @@ dependencies {
     // Navigation3
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
-    implementation(libs.lifecycle.viewmodel.nav3)
 
     // Room
     implementation(libs.room.runtime)
