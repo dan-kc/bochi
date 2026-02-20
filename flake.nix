@@ -6,17 +6,12 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    android-nixpkgs = {
-      url = "github:tadfisher/android-nixpkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
   outputs =
     {
       nixpkgs,
       flake-utils,
       fenix,
-      android-nixpkgs,
       self,
       ...
     }:
@@ -26,7 +21,6 @@
         overlays = [ fenix.overlays.default ];
         pkgs = import nixpkgs {
           inherit system overlays;
-          config.allowUnfree = true;
         };
         env = rec {
           # Database
@@ -75,14 +69,6 @@
           # Adminer
           ADMINER_PORT = 8504;
         };
-        android-sdk = android-nixpkgs.sdk.${system} (
-          sdkPkgs: with sdkPkgs; [
-            cmdline-tools-latest
-            build-tools-36-0-0
-            platform-tools
-            platforms-android-36
-          ]
-        );
         scripts = import ./scripts.nix {
           inherit pkgs;
           inherit env;
@@ -117,9 +103,6 @@
               circleci-cli
               postgresql
               moreutils
-              ktlint
-              jdk21
-              android-sdk
             ]
             ++ scripts;
           shellHook = ''
@@ -127,19 +110,6 @@
             export FRONTEND_PORT="${env.FRONTEND_PORT}"
             export HOST="localhost"
             export LSPMUX_PORT="${env.LSPMUX_PORT}"
-            export JAVA_HOME="${pkgs.jdk21}"
-            export ANDROID_HOME="${android-sdk}/share/android-sdk"
-            export ANDROID_SDK_ROOT="$ANDROID_HOME"
-
-            # Generate local.properties for Gradle (nix-store paths change on rebuild)
-            if [ -d "$PWD/android" ]; then
-              cat > "$PWD/android/local.properties" <<LOCALPROPS
-            sdk.dir=$ANDROID_HOME
-            LOCALPROPS
-            fi
-            # NixOS: aapt2 override for Gradle (AGP only reads this from gradle.properties, not local.properties)
-            export AAPT2_FROM_MAVEN_OVERRIDE="$ANDROID_HOME/build-tools/36.0.0/aapt2"
-
             status
           '';
         };
