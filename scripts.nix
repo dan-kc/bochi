@@ -397,7 +397,7 @@ let
       ${agradle}/bin/agradle testDebugUnitTest "$@"
     '';
 
-    # Android: Lint Kotlin code
+# Android: Lint Kotlin code
     alint = pkgs.writeShellScriptBin "alint" ''
       ${agradle}/bin/agradle ktlintCheck "$@"
     '';
@@ -413,7 +413,7 @@ let
       adb shell am start -n com.tofustash.app/.MainActivity
     '';
 
-    # Android: Build + install + launch
+# Android: Build + install + launch
     arun = pkgs.writeShellScriptBin "arun" ''
       ${agradle}/bin/agradle installDebug
       adb shell am start -n com.tofustash.app/.MainActivity
