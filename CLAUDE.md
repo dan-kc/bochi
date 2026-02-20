@@ -76,5 +76,3 @@ Logs for all processes can be found in logs/
 - `arun` - Build + install + launch
 - `aclean` - Clean build artifacts
 - `agradle <task>` - Run any Gradle task with NixOS aapt2 override
-- `avd-create` - Create a Pixel 5 emulator AVD
-- `aemu [name]` - Launch emulator in background (defaults to pixel5)
