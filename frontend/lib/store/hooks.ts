@@ -4,9 +4,11 @@ import { tagStore } from "./tagStore";
 import { habitTagStore } from "./habitTagStore";
 import { rewardStore } from "./rewardStore";
 import { rewardTagStore } from "./rewardTagStore";
+import { tradeStore } from "./tradeStore";
 import type { Habit } from "../habit";
 import type { Tag } from "../tag";
 import type { Reward } from "../reward";
+import type { Trade } from "../trade";
 
 // ============ Core Subscription Hook ============
 
@@ -392,4 +394,35 @@ export function useRewardTagActions() {
     addTagToReward: rewardTagStore.addTagToReward.bind(rewardTagStore),
     removeTagFromReward: rewardTagStore.removeTagFromReward.bind(rewardTagStore),
   };
+}
+
+// ============ Trade Hooks ============
+
+/**
+ * Subscribe to all trades for a user.
+ * Only re-renders when the trade list changes.
+ */
+export function useTrades(userId: string): Trade[] {
+  const cacheRef = useRef<{ trades: Trade[]; serialized: string }>({
+    trades: [],
+    serialized: "[]",
+  });
+
+  const getSnapshotWithCache = useCallback(() => {
+    const trades = tradeStore.getAllTrades(userId);
+    const serialized = JSON.stringify(
+      trades.map((t) => `${t.id}:${t.updated_at}`),
+    );
+
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { trades, serialized };
+    }
+    return cacheRef.current.trades;
+  }, [userId]);
+
+  return useSyncExternalStore(
+    tradeStore.subscribe,
+    getSnapshotWithCache,
+    getSnapshotWithCache,
+  );
 }

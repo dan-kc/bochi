@@ -37,6 +37,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="trades"
+        options={{
+          title: "Trades",
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
