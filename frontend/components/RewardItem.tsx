@@ -1,5 +1,4 @@
 import { View, Text, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
 import type { DisplayMode } from "@/lib/rewardSorting";
@@ -29,20 +28,10 @@ function InfoDisplay({
     const priceData = priceContext.prices[reward.id];
     if (!priceData) return null;
 
-    const { current, previous } = priceData;
-    const isUp = current > previous;
-    const isDown = current < previous;
-
     return (
       <View className="flex-row items-center bg-red-50 border border-red-200 px-2 py-1 rounded">
-        {isUp && <Ionicons name="arrow-up" size={12} color="#ef4444" />}
-        {isDown && <Ionicons name="arrow-down" size={12} color="#22c55e" />}
-        <Text
-          className={`text-xs font-medium ml-0.5 ${
-            isUp ? "text-red-600" : isDown ? "text-green-600" : "text-red-700"
-          }`}
-        >
-          {current} tofu (was {previous})
+        <Text className="text-xs font-medium text-red-700">
+          {priceData.current} tofu
         </Text>
       </View>
     );
