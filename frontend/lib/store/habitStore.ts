@@ -18,7 +18,6 @@ export function normalizeHabit(habit: Partial<Habit>): Habit {
     created_at: habit.created_at ?? new Date().toISOString(),
     updated_at: habit.updated_at ?? new Date().toISOString(),
     deleted_at: habit.deleted_at ?? null,
-    hidden_until: habit.hidden_until ?? null,
     min_daily_frequency: habit.min_daily_frequency ?? null,
     difficulty_rank: habit.difficulty_rank ?? null,
   };
@@ -78,7 +77,6 @@ class HabitStore extends EntityStore<Habit> {
       created_at: now,
       updated_at: now,
       deleted_at: input.deleted_at ?? null,
-      hidden_until: input.hidden_until ?? null,
       min_daily_frequency: input.min_daily_frequency ?? null,
       difficulty_rank: input.difficulty_rank ?? null,
     };
@@ -95,7 +93,6 @@ class HabitStore extends EntityStore<Habit> {
     if (input.name !== undefined) updates.name = input.name;
     if (input.description !== undefined) updates.description = input.description;
     if (input.deleted_at !== undefined) updates.deleted_at = input.deleted_at;
-    if (input.hidden_until !== undefined) updates.hidden_until = input.hidden_until;
     if (input.min_daily_frequency !== undefined) updates.min_daily_frequency = input.min_daily_frequency;
     if (input.difficulty_rank !== undefined) updates.difficulty_rank = input.difficulty_rank;
 

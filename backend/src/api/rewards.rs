@@ -1,5 +1,5 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -15,7 +15,6 @@ use super::ApiError;
 pub struct CreateRewardRequest {
     pub name: String,
     pub description: String,
-    pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
     pub damage_rank: Option<String>,
 }
@@ -29,7 +28,6 @@ pub struct RewardResponse {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
     pub damage_rank: Option<String>,
 }
@@ -59,18 +57,6 @@ pub async fn create_reward(
         return Err(ApiError::Validation(msg));
     }
 
-    // Validate hidden_until is in the future
-    let now = Utc::now().naive_utc();
-    if let Some(hidden_at) = input.hidden_until {
-        if hidden_at <= now {
-            let msg = format!(
-                "The 'hidden until' date ({}) has already passed or is the current moment. Please select a future date.",
-                hidden_at
-            );
-            return Err(ApiError::Validation(msg));
-        }
-    }
-
     // Validate max_daily_frequency range
     if let Some(freq) = input.max_daily_frequency {
         if freq < 0.0 || freq > 100.0 {
@@ -86,7 +72,6 @@ pub async fn create_reward(
         user_id: user.user_id,
         name: input.name,
         description: input.description,
-        hidden_until: input.hidden_until,
         max_daily_frequency: input.max_daily_frequency,
         damage_rank: input.damage_rank,
     };
@@ -105,7 +90,6 @@ pub async fn create_reward(
             created_at: reward_row.created_at,
             updated_at: reward_row.updated_at,
             deleted_at: reward_row.deleted_at,
-            hidden_until: reward_row.hidden_until,
             max_daily_frequency: reward_row.max_daily_frequency,
             damage_rank: reward_row.damage_rank,
         }),

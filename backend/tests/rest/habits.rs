@@ -30,7 +30,6 @@ async fn test_create_habit_success() {
         json.get("description").unwrap().as_str().unwrap(),
         "A test habit description"
     );
-    assert_eq!(json.get("hiddenUntil").unwrap(), &Value::Null);
     assert_eq!(json.get("minDailyFrequency").unwrap(), &Value::Null);
 }
 
@@ -43,15 +42,15 @@ async fn test_create_habit_with_optional_fields() {
     let access_token = get_access_token_for_user(&email, &password).await;
 
     let body = json!({
-        "name": "Habit with dates",
-        "description": "Habit with optional dates",
-        "hiddenUntil": "2028-12-16T00:33:08"
+        "name": "Habit with frequency",
+        "description": "Habit with optional fields",
+        "minDailyFrequency": 5.0
     });
 
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(json.get("hiddenUntil").unwrap(), "2028-12-16T00:33:08");
+    assert_eq!(json.get("minDailyFrequency").unwrap(), 5.0);
 }
 
 #[tokio::test]
@@ -181,39 +180,6 @@ async fn test_create_habit_maximum_valid_input() {
         &Value::String(max_description)
     );
     assert_eq!(json.get("minDailyFrequency").unwrap(), 100.0);
-}
-
-#[tokio::test]
-async fn test_create_habit_hidden_until_in_past() {
-    let email = generate_email_from_fn!(test_create_habit_hidden_until_in_past);
-    let password = "password123";
-
-    register_user(&email, password).await;
-    let access_token = get_access_token_for_user(&email, &password).await;
-
-    let body = json!({
-        "name": "test name",
-        "description": "test description",
-        "hiddenUntil": "2022-12-25T23:59:59"
-    });
-
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
-
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let errors = json.get("errors").unwrap().as_array().unwrap();
-    assert_eq!(errors.len(), 1);
-
-    let error = errors.first().unwrap();
-    assert_eq!(
-        error.get("message").unwrap(),
-        &Value::String(
-            "Validation Error: The 'hidden until' date (2022-12-25 23:59:59) has already passed or is the current moment. Please select a future date.".to_string()
-        )
-    );
-    assert_eq!(
-        error.get("code").unwrap(),
-        &Value::String("BAD_USER_INPUT".to_string())
-    );
 }
 
 #[tokio::test]
@@ -374,28 +340,6 @@ async fn test_create_habit_min_daily_frequency_boundary() {
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("minDailyFrequency").unwrap(), 100.0);
-}
-
-#[tokio::test]
-async fn test_create_habit_with_hidden_until_and_min_daily_frequency() {
-    let email = generate_email_from_fn!(test_create_habit_with_hidden_until_and_min_daily_frequency);
-    let password = "password123";
-
-    register_user(&email, password).await;
-    let access_token = get_access_token_for_user(&email, &password).await;
-
-    let body = json!({
-        "name": "Habit with hidden and frequency",
-        "description": "Habit with hidden_until and min_daily_frequency",
-        "hiddenUntil": "2028-12-16T00:33:08",
-        "minDailyFrequency": 10.0
-    });
-
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
-
-    assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(json.get("hiddenUntil").unwrap(), "2028-12-16T00:33:08");
-    assert_eq!(json.get("minDailyFrequency").unwrap(), 10.0);
 }
 
 #[tokio::test]

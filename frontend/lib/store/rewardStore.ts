@@ -18,7 +18,6 @@ export function normalizeReward(reward: Partial<Reward>): Reward {
     created_at: reward.created_at ?? new Date().toISOString(),
     updated_at: reward.updated_at ?? new Date().toISOString(),
     deleted_at: reward.deleted_at ?? null,
-    hidden_until: reward.hidden_until ?? null,
     max_daily_frequency: reward.max_daily_frequency ?? null,
     damage_rank: reward.damage_rank ?? null,
   };
@@ -78,7 +77,6 @@ class RewardStore extends EntityStore<Reward> {
       created_at: now,
       updated_at: now,
       deleted_at: input.deleted_at ?? null,
-      hidden_until: input.hidden_until ?? null,
       max_daily_frequency: input.max_daily_frequency ?? null,
       damage_rank: input.damage_rank ?? null,
     };
@@ -95,7 +93,6 @@ class RewardStore extends EntityStore<Reward> {
     if (input.name !== undefined) updates.name = input.name;
     if (input.description !== undefined) updates.description = input.description;
     if (input.deleted_at !== undefined) updates.deleted_at = input.deleted_at;
-    if (input.hidden_until !== undefined) updates.hidden_until = input.hidden_until;
     if (input.max_daily_frequency !== undefined) updates.max_daily_frequency = input.max_daily_frequency;
     if (input.damage_rank !== undefined) updates.damage_rank = input.damage_rank;
 

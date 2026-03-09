@@ -320,7 +320,6 @@ export class SyncService {
             createdAt: h.created_at,
             updatedAt: h.updated_at,
             deletedAt: h.deleted_at,
-            hiddenUntil: h.hidden_until,
             minDailyFrequency: h.min_daily_frequency,
             difficultyRank: h.difficulty_rank,
           }))
@@ -370,7 +369,6 @@ export class SyncService {
             createdAt: r.created_at,
             updatedAt: r.updated_at,
             deletedAt: r.deleted_at,
-            hiddenUntil: r.hidden_until,
             maxDailyFrequency: r.max_daily_frequency,
             damageRank: r.damage_rank,
           }))

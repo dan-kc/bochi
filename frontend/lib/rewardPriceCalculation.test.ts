@@ -20,7 +20,6 @@ function createReward(overrides: Partial<Reward> = {}): Reward {
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     deleted_at: null,
-    hidden_until: null,
     max_daily_frequency: null,
     damage_rank: null,
     ...overrides,

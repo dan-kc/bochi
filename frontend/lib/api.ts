@@ -206,7 +206,7 @@ class ApiClient {
         createdAt: string;
         updatedAt: string;
         deletedAt: string | null;
-        hiddenUntil: string | null;
+
         minDailyFrequency: number | null;
         difficultyRank: string | null;
       }>;
@@ -241,7 +241,7 @@ class ApiClient {
         createdAt: string;
         updatedAt: string;
         deletedAt: string | null;
-        hiddenUntil: string | null;
+
         maxDailyFrequency: number | null;
         damageRank: string | null;
       }>;
@@ -269,7 +269,7 @@ class ApiClient {
         created_at: h.createdAt,
         updated_at: h.updatedAt,
         deleted_at: h.deletedAt,
-        hidden_until: h.hiddenUntil,
+
         min_daily_frequency: h.minDailyFrequency,
         difficulty_rank: h.difficultyRank,
       })),
@@ -308,7 +308,7 @@ class ApiClient {
         created_at: r.createdAt,
         updated_at: r.updatedAt,
         deleted_at: r.deletedAt,
-        hidden_until: r.hiddenUntil,
+
         max_daily_frequency: r.maxDailyFrequency,
         damage_rank: r.damageRank,
       })),
@@ -341,7 +341,7 @@ class ApiClient {
       createdAt: toNaiveDateTime(h.createdAt) ?? "",
       updatedAt: toNaiveDateTime(h.updatedAt) ?? "",
       deletedAt: toNaiveDateTime(h.deletedAt),
-      hiddenUntil: toNaiveDateTime(h.hiddenUntil),
+
       minDailyFrequency: h.minDailyFrequency,
       difficultyRank: h.difficultyRank,
     }));
@@ -383,7 +383,7 @@ class ApiClient {
       createdAt: toNaiveDateTime(r.createdAt) ?? "",
       updatedAt: toNaiveDateTime(r.updatedAt) ?? "",
       deletedAt: toNaiveDateTime(r.deletedAt),
-      hiddenUntil: toNaiveDateTime(r.hiddenUntil),
+
       maxDailyFrequency: r.maxDailyFrequency,
       damageRank: r.damageRank,
     }));
@@ -405,7 +405,7 @@ class ApiClient {
         createdAt: string;
         updatedAt: string;
         deletedAt: string | null;
-        hiddenUntil: string | null;
+
         minDailyFrequency: number | null;
         difficultyRank: string | null;
       }>;
@@ -440,7 +440,7 @@ class ApiClient {
         createdAt: string;
         updatedAt: string;
         deletedAt: string | null;
-        hiddenUntil: string | null;
+
         maxDailyFrequency: number | null;
         damageRank: string | null;
       }>;
@@ -478,7 +478,7 @@ class ApiClient {
         created_at: h.createdAt,
         updated_at: h.updatedAt,
         deleted_at: h.deletedAt,
-        hidden_until: h.hiddenUntil,
+
         min_daily_frequency: h.minDailyFrequency,
         difficulty_rank: h.difficultyRank,
       })),
@@ -517,7 +517,7 @@ class ApiClient {
         created_at: r.createdAt,
         updated_at: r.updatedAt,
         deleted_at: r.deletedAt,
-        hidden_until: r.hiddenUntil,
+
         max_daily_frequency: r.maxDailyFrequency,
         damage_rank: r.damageRank,
       })),

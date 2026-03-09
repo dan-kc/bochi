@@ -44,7 +44,6 @@ pub struct SyncHabitInput {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
 }
@@ -90,7 +89,6 @@ pub struct SyncRewardInput {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f64>,
     pub damage_rank: Option<String>,
 }
@@ -129,7 +127,6 @@ pub struct HabitOutput {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
 }
@@ -176,7 +173,6 @@ pub struct RewardOutput {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f64>,
     pub damage_rank: Option<String>,
 }
@@ -288,7 +284,6 @@ pub async fn get_sync(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
-            hidden_until: row.hidden_until,
             min_daily_frequency: row.min_daily_frequency,
             difficulty_rank: row.difficulty_rank,
         })
@@ -339,7 +334,6 @@ pub async fn get_sync(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
-            hidden_until: row.hidden_until,
             max_daily_frequency: row.max_daily_frequency.map(|f| f as f64),
             damage_rank: row.damage_rank,
         })
@@ -438,7 +432,6 @@ pub async fn post_sync(
                 description: habit_input.description,
                 created_at: habit_input.created_at,
                 deleted_at: habit_input.deleted_at,
-                hidden_until: habit_input.hidden_until,
                 min_daily_frequency: habit_input.min_daily_frequency,
                 difficulty_rank: habit_input.difficulty_rank,
             };
@@ -457,7 +450,6 @@ pub async fn post_sync(
                 created_at: habit_row.created_at,
                 updated_at: habit_row.updated_at,
                 deleted_at: habit_row.deleted_at,
-                hidden_until: habit_row.hidden_until,
                 min_daily_frequency: habit_row.min_daily_frequency,
                 difficulty_rank: habit_row.difficulty_rank,
             });
@@ -509,7 +501,6 @@ pub async fn post_sync(
                 description: reward_input.description,
                 created_at: reward_input.created_at,
                 deleted_at: reward_input.deleted_at,
-                hidden_until: reward_input.hidden_until,
                 max_daily_frequency: reward_input.max_daily_frequency,
                 damage_rank: reward_input.damage_rank,
             };
@@ -528,7 +519,6 @@ pub async fn post_sync(
                 created_at: reward_row.created_at,
                 updated_at: reward_row.updated_at,
                 deleted_at: reward_row.deleted_at,
-                hidden_until: reward_row.hidden_until,
                 max_daily_frequency: reward_row.max_daily_frequency.map(|f| f as f64),
                 damage_rank: reward_row.damage_rank,
             });

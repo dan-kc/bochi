@@ -13,7 +13,7 @@ describe("normalizeHabit", () => {
       expect(result.user_id).toBe("");
       expect(result.description).toBe("");
       expect(result.deleted_at).toBeNull();
-      expect(result.hidden_until).toBeNull();
+
       expect(result.min_daily_frequency).toBeNull();
       expect(result.difficulty_rank).toBeNull();
     });
@@ -49,7 +49,6 @@ describe("normalizeHabit", () => {
         created_at: "2024-06-15T08:00:00Z",
         updated_at: "2024-06-20T10:30:00Z",
         deleted_at: null,
-        hidden_until: "2024-07-01T00:00:00Z",
         min_daily_frequency: 1,
         difficulty_rank: "A",
       };
@@ -101,7 +100,6 @@ describe("updateHabit input handling", () => {
     if (input.name !== undefined) updates.name = input.name;
     if (input.description !== undefined) updates.description = input.description;
     if (input.deleted_at !== undefined) updates.deleted_at = input.deleted_at;
-    if (input.hidden_until !== undefined) updates.hidden_until = input.hidden_until;
     if (input.min_daily_frequency !== undefined) updates.min_daily_frequency = input.min_daily_frequency;
     if (input.difficulty_rank !== undefined) updates.difficulty_rank = input.difficulty_rank;
     return updates;
@@ -136,11 +134,9 @@ describe("updateHabit input handling", () => {
     // Simulates what happens during merge: clearing difficulty_rank
     const input: Partial<HabitInput> = {
       difficulty_rank: null,
-      hidden_until: null,
     };
     const updates = computeUpdates(input);
 
     expect(updates.difficulty_rank).toBeNull();
-    expect(updates.hidden_until).toBeNull();
   });
 });

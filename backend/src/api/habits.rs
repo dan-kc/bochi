@@ -1,5 +1,5 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -15,7 +15,6 @@ use super::ApiError;
 pub struct CreateHabitRequest {
     pub name: String,
     pub description: String,
-    pub hidden_until: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
 }
@@ -29,7 +28,6 @@ pub struct HabitResponse {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_rank: Option<String>,
 }
@@ -59,18 +57,6 @@ pub async fn create_habit(
         return Err(ApiError::Validation(msg));
     }
 
-    // Validate hidden_until is in the future
-    let now = Utc::now().naive_utc();
-    if let Some(hidden_at) = input.hidden_until {
-        if hidden_at <= now {
-            let msg = format!(
-                "The 'hidden until' date ({}) has already passed or is the current moment. Please select a future date.",
-                hidden_at
-            );
-            return Err(ApiError::Validation(msg));
-        }
-    }
-
     // Validate min_daily_frequency range
     if let Some(freq) = input.min_daily_frequency {
         if freq < 0.0 || freq > 100.0 {
@@ -86,7 +72,6 @@ pub async fn create_habit(
         user_id: user.user_id,
         name: input.name,
         description: input.description,
-        hidden_until: input.hidden_until,
         min_daily_frequency: input.min_daily_frequency,
         difficulty_rank: input.difficulty_rank,
     };
@@ -105,7 +90,6 @@ pub async fn create_habit(
             created_at: habit_row.created_at,
             updated_at: habit_row.updated_at,
             deleted_at: habit_row.deleted_at,
-            hidden_until: habit_row.hidden_until,
             min_daily_frequency: habit_row.min_daily_frequency,
             difficulty_rank: habit_row.difficulty_rank,
         }),

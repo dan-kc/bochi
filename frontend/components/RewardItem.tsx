@@ -15,16 +15,6 @@ interface RewardItemProps {
   displayMode?: DisplayMode;
 }
 
-function formatDate(dateString: string | null): string {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 function InfoDisplay({
   reward,
   displayMode,
@@ -113,7 +103,6 @@ export function RewardItem({
   isDamageView,
   displayMode = "price",
 }: RewardItemProps) {
-  const hasHiddenUntil = reward.hidden_until !== null;
   const hasDamageRank = reward.damage_rank != null;
   const isUnrankedInDamageView = isDamageView && !hasDamageRank;
   const priceContext = useRewardPriceUpdateOptional();
@@ -156,13 +145,6 @@ export function RewardItem({
           ) : null}
           <RewardTagChips rewardId={reward.id} />
           <View className="flex-row flex-wrap gap-2 mt-2">
-            {hasHiddenUntil && (
-              <View className="bg-gray-100 px-2 py-1 rounded">
-                <Text className="text-gray-600 text-xs">
-                  Hidden until: {formatDate(reward.hidden_until)}
-                </Text>
-              </View>
-            )}
             {reward.max_daily_frequency !== null && (
               <View className="bg-orange-100 px-2 py-1 rounded">
                 <Text className="text-orange-700 text-xs">

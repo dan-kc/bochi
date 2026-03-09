@@ -38,7 +38,6 @@ pub struct TradableItem {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub hidden_until: Option<NaiveDateTime>,
     // Habit fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_daily_frequency: Option<f64>,
@@ -91,7 +90,6 @@ pub async fn create_trade(
                     created_at: trade_row.habit_created_at,
                     updated_at: trade_row.habit_updated_at,
                     deleted_at: trade_row.habit_deleted_at,
-                    hidden_until: trade_row.habit_hidden_until,
                     min_daily_frequency: trade_row.habit_min_daily_frequency,
                     difficulty_rank: trade_row.habit_difficulty_rank,
                     max_daily_frequency: None,
@@ -128,7 +126,6 @@ pub async fn create_trade(
                     created_at: trade_row.reward_created_at,
                     updated_at: trade_row.reward_updated_at,
                     deleted_at: trade_row.reward_deleted_at,
-                    hidden_until: trade_row.reward_hidden_until,
                     min_daily_frequency: None,
                     difficulty_rank: None,
                     max_daily_frequency: trade_row.reward_max_daily_frequency,

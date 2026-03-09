@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,9 +10,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import { z } from "zod";
 import type { Habit, HabitInput } from "@/lib/habit";
 import { createEmptyHabitInput } from "@/lib/habit";
@@ -20,125 +17,6 @@ import type { Tag } from "@/lib/tag";
 import { useTagsForHabit, useTagActions } from "@/lib/store/hooks";
 import { TagSelectionModal } from "./TagSelectionModal";
 import { ColorPickerModal } from "./ColorPickerModal";
-
-function formatDateForInput(date: Date | null): string {
-  if (!date) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getTomorrowString(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return formatDateForInput(tomorrow);
-}
-
-interface DatePickerFieldProps {
-  label: string;
-  value: Date | null;
-  onChange: (date: Date | null) => void;
-  hasError?: boolean;
-  disabled?: boolean;
-  placeholder?: string;
-}
-
-function DatePickerField({
-  label,
-  value,
-  onChange,
-  hasError,
-  disabled,
-  placeholder,
-}: DatePickerFieldProps) {
-  const [showPicker, setShowPicker] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleNativeChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date,
-  ) => {
-    setShowPicker(Platform.OS === "ios");
-    if (event.type === "set" && selectedDate) {
-      onChange(selectedDate);
-    }
-  };
-
-  const handleWebChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val) {
-      onChange(new Date(val + "T00:00:00"));
-    } else {
-      onChange(null);
-    }
-  };
-
-  if (Platform.OS === "web") {
-    return (
-      <View>
-        <Text className="text-sm font-medium text-gray-700 mb-1">{label}</Text>
-        <Pressable
-          onPress={() => inputRef.current?.showPicker?.()}
-          disabled={disabled}
-          className={`border rounded-lg px-4 py-3 ${hasError ? "border-red-500" : "border-gray-300"}`}
-        >
-          <input
-            ref={inputRef}
-            type="date"
-            value={formatDateForInput(value)}
-            onChange={handleWebChange}
-            min={getTomorrowString()}
-            disabled={disabled}
-            style={{
-              border: "none",
-              background: "transparent",
-              fontSize: 16,
-              width: "100%",
-              outline: "none",
-              color: value ? "#111827" : "#9ca3af",
-              cursor: disabled ? "not-allowed" : "pointer",
-            }}
-          />
-        </Pressable>
-        {value && (
-          <Pressable onPress={() => onChange(null)} className="mt-1">
-            <Text className="text-blue-500 text-sm">Clear</Text>
-          </Pressable>
-        )}
-      </View>
-    );
-  }
-
-  return (
-    <View>
-      <Text className="text-sm font-medium text-gray-700 mb-1">{label}</Text>
-      <Pressable
-        onPress={() => setShowPicker(true)}
-        disabled={disabled}
-        className={`border rounded-lg px-4 py-3 ${hasError ? "border-red-500" : "border-gray-300"}`}
-      >
-        <Text className={value ? "text-gray-900" : "text-gray-400"}>
-          {value ? value.toLocaleDateString() : placeholder || "Select date"}
-        </Text>
-      </Pressable>
-      {value && (
-        <Pressable onPress={() => onChange(null)} className="mt-1">
-          <Text className="text-blue-500 text-sm">Clear</Text>
-        </Pressable>
-      )}
-      {showPicker && (
-        <DateTimePicker
-          value={value || new Date()}
-          mode="date"
-          display="default"
-          onChange={handleNativeChange}
-          minimumDate={new Date()}
-        />
-      )}
-    </View>
-  );
-}
 
 interface HabitFormProps {
   habit?: Habit | null;
@@ -157,12 +35,6 @@ const habitSchema = z.object({
   description: z
     .string()
     .max(10000, "Description must be 10,000 characters or less"),
-  hidden_until: z
-    .date()
-    .refine((date) => date > new Date(), {
-      message: "Hidden until must be a future date",
-    })
-    .nullable(),
   min_daily_frequency: z
     .number()
     .gt(0, "Frequency must be greater than 0")
@@ -181,7 +53,6 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
 export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [hiddenUntil, setHiddenUntil] = useState<Date | null>(null);
   const [minDailyFrequency, setMinDailyFrequency] = useState("");
   const [frequencyPeriod, setFrequencyPeriod] = useState<FrequencyPeriod>("day");
   const [isSaving, setIsSaving] = useState(false);
@@ -203,7 +74,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
     if (habit) {
       setName(habit.name);
       setDescription(habit.description);
-      setHiddenUntil(habit.hidden_until ? new Date(habit.hidden_until) : null);
 
       if (habit.min_daily_frequency !== null) {
         const dailyFreq = habit.min_daily_frequency;
@@ -232,7 +102,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
       const empty = createEmptyHabitInput();
       setName(empty.name);
       setDescription(empty.description);
-      setHiddenUntil(null);
       setMinDailyFrequency("");
       setFrequencyPeriod("day");
     }
@@ -251,7 +120,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
     const input = {
       name: name.trim(),
       description: description.trim(),
-      hidden_until: hiddenUntil,
       min_daily_frequency: frequency,
     };
 
@@ -273,7 +141,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
     const habitInput: HabitInput = {
       name: result.data.name,
       description: result.data.description,
-      hidden_until: result.data.hidden_until?.toISOString() ?? null,
       min_daily_frequency: result.data.min_daily_frequency,
     };
 
@@ -458,17 +325,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
                 <Text className="text-gray-600 ml-2">Manage Tags</Text>
               </Pressable>
             </View>
-          )}
-
-          {isEditing && (
-            <DatePickerField
-              label="Hidden Until"
-              value={hiddenUntil}
-              onChange={setHiddenUntil}
-              hasError={!!errors.hidden_until}
-              disabled={isLoading}
-              placeholder="Select date to hide until"
-            />
           )}
 
           <View className="flex-row gap-3 mt-4">

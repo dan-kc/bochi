@@ -40,7 +40,6 @@ export interface SyncHabitInput {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-  hiddenUntil: string | null;
   minDailyFrequency: number | null;
   difficultyRank: string | null;
 }
@@ -78,7 +77,6 @@ export interface SyncRewardInput {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-  hiddenUntil: string | null;
   maxDailyFrequency: number | null;
   damageRank: string | null;
 }

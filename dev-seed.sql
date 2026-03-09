@@ -17,33 +17,33 @@ INSERT INTO tags (id, user_id, name, color_hex) VALUES
 ('bbbb2222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'Learning', '#0000FF  ');
 
 -- Habits for Alice
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
-('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Complete project proposal', 'Write and submit the Q1 project proposal to management', NULL, NULL, 'a0'),
-('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Review pull requests', 'Go through pending PRs on the main repo', NULL, NULL, 'a1'),
-('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Exercise', 'Daily workout routine', 1.0, NULL, 'a2'),
-('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Read documentation', 'Catch up on new API documentation', NULL, '2025-01-10 09:00:00', 'a3'),
-('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Team standup', 'Daily team sync meeting', 1.0, NULL, 'a4');
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
+('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Complete project proposal', 'Write and submit the Q1 project proposal to management', NULL, 'a0'),
+('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Review pull requests', 'Go through pending PRs on the main repo', NULL, 'a1'),
+('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Exercise', 'Daily workout routine', 1.0, 'a2'),
+('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Read documentation', 'Catch up on new API documentation', NULL, 'a3'),
+('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Team standup', 'Daily team sync meeting', 1.0, 'a4');
 
 -- Habits for Bob
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
-('bbbb0001-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Morning meditation', 'Start the day with 15 minutes of mindfulness', 1.0, NULL, 'a0'),
-('bbbb0002-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Learn Rust', 'Complete chapter 5 of the Rust book', NULL, NULL, 'a1'),
-('bbbb0003-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Grocery shopping', 'Buy vegetables and fruits for the week', NULL, NULL, 'a2');
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
+('bbbb0001-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Morning meditation', 'Start the day with 15 minutes of mindfulness', 1.0, 'a0'),
+('bbbb0002-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Learn Rust', 'Complete chapter 5 of the Rust book', NULL, 'a1'),
+('bbbb0003-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Grocery shopping', 'Buy vegetables and fruits for the week', NULL, 'a2');
 
 -- Habits for Charlie
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, hidden_until, difficulty_rank) VALUES
-('cccc0001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'Setup new laptop', 'Install dev tools and configure environment', NULL, NULL, 'a0');
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
+('cccc0001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'Setup new laptop', 'Install dev tools and configure environment', NULL, 'a0');
 
 -- Rewards for Alice
-INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, hidden_until) VALUES
-('aaaa1000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Coffee break', 'Enjoy a nice cup of coffee', 3.0, NULL),
-('aaaa1000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Gaming session', 'Play video games for 30 minutes', 2.0, NULL),
-('aaaa1000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Movie night', 'Watch a movie of your choice', 1.0, NULL);
+INSERT INTO rewards (id, user_id, name, description, max_daily_frequency) VALUES
+('aaaa1000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Coffee break', 'Enjoy a nice cup of coffee', 3.0),
+('aaaa1000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Gaming session', 'Play video games for 30 minutes', 2.0),
+('aaaa1000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Movie night', 'Watch a movie of your choice', 1.0);
 
 -- Rewards for Bob
-INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, hidden_until) VALUES
-('bbbb1000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Snack time', 'Have a healthy snack', 4.0, NULL),
-('bbbb1000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'YouTube break', 'Watch YouTube for 15 minutes', 2.0, NULL);
+INSERT INTO rewards (id, user_id, name, description, max_daily_frequency) VALUES
+('bbbb1000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Snack time', 'Have a healthy snack', 4.0),
+('bbbb1000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'YouTube break', 'Watch YouTube for 15 minutes', 2.0);
 
 -- Trades (habit completions and reward claims)
 INSERT INTO trades (id, user_id, habit_id, reward_id, amount) VALUES

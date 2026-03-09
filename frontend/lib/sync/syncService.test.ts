@@ -182,7 +182,7 @@ describe("SyncService", () => {
         created_at: "2024-01-01T00:00:00Z",
         updated_at: "2024-01-01T00:00:00Z",
         deleted_at: null,
-        hidden_until: null,
+
         min_daily_frequency: null,
         difficulty_rank: "a0", // User set this via binary search
       };
@@ -366,7 +366,7 @@ describe("SyncService", () => {
         created_at: "2024-01-01T00:00:00Z",
         updated_at: "2024-01-01T00:00:00Z",
         deleted_at: null,
-        hidden_until: null,
+
         min_daily_frequency: null,
         difficulty_rank: "a0", // Local has the correct value
       };
@@ -384,7 +384,7 @@ describe("SyncService", () => {
         created_at: "2024-01-01T00:00:00Z",
         updated_at: "2024-01-01T00:00:00Z",
         deleted_at: null,
-        hidden_until: null,
+
         min_daily_frequency: null,
         difficulty_rank: "b0",
       };
