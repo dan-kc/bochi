@@ -33,6 +33,7 @@ pub struct SyncPushRequest {
     pub habit_tags: Option<Vec<SyncHabitTagInput>>,
     pub rewards: Option<Vec<SyncRewardInput>>,
     pub reward_tags: Option<Vec<SyncRewardTagInput>>,
+    pub general_difficulty: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +117,7 @@ pub struct SyncResponse {
     pub server_time: NaiveDateTime,
     pub email: Option<String>,
     pub is_premium: bool,
+    pub general_difficulty: f64,
 }
 
 #[derive(Serialize)]
@@ -365,6 +367,7 @@ pub async fn get_sync(
         server_time,
         email: profile_row.email,
         is_premium: profile_row.premium,
+        general_difficulty: profile_row.general_difficulty,
     }))
 }
 
@@ -736,6 +739,21 @@ pub async fn post_sync(
         }
     }
 
+    // Update general_difficulty if provided
+    if let Some(gd) = input.general_difficulty {
+        if gd <= 0.0 || gd >= 1000.0 {
+            return Err(ApiError::Validation(
+                "general_difficulty must be greater than 0 and less than 1000".to_string(),
+            ));
+        }
+        Database::update_general_difficulty_tx(&mut tx, user.user_id, gd)
+            .await
+            .map_err(|e| {
+                error!("Database Error updating general_difficulty: {:?}", e);
+                ApiError::Internal
+            })?;
+    }
+
     // Recalculate balance from all trades
     let new_balance = Database::recalculate_balance_tx(&mut tx, user.user_id)
         .await
@@ -774,5 +792,6 @@ pub async fn post_sync(
         server_time,
         email: profile_row.email,
         is_premium: profile_row.premium,
+        general_difficulty: profile_row.general_difficulty,
     }))
 }

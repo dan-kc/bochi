@@ -4,11 +4,13 @@ import {
   useState,
   useEffect,
   useCallback,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { calculateReward } from "./rewardCalculation";
 import type { Habit } from "./habit";
 import { tradeStore } from "./store/tradeStore";
+import { userStore } from "./store/userStore";
 import { useAuth } from "./AuthContext";
 import { LOCAL_USER_ID } from "./store";
 
@@ -61,6 +63,11 @@ function getAlignedTimeBucket(now: Date = new Date()): number {
 export function PriceUpdateProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? LOCAL_USER_ID;
+  const userState = useSyncExternalStore(
+    userStore.subscribe,
+    userStore.getSnapshot,
+    userStore.getServerSnapshot,
+  );
 
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [timeBucket, setTimeBucket] = useState(() => getAlignedTimeBucket());
@@ -74,6 +81,7 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
     (habits: Habit[], bucket: number) => {
       const newPrices: Record<string, PriceData> = {};
       const previousBucket = bucket - 1;
+      const generalDifficulty = userState.generalDifficulty;
 
       for (const habit of habits) {
         // Get real completion count from trade store (last 7 days)
@@ -85,6 +93,7 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
           habits,
           completionsInPeriod,
           bucket,
+          generalDifficulty,
         );
 
         // Calculate what the price was in the previous time bucket
@@ -93,6 +102,7 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
           habits,
           completionsInPeriod,
           previousBucket,
+          generalDifficulty,
         );
 
         newPrices[habit.id] = {
@@ -103,7 +113,7 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
 
       return newPrices;
     },
-    [userId]
+    [userId, userState.generalDifficulty]
   );
 
   // Update prices when habits change or time bucket changes
@@ -114,6 +124,13 @@ export function PriceUpdateProvider({ children }: { children: ReactNode }) {
     },
     [timeBucket, calculatePrices]
   );
+
+  // Recalculate when generalDifficulty changes
+  useEffect(() => {
+    if (allHabits.length > 0) {
+      setPrices(calculatePrices(allHabits, timeBucket));
+    }
+  }, [userState.generalDifficulty, allHabits, timeBucket, calculatePrices]);
 
   // Set up countdown timer (updates every second)
   useEffect(() => {

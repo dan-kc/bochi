@@ -68,6 +68,7 @@ async fn test_sync_pull_returns_all_entity_types() {
     // Check user data
     assert_eq!(json.get("email").unwrap(), &email);
     assert_eq!(json.get("isPremium").unwrap(), false);
+    assert_eq!(json.get("generalDifficulty").unwrap(), 5.0);
 }
 
 #[tokio::test]
@@ -1813,4 +1814,207 @@ async fn test_sync_push_atomicity_with_tags() {
         0,
         "Trade should have been rolled back"
     );
+}
+
+// ============================================================================
+// General Difficulty Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_sync_pull_returns_default_general_difficulty() {
+    let email = generate_email_from_fn!(test_sync_pull_returns_default_general_difficulty);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json.get("generalDifficulty").unwrap(), 5.0);
+}
+
+#[tokio::test]
+async fn test_sync_push_updates_general_difficulty() {
+    let email = generate_email_from_fn!(test_sync_push_updates_general_difficulty);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Push a new general difficulty
+    let body = json!({
+        "generalDifficulty": 8.5
+    });
+    let (status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(push_json.get("generalDifficulty").unwrap(), 8.5);
+
+    // Verify it persists via pull
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("generalDifficulty").unwrap(), 8.5);
+}
+
+#[tokio::test]
+async fn test_sync_push_general_difficulty_validation_zero() {
+    let email = generate_email_from_fn!(test_sync_push_general_difficulty_validation_zero);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "generalDifficulty": 0.0
+    });
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Verify default was not changed
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("generalDifficulty").unwrap(), 5.0);
+}
+
+#[tokio::test]
+async fn test_sync_push_general_difficulty_validation_negative() {
+    let email = generate_email_from_fn!(test_sync_push_general_difficulty_validation_negative);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "generalDifficulty": -1.0
+    });
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_sync_push_general_difficulty_validation_too_high() {
+    let email = generate_email_from_fn!(test_sync_push_general_difficulty_validation_too_high);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "generalDifficulty": 1000.0
+    });
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_sync_push_general_difficulty_boundary_values() {
+    let email = generate_email_from_fn!(test_sync_push_general_difficulty_boundary_values);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Just above zero should work
+    let body = json!({
+        "generalDifficulty": 0.01
+    });
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json.get("generalDifficulty").unwrap(), 0.01);
+
+    // Just below 1000 should work
+    let body = json!({
+        "generalDifficulty": 999.99
+    });
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json.get("generalDifficulty").unwrap(), 999.99);
+}
+
+#[tokio::test]
+async fn test_sync_push_general_difficulty_with_other_entities() {
+    let email = generate_email_from_fn!(test_sync_push_general_difficulty_with_other_entities);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "generalDifficulty": 3.0,
+        "habits": [{
+            "id": habit_id,
+            "name": "Test Habit",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }]
+    });
+
+    let (status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(push_json.get("generalDifficulty").unwrap(), 3.0);
+
+    // Verify both the habit and difficulty persisted
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_json.get("generalDifficulty").unwrap(), 3.0);
+    assert_eq!(
+        pull_json.get("habits").unwrap().as_array().unwrap().len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_without_general_difficulty_preserves_existing() {
+    let email = generate_email_from_fn!(test_sync_push_without_general_difficulty_preserves_existing);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    // Set difficulty to 7.0
+    let body = json!({
+        "generalDifficulty": 7.0
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    // Push without generalDifficulty
+    let body = json!({});
+    let (status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // Should still return 7.0
+    assert_eq!(push_json.get("generalDifficulty").unwrap(), 7.0);
+}
+
+#[tokio::test]
+async fn test_sync_general_difficulty_isolation_between_users() {
+    let email1 = generate_email_from_fn!(test_sync_general_difficulty_isolation_between_users);
+    let email2 = "test_sync_gd_isolation_user2@test.com";
+    let password = "password123";
+
+    register_user(&email1, password).await;
+    register_user(email2, password).await;
+    let token1 = get_access_token_for_user(&email1, &password).await;
+    let token2 = get_access_token_for_user(email2, &password).await;
+
+    // User 1 sets difficulty to 2.0
+    let body = json!({ "generalDifficulty": 2.0 });
+    make_authenticated_post_request(&token1, "/api/sync", body).await;
+
+    // User 2 should still have default 5.0
+    let (_, pull_json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    assert_eq!(pull_json.get("generalDifficulty").unwrap(), 5.0);
+
+    // User 1 should still have 2.0
+    let (_, pull_json) = make_authenticated_get_request(&token1, "/api/sync").await;
+    assert_eq!(pull_json.get("generalDifficulty").unwrap(), 2.0);
 }

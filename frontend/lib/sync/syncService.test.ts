@@ -78,6 +78,7 @@ vi.mock("../store/balanceStore", () => ({
 vi.mock("../store/userStore", () => ({
   userStore: {
     setUser: vi.fn(),
+    getGeneralDifficulty: vi.fn().mockReturnValue(5.0),
   },
 }));
 
@@ -88,6 +89,7 @@ vi.mock("./syncStorage", () => ({
   checkAndPrepareFullSyncIfNeeded: vi.fn(),
   recordFullSyncCompleted: vi.fn(),
   clearFullSyncTimestamp: vi.fn(),
+  isGeneralDifficultyDirty: vi.fn().mockReturnValue(false),
 }));
 
 describe("SyncService", () => {
@@ -150,6 +152,7 @@ describe("SyncService", () => {
       server_time: "2024-01-01T00:00:01Z",
       email: "test@example.com",
       isPremium: false,
+      generalDifficulty: 5.0,
     };
     vi.mocked(api.sync).mockResolvedValue(defaultPullResponse);
     vi.mocked(api.syncPush).mockResolvedValue(defaultPullResponse);
@@ -230,6 +233,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -243,6 +247,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       // Trigger sync and wait for completion
@@ -301,6 +306,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -314,6 +320,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       await syncService.syncAndWait();
@@ -408,6 +415,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:01Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       vi.mocked(api.syncPush).mockResolvedValue({
@@ -421,6 +429,7 @@ describe("SyncService", () => {
         server_time: "2024-01-01T00:00:02Z",
         email: "test@example.com",
         isPremium: false,
+        generalDifficulty: 5.0,
       });
 
       await syncService.syncAndWait();

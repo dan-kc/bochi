@@ -4,11 +4,13 @@ import {
   useState,
   useEffect,
   useCallback,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { calculatePrice } from "./rewardPriceCalculation";
 import type { Reward } from "./reward";
 import { tradeStore } from "./store/tradeStore";
+import { userStore } from "./store/userStore";
 import { useAuth } from "./AuthContext";
 import { LOCAL_USER_ID } from "./store";
 
@@ -64,6 +66,11 @@ function getAlignedTimeBucket(now: Date = new Date()): number {
 export function RewardPriceUpdateProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? LOCAL_USER_ID;
+  const userState = useSyncExternalStore(
+    userStore.subscribe,
+    userStore.getSnapshot,
+    userStore.getServerSnapshot,
+  );
 
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [timeBucket, setTimeBucket] = useState(() => getAlignedTimeBucket());
@@ -77,6 +84,7 @@ export function RewardPriceUpdateProvider({ children }: { children: ReactNode })
     (rewards: Reward[], bucket: number) => {
       const newPrices: Record<string, PriceData> = {};
       const previousBucket = bucket - 1;
+      const generalDifficulty = userState.generalDifficulty;
 
       for (const reward of rewards) {
         // Get real purchase count from trade store (last 60 days for rewards)
@@ -92,6 +100,7 @@ export function RewardPriceUpdateProvider({ children }: { children: ReactNode })
           rewards,
           purchasesInPeriod,
           bucket,
+          generalDifficulty,
         );
 
         // Calculate what the price was in the previous time bucket
@@ -100,6 +109,7 @@ export function RewardPriceUpdateProvider({ children }: { children: ReactNode })
           rewards,
           purchasesInPeriod,
           previousBucket,
+          generalDifficulty,
         );
 
         newPrices[reward.id] = {
@@ -110,7 +120,7 @@ export function RewardPriceUpdateProvider({ children }: { children: ReactNode })
 
       return newPrices;
     },
-    [userId]
+    [userId, userState.generalDifficulty]
   );
 
   // Update prices when rewards change or time bucket changes
@@ -121,6 +131,13 @@ export function RewardPriceUpdateProvider({ children }: { children: ReactNode })
     },
     [timeBucket, calculatePrices]
   );
+
+  // Recalculate when generalDifficulty changes
+  useEffect(() => {
+    if (allRewards.length > 0) {
+      setPrices(calculatePrices(allRewards, timeBucket));
+    }
+  }, [userState.generalDifficulty, allRewards, timeBucket, calculatePrices]);
 
   // Set up countdown timer (updates every second)
   useEffect(() => {

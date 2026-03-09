@@ -1,31 +1,26 @@
 /**
  * Reward Calculation Formula
  *
- * Calculates dynamic tofu rewards for completing habits based on:
- * 1. Difficulty (main factor) - higher difficulty = larger reward
- * 2. Habit frequency - not meeting target frequency = larger reward (capped at ±50%)
- * 3. Deterministic "random" element - varies by ±15% based on habit ID + time bucket
+ * Calculates dynamic tofu rewards for completing habits.
  *
- * The formula is deterministic: given the same inputs and time bucket,
- * all frontends will calculate the same reward amount.
+ * Formula: Reward = 100 * G * D * F * R
+ *   G = general difficulty (user-configurable scalar, default 5.0)
+ *   D = (N - rank + 1) / (N + 1), relative difficulty in (0, 1)
+ *   F = 2 / (1 + r_eff^α), α=2.5, frequency multiplier in (0, 2)
+ *     r_eff = w * r + (1 - w) * 1.0, w = min(1, age_days / 30)
+ *   R = 0.9 + 0.2 * rand(), deterministic random in [0.9, 1.1)
  */
 
 import type { Habit } from './habit';
 
-/** Base reward amount in tofu */
-const BASE_REWARD = 100;
+/** Frequency exponent for habit reward formula */
+const ALPHA = 2.5;
 
-/** Difficulty multiplier range: easiest habit = 1x, hardest = 10x */
-const MIN_DIFFICULTY_MULTIPLIER = 1;
-const MAX_DIFFICULTY_MULTIPLIER = 10;
+/** Age blending period in days */
+const AGE_BLEND_DAYS = 30;
 
-/** Habit frequency multiplier range: ±50% from base */
-const MIN_HABIT_MULTIPLIER = 0.5;
-const MAX_HABIT_MULTIPLIER = 1.5;
-
-/** Random element range: ±15% from base */
-const MIN_RANDOM_MULTIPLIER = 0.85;
-const MAX_RANDOM_MULTIPLIER = 1.15;
+/** Default frequency neutral point for new habits */
+const HABIT_NEUTRAL_RATIO = 1.0;
 
 /** Time bucket size in milliseconds (30 minutes) */
 const TIME_BUCKET_MS = 30 * 60 * 1000;
@@ -68,50 +63,36 @@ export function getCurrentTimeBucket(now: Date = new Date()): number {
 
 /**
  * Calculate difficulty multiplier based on habit position in difficulty ranking.
- *
- * @param habit - The habit to calculate for
- * @param allHabits - All habits for the user (to determine relative difficulty)
- * @returns Multiplier between MIN_DIFFICULTY_MULTIPLIER and MAX_DIFFICULTY_MULTIPLIER
+ * D = (N - rank + 1) / (N + 1), where rank is 1-indexed position.
+ * Range: (0, 1), never reaches 0 or 1.
  */
 export function calculateDifficultyMultiplier(
   habit: Habit,
   allHabits: Habit[]
 ): number {
-  // Filter to habits with difficulty ranks and sort by rank
   const rankedHabits = allHabits
     .filter((h) => h.difficulty_rank !== null && h.deleted_at === null)
     .sort((a, b) => (a.difficulty_rank! < b.difficulty_rank! ? -1 : 1));
 
   if (rankedHabits.length === 0 || habit.difficulty_rank === null) {
-    // Unranked habit gets middle difficulty
-    return (MIN_DIFFICULTY_MULTIPLIER + MAX_DIFFICULTY_MULTIPLIER) / 2;
+    return 0.5;
   }
 
-  // Find position in sorted list (0 = easiest, length-1 = hardest)
   const position = rankedHabits.findIndex((h) => h.id === habit.id);
   if (position === -1) {
-    return (MIN_DIFFICULTY_MULTIPLIER + MAX_DIFFICULTY_MULTIPLIER) / 2;
+    return 0.5;
   }
 
-  // Convert position to 0-1 scale
-  const normalizedPosition =
-    rankedHabits.length === 1 ? 0.5 : position / (rankedHabits.length - 1);
-
-  // Map to multiplier range
-  return (
-    MIN_DIFFICULTY_MULTIPLIER +
-    normalizedPosition * (MAX_DIFFICULTY_MULTIPLIER - MIN_DIFFICULTY_MULTIPLIER)
-  );
+  const N = rankedHabits.length;
+  const rank = position + 1; // 1-indexed
+  return (N - rank + 1) / (N + 1);
 }
 
 /**
- * Calculate habit frequency multiplier.
- * Habits that are behind their target frequency get higher rewards.
- *
- * @param habit - The habit to calculate for
- * @param completionsInPeriod - Number of completions in the measurement period
- * @param periodDays - The measurement period in days (default: 7)
- * @returns Multiplier between MIN_HABIT_MULTIPLIER and MAX_HABIT_MULTIPLIER
+ * Calculate habit frequency multiplier with age blending.
+ * F = 2 / (1 + r_eff^α), α=2.5
+ * r_eff = w * r + (1 - w) * 1.0, where w = min(1, age_days / 30)
+ * Range: (0, 2)
  */
 export function calculateHabitMultiplier(
   habit: Habit,
@@ -122,76 +103,54 @@ export function calculateHabitMultiplier(
     return 1;
   }
 
-  // Expected completions = min_daily_frequency * periodDays
-  // Note: min_daily_frequency is 0-100, representing percentage of days
-  // So min_daily_frequency=100 means every day, 50 means every other day
   const expectedCompletions = (habit.min_daily_frequency / 100) * periodDays;
 
   if (expectedCompletions === 0) {
     return 1;
   }
 
-  // Calculate how well the target is being met
-  // ratio < 1 = behind target, ratio > 1 = ahead of target
-  const ratio = completionsInPeriod / expectedCompletions;
+  const r = completionsInPeriod / expectedCompletions;
 
-  // Invert and clamp: behind target = higher reward, ahead = lower reward
-  // ratio 0.5 (50% of target) -> multiplier 1.5
-  // ratio 1.0 (100% of target) -> multiplier 1.0
-  // ratio 1.5 (150% of target) -> multiplier 0.75
-  // ratio 2.0+ (200%+ of target) -> multiplier 0.5
+  // Age blending
+  const ageDays = getAgeDays(habit.created_at);
+  const w = Math.min(1, ageDays / AGE_BLEND_DAYS);
+  const rEff = w * r + (1 - w) * HABIT_NEUTRAL_RATIO;
 
-  // Map ratio to multiplier: multiplier = 1.5 - (ratio * 0.5), clamped
-  const rawMultiplier = MAX_HABIT_MULTIPLIER - ratio * 0.5;
-
-  return Math.max(MIN_HABIT_MULTIPLIER, Math.min(MAX_HABIT_MULTIPLIER, rawMultiplier));
+  return 2 / (1 + Math.pow(rEff, ALPHA));
 }
 
 /**
  * Calculate deterministic "random" multiplier.
- * This provides price variation while ensuring all frontends show the same value.
- *
- * @param habitId - The habit ID
- * @param timeBucket - The 30-minute time bucket (use getCurrentTimeBucket())
- * @returns Multiplier between MIN_RANDOM_MULTIPLIER and MAX_RANDOM_MULTIPLIER
+ * Range: [0.9, 1.1)
  */
 export function calculateRandomMultiplier(
   habitId: string,
   timeBucket: number
 ): number {
-  // Combine habit ID and time bucket for deterministic variation
   const seed = `${habitId}-${timeBucket}`;
   const hash = deterministicHash(seed);
-  const multiplier = MIN_RANDOM_MULTIPLIER + hash * (MAX_RANDOM_MULTIPLIER - MIN_RANDOM_MULTIPLIER);
-
-  // Map hash (0-1) to multiplier range
-  return multiplier;
+  return 0.9 + hash * 0.2;
 }
 
 /**
  * Calculate the full reward amount for completing a habit.
  *
- * Formula:
- *   reward = BASE_REWARD * difficulty * habit * random
- *
- * @param habit - The habit to calculate reward for
- * @param allHabits - All habits for the user (for difficulty ranking)
- * @param completionsInPeriod - Habit completions in last 7 days
- * @param timeBucket - The time bucket for random element (use getCurrentTimeBucket())
- * @returns The reward amount in tofu (rounded to integer)
+ * Formula: Reward = 100 * G * D * F * R
  */
 export function calculateReward(
   habit: Habit,
   allHabits: Habit[],
   completionsInPeriod: number = 0,
   timeBucket: number = getCurrentTimeBucket(),
+  generalDifficulty: number = 5.0,
 ): number {
   const difficultyMultiplier = calculateDifficultyMultiplier(habit, allHabits);
   const habitMultiplier = calculateHabitMultiplier(habit, completionsInPeriod);
   const randomMultiplier = calculateRandomMultiplier(habit.id, timeBucket);
 
   const reward =
-    BASE_REWARD *
+    100 *
+    generalDifficulty *
     difficultyMultiplier *
     habitMultiplier *
     randomMultiplier;
@@ -207,10 +166,11 @@ export function calculateRewardWithBreakdown(
   allHabits: Habit[],
   completionsInPeriod: number = 0,
   timeBucket: number = getCurrentTimeBucket(),
+  generalDifficulty: number = 5.0,
 ): {
   reward: number;
   breakdown: {
-    base: number;
+    generalDifficulty: number;
     difficultyMultiplier: number;
     habitMultiplier: number;
     randomMultiplier: number;
@@ -221,7 +181,8 @@ export function calculateRewardWithBreakdown(
   const randomMultiplier = calculateRandomMultiplier(habit.id, timeBucket);
 
   const reward =
-    BASE_REWARD *
+    100 *
+    generalDifficulty *
     difficultyMultiplier *
     habitMultiplier *
     randomMultiplier;
@@ -229,10 +190,19 @@ export function calculateRewardWithBreakdown(
   return {
     reward: Math.round(reward),
     breakdown: {
-      base: BASE_REWARD,
+      generalDifficulty,
       difficultyMultiplier,
       habitMultiplier,
       randomMultiplier,
     },
   };
+}
+
+/**
+ * Get age in days from a created_at timestamp string.
+ */
+function getAgeDays(createdAt: string): number {
+  const created = new Date(createdAt);
+  const now = new Date();
+  return (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
 }

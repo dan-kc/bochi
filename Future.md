@@ -1,51 +1,26 @@
-# Add tags
+Give me ideas for a good formula for calculating:
 
-Add tags to all habits. They already exist in the db but I need tags to be many to many with habits and many to many with rewards.
-The same tag can be used by rewards and habits. The tags should be synced just like the habits and trades.
-Show all of the tags underneath the text. If there are so many tags that it's running out of space then truncate that too but show the user that there are more.
-When clicking `add tags` after clicking on a habit, it should pop up with a new ui that lists all tags and opens a text box for you to search and filter. It will filter depending on what you type and in the list there should be tickboxes such that you can select multiple.
-Also beside each entry in the list, it should be a color button. Clicking that will bring up a modal that is a color picker.
-You should also be able to add new ones too with a button. Creating new ones will give it a random color hex.
+- The cost of a reward
+- The amount earned from a habit
 
-first add tests to the backend if any,
-then make the tests pass
-then implement the frontend changes
+# Habit formula draft
 
-# Add rewards tab
+Total = 100 \* F \* D \* R \* G
 
-Plan a big feature change. Add a `rewards` tab. It should look like the habits tab. It should be synced the same as habits, trades and tags. Rewards can be `purchased` with soy.
+where
+G = General Difficulty; 0<G<1000;
+D = Difficutly: 0<D<1;
+R = Random: 0.9<R<1.1;
+F = Frequency: 0<F<1;
 
-They have a price to them similar to the habits. This price is derived from the habits max_daily_frequency against the actual frequency for this habit. This can be calculated with the `trades`. How many trades have been made for this habit and when was the habit created. It should only consider the past 2 months and calculate the rate from that. If a reward has been purchased at a rate far fewer than the max_daily_frequency in the past 2 months, then it should be cheaper.
+All G, D,R,F can be made into different seperate fomulae.
 
-Rewards can have tags too
+G will be a variable stored on the users account. The user should be able to change this manually. It should store locally and be synced local-first like the habits.
 
-The rewards tab should have a sort by for: (just like the habits do)
-newest/oldest
-max_daily_frequency rate highest to lowest
-max_daily_frequency rate lowest to highest
-price cheapest to most expensive
-price most expensive to cheapest (default)
+D will be derived from the habits relative position among other habits in terms of difficulty. If it is the 2nd most difficult habit out of 51 habits then D = (51 - 1) / 51. This will have values linearly from 0 to 1, but I need you to edit it such that 0 is never hit. The habit reward amount should always be strictly positive.
 
-Also they should the information in the habit itself in the List, just like how habits does.
+R is a random number distributed linearly.
 
-First write new tests on the backend.
-Make sure the new tests pass
-Then change the frontend
-The frontend should have
+F is a calculation of actual frequency vs desired frequency. If a habit has been done too much then the reward price should decrease. I want this to be non-liner, not sure what to do. I want it to dramatically increase/decrease if the actual freq is wildly too big/small, but still stay within the range. I also want the formula to take into consideration the possibility that the habit was just created. In this case i do not want to dramatically influence the habits price, there needs to be some factor of when the habit was created too.
 
-# Add a trades tab
 
-This new tab after `habits` and before `settings` will be `trades`. This should list all trades just like the habits. This should look very similar to the habits tab. It should have "Both", "Reward", "Habit" and then the sort by.
-
-|Trades |
-|Both, Reward, Habit |
-| sort by newest | (or oldest, or cheapest or most expensive. Newest is default)
-It should also show the balance in the top, just the same as habits view.
-
-Make sure to re-use and abstract out components don't repeat yourself too much.
-Each trade should look like
-
-|[type][name] amount | where type is "Bought" or "Sold"
-|tags |
-
-# Observability

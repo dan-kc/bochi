@@ -404,12 +404,26 @@ impl Database {
             .await
     }
 
-    /// Get user profile (email and premium status)
+    /// Get user profile (email, premium status, and general difficulty)
     pub async fn get_user_profile(&self, user_id: Uuid) -> Result<UserProfileRow, sqlx::Error> {
-        sqlx::query_as("SELECT email, premium FROM users WHERE id = $1")
+        sqlx::query_as("SELECT email, premium, general_difficulty FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
+    }
+
+    /// Update general_difficulty within a transaction
+    pub async fn update_general_difficulty_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        general_difficulty: f64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET general_difficulty = $2 WHERE id = $1")
+            .bind(user_id)
+            .bind(general_difficulty)
+            .execute(&mut **tx)
+            .await?;
+        Ok(())
     }
 
     // ============================================================================
@@ -960,6 +974,7 @@ pub struct UserBalanceRow {
 pub struct UserProfileRow {
     pub email: Option<String>,
     pub premium: bool,
+    pub general_difficulty: f64,
 }
 
 #[derive(sqlx::FromRow)]

@@ -258,6 +258,7 @@ class ApiClient {
       serverTime: string;
       email: string | null;
       isPremium: boolean;
+      generalDifficulty: number;
     }>(url, { method: "GET" });
 
     return {
@@ -326,6 +327,7 @@ class ApiClient {
       server_time: result.serverTime,
       email: result.email,
       isPremium: result.isPremium,
+      generalDifficulty: result.generalDifficulty,
     };
   }
 
@@ -457,6 +459,7 @@ class ApiClient {
       serverTime: string;
       email: string | null;
       isPremium: boolean;
+      generalDifficulty: number;
     }>("/api/sync", {
       method: "POST",
       body: JSON.stringify({
@@ -466,6 +469,7 @@ class ApiClient {
         habitTags: habitTagInputs,
         rewards: rewardInputs,
         rewardTags: rewardTagInputs,
+        generalDifficulty: input.generalDifficulty,
       }),
     });
 
@@ -535,6 +539,7 @@ class ApiClient {
       server_time: result.serverTime,
       email: result.email,
       isPremium: result.isPremium,
+      generalDifficulty: result.generalDifficulty,
     };
   }
 }

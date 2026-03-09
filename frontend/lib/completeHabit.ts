@@ -1,6 +1,7 @@
 import type { Habit } from "./habit";
 import { tradeStore } from "./store/tradeStore";
 import { balanceStore } from "./store/balanceStore";
+import { userStore } from "./store/userStore";
 import { calculateReward, getCurrentTimeBucket } from "./rewardCalculation";
 
 /**
@@ -28,11 +29,13 @@ export async function completeHabit(
 
   // Calculate the reward amount
   const timeBucket = getCurrentTimeBucket();
+  const generalDifficulty = userStore.getGeneralDifficulty();
   const amount = calculateReward(
     habit,
     allHabits,
     completionsInPeriod,
     timeBucket,
+    generalDifficulty,
   );
 
   // Create the trade record

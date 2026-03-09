@@ -120,8 +120,18 @@ export async function getDirtyIds(
 
 export async function clearAllDirty(): Promise<void> {
   const state = await getSyncState();
-  state.dirty = { habits: [], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [] };
+  state.dirty = { habits: [], trades: [], tags: [], habitTags: [], rewards: [], rewardTags: [], generalDifficulty: false };
   await setSyncState(state);
+}
+
+export async function markGeneralDifficultyDirty(): Promise<void> {
+  const state = await getSyncState();
+  state.dirty.generalDifficulty = true;
+  await setSyncState(state);
+}
+
+export function isGeneralDifficultyDirty(state: SyncState): boolean {
+  return state.dirty.generalDifficulty === true;
 }
 
 export async function getLastSyncTime(): Promise<string | null> {

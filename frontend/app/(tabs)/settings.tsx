@@ -6,8 +6,10 @@ import ProfileCard from "@/components/ProfileCard";
 import { useAuth } from "@/lib/AuthContext";
 import { useSync } from "@/lib/sync";
 import { userStore } from "@/lib/store/userStore";
+import { markGeneralDifficultyDirty } from "@/lib/sync/syncStorage";
 import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem";
 import { AccountModal } from "@/components/settings/AccountModal";
+import { GeneralDifficultyModal } from "@/components/settings/GeneralDifficultyModal";
 
 export default function Settings() {
   const { user, logout, isAnonymous } = useAuth();
@@ -19,6 +21,7 @@ export default function Settings() {
   );
 
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
 
   const handleRegister = () => {
     router.push("/auth/register");
@@ -40,6 +43,12 @@ export default function Settings() {
     // Update the local store immediately for responsiveness
     await userStore.setUser(newEmail, userState.isPremium);
     // Trigger a sync to ensure server state is reflected
+    triggerSync();
+  };
+
+  const handleDifficultySave = async (value: number) => {
+    await userStore.setGeneralDifficulty(value);
+    await markGeneralDifficultyDirty();
     triggerSync();
   };
 
@@ -80,6 +89,16 @@ export default function Settings() {
           />
         )}
 
+        {/* General Difficulty - available to all users */}
+        <View className="bg-zinc-800 rounded-xl mt-4">
+          <SettingsMenuItem
+            icon="speedometer-outline"
+            label="General Difficulty"
+            value={userState.generalDifficulty.toString()}
+            onPress={() => setShowDifficultyModal(true)}
+          />
+        </View>
+
         <Text className="text-gray-600 mt-4">App settings and preferences.</Text>
       </View>
 
@@ -91,6 +110,13 @@ export default function Settings() {
           onEmailChanged={handleEmailChanged}
         />
       )}
+
+      <GeneralDifficultyModal
+        visible={showDifficultyModal}
+        onClose={() => setShowDifficultyModal(false)}
+        currentValue={userState.generalDifficulty}
+        onSave={handleDifficultySave}
+      />
     </SafeAreaView>
   );
 }

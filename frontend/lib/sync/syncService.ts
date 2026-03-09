@@ -16,6 +16,7 @@ import {
   checkAndPrepareFullSyncIfNeeded,
   recordFullSyncCompleted,
   clearFullSyncTimestamp,
+  isGeneralDifficultyDirty,
 } from "./syncStorage";
 import type {
   SyncCallbacks,
@@ -109,7 +110,7 @@ export class SyncService {
         await rewardTagStore.merge(cleanRewardTags, this.userId);
       }
       await balanceStore.setBalance(response.balance.tofu_balance);
-      await userStore.setUser(response.email, response.isPremium);
+      await userStore.setUser(response.email, response.isPremium, response.generalDifficulty);
 
       await setLastSyncTime(response.server_time);
       this.callbacks.onSyncComplete(response.server_time);
@@ -227,16 +228,18 @@ export class SyncService {
         await rewardTagStore.merge(pullResponse.rewardTags, this.userId);
       }
       await balanceStore.setBalance(pullResponse.balance.tofu_balance);
-      await userStore.setUser(pullResponse.email, pullResponse.isPremium);
+      await userStore.setUser(pullResponse.email, pullResponse.isPremium, pullResponse.generalDifficulty);
 
       // Step 5: Push dirty entities if any
+      const generalDifficultyDirty = isGeneralDifficultyDirty(syncState);
       const hasDirty =
         dirtyHabits.length > 0 ||
         dirtyTrades.length > 0 ||
         dirtyTags.length > 0 ||
         dirtyHabitTags.length > 0 ||
         dirtyRewards.length > 0 ||
-        dirtyRewardTags.length > 0;
+        dirtyRewardTags.length > 0 ||
+        generalDifficultyDirty;
       if (hasDirty) {
         const input = this.buildSyncInput(
           dirtyHabits,
@@ -245,6 +248,7 @@ export class SyncService {
           dirtyHabitTags,
           dirtyRewards,
           dirtyRewardTags,
+          generalDifficultyDirty,
         );
         const pushResponse = await api.syncPush(input);
 
@@ -268,7 +272,7 @@ export class SyncService {
           await rewardTagStore.merge(pushResponse.rewardTags, this.userId);
         }
         await balanceStore.setBalance(pushResponse.balance.tofu_balance);
-        await userStore.setUser(pushResponse.email, pushResponse.isPremium);
+        await userStore.setUser(pushResponse.email, pushResponse.isPremium, pushResponse.generalDifficulty);
       }
 
       // Step 7: Clear dirty flags and update timestamp
@@ -310,6 +314,7 @@ export class SyncService {
     habitTags: ReturnType<typeof habitTagStore.getDirty>,
     rewards: ReturnType<typeof rewardStore.getDirtyRewards>,
     rewardTags: ReturnType<typeof rewardTagStore.getDirty>,
+    generalDifficultyDirty: boolean = false,
   ): SyncInput {
     const habitInputs: SyncHabitInput[] | undefined =
       habits.length > 0
@@ -392,6 +397,7 @@ export class SyncService {
       habitTags: habitTagInputs,
       rewards: rewardInputs,
       rewardTags: rewardTagInputs,
+      generalDifficulty: generalDifficultyDirty ? userStore.getGeneralDifficulty() : undefined,
     };
   }
 }

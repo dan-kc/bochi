@@ -31,6 +31,7 @@ export interface SyncResponse {
   server_time: string;
   email: string | null;
   isPremium: boolean;
+  generalDifficulty: number;
 }
 
 export interface SyncHabitInput {
@@ -96,6 +97,7 @@ export interface SyncInput {
   habitTags?: SyncHabitTagInput[];
   rewards?: SyncRewardInput[];
   rewardTags?: SyncRewardTagInput[];
+  generalDifficulty?: number;
 }
 
 // ============================================================================
@@ -111,5 +113,6 @@ export interface SyncState {
     habitTags: string[];
     rewards: string[];
     rewardTags: string[];
+    generalDifficulty?: boolean;
   };
 }

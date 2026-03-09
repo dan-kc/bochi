@@ -1,41 +1,36 @@
 /**
  * Reward Price Calculation Formula
  *
- * Calculates dynamic tofu costs for purchasing rewards based on:
- * 1. Damage (main factor) - higher damage = more expensive
- * 2. Usage frequency - not meeting max frequency = cheaper (discount up to 50%)
- * 3. Deterministic "random" element - varies by ±15% based on reward ID + time bucket
+ * Calculates dynamic tofu costs for purchasing rewards.
  *
- * The formula is deterministic: given the same inputs and time bucket,
- * all frontends will calculate the same price.
- *
- * Key difference from habits:
- * - Habits: LESS usage = HIGHER reward (incentivize doing more)
- * - Rewards: LESS usage = LOWER price (discount for restraint)
+ * Formula: Cost = 100 * G * D_r * F_r * R
+ *   G = general difficulty (user-configurable scalar, default 5.0)
+ *   D_r = (N_r - rank + 1) / (N_r + 1), relative difficulty in (0, 1)
+ *   F_r = 2 / (1 - r_eff^β) - 1, β=3, asymptotic frequency in [1, ∞), capped at 50
+ *     r_eff = w * r + (1 - w) * 0.5, w = min(1, age_days / 30)
+ *     Hard block when r_eff >= 1
+ *   R = 0.9 + 0.2 * rand(), deterministic random in [0.9, 1.1)
  */
 
 import type { Reward } from "./reward";
 
-/** Base price amount in tofu */
-export const BASE_PRICE = 1000;
+/** Frequency exponent for reward cost formula */
+const BETA = 3;
 
-/** Damage multiplier range: lowest damage = 1x, highest = 10x */
-const MIN_DAMAGE_MULTIPLIER = 1;
-const MAX_DAMAGE_MULTIPLIER = 10;
+/** Age blending period in days */
+const AGE_BLEND_DAYS = 30;
 
-/** Frequency multiplier range: ±50% from base */
-const MIN_FREQUENCY_MULTIPLIER = 0.5;
-const MAX_FREQUENCY_MULTIPLIER = 1.5;
+/** Default neutral ratio for new rewards */
+const REWARD_NEUTRAL_RATIO = 0.5;
 
-/** Random element range: ±15% from base */
-const MIN_RANDOM_MULTIPLIER = 0.85;
-const MAX_RANDOM_MULTIPLIER = 1.15;
-
-/** Time bucket size in milliseconds (30 minutes) */
-const TIME_BUCKET_MS = 30 * 60 * 1000;
+/** Maximum frequency multiplier cap */
+const MAX_FREQUENCY_MULTIPLIER = 50;
 
 /** Default period for frequency calculation (60 days = ~2 months) */
 const DEFAULT_PERIOD_DAYS = 60;
+
+/** Time bucket size in milliseconds (30 minutes) */
+const TIME_BUCKET_MS = 30 * 60 * 1000;
 
 /**
  * Deterministic hash function for strings with good avalanche properties.
@@ -75,52 +70,36 @@ export function getCurrentTimeBucket(now: Date = new Date()): number {
 
 /**
  * Calculate damage multiplier based on reward position in damage ranking.
- * Higher damage = higher multiplier = more expensive.
- *
- * @param reward - The reward to calculate for
- * @param allRewards - All rewards for the user (to determine relative damage)
- * @returns Multiplier between MIN_DAMAGE_MULTIPLIER and MAX_DAMAGE_MULTIPLIER
+ * D_r = (N_r - rank + 1) / (N_r + 1), where rank is 1-indexed.
+ * Range: (0, 1), never reaches 0 or 1.
  */
 export function calculateDamageMultiplier(
   reward: Reward,
   allRewards: Reward[]
 ): number {
-  // Filter to rewards with damage ranks and sort by rank
   const rankedRewards = allRewards
     .filter((r) => r.damage_rank !== null && r.deleted_at === null)
     .sort((a, b) => (a.damage_rank! < b.damage_rank! ? -1 : 1));
 
   if (rankedRewards.length === 0 || reward.damage_rank === null) {
-    // Unranked reward gets middle damage
-    return (MIN_DAMAGE_MULTIPLIER + MAX_DAMAGE_MULTIPLIER) / 2;
+    return 0.5;
   }
 
-  // Find position in sorted list (0 = lowest damage, length-1 = highest damage)
   const position = rankedRewards.findIndex((r) => r.id === reward.id);
   if (position === -1) {
-    return (MIN_DAMAGE_MULTIPLIER + MAX_DAMAGE_MULTIPLIER) / 2;
+    return 0.5;
   }
 
-  // Convert position to 0-1 scale
-  const normalizedPosition =
-    rankedRewards.length === 1 ? 0.5 : position / (rankedRewards.length - 1);
-
-  // Map to multiplier range
-  return (
-    MIN_DAMAGE_MULTIPLIER +
-    normalizedPosition * (MAX_DAMAGE_MULTIPLIER - MIN_DAMAGE_MULTIPLIER)
-  );
+  const N = rankedRewards.length;
+  const rank = position + 1; // 1-indexed
+  return (N - rank + 1) / (N + 1);
 }
 
 /**
- * Calculate frequency multiplier based on usage vs max_daily_frequency.
- * LESS usage = CHEAPER (discount for restraint).
- * MORE usage = MORE EXPENSIVE (premium for overuse).
- *
- * @param reward - The reward to calculate for
- * @param purchasesInPeriod - Number of purchases in the measurement period
- * @param periodDays - The measurement period in days (default: 60)
- * @returns Multiplier between MIN_FREQUENCY_MULTIPLIER and MAX_FREQUENCY_MULTIPLIER
+ * Calculate asymptotic frequency multiplier for reward costs.
+ * F_r = 2 / (1 - r_eff^β) - 1, β=3
+ * r_eff = w * r + (1 - w) * 0.5, where w = min(1, age_days / 30)
+ * Range: [1, ∞), capped at 50. Returns Infinity when r_eff >= 1 (hard block).
  */
 export function calculateFrequencyMultiplier(
   reward: Reward,
@@ -131,80 +110,64 @@ export function calculateFrequencyMultiplier(
     return 1;
   }
 
-  // Expected purchases = max_daily_frequency * periodDays
-  // Note: max_daily_frequency is 0-100, representing percentage of days
-  // So max_daily_frequency=100 means every day, 50 means every other day
   const expectedPurchases = (reward.max_daily_frequency / 100) * periodDays;
 
   if (expectedPurchases === 0) {
     return 1;
   }
 
-  // Calculate usage ratio
-  // ratio < 1 = using less than expected, ratio > 1 = using more than expected
-  const ratio = purchasesInPeriod / expectedPurchases;
+  const r = purchasesInPeriod / expectedPurchases;
 
-  // For rewards:
-  // - ratio = 0 (0% of expected) -> multiplier = 0.5 (50% discount)
-  // - ratio = 1 (100% of expected) -> multiplier = 1.0 (base price)
-  // - ratio = 2+ (200%+ of expected) -> multiplier = 1.5 (50% premium)
+  // Age blending
+  const ageDays = getAgeDays(reward.created_at);
+  const w = Math.min(1, ageDays / AGE_BLEND_DAYS);
+  const rEff = w * r + (1 - w) * REWARD_NEUTRAL_RATIO;
 
-  if (ratio <= 1) {
-    // Less than expected: discount
-    // Linear interpolation from 0.5 (at ratio 0) to 1.0 (at ratio 1)
-    return MIN_FREQUENCY_MULTIPLIER + ratio * (1 - MIN_FREQUENCY_MULTIPLIER);
-  } else {
-    // More than expected: premium
-    // Linear increase from 1.0 (at ratio 1) to 1.5 (at ratio 2+)
-    const premium = (ratio - 1) * 0.5;
-    return Math.min(MAX_FREQUENCY_MULTIPLIER, 1 + premium);
+  // Hard block when r_eff >= 1
+  if (rEff >= 1) {
+    return Infinity;
   }
+
+  const Fr = 2 / (1 - Math.pow(rEff, BETA)) - 1;
+  return Math.min(Fr, MAX_FREQUENCY_MULTIPLIER);
 }
 
 /**
  * Calculate deterministic "random" multiplier.
- * This provides price variation while ensuring all frontends show the same value.
- *
- * @param rewardId - The reward ID
- * @param timeBucket - The 30-minute time bucket (use getCurrentTimeBucket())
- * @returns Multiplier between MIN_RANDOM_MULTIPLIER and MAX_RANDOM_MULTIPLIER
+ * Range: [0.9, 1.1)
  */
 export function calculateRandomMultiplier(
   rewardId: string,
   timeBucket: number
 ): number {
-  // Combine reward ID and time bucket for deterministic variation
   const seed = `${rewardId}-${timeBucket}`;
   const hash = deterministicHash(seed);
-
-  // Map hash (0-1) to multiplier range
-  return MIN_RANDOM_MULTIPLIER + hash * (MAX_RANDOM_MULTIPLIER - MIN_RANDOM_MULTIPLIER);
+  return 0.9 + hash * 0.2;
 }
 
 /**
  * Calculate the full price for purchasing a reward.
  *
- * Formula:
- *   price = BASE_PRICE * damage * frequency * random
- *
- * @param reward - The reward to calculate price for
- * @param allRewards - All rewards for the user (for damage ranking)
- * @param purchasesInPeriod - Reward purchases in last 60 days
- * @param timeBucket - The time bucket for random element (use getCurrentTimeBucket())
- * @returns The price in tofu (rounded to integer)
+ * Formula: Cost = 100 * G * D_r * F_r * R
  */
 export function calculatePrice(
   reward: Reward,
   allRewards: Reward[],
   purchasesInPeriod: number = 0,
-  timeBucket: number = getCurrentTimeBucket()
+  timeBucket: number = getCurrentTimeBucket(),
+  generalDifficulty: number = 5.0,
 ): number {
   const damageMultiplier = calculateDamageMultiplier(reward, allRewards);
   const frequencyMultiplier = calculateFrequencyMultiplier(reward, purchasesInPeriod);
   const randomMultiplier = calculateRandomMultiplier(reward.id, timeBucket);
 
+  if (!isFinite(frequencyMultiplier)) {
+    return Infinity;
+  }
+
   const price =
-    BASE_PRICE *
+    100 *
+    generalDifficulty *
     damageMultiplier *
     frequencyMultiplier *
     randomMultiplier;
@@ -219,11 +182,12 @@ export function calculatePriceWithBreakdown(
   reward: Reward,
   allRewards: Reward[],
   purchasesInPeriod: number = 0,
-  timeBucket: number = getCurrentTimeBucket()
+  timeBucket: number = getCurrentTimeBucket(),
+  generalDifficulty: number = 5.0,
 ): {
   price: number;
   breakdown: {
-    base: number;
+    generalDifficulty: number;
     damageMultiplier: number;
     frequencyMultiplier: number;
     randomMultiplier: number;
@@ -233,19 +197,29 @@ export function calculatePriceWithBreakdown(
   const frequencyMultiplier = calculateFrequencyMultiplier(reward, purchasesInPeriod);
   const randomMultiplier = calculateRandomMultiplier(reward.id, timeBucket);
 
-  const price =
-    BASE_PRICE *
+  const price = !isFinite(frequencyMultiplier) ? Infinity :
+    100 *
+    generalDifficulty *
     damageMultiplier *
     frequencyMultiplier *
     randomMultiplier;
 
   return {
-    price: Math.round(price),
+    price: isFinite(price) ? Math.round(price) : Infinity,
     breakdown: {
-      base: BASE_PRICE,
+      generalDifficulty,
       damageMultiplier,
       frequencyMultiplier,
       randomMultiplier,
     },
   };
+}
+
+/**
+ * Get age in days from a created_at timestamp string.
+ */
+function getAgeDays(createdAt: string): number {
+  const created = new Date(createdAt);
+  const now = new Date();
+  return (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
 }

@@ -1,6 +1,7 @@
 import type { Reward } from "./reward";
 import { tradeStore } from "./store/tradeStore";
 import { balanceStore } from "./store/balanceStore";
+import { userStore } from "./store/userStore";
 import { calculatePrice, getCurrentTimeBucket } from "./rewardPriceCalculation";
 
 /**
@@ -29,12 +30,19 @@ export async function purchaseReward(
 
   // Calculate the price (positive value)
   const timeBucket = getCurrentTimeBucket();
+  const generalDifficulty = userStore.getGeneralDifficulty();
   const price = calculatePrice(
     reward,
     allRewards,
     purchasesInPeriod,
     timeBucket,
+    generalDifficulty,
   );
+
+  // Hard block if price is infinite (usage exceeded limit)
+  if (!isFinite(price)) {
+    throw new Error("This reward has reached its usage limit for the current period.");
+  }
 
   // Check if user has enough balance
   const currentBalance = balanceStore.getBalance();

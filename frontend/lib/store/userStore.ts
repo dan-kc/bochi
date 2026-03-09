@@ -8,9 +8,12 @@ const USER_STORAGE_KEY = "tofustash_user";
 interface UserState {
   email: string | null;
   isPremium: boolean;
+  generalDifficulty: number;
 }
 
 type Listener = () => void;
+
+const DEFAULT_GENERAL_DIFFICULTY = 5.0;
 
 // ============ Storage Helpers ============
 
@@ -22,10 +25,11 @@ function readStorageSync(): UserState {
       return {
         email: parsed.email ?? null,
         isPremium: parsed.isPremium ?? false,
+        generalDifficulty: parsed.generalDifficulty ?? DEFAULT_GENERAL_DIFFICULTY,
       };
     }
   }
-  return { email: null, isPremium: false };
+  return { email: null, isPremium: false, generalDifficulty: DEFAULT_GENERAL_DIFFICULTY };
 }
 
 async function readStorageAsync(): Promise<UserState> {
@@ -38,9 +42,10 @@ async function readStorageAsync(): Promise<UserState> {
       return {
         email: parsed.email ?? null,
         isPremium: parsed.isPremium ?? false,
+        generalDifficulty: parsed.generalDifficulty ?? DEFAULT_GENERAL_DIFFICULTY,
       };
     }
-    return { email: null, isPremium: false };
+    return { email: null, isPremium: false, generalDifficulty: DEFAULT_GENERAL_DIFFICULTY };
   }
 }
 
@@ -56,7 +61,7 @@ async function writeStorage(state: UserState): Promise<void> {
 // ============ Store Class ============
 
 class UserStore {
-  private state: UserState = { email: null, isPremium: false };
+  private state: UserState = { email: null, isPremium: false, generalDifficulty: DEFAULT_GENERAL_DIFFICULTY };
   private listeners = new Set<Listener>();
   private initialized = false;
 
@@ -85,6 +90,7 @@ class UserStore {
         this.state = {
           email: parsed.email ?? null,
           isPremium: parsed.isPremium ?? false,
+          generalDifficulty: parsed.generalDifficulty ?? DEFAULT_GENERAL_DIFFICULTY,
         };
         this.notify();
       }
@@ -122,12 +128,26 @@ class UserStore {
     return this.state.isPremium;
   }
 
+  getGeneralDifficulty(): number {
+    return this.state.generalDifficulty;
+  }
+
   // ============ Mutations ============
 
-  async setUser(email: string | null, isPremium: boolean): Promise<void> {
+  async setUser(email: string | null, isPremium: boolean, generalDifficulty?: number): Promise<void> {
     this.state = {
       email,
       isPremium,
+      generalDifficulty: generalDifficulty ?? this.state.generalDifficulty,
+    };
+    await writeStorage(this.state);
+    this.notify();
+  }
+
+  async setGeneralDifficulty(value: number): Promise<void> {
+    this.state = {
+      ...this.state,
+      generalDifficulty: value,
     };
     await writeStorage(this.state);
     this.notify();
@@ -139,7 +159,7 @@ class UserStore {
   }
 
   async clear(): Promise<void> {
-    this.state = { email: null, isPremium: false };
+    this.state = { email: null, isPremium: false, generalDifficulty: DEFAULT_GENERAL_DIFFICULTY };
     await writeStorage(this.state);
     this.notify();
   }
