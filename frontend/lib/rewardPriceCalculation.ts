@@ -99,7 +99,7 @@ export function calculateDamageMultiplier(
  * Calculate asymptotic frequency multiplier for reward costs.
  * F_r = 2 / (1 - r_eff^β) - 1, β=3
  * r_eff = w * r + (1 - w) * 0.5, where w = min(1, age_days / 30)
- * Range: [1, ∞), capped at 50. Returns Infinity when r_eff >= 1 (hard block).
+ * Range: [1, 50], clamped to MAX_FREQUENCY_MULTIPLIER.
  */
 export function calculateFrequencyMultiplier(
   reward: Reward,
@@ -123,9 +123,9 @@ export function calculateFrequencyMultiplier(
   const w = Math.min(1, ageDays / AGE_BLEND_DAYS);
   const rEff = w * r + (1 - w) * REWARD_NEUTRAL_RATIO;
 
-  // Hard block when r_eff >= 1
+  // Clamp r_eff below 1 so the formula stays finite
   if (rEff >= 1) {
-    return Infinity;
+    return MAX_FREQUENCY_MULTIPLIER;
   }
 
   const Fr = 2 / (1 - Math.pow(rEff, BETA)) - 1;
@@ -161,10 +161,6 @@ export function calculatePrice(
   const frequencyMultiplier = calculateFrequencyMultiplier(reward, purchasesInPeriod);
   const randomMultiplier = calculateRandomMultiplier(reward.id, timeBucket);
 
-  if (!isFinite(frequencyMultiplier)) {
-    return Infinity;
-  }
-
   const price =
     100 *
     generalDifficulty *
@@ -197,7 +193,7 @@ export function calculatePriceWithBreakdown(
   const frequencyMultiplier = calculateFrequencyMultiplier(reward, purchasesInPeriod);
   const randomMultiplier = calculateRandomMultiplier(reward.id, timeBucket);
 
-  const price = !isFinite(frequencyMultiplier) ? Infinity :
+  const price =
     100 *
     generalDifficulty *
     damageMultiplier *
@@ -205,7 +201,7 @@ export function calculatePriceWithBreakdown(
     randomMultiplier;
 
   return {
-    price: isFinite(price) ? Math.round(price) : Infinity,
+    price: Math.round(price),
     breakdown: {
       generalDifficulty,
       damageMultiplier,

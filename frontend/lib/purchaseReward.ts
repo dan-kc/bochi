@@ -39,11 +39,6 @@ export async function purchaseReward(
     generalDifficulty,
   );
 
-  // Hard block if price is infinite (usage exceeded limit)
-  if (!isFinite(price)) {
-    throw new Error("This reward has reached its usage limit for the current period.");
-  }
-
   // Check if user has enough balance
   const currentBalance = balanceStore.getBalance();
   if (currentBalance < price) {

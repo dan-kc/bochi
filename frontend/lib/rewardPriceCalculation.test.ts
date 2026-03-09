@@ -149,18 +149,18 @@ describe("rewardPriceCalculation", () => {
       expect(multiplier).toBeLessThan(10);
     });
 
-    test("returns Infinity when r_eff >= 1 (hard block)", () => {
+    test("clamps to max when r_eff >= 1", () => {
       const reward = createReward({ max_daily_frequency: 100 });
       // Expected = 60, actual = 60, r = 1.0, r_eff = 1.0
       const multiplier = calculateFrequencyMultiplier(reward, 60, 60);
-      expect(multiplier).toBe(Infinity);
+      expect(multiplier).toBe(50);
     });
 
-    test("returns Infinity when over limit", () => {
+    test("clamps to max when over limit", () => {
       const reward = createReward({ max_daily_frequency: 50 });
       // Expected = 30, actual = 60, r = 2.0
       const multiplier = calculateFrequencyMultiplier(reward, 60, 60);
-      expect(multiplier).toBe(Infinity);
+      expect(multiplier).toBe(50);
     });
 
     test("caps at 50 for very high but sub-1 r_eff", () => {
@@ -222,11 +222,12 @@ describe("rewardPriceCalculation", () => {
       expect(price).toBeLessThan(Math.round(100 * 5 * 0.5 * 1.1) + 1);
     });
 
-    test("returns Infinity when frequency multiplier is Infinity", () => {
+    test("returns capped price when r_eff >= 1", () => {
       const reward = createReward({ max_daily_frequency: 100 });
-      // r_eff >= 1 -> Infinity
+      // r_eff >= 1 -> frequency capped at 50
       const price = calculatePrice(reward, [reward], 60, 12345, 5);
-      expect(price).toBe(Infinity);
+      expect(isFinite(price)).toBe(true);
+      expect(price).toBeGreaterThan(0);
     });
 
     test("generalDifficulty scales price linearly", () => {
@@ -271,11 +272,11 @@ describe("rewardPriceCalculation", () => {
       expect(result.price).toBe(Math.round(calculated));
     });
 
-    test("returns Infinity price when frequency is Infinity", () => {
+    test("returns capped price when r_eff >= 1", () => {
       const reward = createReward({ max_daily_frequency: 100 });
       const result = calculatePriceWithBreakdown(reward, [reward], 60, 12345, 5);
-      expect(result.price).toBe(Infinity);
-      expect(result.breakdown.frequencyMultiplier).toBe(Infinity);
+      expect(isFinite(result.price)).toBe(true);
+      expect(result.breakdown.frequencyMultiplier).toBe(50);
     });
   });
 

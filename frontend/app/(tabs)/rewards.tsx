@@ -114,15 +114,15 @@ export default function Rewards() {
     async (reward: Reward) => {
       try {
         const price = await purchaseReward(reward);
-        // Optionally show a success message
+        // Recalculate prices since purchase count changed
+        updatePrices(rewards);
         Alert.alert("Purchased!", `Spent ${price} tofu on "${reward.name}"`);
       } catch (error) {
-        // Show error if insufficient balance
         const message = error instanceof Error ? error.message : "Failed to purchase reward";
         Alert.alert("Cannot Purchase", message);
       }
     },
-    [purchaseReward],
+    [purchaseReward, updatePrices, rewards],
   );
 
   const handleRerank = useCallback(() => {
