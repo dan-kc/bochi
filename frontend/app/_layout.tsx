@@ -6,6 +6,7 @@ import { PriceUpdateProvider } from "@/lib/PriceUpdateContext";
 import { RewardProvider } from "@/lib/RewardContext";
 import { RewardPriceUpdateProvider } from "@/lib/RewardPriceUpdateContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
+import { SyncToast } from "@/components/SyncToast";
 import "../global.css";
 
 export default function RootLayout() {
@@ -18,6 +19,7 @@ export default function RootLayout() {
               <RewardPriceUpdateProvider>
                 <RewardProvider>
                   <Slot />
+                  <SyncToast />
                 </RewardProvider>
               </RewardPriceUpdateProvider>
             </HabitProvider>

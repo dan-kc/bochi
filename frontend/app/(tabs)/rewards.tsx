@@ -7,7 +7,6 @@ import { useRewardPriceUpdate } from "@/lib/RewardPriceUpdateContext";
 import { RewardItem } from "@/components/RewardItem";
 import { RewardForm } from "@/components/RewardForm";
 import { DamageRanker } from "@/components/DamageRanker";
-import { SyncStatusIcon } from "@/components/SyncStatusIcon";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { SortDropdown } from "@/components/SortDropdown";
 import type { Reward, RewardInput } from "@/lib/reward";
@@ -152,10 +151,7 @@ export default function Rewards() {
         <View className="p-4 border-b border-border">
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-2xl font-bold text-foreground">Rewards</Text>
-            <View className="flex-row items-center gap-2">
-              <BalanceDisplay />
-              <SyncStatusIcon />
-            </View>
+            <BalanceDisplay />
           </View>
           <View className="flex-row justify-end items-center">
             <SortDropdown

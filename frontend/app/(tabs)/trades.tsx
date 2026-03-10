@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { LOCAL_USER_ID, useTrades } from "@/lib/store";
 import { habitStore } from "@/lib/store/habitStore";
 import { rewardStore } from "@/lib/store/rewardStore";
-import { SyncStatusIcon } from "@/components/SyncStatusIcon";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { SortDropdown } from "@/components/SortDropdown";
 import { FilterChips } from "@/components/FilterChips";
@@ -66,10 +65,7 @@ export default function Trades() {
         <View className="p-4 border-b border-border">
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-2xl font-bold text-foreground">Trades</Text>
-            <View className="flex-row items-center gap-2">
-              <BalanceDisplay />
-              <SyncStatusIcon />
-            </View>
+            <BalanceDisplay />
           </View>
           <View className="flex-row justify-between items-center">
             <FilterChips

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import ProfileCard from "@/components/ProfileCard";
 import { useAuth } from "@/lib/AuthContext";
-import { useSync } from "@/lib/sync";
+import { useSync, useSyncOptional } from "@/lib/sync";
 import { useTheme } from "@/lib/ThemeContext";
 import { userStore } from "@/lib/store/userStore";
 import { markGeneralDifficultyDirty } from "@/lib/sync/syncStorage";
@@ -12,10 +12,29 @@ import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem";
 import { AccountModal } from "@/components/settings/AccountModal";
 import { GeneralDifficultyModal } from "@/components/settings/GeneralDifficultyModal";
 
+function formatSyncStatus(syncStatus: string, lastSyncTime: string | null, syncError: string | null): string {
+  if (syncStatus === "syncing") return "Syncing...";
+  if (syncStatus === "error") return syncError ?? "Sync failed";
+  if (lastSyncTime) {
+    const date = new Date(lastSyncTime);
+    const now = new Date();
+    const isToday =
+      date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    }
+    return date.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+  return "Not synced";
+}
+
 export default function Settings() {
   const { user, logout, isAnonymous } = useAuth();
   const { triggerSync } = useSync();
   const { colorScheme, toggleTheme } = useTheme();
+  const sync = useSyncOptional();
   const userState = useSyncExternalStore(
     userStore.subscribe,
     userStore.getSnapshot,
@@ -111,6 +130,20 @@ export default function Settings() {
             onPress={() => setShowDifficultyModal(true)}
           />
         </View>
+
+        {/* Sync Status */}
+        {sync && (
+          <View className="bg-surface rounded-xl mt-4">
+            <SettingsMenuItem
+              icon={sync.syncStatus === "error" ? "cloud-offline" : "cloud-done-outline"}
+              iconColor={sync.syncStatus === "error" ? "#f54900" : "#197291"}
+              label="Sync"
+              value={formatSyncStatus(sync.syncStatus, sync.lastSyncTime, sync.syncError)}
+              onPress={triggerSync}
+              showChevron={false}
+            />
+          </View>
+        )}
 
         <Text className="text-muted mt-4">App settings and preferences.</Text>
       </View>
