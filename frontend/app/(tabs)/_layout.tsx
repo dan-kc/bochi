@@ -14,7 +14,9 @@ export default function TabsLayout() {
     return (
       <View className="flex-1 bg-background">
         <Navbar />
-        <Slot />
+        <View className="flex-1 max-w-7xl w-full mx-auto">
+          <Slot />
+        </View>
       </View>
     );
   }

@@ -21,3 +21,22 @@
   --color-border: #2e2d33;
   --color-muted: #9e9890;
 }
+
+/* Subtle scrollbar styling (web only) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+}

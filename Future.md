@@ -8,3 +8,4 @@ Refactor the frontend codebase to make it more DRY and using Functional programm
 
 ---
 
+
