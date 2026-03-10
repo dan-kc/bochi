@@ -1,15 +1,18 @@
 import { Tabs, Slot } from "expo-router";
 import { Platform, useWindowDimensions, View } from "react-native";
+import { useColorScheme } from "nativewind";
 import Navbar from "../../components/Navbar";
 
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isDesktop = isWeb && width >= 1024;
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
 
   if (isDesktop) {
     return (
-      <View className="flex-1">
+      <View className="flex-1 bg-background">
         <Navbar />
         <Slot />
       </View>
@@ -19,8 +22,12 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#3b82f6",
-        tabBarInactiveTintColor: "#6b7280",
+        tabBarActiveTintColor: "#f54900",
+        tabBarInactiveTintColor: isDark ? "#9e9890" : "#7d7888",
+        tabBarStyle: {
+          backgroundColor: isDark ? "#1b1a1f" : "#fffeff",
+          borderTopColor: isDark ? "#2e2d33" : "#e5e3e7",
+        },
         headerShown: false,
       }}
     >

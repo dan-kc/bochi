@@ -14,7 +14,7 @@ export function PriceDisplay({ habitId }: PriceDisplayProps) {
   if (!priceData) return null;
 
   return (
-    <Text className="text-base font-bold text-amber-700">
+    <Text className="text-base font-bold text-accent">
       {priceData.current} T
     </Text>
   );

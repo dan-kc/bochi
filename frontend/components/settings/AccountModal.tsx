@@ -44,12 +44,12 @@ export function AccountModal({
           onPress={onClose}
         >
           <Pressable
-            className="bg-zinc-800 rounded-t-2xl pb-8"
+            className="bg-background rounded-t-2xl pb-8"
             onPress={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <View className="p-4 border-b border-zinc-700">
-              <Text className="text-lg font-semibold text-white text-center">
+            <View className="p-4 border-b border-border">
+              <Text className="text-lg font-semibold text-foreground text-center">
                 Account
               </Text>
             </View>
@@ -57,24 +57,24 @@ export function AccountModal({
             {/* Email Row */}
             <Pressable
               onPress={() => setShowUpdateEmail(true)}
-              className="flex-row items-center px-4 py-4 border-b border-zinc-700"
+              className="flex-row items-center px-4 py-4 border-b border-border"
             >
-              <Text className="text-gray-400 text-base">Email</Text>
+              <Text className="text-muted text-base">Email</Text>
               <View className="flex-1" />
-              <Text className="text-white text-base mr-2" numberOfLines={1}>
+              <Text className="text-foreground text-base mr-2" numberOfLines={1}>
                 {currentEmail}
               </Text>
-              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+              <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
             </Pressable>
 
             {/* Password Row */}
             <View className="px-4 py-4">
-              <Text className="text-gray-400 text-base mb-3">Password</Text>
+              <Text className="text-muted text-base mb-3">Password</Text>
               <Pressable
                 onPress={() => setShowChangePassword(true)}
-                className="bg-zinc-700 rounded-xl py-4 items-center"
+                className="bg-surface rounded-xl py-4 items-center"
               >
-                <Text className="text-white text-base">Change Password</Text>
+                <Text className="text-foreground text-base">Change Password</Text>
               </Pressable>
             </View>
           </Pressable>

@@ -147,11 +147,11 @@ export default function Rewards() {
   const keyExtractor = useCallback((item: Reward) => item.id, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
       <View className="flex-1">
-        <View className="p-4 border-b border-gray-200">
+        <View className="p-4 border-b border-border">
           <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-2xl font-bold text-gray-900">Rewards</Text>
+            <Text className="text-2xl font-bold text-foreground">Rewards</Text>
             <View className="flex-row items-center gap-2">
               <BalanceDisplay />
               <SyncStatusIcon />
@@ -168,7 +168,7 @@ export default function Rewards() {
 
         {displayRewards.length === 0 ? (
           <View className="flex-1 items-center justify-center p-4">
-            <Text className="text-gray-500 text-center mb-4">
+            <Text className="text-muted text-center mb-4">
               No rewards yet. Add your first reward to get started.
             </Text>
           </View>
@@ -183,10 +183,10 @@ export default function Rewards() {
           />
         )}
 
-        <View className="p-4 border-t border-gray-200">
+        <View className="p-4 border-t border-border">
           <Pressable
             onPress={handleAddReward}
-            className="bg-red-500 py-3 px-6 rounded-lg items-center"
+            className="bg-accent py-3 px-6 rounded-lg items-center"
           >
             <Text className="text-white font-semibold text-base">Add Reward</Text>
           </Pressable>
@@ -198,7 +198,7 @@ export default function Rewards() {
           presentationStyle="pageSheet"
           onRequestClose={handleCancel}
         >
-          <SafeAreaView className="flex-1 bg-white">
+          <SafeAreaView className="flex-1 bg-background">
             <RewardForm
               reward={selectedReward}
               userId={userId}
@@ -217,7 +217,7 @@ export default function Rewards() {
           presentationStyle="pageSheet"
           onRequestClose={handleRankSkip}
         >
-          <SafeAreaView className="flex-1 bg-white">
+          <SafeAreaView className="flex-1 bg-background">
             {rewardToRank && (
               <DamageRanker
                 reward={rewardToRank}

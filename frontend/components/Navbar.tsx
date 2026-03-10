@@ -12,9 +12,9 @@ export default function Navbar() {
   ] as const;
 
   return (
-    <View className="bg-white border-b border-gray-200 px-6 py-4">
+    <View className="bg-background border-b border-border px-6 py-4">
       <View className="flex-row justify-between items-center max-w-7xl mx-auto w-full">
-        <Text className="text-xl font-bold text-gray-900">TOFUSTASH</Text>
+        <Text className="text-xl font-bold text-foreground">TOFUSTASH</Text>
         <View className="flex-row gap-6">
           {navItems.map((item) => {
             const isActive = pathname === item.path;
@@ -25,10 +25,10 @@ export default function Navbar() {
                     <Text
                       className={`text-base font-medium ${
                         isActive
-                          ? "text-blue-500"
+                          ? "text-accent"
                           : hovered
-                            ? "text-gray-900"
-                            : "text-gray-600"
+                            ? "text-foreground"
+                            : "text-muted"
                       }`}
                     >
                       {item.name}

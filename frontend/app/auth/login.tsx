@@ -41,30 +41,19 @@ export default function Login() {
     setIsLoading(true);
     try {
       if (mergeHabits && user) {
-        // Prepare habits for merge BEFORE login
-        // This must happen before login() because login() triggers an immediate sync
-        // via SyncProvider's useEffect. If we don't prepare first, the sync will:
-        // 1. Use the old lastSyncTime (missing existing habits on server)
-        // 2. Not push local habits (they won't be marked dirty yet)
         const habitIds = await habitStore.updateAllHabitsUserId("");
 
-        // Clear difficulty ranks for merged habits - they need to be re-ranked
-        // in the context of the existing account's habits
         for (const habitId of habitIds) {
           await habitStore.updateHabit(habitId, { difficulty_rank: null });
         }
 
         await markHabitsDirty(habitIds);
-        await clearLastSyncTime(); // Force full sync
+        await clearLastSyncTime();
 
-        // Now login - this triggers sync with correct state
         await login(loginEmail, loginPassword);
 
-        // Wait for sync to complete before navigating
-        // This ensures habits are pushed to the server
         await waitForSync();
       } else {
-        // Clear local habits before login
         await habitStore.clearAllHabits();
         await clearAllDirtyFlags();
         await clearLastSyncTime();
@@ -101,15 +90,12 @@ export default function Login() {
       return;
     }
 
-    // Check if user is anonymous and has local habits
     if (isAnonymous && localHabitCount > 0) {
-      // Show merge dialog
       setPendingLogin({ email, password });
       setShowMergeModal(true);
       return;
     }
 
-    // No local habits or not anonymous - proceed with login
     await performLogin(email, password, false);
   };
 
@@ -119,23 +105,23 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <View className="flex-1 p-6 justify-center max-w-md mx-auto w-full">
-          <Text className="text-3xl font-bold text-gray-900 mb-2">
+          <Text className="text-3xl font-bold text-foreground mb-2">
             Welcome back
           </Text>
-          <Text className="text-gray-600 mb-8">
+          <Text className="text-muted mb-8">
             Log in to your Tofustash account
           </Text>
 
           {errors.length > 0 && (
-            <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
               {errors.map((error, index) => (
-                <Text key={index} className="text-red-600 text-sm">
+                <Text key={index} className="text-accent text-sm">
                   {error}
                 </Text>
               ))}
@@ -144,12 +130,13 @@ export default function Login() {
 
           <View className="gap-4">
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
+              <Text className="text-sm font-medium text-muted mb-1">
                 Email
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
                 placeholder="you@example.com"
+                placeholderTextColor="var(--color-muted)"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -160,12 +147,13 @@ export default function Login() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
+              <Text className="text-sm font-medium text-muted mb-1">
                 Password
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
                 placeholder="Enter your password"
+                placeholderTextColor="var(--color-muted)"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -177,7 +165,7 @@ export default function Login() {
             <Pressable
               onPress={handleLogin}
               disabled={isLoading}
-              className="bg-blue-500 py-3 px-6 rounded-lg items-center mt-2"
+              className="bg-accent py-3 px-6 rounded-lg items-center mt-2"
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
@@ -190,12 +178,12 @@ export default function Login() {
           </View>
 
           <View className="flex-row justify-center mt-6 gap-1">
-            <Text className="text-gray-600">Don&apos;t have an account?</Text>
+            <Text className="text-muted">Don&apos;t have an account?</Text>
             <Link href="/auth/register" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`font-semibold ${hovered ? "text-blue-700" : "text-blue-500"}`}
+                    className={`font-semibold ${hovered ? "text-accent" : "text-accent"}`}
                   >
                     Register
                   </Text>
@@ -209,7 +197,7 @@ export default function Login() {
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`${hovered ? "text-gray-900" : "text-gray-500"}`}
+                    className={`${hovered ? "text-foreground" : "text-muted"}`}
                   >
                     Back to Settings
                   </Text>
@@ -231,11 +219,11 @@ export default function Login() {
         }}
       >
         <View className="flex-1 bg-black/50 justify-center items-center p-6">
-          <View className="bg-white rounded-2xl p-6 max-w-sm w-full">
-            <Text className="text-xl font-bold text-gray-900 mb-2">
+          <View className="bg-background rounded-2xl p-6 max-w-sm w-full">
+            <Text className="text-xl font-bold text-foreground mb-2">
               Merge Your Habits?
             </Text>
-            <Text className="text-gray-600 mb-4">
+            <Text className="text-muted mb-4">
               You have {localHabitCount} habit{localHabitCount !== 1 ? "s" : ""} on
               this device. Would you like to add them to your account?
             </Text>
@@ -244,7 +232,7 @@ export default function Login() {
               <Pressable
                 onPress={() => handleMergeChoice(true)}
                 disabled={isLoading}
-                className="bg-blue-500 py-3 px-6 rounded-lg items-center"
+                className="bg-accent py-3 px-6 rounded-lg items-center"
               >
                 {isLoading ? (
                   <ActivityIndicator color="white" />
@@ -258,9 +246,9 @@ export default function Login() {
               <Pressable
                 onPress={() => handleMergeChoice(false)}
                 disabled={isLoading}
-                className="border border-gray-300 py-3 px-6 rounded-lg items-center"
+                className="border border-border py-3 px-6 rounded-lg items-center"
               >
-                <Text className="text-gray-700 font-semibold">
+                <Text className="text-foreground font-semibold">
                   No, discard them
                 </Text>
               </Pressable>
@@ -273,7 +261,7 @@ export default function Login() {
                 disabled={isLoading}
                 className="py-2 items-center"
               >
-                <Text className="text-gray-500">Cancel</Text>
+                <Text className="text-muted">Cancel</Text>
               </Pressable>
             </View>
           </View>

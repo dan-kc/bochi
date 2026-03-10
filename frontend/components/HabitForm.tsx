@@ -51,6 +51,22 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
+function formatFrequencySummary(frequency: number | null): string | null {
+  if (frequency == null) return null;
+  if (frequency >= 1) {
+    const formatted = frequency.toFixed(2).replace(/\.?0+$/, "");
+    return `${formatted}/day`;
+  }
+  const weekly = frequency * 7;
+  if (weekly >= 1) {
+    const formatted = weekly.toFixed(2).replace(/\.?0+$/, "");
+    return `${formatted}/week`;
+  }
+  const monthly = frequency * 30;
+  const formatted = monthly.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}/month`;
+}
+
 export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank, onComplete }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -59,6 +75,7 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [showMore, setShowMore] = useState(false);
 
   // Tag selection state
   const [showTagModal, setShowTagModal] = useState(false);
@@ -78,7 +95,6 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
 
       if (habit.min_daily_frequency !== null) {
         const dailyFreq = habit.min_daily_frequency;
-        // Determine best period to display based on the stored daily frequency
         let bestPeriod: FrequencyPeriod = "day";
         let displayValue = dailyFreq;
 
@@ -184,25 +200,34 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
     }
   };
 
+  const frequencySummary = habit ? formatFrequencySummary(habit.min_daily_frequency) : null;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1"
     >
       <ScrollView className="flex-1 p-4">
+        {/* Header */}
         <View className="flex-row items-center justify-between mb-6">
-          <Text className="text-2xl font-bold text-gray-900">
-            {isEditing ? "Edit" : "New"} Habit
-          </Text>
-          <View className="bg-purple-100 px-3 py-1 rounded-full">
-            <Text className="text-purple-700 font-medium text-sm">Habit</Text>
-          </View>
+          <Pressable onPress={onCancel} disabled={isLoading}>
+            <Ionicons name="close" size={28} color="var(--color-muted)" />
+          </Pressable>
+          {isEditing && (
+            <Pressable onPress={handleSave} disabled={isLoading}>
+              {isSaving ? (
+                <ActivityIndicator color="var(--color-accent-secondary)" />
+              ) : (
+                <Text className="text-accent-secondary font-semibold text-base">Save</Text>
+              )}
+            </Pressable>
+          )}
         </View>
 
         {allErrors.length > 0 && (
-          <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
             {allErrors.map((error, index) => (
-              <Text key={index} className="text-red-600 text-sm">
+              <Text key={index} className="text-accent text-sm">
                 {error}
               </Text>
             ))}
@@ -210,187 +235,198 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
         )}
 
         <View className="gap-4">
-          <View>
-            <Text className="text-sm font-medium text-gray-700 mb-1">
-              Name *
-            </Text>
-            <TextInput
-              className={`border rounded-lg px-4 py-3 text-base ${errors.name ? "border-red-500" : "border-gray-300"}`}
-              placeholder="Habit name"
-              value={name}
-              onChangeText={setName}
-              editable={!isLoading}
-              maxLength={100}
-            />
-            <Text className="text-xs text-gray-500 mt-1">
-              {name.length}/100 characters
-            </Text>
-          </View>
+          {/* Name input */}
+          <TextInput
+            className={`border-b px-1 py-3 text-lg text-foreground ${errors.name ? "border-accent" : "border-border"}`}
+            placeholder="Habit name"
+            placeholderTextColor="var(--color-muted)"
+            value={name}
+            onChangeText={setName}
+            editable={!isLoading}
+            maxLength={100}
+          />
 
-          <View>
-            <Text className="text-sm font-medium text-gray-700 mb-1">
-              Description
-            </Text>
-            <TextInput
-              className={`border rounded-lg px-4 py-3 text-base ${errors.description ? "border-red-500" : "border-gray-300"}`}
-              placeholder="Habit description"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-              style={{ minHeight: 100, textAlignVertical: "top" }}
-              editable={!isLoading}
-              maxLength={10000}
-            />
-            <Text className="text-xs text-gray-500 mt-1">
-              {description.length}/10,000 characters
-            </Text>
-          </View>
+          {/* Description input */}
+          <TextInput
+            className={`border-b px-1 py-3 text-base text-foreground ${errors.description ? "border-accent" : "border-border"}`}
+            placeholder="Description (optional)"
+            placeholderTextColor="var(--color-muted)"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={2}
+            style={{ textAlignVertical: "top" }}
+            editable={!isLoading}
+            maxLength={10000}
+          />
 
-          <View>
-            <Text className="text-sm font-medium text-gray-700 mb-1">
-              Frequency
-            </Text>
-            <View className="flex-row gap-2 mb-2">
-              <TextInput
-                className={`flex-1 border rounded-lg px-4 py-3 text-base ${errors.min_daily_frequency ? "border-red-500" : "border-gray-300"}`}
-                placeholder="e.g., 1, 2, 3"
-                value={minDailyFrequency}
-                onChangeText={setMinDailyFrequency}
-                keyboardType="decimal-pad"
-                editable={!isLoading}
-              />
-              <Text className="self-center text-gray-500">per</Text>
-            </View>
-            <View className="flex-row gap-2">
-              {(["day", "week", "month"] as const).map((period) => (
-                <Pressable
-                  key={period}
-                  onPress={() => setFrequencyPeriod(period)}
-                  disabled={isLoading}
-                  className={`flex-1 py-2 px-3 rounded-lg items-center border ${
-                    frequencyPeriod === period
-                      ? "bg-purple-500 border-purple-500"
-                      : "bg-white border-gray-300"
-                  }`}
+          {/* Show more / summary line */}
+          {isEditing && !showMore && (frequencySummary || habitTags.length > 0) && (
+            <View className="flex-row flex-wrap items-center gap-2">
+              {frequencySummary && (
+                <Text className="text-accent-secondary text-sm">{frequencySummary}</Text>
+              )}
+              {habitTags.map((tag) => (
+                <View
+                  key={tag.id}
+                  className="px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: tag.color_hex + "30" }}
                 >
-                  <Text
-                    className={`font-medium ${
-                      frequencyPeriod === period ? "text-white" : "text-gray-700"
-                    }`}
-                  >
-                    {period.charAt(0).toUpperCase() + period.slice(1)}
+                  <Text className="text-xs font-medium" style={{ color: tag.color_hex }}>
+                    {tag.name}
                   </Text>
-                </Pressable>
+                </View>
               ))}
-            </View>
-            <Text className="text-xs text-gray-500 mt-2">
-              {frequencyPeriod === "day" && "Times per day (e.g., 1 = once daily, 2 = twice daily)"}
-              {frequencyPeriod === "week" && "Times per week (e.g., 3 = three times a week)"}
-              {frequencyPeriod === "month" && "Times per month (e.g., 2 = twice a month)"}
-            </Text>
-          </View>
-
-          {/* Tags Section (only for editing) */}
-          {isEditing && habit && (
-            <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
-                Tags
-              </Text>
-              <View className="flex-row flex-wrap gap-2 mb-2">
-                {habitTags.length === 0 ? (
-                  <Text className="text-gray-500 text-sm">No tags assigned</Text>
-                ) : (
-                  habitTags.map((tag) => (
-                    <View
-                      key={tag.id}
-                      className="px-3 py-1.5 rounded-full flex-row items-center"
-                      style={{ backgroundColor: tag.color_hex + "30" }}
-                    >
-                      <Text
-                        className="text-sm font-medium"
-                        style={{ color: tag.color_hex }}
-                      >
-                        {tag.name}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </View>
-              <Pressable
-                onPress={() => setShowTagModal(true)}
-                disabled={isLoading}
-                className="border border-gray-300 py-2 px-4 rounded-lg flex-row items-center justify-center"
-              >
-                <Ionicons name="pricetags-outline" size={16} color="#6b7280" />
-                <Text className="text-gray-600 ml-2">Manage Tags</Text>
-              </Pressable>
             </View>
           )}
 
-          <View className="flex-row gap-3 mt-4">
-            <Pressable
-              onPress={onCancel}
-              disabled={isLoading}
-              className="flex-1 border border-gray-300 py-3 px-6 rounded-lg items-center"
-            >
-              <Text className="text-gray-700 font-semibold text-base">
-                Cancel
-              </Text>
-            </Pressable>
+          <Pressable
+            onPress={() => setShowMore(!showMore)}
+            className="flex-row items-center gap-1"
+          >
+            <Text className="text-muted text-sm">
+              {showMore ? "Show less" : "Show more"}
+            </Text>
+            <Ionicons
+              name={showMore ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="var(--color-muted)"
+            />
+          </Pressable>
+
+          {/* Collapsible section */}
+          {showMore && (
+            <View className="gap-4">
+              {/* Frequency */}
+              <View>
+                <Text className="text-sm font-medium text-muted mb-1">
+                  Frequency
+                </Text>
+                <View className="flex-row gap-2 mb-2">
+                  <TextInput
+                    className={`flex-1 border rounded-lg px-4 py-3 text-base text-foreground bg-surface ${errors.min_daily_frequency ? "border-accent" : "border-border"}`}
+                    placeholder="e.g., 1, 2, 3"
+                    placeholderTextColor="var(--color-muted)"
+                    value={minDailyFrequency}
+                    onChangeText={setMinDailyFrequency}
+                    keyboardType="decimal-pad"
+                    editable={!isLoading}
+                  />
+                  <Text className="self-center text-muted">per</Text>
+                </View>
+                <View className="flex-row gap-2">
+                  {(["day", "week", "month"] as const).map((period) => (
+                    <Pressable
+                      key={period}
+                      onPress={() => setFrequencyPeriod(period)}
+                      disabled={isLoading}
+                      className={`flex-1 py-2 px-3 rounded-lg items-center border ${
+                        frequencyPeriod === period
+                          ? "bg-accent border-accent"
+                          : "bg-surface border-border"
+                      }`}
+                    >
+                      <Text
+                        className={`font-medium ${
+                          frequencyPeriod === period ? "text-white" : "text-foreground"
+                        }`}
+                      >
+                        {period.charAt(0).toUpperCase() + period.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Tags Section (only for editing) */}
+              {isEditing && habit && (
+                <View>
+                  <Text className="text-sm font-medium text-muted mb-2">
+                    Tags
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2 mb-2">
+                    {habitTags.length === 0 ? (
+                      <Text className="text-muted text-sm">No tags assigned</Text>
+                    ) : (
+                      habitTags.map((tag) => (
+                        <View
+                          key={tag.id}
+                          className="px-3 py-1.5 rounded-full flex-row items-center"
+                          style={{ backgroundColor: tag.color_hex + "30" }}
+                        >
+                          <Text
+                            className="text-sm font-medium"
+                            style={{ color: tag.color_hex }}
+                          >
+                            {tag.name}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                  <Pressable
+                    onPress={() => setShowTagModal(true)}
+                    disabled={isLoading}
+                    className="border border-border py-2 px-4 rounded-lg flex-row items-center justify-center"
+                  >
+                    <Ionicons name="pricetags-outline" size={16} color="var(--color-muted)" />
+                    <Text className="text-muted ml-2">Manage Tags</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Create button (only in create mode) */}
+          {!isEditing && (
             <Pressable
               onPress={handleSave}
               disabled={isLoading}
-              className="flex-1 py-3 px-6 rounded-lg items-center bg-purple-500"
+              className="bg-accent py-3 px-6 rounded-lg items-center mt-4"
             >
               {isSaving ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="text-white font-semibold text-base">
-                  {isEditing ? "Save" : "Create"}
-                </Text>
+                <Text className="text-white font-semibold text-base">Create</Text>
               )}
             </Pressable>
-          </View>
+          )}
 
+          {/* Complete button - hero action (only in edit mode) */}
           {isEditing && onComplete && habit && (
-            <Pressable
-              onPress={() => onComplete(habit)}
-              disabled={isLoading}
-              className="bg-green-600 py-3 px-6 rounded-lg items-center mt-2"
-            >
-              <Text className="text-white font-semibold text-base">
-                Complete
-              </Text>
-            </Pressable>
-          )}
-
-          {isEditing && onRerank && (
-            <Pressable
-              onPress={onRerank}
-              disabled={isLoading}
-              className="border border-orange-300 py-3 px-6 rounded-lg items-center mt-2"
-            >
-              <Text className="text-orange-600 font-semibold text-base">
-                {habit?.difficulty_rank ? "Re-rank Difficulty" : "Set Difficulty"}
-              </Text>
-            </Pressable>
-          )}
-
-          {isEditing && onDelete && (
-            <Pressable
-              onPress={handleDelete}
-              disabled={isLoading}
-              className="border border-red-300 py-3 px-6 rounded-lg items-center mt-2"
-            >
-              {isDeleting ? (
-                <ActivityIndicator color="#dc2626" />
-              ) : (
-                <Text className="text-red-600 font-semibold text-base">
-                  Delete Habit
+            <View className="mt-6">
+              <Pressable
+                onPress={() => onComplete(habit)}
+                disabled={isLoading}
+                className="bg-accent py-4 px-6 rounded-lg items-center"
+              >
+                <Text className="text-white font-bold text-lg">
+                  Complete
                 </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Bottom actions (edit mode only) */}
+          {isEditing && (
+            <View className="flex-row justify-between items-center mt-4">
+              {onRerank && (
+                <Pressable onPress={onRerank} disabled={isLoading}>
+                  <Text className="text-muted text-sm">
+                    {habit?.difficulty_rank ? "Re-rank difficulty" : "Set difficulty"}
+                  </Text>
+                </Pressable>
               )}
-            </Pressable>
+              {onDelete && (
+                <Pressable onPress={handleDelete} disabled={isLoading}>
+                  {isDeleting ? (
+                    <ActivityIndicator color="var(--color-accent)" size="small" />
+                  ) : (
+                    <Text className="text-muted text-sm">Delete</Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
           )}
         </View>
       </ScrollView>

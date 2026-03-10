@@ -11,15 +11,15 @@ interface TradeItemProps {
 export function TradeItem({ type, name, amount, date }: TradeItemProps) {
   const isSold = type === "Sold";
   const sign = isSold ? "+" : "-";
-  const colorClass = isSold ? "text-green-600" : "text-red-600";
+  const colorClass = isSold ? "text-accent-secondary" : "text-accent";
 
   return (
-    <View className="border rounded-lg p-4 mb-3 bg-white border-gray-200">
-      <FadingText numberOfLines={1} className="text-base font-medium text-gray-900">
+    <View className="border-b border-border py-4 px-2">
+      <FadingText numberOfLines={1} className="text-base font-medium text-foreground">
         {`${type} ${name}`}
       </FadingText>
       <View className="flex-row justify-between items-center mt-1">
-        <Text className="text-sm text-gray-500">{date}</Text>
+        <Text className="text-sm text-muted">{date}</Text>
         <Text className={`text-sm font-semibold ${colorClass}`}>
           {sign}{Math.abs(amount)}
         </Text>

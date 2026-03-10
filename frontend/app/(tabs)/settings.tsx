@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import ProfileCard from "@/components/ProfileCard";
 import { useAuth } from "@/lib/AuthContext";
 import { useSync } from "@/lib/sync";
+import { useTheme } from "@/lib/ThemeContext";
 import { userStore } from "@/lib/store/userStore";
 import { markGeneralDifficultyDirty } from "@/lib/sync/syncStorage";
 import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem";
@@ -14,6 +15,7 @@ import { GeneralDifficultyModal } from "@/components/settings/GeneralDifficultyM
 export default function Settings() {
   const { user, logout, isAnonymous } = useAuth();
   const { triggerSync } = useSync();
+  const { colorScheme, toggleTheme } = useTheme();
   const userState = useSyncExternalStore(
     userStore.subscribe,
     userStore.getSnapshot,
@@ -55,14 +57,14 @@ export default function Settings() {
   const isLoggedIn = user && !isAnonymous && userState.email;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-background">
       <View className="flex-1 p-4">
-        <Text className="text-2xl font-bold mb-4">Settings</Text>
+        <Text className="text-2xl font-bold text-foreground mb-4">Settings</Text>
 
         {isLoggedIn ? (
           <>
             {/* Account Settings Menu */}
-            <View className="bg-zinc-800 rounded-xl mb-4">
+            <View className="bg-surface rounded-xl mb-4">
               <SettingsMenuItem
                 icon="person-outline"
                 label="Account"
@@ -89,8 +91,19 @@ export default function Settings() {
           />
         )}
 
+        {/* Appearance */}
+        <View className="bg-surface rounded-xl mt-4">
+          <SettingsMenuItem
+            icon={colorScheme === "dark" ? "moon" : "sunny"}
+            label="Appearance"
+            value={colorScheme === "dark" ? "Dark" : "Light"}
+            onPress={toggleTheme}
+            showChevron={false}
+          />
+        </View>
+
         {/* General Difficulty - available to all users */}
-        <View className="bg-zinc-800 rounded-xl mt-4">
+        <View className="bg-surface rounded-xl mt-4">
           <SettingsMenuItem
             icon="speedometer-outline"
             label="General Difficulty"
@@ -99,7 +112,7 @@ export default function Settings() {
           />
         </View>
 
-        <Text className="text-gray-600 mt-4">App settings and preferences.</Text>
+        <Text className="text-muted mt-4">App settings and preferences.</Text>
       </View>
 
       {isLoggedIn && userState.email && (

@@ -82,12 +82,12 @@ export function ColorPickerModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-white">
+      <View className="flex-1 bg-background">
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
-          <Text className="text-lg font-semibold">Choose Color</Text>
+        <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
+          <Text className="text-lg font-semibold text-foreground">Choose Color</Text>
           <Pressable onPress={onClose} className="p-2">
-            <Ionicons name="close" size={24} color="#374151" />
+            <Ionicons name="close" size={24} color="var(--color-muted)" />
           </Pressable>
         </View>
 
@@ -95,24 +95,25 @@ export function ColorPickerModal({
           {/* Color Preview */}
           <View className="items-center mb-6">
             <View
-              className="w-20 h-20 rounded-full border-4 border-gray-200"
+              className="w-20 h-20 rounded-full border-4 border-border"
               style={{ backgroundColor: isValidColor ? selectedColor : "#ccc" }}
             />
-            <Text className="mt-2 font-mono text-gray-600">
+            <Text className="mt-2 font-mono text-muted">
               {isValidColor ? selectedColor : "Invalid color"}
             </Text>
           </View>
 
           {/* Custom Color Input */}
           <View className="mb-6">
-            <Text className="text-sm font-medium text-gray-700 mb-2">
+            <Text className="text-sm font-medium text-muted mb-2">
               Custom Color (Hex)
             </Text>
             <TextInput
-              className={`border rounded-lg px-4 py-3 text-base font-mono ${
-                isValidColor ? "border-gray-300" : "border-red-500"
+              className={`border rounded-lg px-4 py-3 text-base font-mono text-foreground bg-surface ${
+                isValidColor ? "border-border" : "border-accent"
               }`}
               placeholder="#000000"
+              placeholderTextColor="var(--color-muted)"
               value={customColor}
               onChangeText={handleCustomColorChange}
               autoCapitalize="characters"
@@ -122,7 +123,7 @@ export function ColorPickerModal({
 
           {/* Preset Colors */}
           <View className="mb-6">
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-muted mb-3">
               Preset Colors
             </Text>
             <View className="flex-row flex-wrap gap-3">
@@ -132,8 +133,8 @@ export function ColorPickerModal({
                   onPress={() => handleColorPress(color)}
                   className={`w-10 h-10 rounded-full ${
                     selectedColor === color
-                      ? "border-4 border-gray-900"
-                      : "border-2 border-gray-200"
+                      ? "border-4 border-foreground"
+                      : "border-2 border-border"
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -143,18 +144,18 @@ export function ColorPickerModal({
         </ScrollView>
 
         {/* Actions */}
-        <View className="flex-row gap-3 px-4 py-3 border-t border-gray-200">
+        <View className="flex-row gap-3 px-4 py-3 border-t border-border">
           <Pressable
             onPress={onClose}
-            className="flex-1 border border-gray-300 py-3 rounded-lg items-center"
+            className="flex-1 border border-border py-3 rounded-lg items-center"
           >
-            <Text className="text-gray-700 font-semibold">Cancel</Text>
+            <Text className="text-foreground font-semibold">Cancel</Text>
           </Pressable>
           <Pressable
             onPress={handleApply}
             disabled={!isValidColor}
             className={`flex-1 py-3 rounded-lg items-center ${
-              isValidColor ? "bg-purple-500" : "bg-gray-300"
+              isValidColor ? "bg-accent" : "bg-surface"
             }`}
           >
             <Text className="text-white font-semibold">Apply</Text>

@@ -87,28 +87,29 @@ export function TagSelectionModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-white">
+      <View className="flex-1 bg-background">
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
-          <Text className="text-lg font-semibold">Select Tags</Text>
+        <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
+          <Text className="text-lg font-semibold text-foreground">Select Tags</Text>
           <Pressable onPress={onClose} className="p-2">
-            <Ionicons name="close" size={24} color="#374151" />
+            <Ionicons name="close" size={24} color="var(--color-muted)" />
           </Pressable>
         </View>
 
         {/* Search */}
-        <View className="px-4 py-3 border-b border-gray-100">
-          <View className="flex-row items-center bg-gray-100 rounded-lg px-3 py-2">
-            <Ionicons name="search" size={20} color="#9ca3af" />
+        <View className="px-4 py-3 border-b border-border">
+          <View className="flex-row items-center bg-surface rounded-lg px-3 py-2">
+            <Ionicons name="search" size={20} color="var(--color-muted)" />
             <TextInput
-              className="flex-1 ml-2 text-base"
+              className="flex-1 ml-2 text-base text-foreground"
               placeholder="Search tags..."
+              placeholderTextColor="var(--color-muted)"
               value={search}
               onChangeText={setSearch}
             />
             {search ? (
               <Pressable onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={20} color="#9ca3af" />
+                <Ionicons name="close-circle" size={20} color="var(--color-muted)" />
               </Pressable>
             ) : null}
           </View>
@@ -118,12 +119,12 @@ export function TagSelectionModal({
         <ScrollView className="flex-1 px-4">
           {filteredTags.length === 0 && !search && (
             <View className="py-8 items-center">
-              <Text className="text-gray-500">No tags yet. Create one below.</Text>
+              <Text className="text-muted">No tags yet. Create one below.</Text>
             </View>
           )}
           {filteredTags.length === 0 && search && (
             <View className="py-8 items-center">
-              <Text className="text-gray-500">
+              <Text className="text-muted">
                 No tags matching &quot;{search}&quot;
               </Text>
             </View>
@@ -135,7 +136,7 @@ export function TagSelectionModal({
             return (
               <View
                 key={tag.id}
-                className={`flex-row items-center py-3 border-b border-gray-100 ${
+                className={`flex-row items-center py-3 border-b border-border ${
                   isDeleted ? "opacity-50" : ""
                 }`}
               >
@@ -148,8 +149,8 @@ export function TagSelectionModal({
                     <View
                       className={`w-6 h-6 rounded border-2 items-center justify-center ${
                         isSelected
-                          ? "bg-purple-500 border-purple-500"
-                          : "border-gray-300"
+                          ? "bg-accent border-accent"
+                          : "border-border"
                       }`}
                     >
                       {isSelected && (
@@ -176,7 +177,7 @@ export function TagSelectionModal({
                 {/* Tag name */}
                 <Text
                   className={`flex-1 text-base ${
-                    isDeleted ? "text-gray-400 line-through" : "text-gray-900"
+                    isDeleted ? "text-muted line-through" : "text-foreground"
                   }`}
                 >
                   {tag.name}
@@ -186,9 +187,9 @@ export function TagSelectionModal({
                 {isDeleted && (
                   <Pressable
                     onPress={() => handleRestoreTag(tag)}
-                    className="bg-blue-100 px-3 py-1 rounded"
+                    className="bg-surface px-3 py-1 rounded"
                   >
-                    <Text className="text-blue-600 text-sm font-medium">
+                    <Text className="text-accent-secondary text-sm font-medium">
                       Restore
                     </Text>
                   </Pressable>
@@ -199,11 +200,12 @@ export function TagSelectionModal({
         </ScrollView>
 
         {/* Create new tag */}
-        <View className="px-4 py-3 border-t border-gray-200">
+        <View className="px-4 py-3 border-t border-border">
           <View className="flex-row items-center gap-2">
             <TextInput
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-base"
+              className="flex-1 border border-border rounded-lg px-4 py-2 text-base text-foreground bg-surface"
               placeholder="New tag name..."
+              placeholderTextColor="var(--color-muted)"
               value={newTagName}
               onChangeText={setNewTagName}
               editable={!isCreating}
@@ -213,8 +215,8 @@ export function TagSelectionModal({
               disabled={!newTagName.trim() || isCreating}
               className={`px-4 py-2 rounded-lg ${
                 newTagName.trim() && !isCreating
-                  ? "bg-purple-500"
-                  : "bg-gray-300"
+                  ? "bg-accent"
+                  : "bg-surface"
               }`}
             >
               <Text className="text-white font-medium">Add</Text>

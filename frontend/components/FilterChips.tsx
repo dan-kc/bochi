@@ -26,13 +26,13 @@ export function FilterChips<K extends string>({
             onPress={() => onSelect(option.key)}
             className={`px-4 py-1.5 rounded-full ${
               isActive
-                ? "bg-blue-500"
-                : "bg-white border border-gray-300"
+                ? "bg-accent"
+                : "bg-surface border border-border"
             }`}
           >
             <Text
               className={`text-sm font-medium ${
-                isActive ? "text-white" : "text-gray-600"
+                isActive ? "text-white" : "text-muted"
               }`}
             >
               {option.label}

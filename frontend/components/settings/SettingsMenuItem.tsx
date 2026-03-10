@@ -12,7 +12,7 @@ interface SettingsMenuItemProps {
 
 export function SettingsMenuItem({
   icon,
-  iconColor = "#dc6857",
+  iconColor = "#f54900",
   label,
   value,
   onPress,
@@ -32,15 +32,15 @@ export function SettingsMenuItem({
             style={{ marginRight: 16 }}
           />
           <Text
-            className={`flex-1 text-base ${hovered ? "text-gray-900" : "text-gray-800"}`}
+            className={`flex-1 text-base ${hovered ? "text-foreground" : "text-foreground"}`}
           >
             {label}
           </Text>
           {value && (
-            <Text className="text-gray-500 text-base mr-2">{value}</Text>
+            <Text className="text-muted text-base mr-2">{value}</Text>
           )}
           {showChevron && (
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
           )}
         </>
       )}

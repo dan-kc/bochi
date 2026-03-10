@@ -43,8 +43,8 @@ function PriceCountdown() {
 
   return (
     <View className="flex-row items-center mr-3">
-      <Ionicons name="timer-outline" size={14} color="#d97706" />
-      <Text className="ml-1 text-xs text-amber-600 font-medium">
+      <Ionicons name="timer-outline" size={14} color="#f54900" />
+      <Text className="ml-1 text-xs text-accent font-medium">
         {formatCountdown(secondsUntilUpdate)}
       </Text>
     </View>
@@ -65,8 +65,8 @@ export function SyncStatusIcon() {
           onPress={() => router.push("/auth/login")}
           className="flex-row items-center"
         >
-          <Ionicons name="cloud-offline-outline" size={20} color="#9ca3af" />
-          <Text className="ml-1 text-xs text-gray-500">Log in to sync</Text>
+          <Ionicons name="cloud-offline-outline" size={20} color="var(--color-muted)" />
+          <Text className="ml-1 text-xs text-muted">Log in to sync</Text>
         </Pressable>
       </View>
     );
@@ -82,7 +82,7 @@ export function SyncStatusIcon() {
   const renderLastSynced = () => {
     if (!lastSyncTime) return null;
     return (
-      <Text className="ml-1 text-xs text-gray-500">
+      <Text className="ml-1 text-xs text-muted">
         {formatLastSynced(lastSyncTime)}
       </Text>
     );
@@ -93,8 +93,8 @@ export function SyncStatusIcon() {
       return (
         <View className="flex-row items-center">
           <PriceCountdown />
-          <ActivityIndicator size="small" color="#3b82f6" />
-          <Text className="ml-1 text-xs text-gray-500">Syncing...</Text>
+          <ActivityIndicator size="small" color="#f54900" />
+          <Text className="ml-1 text-xs text-muted">Syncing...</Text>
         </View>
       );
 
@@ -102,7 +102,7 @@ export function SyncStatusIcon() {
       return (
         <View className="flex-row items-center">
           <PriceCountdown />
-          <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+          <Ionicons name="checkmark-circle" size={20} color="#197291" />
           {renderLastSynced()}
         </View>
       );
@@ -112,8 +112,8 @@ export function SyncStatusIcon() {
         <View className="flex-row items-center">
           <PriceCountdown />
           <Pressable onPress={triggerSync} className="flex-row items-center">
-            <Ionicons name="cloud-offline" size={20} color="#ef4444" />
-            <Text className="ml-1 text-xs text-red-600">Not synced</Text>
+            <Ionicons name="cloud-offline" size={20} color="#f54900" />
+            <Text className="ml-1 text-xs text-accent">Not synced</Text>
           </Pressable>
         </View>
       );
@@ -123,7 +123,7 @@ export function SyncStatusIcon() {
       return (
         <View className="flex-row items-center">
           <PriceCountdown />
-          <Ionicons name="cloud-outline" size={20} color="#9ca3af" />
+          <Ionicons name="cloud-outline" size={20} color="var(--color-muted)" />
           {renderLastSynced()}
         </View>
       );

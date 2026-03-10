@@ -61,11 +61,11 @@ export default function Trades() {
   const keyExtractor = useCallback((item: Trade) => item.id, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
       <View className="flex-1">
-        <View className="p-4 border-b border-gray-200">
+        <View className="p-4 border-b border-border">
           <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-2xl font-bold text-gray-900">Trades</Text>
+            <Text className="text-2xl font-bold text-foreground">Trades</Text>
             <View className="flex-row items-center gap-2">
               <BalanceDisplay />
               <SyncStatusIcon />
@@ -87,7 +87,7 @@ export default function Trades() {
 
         {displayTrades.length === 0 ? (
           <View className="flex-1 items-center justify-center p-4">
-            <Text className="text-gray-500 text-center">No trades yet.</Text>
+            <Text className="text-muted text-center">No trades yet.</Text>
           </View>
         ) : (
           <LegendList

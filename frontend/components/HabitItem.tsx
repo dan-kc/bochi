@@ -21,44 +21,39 @@ export function HabitItem({ habit, onPress }: HabitItemProps) {
   return (
     <Pressable
       onPress={() => onPress(habit)}
-      className="border rounded-lg p-4 mb-3 bg-white border-gray-200"
+      className="border-b border-border py-4 px-2"
     >
       {({ hovered }) => (
         <View className={hovered ? "opacity-80" : ""}>
-          {/* Habit Name - max 3 lines */}
           <FadingText
             numberOfLines={3}
-            className="text-lg font-semibold text-gray-900"
+            className="text-lg font-semibold text-foreground"
           >
             {habit.name}
           </FadingText>
 
-          {/* Description - 1 line, only if exists */}
           {habit.description ? (
             <FadingText
               numberOfLines={1}
-              className="text-gray-600 text-sm mt-1"
+              className="text-muted text-sm mt-1"
             >
               {habit.description}
             </FadingText>
           ) : null}
 
-          {/* Frequency - 1 line */}
           {frequencyText ? (
             <FadingText
               numberOfLines={1}
-              className="text-green-700 text-sm mt-1"
+              className="text-accent-secondary text-sm mt-1"
             >
               {frequencyText}
             </FadingText>
           ) : null}
 
-          {/* Tags - single line with fade */}
           <View className="mt-1">
             <HabitTagRow habitId={habit.id} />
           </View>
 
-          {/* Price Display - right-aligned on its own row */}
           <View className="items-end mt-2">
             <PriceDisplay habitId={habit.id} />
           </View>

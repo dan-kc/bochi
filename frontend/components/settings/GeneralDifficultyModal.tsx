@@ -46,24 +46,24 @@ export function GeneralDifficultyModal({
         onPress={onClose}
       >
         <Pressable
-          className="bg-zinc-800 rounded-t-2xl pb-8"
+          className="bg-background rounded-t-2xl pb-8"
           onPress={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <View className="p-4 border-b border-zinc-700">
-            <Text className="text-lg font-semibold text-white text-center">
+          <View className="p-4 border-b border-border">
+            <Text className="text-lg font-semibold text-foreground text-center">
               General Difficulty
             </Text>
           </View>
 
           <View className="px-4 py-4">
-            <Text className="text-gray-400 text-sm mb-3">
+            <Text className="text-muted text-sm mb-3">
               Controls the overall scale of rewards and costs. Higher values mean
               larger rewards and costs. Default is 5.
             </Text>
 
             <TextInput
-              className="bg-zinc-700 text-white text-base rounded-xl px-4 py-3 mb-2"
+              className="bg-surface text-foreground text-base rounded-xl px-4 py-3 mb-2 border border-border"
               value={inputValue}
               onChangeText={(text) => {
                 setInputValue(text);
@@ -71,24 +71,24 @@ export function GeneralDifficultyModal({
               }}
               keyboardType="decimal-pad"
               placeholder="e.g. 5.0"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="var(--color-muted)"
               autoFocus
             />
 
             {error && (
-              <Text className="text-red-400 text-sm mb-2">{error}</Text>
+              <Text className="text-accent text-sm mb-2">{error}</Text>
             )}
 
             <View className="flex-row gap-3 mt-2">
               <Pressable
                 onPress={onClose}
-                className="flex-1 bg-zinc-700 rounded-xl py-4 items-center"
+                className="flex-1 bg-surface rounded-xl py-4 items-center"
               >
-                <Text className="text-white text-base">Cancel</Text>
+                <Text className="text-foreground text-base">Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleSave}
-                className="flex-1 bg-blue-600 rounded-xl py-4 items-center"
+                className="flex-1 bg-accent rounded-xl py-4 items-center"
               >
                 <Text className="text-white text-base font-semibold">Save</Text>
               </Pressable>

@@ -97,17 +97,17 @@ export function ChangePasswordModal({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <SafeAreaView className="flex-1 bg-zinc-900">
+      <SafeAreaView className="flex-1 bg-background">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-zinc-700">
+          <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
             <Pressable onPress={handleClose} className="p-2">
-              <Ionicons name="close" size={24} color="#9ca3af" />
+              <Ionicons name="close" size={24} color="var(--color-muted)" />
             </Pressable>
-            <Text className="text-lg font-semibold text-white">
+            <Text className="text-lg font-semibold text-foreground">
               Change Password
             </Text>
             <Pressable
@@ -116,18 +116,18 @@ export function ChangePasswordModal({
               className="p-2"
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#9ca3af" />
+                <ActivityIndicator size="small" color="var(--color-muted)" />
               ) : (
-                <Ionicons name="checkmark" size={24} color="#9ca3af" />
+                <Ionicons name="checkmark" size={24} color="var(--color-muted)" />
               )}
             </Pressable>
           </View>
 
           <View className="flex-1 p-4">
             {errors.length > 0 && (
-              <View className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-4">
+              <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
                 {errors.map((error, index) => (
-                  <Text key={index} className="text-red-400 text-sm">
+                  <Text key={index} className="text-accent text-sm">
                     {error}
                   </Text>
                 ))}
@@ -135,13 +135,13 @@ export function ChangePasswordModal({
             )}
 
             {/* Current Password */}
-            <View className="bg-zinc-800 rounded-xl mb-6">
+            <View className="bg-surface rounded-xl mb-6">
               <View className="flex-row items-center px-4 py-3">
-                <Text className="text-gray-400 w-24">Current</Text>
+                <Text className="text-muted w-24">Current</Text>
                 <TextInput
-                  className="flex-1 text-white text-base"
+                  className="flex-1 text-foreground text-base"
                   placeholder="current password"
-                  placeholderTextColor="#6b7280"
+                  placeholderTextColor="var(--color-muted)"
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   secureTextEntry
@@ -152,13 +152,13 @@ export function ChangePasswordModal({
             </View>
 
             {/* New Password Section */}
-            <View className="bg-zinc-800 rounded-xl mb-4">
-              <View className="flex-row items-center px-4 py-3 border-b border-zinc-700">
-                <Text className="text-gray-400 w-24">New</Text>
+            <View className="bg-surface rounded-xl mb-4">
+              <View className="flex-row items-center px-4 py-3 border-b border-border">
+                <Text className="text-muted w-24">New</Text>
                 <TextInput
-                  className="flex-1 text-white text-base"
+                  className="flex-1 text-foreground text-base"
                   placeholder="enter password"
-                  placeholderTextColor="#6b7280"
+                  placeholderTextColor="var(--color-muted)"
                   value={newPassword}
                   onChangeText={setNewPassword}
                   secureTextEntry
@@ -167,11 +167,11 @@ export function ChangePasswordModal({
                 />
               </View>
               <View className="flex-row items-center px-4 py-3">
-                <Text className="text-gray-400 w-24">Confirm</Text>
+                <Text className="text-muted w-24">Confirm</Text>
                 <TextInput
-                  className="flex-1 text-white text-base"
+                  className="flex-1 text-foreground text-base"
                   placeholder="re-enter password"
-                  placeholderTextColor="#6b7280"
+                  placeholderTextColor="var(--color-muted)"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry
@@ -181,7 +181,7 @@ export function ChangePasswordModal({
               </View>
             </View>
 
-            <Text className="text-gray-400 text-sm px-1">
+            <Text className="text-muted text-sm px-1">
               Your password must be at least 8 characters long.{"\n"}
               Avoid common passwords or patterns.
             </Text>

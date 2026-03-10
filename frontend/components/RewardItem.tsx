@@ -28,55 +28,43 @@ function InfoDisplay({
     if (!priceData) return null;
 
     return (
-      <View className="flex-row items-center bg-red-50 border border-red-200 px-2 py-1 rounded">
-        <Text className="text-xs font-medium text-red-700">
-          {priceData.current} tofu
-        </Text>
-      </View>
+      <Text className="text-sm font-bold text-accent">
+        {priceData.current} tofu
+      </Text>
     );
   }
 
   if (displayMode === "frequency") {
     if (reward.max_daily_frequency == null) {
       return (
-        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-          <Text className="text-xs font-medium text-gray-500">no limit</Text>
-        </View>
+        <Text className="text-sm text-muted">no limit</Text>
       );
     }
     return (
-      <View className="flex-row items-center bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-        <Text className="text-xs font-medium text-orange-700">
-          {reward.max_daily_frequency} max/day
-        </Text>
-      </View>
+      <Text className="text-sm text-accent-secondary">
+        {reward.max_daily_frequency} max/day
+      </Text>
     );
   }
 
   if (displayMode === "created_at") {
     return (
-      <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-        <Text className="text-xs font-medium text-gray-700">
-          {formatShortDate(reward.created_at)}
-        </Text>
-      </View>
+      <Text className="text-sm text-muted">
+        {formatShortDate(reward.created_at)}
+      </Text>
     );
   }
 
   if (displayMode === "damage") {
     if (reward.damage_rank == null) {
       return (
-        <View className="flex-row items-center bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-          <Text className="text-xs font-medium text-gray-500">not set</Text>
-        </View>
+        <Text className="text-sm text-muted">not set</Text>
       );
     }
     return (
-      <View className="flex-row items-center bg-red-50 border border-red-200 px-2 py-1 rounded">
-        <Text className="text-xs font-medium text-red-700 font-mono">
-          {reward.damage_rank}
-        </Text>
-      </View>
+      <Text className="text-sm font-bold text-accent font-mono">
+        {reward.damage_rank}
+      </Text>
     );
   }
 
@@ -96,32 +84,26 @@ export function RewardItem({
   return (
     <Pressable
       onPress={() => onPress(reward)}
-      className={`border rounded-lg p-4 mb-3 ${
-        isUnrankedInDamageView
-          ? "bg-gray-50 border-gray-300"
-          : "bg-white border-gray-200"
-      }`}
+      className="border-b border-border py-4 px-2"
     >
       {({ hovered }) => (
         <View className={hovered ? "opacity-80" : ""}>
           <View className="flex-row justify-between items-start">
-            <Text className="text-lg font-semibold text-gray-900 mb-1 flex-1">
+            <Text className="text-lg font-semibold text-foreground mb-1 flex-1">
               {reward.name}
             </Text>
             <View className="flex-row items-center gap-2 ml-2">
               <InfoDisplay reward={reward} displayMode={displayMode} />
               {isUnrankedInDamageView && (
-                <View className="bg-gray-200 px-2 py-1 rounded">
-                  <Text className="text-gray-600 text-xs font-medium">
-                    Unranked
-                  </Text>
-                </View>
+                <Text className="text-muted text-xs font-medium">
+                  Unranked
+                </Text>
               )}
             </View>
           </View>
           {reward.description ? (
             <Text
-              className="text-gray-600 text-sm mb-1"
+              className="text-muted text-sm mb-1"
               numberOfLines={2}
               ellipsizeMode="tail"
             >
@@ -131,18 +113,14 @@ export function RewardItem({
           <RewardTagChips rewardId={reward.id} />
           <View className="flex-row flex-wrap gap-2 mt-2">
             {reward.max_daily_frequency !== null && (
-              <View className="bg-orange-100 px-2 py-1 rounded">
-                <Text className="text-orange-700 text-xs">
-                  {reward.max_daily_frequency}x max/day
-                </Text>
-              </View>
+              <Text className="text-accent-secondary text-xs">
+                {reward.max_daily_frequency}x max/day
+              </Text>
             )}
             {hasDamageRank && isDamageView && (
-              <View className="bg-red-100 px-2 py-1 rounded">
-                <Text className="text-red-700 text-xs font-mono">
-                  {reward.damage_rank}
-                </Text>
-              </View>
+              <Text className="text-accent text-xs font-mono">
+                {reward.damage_rank}
+              </Text>
             )}
             {!hasDamageRank && onSetDamage && (
               <Pressable
@@ -150,9 +128,8 @@ export function RewardItem({
                   e.stopPropagation();
                   onSetDamage(reward);
                 }}
-                className="bg-red-50 border border-red-200 px-2 py-1 rounded"
               >
-                <Text className="text-red-600 text-xs">Set Damage</Text>
+                <Text className="text-accent text-xs">Set Damage</Text>
               </Pressable>
             )}
           </View>

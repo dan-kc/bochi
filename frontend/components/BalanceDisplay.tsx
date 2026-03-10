@@ -10,8 +10,8 @@ export function BalanceDisplay() {
   );
 
   return (
-    <View className="bg-amber-100 border border-amber-300 px-3 py-1 rounded-lg flex-row items-center">
-      <Text className="text-amber-800 font-semibold">
+    <View className="bg-surface border border-border px-3 py-1 rounded-lg flex-row items-center">
+      <Text className="text-accent font-semibold">
         {balance.tofu_balance} tofu
       </Text>
     </View>

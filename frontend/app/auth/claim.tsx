@@ -49,7 +49,6 @@ export default function ClaimAccount() {
       router.replace("/settings");
     } catch (error) {
       const apiError = error as ApiError;
-      // Log 4xx errors to console for debugging
       if (apiError.status && apiError.status >= 400 && apiError.status < 500) {
         console.log("[Auth] Claim error:", apiError.status, apiError.errors);
       }
@@ -66,23 +65,23 @@ export default function ClaimAccount() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <View className="flex-1 p-6 justify-center max-w-md mx-auto w-full">
-          <Text className="text-3xl font-bold text-gray-900 mb-2">
+          <Text className="text-3xl font-bold text-foreground mb-2">
             Create Your Account
           </Text>
-          <Text className="text-gray-600 mb-8">
+          <Text className="text-muted mb-8">
             Keep your habits safe and sync them across all your devices.
           </Text>
 
           {errors.length > 0 && (
-            <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
               {errors.map((error, index) => (
-                <Text key={index} className="text-red-600 text-sm">
+                <Text key={index} className="text-accent text-sm">
                   {error}
                 </Text>
               ))}
@@ -91,12 +90,13 @@ export default function ClaimAccount() {
 
           <View className="gap-4">
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
+              <Text className="text-sm font-medium text-muted mb-1">
                 Email
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
                 placeholder="you@example.com"
+                placeholderTextColor="var(--color-muted)"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -107,12 +107,13 @@ export default function ClaimAccount() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
+              <Text className="text-sm font-medium text-muted mb-1">
                 Password
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
                 placeholder="At least 8 characters"
+                placeholderTextColor="var(--color-muted)"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -122,12 +123,13 @@ export default function ClaimAccount() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-1">
+              <Text className="text-sm font-medium text-muted mb-1">
                 Confirm Password
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
                 placeholder="Confirm your password"
+                placeholderTextColor="var(--color-muted)"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
@@ -139,7 +141,7 @@ export default function ClaimAccount() {
             <Pressable
               onPress={handleClaim}
               disabled={isLoading}
-              className="bg-orange-500 py-3 px-6 rounded-lg items-center mt-2"
+              className="bg-accent py-3 px-6 rounded-lg items-center mt-2"
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
@@ -151,19 +153,19 @@ export default function ClaimAccount() {
             </Pressable>
           </View>
 
-          <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-            <Text className="text-blue-800 text-sm">
+          <View className="bg-surface border border-border rounded-lg p-4 mt-6">
+            <Text className="text-accent-secondary text-sm">
               Your existing habits will be kept and synced to your new account.
             </Text>
           </View>
 
           <View className="flex-row justify-center mt-6 gap-1">
-            <Text className="text-gray-600">Already have an account?</Text>
+            <Text className="text-muted">Already have an account?</Text>
             <Link href="/auth/login" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`font-semibold ${hovered ? "text-blue-700" : "text-blue-500"}`}
+                    className={`font-semibold ${hovered ? "text-accent" : "text-accent"}`}
                   >
                     Login instead
                   </Text>
@@ -177,7 +179,7 @@ export default function ClaimAccount() {
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`${hovered ? "text-gray-900" : "text-gray-500"}`}
+                    className={`${hovered ? "text-foreground" : "text-muted"}`}
                   >
                     Back to Settings
                   </Text>
