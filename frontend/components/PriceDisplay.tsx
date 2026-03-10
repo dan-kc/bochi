@@ -15,7 +15,7 @@ export function PriceDisplay({ habitId }: PriceDisplayProps) {
 
   return (
     <Text className="text-base font-bold text-accent">
-      {priceData.current} T
+      {priceData.current} tofu
     </Text>
   );
 }
