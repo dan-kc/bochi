@@ -8,7 +8,6 @@ import { RewardTagChips } from "./RewardTagChips";
 interface RewardItemProps {
   reward: Reward;
   onPress: (reward: Reward) => void;
-  onPurchase?: (reward: Reward) => void;
   onSetDamage?: (reward: Reward) => void;
   isDamageView?: boolean;
   displayMode?: DisplayMode;
@@ -87,15 +86,12 @@ function InfoDisplay({
 export function RewardItem({
   reward,
   onPress,
-  onPurchase,
   onSetDamage,
   isDamageView,
   displayMode = "price",
 }: RewardItemProps) {
   const hasDamageRank = reward.damage_rank != null;
   const isUnrankedInDamageView = isDamageView && !hasDamageRank;
-  const priceContext = useRewardPriceUpdateOptional();
-  const currentPrice = priceContext?.prices[reward.id]?.current;
 
   return (
     <Pressable
@@ -157,19 +153,6 @@ export function RewardItem({
                 className="bg-red-50 border border-red-200 px-2 py-1 rounded"
               >
                 <Text className="text-red-600 text-xs">Set Damage</Text>
-              </Pressable>
-            )}
-            {onPurchase && (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onPurchase(reward);
-                }}
-                className="bg-red-500 px-3 py-1 rounded ml-auto"
-              >
-                <Text className="text-white text-xs font-semibold">
-                  -{currentPrice ?? "..."} tofu
-                </Text>
               </Pressable>
             )}
           </View>

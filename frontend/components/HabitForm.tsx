@@ -25,6 +25,7 @@ interface HabitFormProps {
   onCancel: () => void;
   onDelete?: () => Promise<void>;
   onRerank?: () => void;
+  onComplete?: (habit: Habit) => Promise<void>;
 }
 
 const habitSchema = z.object({
@@ -50,7 +51,7 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
-export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank }: HabitFormProps) {
+export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank, onComplete }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [minDailyFrequency, setMinDailyFrequency] = useState("");
@@ -351,6 +352,18 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank 
               )}
             </Pressable>
           </View>
+
+          {isEditing && onComplete && habit && (
+            <Pressable
+              onPress={() => onComplete(habit)}
+              disabled={isLoading}
+              className="bg-green-600 py-3 px-6 rounded-lg items-center mt-2"
+            >
+              <Text className="text-white font-semibold text-base">
+                Complete
+              </Text>
+            </Pressable>
+          )}
 
           {isEditing && onRerank && (
             <Pressable

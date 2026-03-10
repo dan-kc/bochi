@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
 import { useHabitsContext } from "@/lib/HabitContext";
@@ -24,6 +24,7 @@ export default function Habits() {
     createHabit,
     updateHabit,
     deleteHabit,
+    completeHabit,
     selectHabit,
     setIsEditing,
   } = useHabitsContext();
@@ -108,6 +109,20 @@ export default function Habits() {
     setHabitToRank(null);
   }, []);
 
+  const handleComplete = useCallback(
+    async (habit: Habit) => {
+      try {
+        const amount = await completeHabit(habit);
+        updatePrices(habits);
+        Alert.alert("Completed!", `Earned ${amount} tofu for "${habit.name}"`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to complete habit";
+        Alert.alert("Cannot Complete", message);
+      }
+    },
+    [completeHabit, updatePrices, habits],
+  );
+
   const handleRerank = useCallback(() => {
     if (selectedHabit) {
       setIsHabitFormVisible(false);
@@ -185,6 +200,7 @@ export default function Habits() {
               onCancel={handleCancel}
               onDelete={selectedHabit ? handleDelete : undefined}
               onRerank={selectedHabit && habits.length > 1 ? handleRerank : undefined}
+              onComplete={selectedHabit ? handleComplete : undefined}
             />
           </SafeAreaView>
         </Modal>

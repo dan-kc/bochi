@@ -25,6 +25,7 @@ interface RewardFormProps {
   onCancel: () => void;
   onDelete?: () => Promise<void>;
   onRerank?: () => void;
+  onPurchase?: (reward: Reward) => Promise<void>;
 }
 
 const rewardSchema = z.object({
@@ -50,7 +51,7 @@ const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
   month: 30,
 };
 
-export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onRerank }: RewardFormProps) {
+export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onRerank, onPurchase }: RewardFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [maxDailyFrequency, setMaxDailyFrequency] = useState("");
@@ -351,6 +352,18 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
               )}
             </Pressable>
           </View>
+
+          {isEditing && onPurchase && reward && (
+            <Pressable
+              onPress={() => onPurchase(reward)}
+              disabled={isLoading}
+              className="bg-red-500 py-3 px-6 rounded-lg items-center mt-2"
+            >
+              <Text className="text-white font-semibold text-base">
+                Purchase
+              </Text>
+            </Pressable>
+          )}
 
           {isEditing && onRerank && (
             <Pressable

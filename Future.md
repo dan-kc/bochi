@@ -1,1 +1,1 @@
- Remove the percentages calculations from the UI. I'm referring to the "+5%" etc that is shown on the habit list item. Also remove it from the Reward too
+ Remove the ability to purchase rewards and complete habits from the list view. Each list item should have the button removed that quickly does the trade. The trade button should only be available in the change form.

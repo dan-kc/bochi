@@ -138,11 +138,10 @@ export default function Rewards() {
       <RewardItem
         reward={item}
         onPress={handleRewardPress}
-        onPurchase={handlePurchase}
         displayMode={displayMode}
       />
     ),
-    [handleRewardPress, handlePurchase, displayMode],
+    [handleRewardPress, displayMode],
   );
 
   const keyExtractor = useCallback((item: Reward) => item.id, []);
@@ -207,6 +206,7 @@ export default function Rewards() {
               onCancel={handleCancel}
               onDelete={selectedReward ? handleDelete : undefined}
               onRerank={selectedReward && rewards.length > 1 ? handleRerank : undefined}
+              onPurchase={selectedReward ? handlePurchase : undefined}
             />
           </SafeAreaView>
         </Modal>
