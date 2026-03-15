@@ -14,9 +14,12 @@ import { z } from "zod";
 import type { Reward, RewardInput } from "@/lib/reward";
 import { createEmptyRewardInput } from "@/lib/reward";
 import type { Tag } from "@/lib/tag";
-import { useTagsForReward, useTagActions } from "@/lib/store/hooks";
-import { RewardTagSelectionModal } from "./RewardTagSelectionModal";
+import { useTagsForReward, useTagActions, useRewardTagActions } from "@/lib/store/hooks";
+import { TagSelectionModal } from "./TagSelectionModal";
 import { ColorPickerModal } from "./ColorPickerModal";
+import type { FrequencyPeriod } from "@/lib/frequency";
+import { PERIOD_DIVISORS, formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
+import { parseZodErrors } from "@/lib/formValidation";
 
 interface RewardFormProps {
   reward?: Reward | null;
@@ -43,30 +46,6 @@ const rewardSchema = z.object({
     .nullable(),
 });
 
-type FrequencyPeriod = "day" | "week" | "month";
-
-const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
-  day: 1,
-  week: 7,
-  month: 30,
-};
-
-function formatFrequencySummary(frequency: number | null): string | null {
-  if (frequency == null) return null;
-  if (frequency >= 1) {
-    const formatted = frequency.toFixed(2).replace(/\.?0+$/, "");
-    return `${formatted} max/day`;
-  }
-  const weekly = frequency * 7;
-  if (weekly >= 1) {
-    const formatted = weekly.toFixed(2).replace(/\.?0+$/, "");
-    return `${formatted} max/week`;
-  }
-  const monthly = frequency * 30;
-  const formatted = monthly.toFixed(2).replace(/\.?0+$/, "");
-  return `${formatted} max/month`;
-}
-
 export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onRerank, onPurchase }: RewardFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -87,6 +66,7 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
   // Get tags for this reward (only when editing)
   const rewardTags = useTagsForReward(reward?.id ?? "");
   const { updateTag } = useTagActions();
+  const { addTagToReward, removeTagFromReward } = useRewardTagActions();
 
   useEffect(() => {
     if (reward) {
@@ -94,23 +74,9 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
       setDescription(reward.description);
 
       if (reward.max_daily_frequency !== null) {
-        const dailyFreq = reward.max_daily_frequency;
-        let bestPeriod: FrequencyPeriod = "day";
-        let displayValue = dailyFreq;
-
-        if (dailyFreq >= 1) {
-          bestPeriod = "day";
-          displayValue = dailyFreq;
-        } else if (dailyFreq * 7 >= 1) {
-          bestPeriod = "week";
-          displayValue = dailyFreq * 7;
-        } else {
-          bestPeriod = "month";
-          displayValue = dailyFreq * 30;
-        }
-
-        setFrequencyPeriod(bestPeriod);
-        setMaxDailyFrequency(String(displayValue));
+        const { value, period } = fromDailyFrequency(reward.max_daily_frequency);
+        setFrequencyPeriod(period);
+        setMaxDailyFrequency(String(value));
       } else {
         setMaxDailyFrequency("");
         setFrequencyPeriod("day");
@@ -143,15 +109,7 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
     const result = rewardSchema.safeParse(input);
 
     if (!result.success) {
-      const fieldErrors: Record<string, string[]> = {};
-      for (const issue of result.error.issues) {
-        const path = issue.path.join(".") || "general";
-        if (!fieldErrors[path]) {
-          fieldErrors[path] = [];
-        }
-        fieldErrors[path].push(issue.message);
-      }
-      setErrors(fieldErrors);
+      setErrors(parseZodErrors(result.error));
       return;
     }
 
@@ -200,7 +158,7 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
     }
   };
 
-  const frequencySummary = reward ? formatFrequencySummary(reward.max_daily_frequency) : null;
+  const frequencySummary = reward ? formatFrequencySummary(reward.max_daily_frequency, "max") : null;
 
   return (
     <KeyboardAvoidingView
@@ -433,13 +391,15 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
 
       {/* Tag Selection Modal */}
       {isEditing && reward && (
-        <RewardTagSelectionModal
+        <TagSelectionModal
           visible={showTagModal}
           onClose={() => setShowTagModal(false)}
-          rewardId={reward.id}
+          entityId={reward.id}
           userId={userId}
           selectedTagIds={rewardTags.map((t) => t.id)}
           onColorEdit={handleColorEdit}
+          addTag={addTagToReward}
+          removeTag={removeTagFromReward}
         />
       )}
 

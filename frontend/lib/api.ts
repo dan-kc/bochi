@@ -5,6 +5,8 @@ import type {
   SyncInput,
 } from "./sync/types";
 import { getStoredTokens } from "./storage";
+import type { ApiSyncResponse } from "./apiTransformers";
+import { transformSyncResponse } from "./apiTransformers";
 
 const API_PROTOCOL = process.env.EXPO_PUBLIC_API_PROTOCOL || "http";
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST || "localhost";
@@ -198,137 +200,8 @@ class ApiClient {
       ? `/api/sync?since=${encodeURIComponent(sinceParsed)}`
       : "/api/sync";
 
-    const result = await this.authenticatedRequest<{
-      habits: Array<{
-        id: string;
-        name: string;
-        description: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-
-        minDailyFrequency: number | null;
-        difficultyRank: string | null;
-      }>;
-      trades: Array<{
-        id: string;
-        habitId: string | null;
-        rewardId: string | null;
-        amount: number;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      tags: Array<{
-        id: string;
-        name: string;
-        colorHex: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      habitTags: Array<{
-        habitId: string;
-        tagId: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      rewards: Array<{
-        id: string;
-        name: string;
-        description: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-
-        maxDailyFrequency: number | null;
-        damageRank: string | null;
-      }>;
-      rewardTags: Array<{
-        rewardId: string;
-        tagId: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      balance: {
-        tofuBalance: number;
-      };
-      serverTime: string;
-      email: string | null;
-      isPremium: boolean;
-      generalDifficulty: number;
-    }>(url, { method: "GET" });
-
-    return {
-      habits: result.habits.map((h) => ({
-        id: h.id,
-        user_id: "",
-        name: h.name,
-        description: h.description,
-        created_at: h.createdAt,
-        updated_at: h.updatedAt,
-        deleted_at: h.deletedAt,
-
-        min_daily_frequency: h.minDailyFrequency,
-        difficulty_rank: h.difficultyRank,
-      })),
-      trades: result.trades.map((t) => ({
-        id: t.id,
-        user_id: "",
-        habit_id: t.habitId,
-        reward_id: t.rewardId,
-        amount: t.amount,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-      })),
-      tags: result.tags.map((t) => ({
-        id: t.id,
-        user_id: "",
-        name: t.name,
-        color_hex: t.colorHex,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-      })),
-      habitTags: result.habitTags.map((ht) => ({
-        habit_id: ht.habitId,
-        tag_id: ht.tagId,
-        user_id: "",
-        created_at: ht.createdAt,
-        updated_at: ht.updatedAt,
-        deleted_at: ht.deletedAt,
-      })),
-      rewards: result.rewards.map((r) => ({
-        id: r.id,
-        user_id: "",
-        name: r.name,
-        description: r.description,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-        deleted_at: r.deletedAt,
-
-        max_daily_frequency: r.maxDailyFrequency,
-        damage_rank: r.damageRank,
-      })),
-      rewardTags: result.rewardTags.map((rt) => ({
-        reward_id: rt.rewardId,
-        tag_id: rt.tagId,
-        user_id: "",
-        created_at: rt.createdAt,
-        updated_at: rt.updatedAt,
-        deleted_at: rt.deletedAt,
-      })),
-      balance: {
-        tofu_balance: result.balance.tofuBalance,
-      },
-      server_time: result.serverTime,
-      email: result.email,
-      isPremium: result.isPremium,
-      generalDifficulty: result.generalDifficulty,
-    };
+    const result = await this.authenticatedRequest<ApiSyncResponse>(url, { method: "GET" });
+    return transformSyncResponse(result);
   }
 
   async syncPush(input: SyncInput): Promise<SyncResponse> {
@@ -399,68 +272,7 @@ class ApiClient {
       deletedAt: toNaiveDateTime(rt.deletedAt),
     }));
 
-    const result = await this.authenticatedRequest<{
-      habits: Array<{
-        id: string;
-        name: string;
-        description: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-
-        minDailyFrequency: number | null;
-        difficultyRank: string | null;
-      }>;
-      trades: Array<{
-        id: string;
-        habitId: string | null;
-        rewardId: string | null;
-        amount: number;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      tags: Array<{
-        id: string;
-        name: string;
-        colorHex: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      habitTags: Array<{
-        habitId: string;
-        tagId: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      rewards: Array<{
-        id: string;
-        name: string;
-        description: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-
-        maxDailyFrequency: number | null;
-        damageRank: string | null;
-      }>;
-      rewardTags: Array<{
-        rewardId: string;
-        tagId: string;
-        createdAt: string;
-        updatedAt: string;
-        deletedAt: string | null;
-      }>;
-      balance: {
-        tofuBalance: number;
-      };
-      serverTime: string;
-      email: string | null;
-      isPremium: boolean;
-      generalDifficulty: number;
-    }>("/api/sync", {
+    const result = await this.authenticatedRequest<ApiSyncResponse>("/api/sync", {
       method: "POST",
       body: JSON.stringify({
         habits: habitInputs,
@@ -473,74 +285,7 @@ class ApiClient {
       }),
     });
 
-    return {
-      habits: result.habits.map((h) => ({
-        id: h.id,
-        user_id: "",
-        name: h.name,
-        description: h.description,
-        created_at: h.createdAt,
-        updated_at: h.updatedAt,
-        deleted_at: h.deletedAt,
-
-        min_daily_frequency: h.minDailyFrequency,
-        difficulty_rank: h.difficultyRank,
-      })),
-      trades: result.trades.map((t) => ({
-        id: t.id,
-        user_id: "",
-        habit_id: t.habitId,
-        reward_id: t.rewardId,
-        amount: t.amount,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-      })),
-      tags: result.tags.map((t) => ({
-        id: t.id,
-        user_id: "",
-        name: t.name,
-        color_hex: t.colorHex,
-        created_at: t.createdAt,
-        updated_at: t.updatedAt,
-        deleted_at: t.deletedAt,
-      })),
-      habitTags: result.habitTags.map((ht) => ({
-        habit_id: ht.habitId,
-        tag_id: ht.tagId,
-        user_id: "",
-        created_at: ht.createdAt,
-        updated_at: ht.updatedAt,
-        deleted_at: ht.deletedAt,
-      })),
-      rewards: result.rewards.map((r) => ({
-        id: r.id,
-        user_id: "",
-        name: r.name,
-        description: r.description,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-        deleted_at: r.deletedAt,
-
-        max_daily_frequency: r.maxDailyFrequency,
-        damage_rank: r.damageRank,
-      })),
-      rewardTags: result.rewardTags.map((rt) => ({
-        reward_id: rt.rewardId,
-        tag_id: rt.tagId,
-        user_id: "",
-        created_at: rt.createdAt,
-        updated_at: rt.updatedAt,
-        deleted_at: rt.deletedAt,
-      })),
-      balance: {
-        tofu_balance: result.balance.tofuBalance,
-      },
-      server_time: result.serverTime,
-      email: result.email,
-      isPremium: result.isPremium,
-      generalDifficulty: result.generalDifficulty,
-    };
+    return transformSyncResponse(result);
   }
 }
 

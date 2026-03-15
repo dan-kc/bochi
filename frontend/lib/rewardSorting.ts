@@ -1,10 +1,8 @@
 import type { Reward } from "./reward";
 import type { RewardSortKey } from "./rewardSortOptions";
-
-export interface PriceData {
-  current: number;
-  previous: number;
-}
+import type { PriceData } from "./dateUtils";
+export type { PriceData } from "./dateUtils";
+export { formatShortDate } from "./dateUtils";
 
 export type DisplayMode = "price" | "frequency" | "created_at" | "damage";
 
@@ -74,9 +72,4 @@ export function getDisplayMode(sortKey: RewardSortKey): DisplayMode {
     default:
       return "price";
   }
-}
-
-export function formatShortDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

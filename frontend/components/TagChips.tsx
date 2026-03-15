@@ -1,18 +1,16 @@
 import { View, Text } from "react-native";
-import { useTagsForHabit } from "@/lib/store/hooks";
+import type { Tag } from "@/lib/tag";
 
 interface TagChipsProps {
-  habitId: string;
+  tags: Tag[];
   maxTags?: number;
 }
 
 /**
- * Displays tag chips for a habit.
+ * Displays tag chips for any entity.
  * Shows up to maxTags tags with a "+N more" indicator if truncated.
  */
-export function TagChips({ habitId, maxTags = 3 }: TagChipsProps) {
-  const tags = useTagsForHabit(habitId);
-
+export function TagChips({ tags, maxTags = 3 }: TagChipsProps) {
   if (tags.length === 0) return null;
 
   const visibleTags = tags.slice(0, maxTags);
