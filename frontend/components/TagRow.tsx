@@ -1,14 +1,12 @@
 import { View, Text } from "react-native";
-import { useTagsForHabit } from "@/lib/store/hooks";
+import type { Tag } from "@/lib/tag";
 import { FadingContainer } from "./FadingContainer";
 
-interface HabitTagRowProps {
-  habitId: string;
+interface TagRowProps {
+  tags: Tag[];
 }
 
-export function HabitTagRow({ habitId }: HabitTagRowProps) {
-  const tags = useTagsForHabit(habitId);
-
+export function TagRow({ tags }: TagRowProps) {
   if (tags.length === 0) return null;
 
   return (
