@@ -4,8 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
 import { useAuth } from "@/lib/AuthContext";
 import { LOCAL_USER_ID, useTrades } from "@/lib/store";
-import { habitStore } from "@/lib/store/habitStore";
-import { rewardStore } from "@/lib/store/rewardStore";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { SortDropdown } from "@/components/SortDropdown";
 import { FilterChips } from "@/components/FilterChips";
@@ -13,12 +11,7 @@ import { TradeItem } from "@/components/TradeItem";
 import type { Trade } from "@/lib/trade";
 import { TRADE_SORT_OPTIONS, DEFAULT_TRADE_SORT, type TradeSortKey } from "@/lib/tradeSortOptions";
 import { TRADE_FILTER_OPTIONS, DEFAULT_TRADE_FILTER, type TradeFilterKey } from "@/lib/tradeSortOptions";
-import { filterTrades, sortTrades } from "@/lib/tradeSorting";
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
+import { filterTrades, sortTrades, formatTradeDate, getTradeInfo } from "@/lib/tradeSorting";
 
 export default function Trades() {
   const { user } = useAuth();
@@ -33,15 +26,6 @@ export default function Trades() {
     return sortTrades(filtered, sortKey);
   }, [trades, filterKey, sortKey]);
 
-  const getTradeInfo = useCallback((trade: Trade) => {
-    if (trade.habit_id) {
-      const habit = habitStore.getHabitById(trade.habit_id);
-      return { type: "Sold" as const, name: habit?.name ?? "Deleted habit" };
-    }
-    const reward = rewardStore.getRewardById(trade.reward_id!);
-    return { type: "Bought" as const, name: reward?.name ?? "Deleted reward" };
-  }, []);
-
   const renderItem = useCallback(
     ({ item }: { item: Trade }) => {
       const { type, name } = getTradeInfo(item);
@@ -50,11 +34,11 @@ export default function Trades() {
           type={type}
           name={name}
           amount={item.amount}
-          date={formatDate(item.created_at)}
+          date={formatTradeDate(item.created_at)}
         />
       );
     },
-    [getTradeInfo],
+    [],
   );
 
   const keyExtractor = useCallback((item: Trade) => item.id, []);
