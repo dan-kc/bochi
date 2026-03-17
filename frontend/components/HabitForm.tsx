@@ -14,9 +14,12 @@ import { z } from "zod";
 import type { Habit, HabitInput } from "@/lib/habit";
 import { createEmptyHabitInput } from "@/lib/habit";
 import type { Tag } from "@/lib/tag";
-import { useTagsForHabit, useTagActions } from "@/lib/store/hooks";
+import { useTagsForHabit, useTagActions, useHabitTagActions } from "@/lib/store/hooks";
 import { TagSelectionModal } from "./TagSelectionModal";
 import { ColorPickerModal } from "./ColorPickerModal";
+import type { FrequencyPeriod } from "@/lib/frequency";
+import { PERIOD_DIVISORS, formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
+import { parseZodErrors } from "@/lib/formValidation";
 
 interface HabitFormProps {
   habit?: Habit | null;
@@ -43,30 +46,6 @@ const habitSchema = z.object({
     .nullable(),
 });
 
-type FrequencyPeriod = "day" | "week" | "month";
-
-const PERIOD_DIVISORS: Record<FrequencyPeriod, number> = {
-  day: 1,
-  week: 7,
-  month: 30,
-};
-
-function formatFrequencySummary(frequency: number | null): string | null {
-  if (frequency == null) return null;
-  if (frequency >= 1) {
-    const formatted = frequency.toFixed(2).replace(/\.?0+$/, "");
-    return `${formatted}/day`;
-  }
-  const weekly = frequency * 7;
-  if (weekly >= 1) {
-    const formatted = weekly.toFixed(2).replace(/\.?0+$/, "");
-    return `${formatted}/week`;
-  }
-  const monthly = frequency * 30;
-  const formatted = monthly.toFixed(2).replace(/\.?0+$/, "");
-  return `${formatted}/month`;
-}
-
 export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank, onComplete }: HabitFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -87,6 +66,7 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
   // Get tags for this habit (only when editing)
   const habitTags = useTagsForHabit(habit?.id ?? "");
   const { updateTag } = useTagActions();
+  const { addTagToHabit, removeTagFromHabit } = useHabitTagActions();
 
   useEffect(() => {
     if (habit) {
@@ -94,23 +74,9 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
       setDescription(habit.description);
 
       if (habit.min_daily_frequency !== null) {
-        const dailyFreq = habit.min_daily_frequency;
-        let bestPeriod: FrequencyPeriod = "day";
-        let displayValue = dailyFreq;
-
-        if (dailyFreq >= 1) {
-          bestPeriod = "day";
-          displayValue = dailyFreq;
-        } else if (dailyFreq * 7 >= 1) {
-          bestPeriod = "week";
-          displayValue = dailyFreq * 7;
-        } else {
-          bestPeriod = "month";
-          displayValue = dailyFreq * 30;
-        }
-
-        setFrequencyPeriod(bestPeriod);
-        setMinDailyFrequency(String(displayValue));
+        const { value, period } = fromDailyFrequency(habit.min_daily_frequency);
+        setFrequencyPeriod(period);
+        setMinDailyFrequency(String(value));
       } else {
         setMinDailyFrequency("");
         setFrequencyPeriod("day");
@@ -143,15 +109,7 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
     const result = habitSchema.safeParse(input);
 
     if (!result.success) {
-      const fieldErrors: Record<string, string[]> = {};
-      for (const issue of result.error.issues) {
-        const path = issue.path.join(".") || "general";
-        if (!fieldErrors[path]) {
-          fieldErrors[path] = [];
-        }
-        fieldErrors[path].push(issue.message);
-      }
-      setErrors(fieldErrors);
+      setErrors(parseZodErrors(result.error));
       return;
     }
 
@@ -436,10 +394,12 @@ export function HabitForm({ habit, userId, onSave, onCancel, onDelete, onRerank,
         <TagSelectionModal
           visible={showTagModal}
           onClose={() => setShowTagModal(false)}
-          habitId={habit.id}
+          entityId={habit.id}
           userId={userId}
           selectedTagIds={habitTags.map((t) => t.id)}
           onColorEdit={handleColorEdit}
+          addTag={addTagToHabit}
+          removeTag={removeTagFromHabit}
         />
       )}
 

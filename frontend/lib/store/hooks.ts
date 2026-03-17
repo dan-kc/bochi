@@ -10,6 +10,59 @@ import type { Tag } from "../tag";
 import type { Reward } from "../reward";
 import type { Trade } from "../trade";
 
+// ============ Cached Selector Helpers ============
+
+function useCachedListSelector<T>(
+  subscribe: (listener: () => void) => () => void,
+  selector: () => T[],
+  serialize: (items: T[]) => string,
+): T[] {
+  const cacheRef = useRef<{ items: T[]; serialized: string }>({
+    items: [],
+    serialized: "[]",
+  });
+
+  const getSnapshot = useCallback(() => {
+    const items = selector();
+    const serialized = serialize(items);
+    if (serialized !== cacheRef.current.serialized) {
+      cacheRef.current = { items, serialized };
+    }
+    return cacheRef.current.items;
+  }, [selector, serialize]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+function useCachedItemSelector<T extends { updated_at?: string }>(
+  subscribe: (listener: () => void) => () => void,
+  selector: () => T | undefined,
+): T | undefined {
+  const cacheRef = useRef<{ item: T | undefined; updatedAt: string }>({
+    item: undefined,
+    updatedAt: "",
+  });
+
+  const getSnapshot = useCallback(() => {
+    const item = selector();
+    const updatedAt = item?.updated_at ?? "";
+    if (updatedAt !== cacheRef.current.updatedAt) {
+      cacheRef.current = { item, updatedAt };
+    }
+    return cacheRef.current.item;
+  }, [selector]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+function serializeByIdAndUpdatedAt(items: { id: string; updated_at: string }[]): string {
+  return JSON.stringify(items.map((i) => `${i.id}:${i.updated_at}`));
+}
+
+function serializeByIdUpdatedDeleted(items: { id: string; updated_at: string; deleted_at: string | null }[]): string {
+  return JSON.stringify(items.map((i) => `${i.id}:${i.updated_at}:${i.deleted_at ?? ""}`));
+}
+
 // ============ Core Subscription Hook ============
 
 /**
@@ -24,41 +77,15 @@ export function useHabitStore() {
   );
 }
 
-// ============ Fine-Grained Hooks ============
+// ============ Habit Hooks ============
 
 /**
  * Subscribe to all habits for a user (filtered, sorted).
  * Only re-renders when the filtered list changes.
  */
 export function useHabits(userId: string): Habit[] {
-  const getSnapshot = useCallback(() => {
-    return habitStore.getAllHabits(userId);
-  }, [userId]);
-
-  // Use a ref to cache the previous result for shallow comparison
-  const cacheRef = useRef<{ habits: Habit[]; serialized: string }>({
-    habits: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const habits = habitStore.getAllHabits(userId);
-    // Serialize for comparison (only IDs and updated_at for efficiency)
-    const serialized = JSON.stringify(
-      habits.map((h) => `${h.id}:${h.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { habits, serialized };
-    }
-    return cacheRef.current.habits;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    habitStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => habitStore.getAllHabits(userId), [userId]);
+  return useCachedListSelector(habitStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }
 
 /**
@@ -66,31 +93,8 @@ export function useHabits(userId: string): Habit[] {
  * Only re-renders when THIS specific habit changes.
  */
 export function useHabit(habitId: string): Habit | undefined {
-  const getSnapshot = useCallback(() => {
-    return habitStore.getHabitById(habitId);
-  }, [habitId]);
-
-  // Cache to prevent unnecessary re-renders
-  const cacheRef = useRef<{ habit: Habit | undefined; updatedAt: string }>({
-    habit: undefined,
-    updatedAt: "",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const habit = habitStore.getHabitById(habitId);
-    const updatedAt = habit?.updated_at ?? "";
-
-    if (updatedAt !== cacheRef.current.updatedAt) {
-      cacheRef.current = { habit, updatedAt };
-    }
-    return cacheRef.current.habit;
-  }, [habitId]);
-
-  return useSyncExternalStore(
-    habitStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => habitStore.getHabitById(habitId), [habitId]);
+  return useCachedItemSelector(habitStore.subscribe, selector);
 }
 
 /**
@@ -110,33 +114,11 @@ export function useHabitCount(userId: string): number {
  * Sorted from hardest to easiest, with unranked habits at the bottom.
  */
 export function useHabitsSortedByDifficulty(userId: string): Habit[] {
-  // Use a ref to cache the previous result for shallow comparison
-  const cacheRef = useRef<{ habits: Habit[]; serialized: string }>({
-    habits: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const habits = habitStore.getHabitsSortedByDifficulty(userId);
-    // Use updated_at to detect any habit field change (not just difficulty_rank)
-    const serialized = JSON.stringify(
-      habits.map((h) => `${h.id}:${h.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { habits, serialized };
-    }
-    return cacheRef.current.habits;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    habitStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => habitStore.getHabitsSortedByDifficulty(userId), [userId]);
+  return useCachedListSelector(habitStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }
 
-// ============ Actions (no subscription, just mutations) ============
+// ============ Habit Actions ============
 
 export function useHabitActions() {
   return {
@@ -154,28 +136,8 @@ export function useHabitActions() {
  * Only re-renders when the tag list changes.
  */
 export function useTags(userId: string): Tag[] {
-  const cacheRef = useRef<{ tags: Tag[]; serialized: string }>({
-    tags: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const tags = tagStore.getAllTags(userId);
-    const serialized = JSON.stringify(
-      tags.map((t) => `${t.id}:${t.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { tags, serialized };
-    }
-    return cacheRef.current.tags;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    tagStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => tagStore.getAllTags(userId), [userId]);
+  return useCachedListSelector(tagStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }
 
 /**
@@ -183,28 +145,8 @@ export function useTags(userId: string): Tag[] {
  * Useful for tag selection modal with restore option.
  */
 export function useAllTagsIncludingDeleted(userId: string): Tag[] {
-  const cacheRef = useRef<{ tags: Tag[]; serialized: string }>({
-    tags: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const tags = tagStore.getAllTagsIncludingDeleted(userId);
-    const serialized = JSON.stringify(
-      tags.map((t) => `${t.id}:${t.updated_at}:${t.deleted_at ?? ""}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { tags, serialized };
-    }
-    return cacheRef.current.tags;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    tagStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => tagStore.getAllTagsIncludingDeleted(userId), [userId]);
+  return useCachedListSelector(tagStore.subscribe, selector, serializeByIdUpdatedDeleted);
 }
 
 /**
@@ -217,17 +159,13 @@ export function useTagsForHabit(habitId: string): Tag[] {
     serialized: "[]",
   });
 
-  // Combined snapshot that gets tag IDs and resolves them to tags
-  // We need to subscribe to both stores, so we combine the subscription
   const getSnapshot = useCallback(() => {
     const tagIds = habitTagStore.getTagIdsForHabit(habitId);
     const tags = tagIds
       .map((id) => tagStore.getTagById(id))
       .filter((t): t is Tag => t != null && !t.deleted_at);
 
-    const serialized = JSON.stringify(
-      tags.map((t) => `${t.id}:${t.updated_at}`),
-    );
+    const serialized = serializeByIdAndUpdatedAt(tags);
 
     if (serialized !== cacheRef.current.serialized) {
       cacheRef.current = { tags, serialized };
@@ -265,28 +203,8 @@ export function useHabitTagActions() {
  * Only re-renders when the reward list changes.
  */
 export function useRewards(userId: string): Reward[] {
-  const cacheRef = useRef<{ rewards: Reward[]; serialized: string }>({
-    rewards: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const rewards = rewardStore.getAllRewards(userId);
-    const serialized = JSON.stringify(
-      rewards.map((r) => `${r.id}:${r.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { rewards, serialized };
-    }
-    return cacheRef.current.rewards;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    rewardStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => rewardStore.getAllRewards(userId), [userId]);
+  return useCachedListSelector(rewardStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }
 
 /**
@@ -294,26 +212,8 @@ export function useRewards(userId: string): Reward[] {
  * Only re-renders when THIS specific reward changes.
  */
 export function useReward(rewardId: string): Reward | undefined {
-  const cacheRef = useRef<{ reward: Reward | undefined; updatedAt: string }>({
-    reward: undefined,
-    updatedAt: "",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const reward = rewardStore.getRewardById(rewardId);
-    const updatedAt = reward?.updated_at ?? "";
-
-    if (updatedAt !== cacheRef.current.updatedAt) {
-      cacheRef.current = { reward, updatedAt };
-    }
-    return cacheRef.current.reward;
-  }, [rewardId]);
-
-  return useSyncExternalStore(
-    rewardStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => rewardStore.getRewardById(rewardId), [rewardId]);
+  return useCachedItemSelector(rewardStore.subscribe, selector);
 }
 
 /**
@@ -321,28 +221,8 @@ export function useReward(rewardId: string): Reward | undefined {
  * Sorted from highest damage to lowest, with unranked rewards at the bottom.
  */
 export function useRewardsSortedByDamage(userId: string): Reward[] {
-  const cacheRef = useRef<{ rewards: Reward[]; serialized: string }>({
-    rewards: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const rewards = rewardStore.getRewardsSortedByDamage(userId);
-    const serialized = JSON.stringify(
-      rewards.map((r) => `${r.id}:${r.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { rewards, serialized };
-    }
-    return cacheRef.current.rewards;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    rewardStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => rewardStore.getRewardsSortedByDamage(userId), [userId]);
+  return useCachedListSelector(rewardStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }
 
 export function useRewardActions() {
@@ -372,9 +252,7 @@ export function useTagsForReward(rewardId: string): Tag[] {
       .map((id) => tagStore.getTagById(id))
       .filter((t): t is Tag => t != null && !t.deleted_at);
 
-    const serialized = JSON.stringify(
-      tags.map((t) => `${t.id}:${t.updated_at}`),
-    );
+    const serialized = serializeByIdAndUpdatedAt(tags);
 
     if (serialized !== cacheRef.current.serialized) {
       cacheRef.current = { tags, serialized };
@@ -403,26 +281,6 @@ export function useRewardTagActions() {
  * Only re-renders when the trade list changes.
  */
 export function useTrades(userId: string): Trade[] {
-  const cacheRef = useRef<{ trades: Trade[]; serialized: string }>({
-    trades: [],
-    serialized: "[]",
-  });
-
-  const getSnapshotWithCache = useCallback(() => {
-    const trades = tradeStore.getAllTrades(userId);
-    const serialized = JSON.stringify(
-      trades.map((t) => `${t.id}:${t.updated_at}`),
-    );
-
-    if (serialized !== cacheRef.current.serialized) {
-      cacheRef.current = { trades, serialized };
-    }
-    return cacheRef.current.trades;
-  }, [userId]);
-
-  return useSyncExternalStore(
-    tradeStore.subscribe,
-    getSnapshotWithCache,
-    getSnapshotWithCache,
-  );
+  const selector = useCallback(() => tradeStore.getAllTrades(userId), [userId]);
+  return useCachedListSelector(tradeStore.subscribe, selector, serializeByIdAndUpdatedAt);
 }

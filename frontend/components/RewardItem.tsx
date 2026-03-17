@@ -3,7 +3,8 @@ import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
 import type { DisplayMode } from "@/lib/rewardSorting";
 import { formatShortDate } from "@/lib/rewardSorting";
-import { RewardTagChips } from "./RewardTagChips";
+import { useTagsForReward } from "@/lib/store/hooks";
+import { TagChips } from "./TagChips";
 
 interface RewardItemProps {
   reward: Reward;
@@ -78,6 +79,7 @@ export function RewardItem({
   isDamageView,
   displayMode = "price",
 }: RewardItemProps) {
+  const tags = useTagsForReward(reward.id);
   const hasDamageRank = reward.damage_rank != null;
   const isUnrankedInDamageView = isDamageView && !hasDamageRank;
 
@@ -110,7 +112,7 @@ export function RewardItem({
               {reward.description}
             </Text>
           ) : null}
-          <RewardTagChips rewardId={reward.id} />
+          <TagChips tags={tags} />
           <View className="flex-row flex-wrap gap-2 mt-2">
             {reward.max_daily_frequency !== null && (
               <Text className="text-accent-secondary text-xs">

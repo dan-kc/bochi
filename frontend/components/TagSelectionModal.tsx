@@ -11,7 +11,6 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   useAllTagsIncludingDeleted,
   useTagActions,
-  useHabitTagActions,
 } from "@/lib/store/hooks";
 import { generateRandomColor } from "@/lib/tag";
 import type { Tag } from "@/lib/tag";
@@ -19,19 +18,23 @@ import type { Tag } from "@/lib/tag";
 interface TagSelectionModalProps {
   visible: boolean;
   onClose: () => void;
-  habitId: string;
+  entityId: string;
   userId: string;
   selectedTagIds: string[];
   onColorEdit: (tag: Tag) => void;
+  addTag: (userId: string, entityId: string, tagId: string) => Promise<any>;
+  removeTag: (entityId: string, tagId: string) => Promise<boolean>;
 }
 
 export function TagSelectionModal({
   visible,
   onClose,
-  habitId,
+  entityId,
   userId,
   selectedTagIds,
   onColorEdit,
+  addTag,
+  removeTag,
 }: TagSelectionModalProps) {
   const [search, setSearch] = useState("");
   const [newTagName, setNewTagName] = useState("");
@@ -39,7 +42,6 @@ export function TagSelectionModal({
 
   const allTags = useAllTagsIncludingDeleted(userId);
   const { createTag, restoreTag } = useTagActions();
-  const { addTagToHabit, removeTagFromHabit } = useHabitTagActions();
 
   // Filter tags by search query
   const filteredTags = useMemo(() => {
@@ -52,9 +54,9 @@ export function TagSelectionModal({
 
   const handleToggleTag = async (tag: Tag) => {
     if (selectedSet.has(tag.id)) {
-      await removeTagFromHabit(habitId, tag.id);
+      await removeTag(entityId, tag.id);
     } else {
-      await addTagToHabit(userId, habitId, tag.id);
+      await addTag(userId, entityId, tag.id);
     }
   };
 
@@ -73,7 +75,7 @@ export function TagSelectionModal({
         color_hex: generateRandomColor(),
       });
       // Auto-select the new tag
-      await addTagToHabit(userId, habitId, tag.id);
+      await addTag(userId, entityId, tag.id);
       setNewTagName("");
     } finally {
       setIsCreating(false);

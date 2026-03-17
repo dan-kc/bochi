@@ -1,10 +1,8 @@
 import type { Habit } from "./habit";
 import type { SortKey } from "./sortOptions";
-
-export interface PriceData {
-  current: number;
-  previous: number;
-}
+import type { PriceData } from "./dateUtils";
+export type { PriceData } from "./dateUtils";
+export { formatShortDate } from "./dateUtils";
 
 export type DisplayMode = "price" | "frequency" | "created_at" | "difficulty";
 
@@ -74,9 +72,4 @@ export function getDisplayMode(sortKey: SortKey): DisplayMode {
     default:
       return "price";
   }
-}
-
-export function formatShortDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
