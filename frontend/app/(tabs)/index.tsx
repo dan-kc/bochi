@@ -110,6 +110,8 @@ export default function Habits() {
 
   const handleComplete = useCallback(
     async (habit: Habit) => {
+      setIsHabitFormVisible(false);
+      selectHabit(null);
       try {
         const amount = await completeHabit(habit);
         updatePrices(habits);
@@ -119,7 +121,7 @@ export default function Habits() {
         Alert.alert("Cannot Complete", message);
       }
     },
-    [completeHabit, updatePrices, habits],
+    [completeHabit, updatePrices, habits, selectHabit],
   );
 
   const handleRerank = useCallback(() => {
@@ -132,9 +134,9 @@ export default function Habits() {
 
   const renderItem = useCallback(
     ({ item }: { item: Habit }) => (
-      <HabitItem habit={item} onPress={handleHabitPress} />
+      <HabitItem habit={item} onPress={handleHabitPress} onComplete={handleComplete} />
     ),
-    [handleHabitPress],
+    [handleHabitPress, handleComplete],
   );
 
   const keyExtractor = useCallback((item: Habit) => item.id, []);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -19,8 +19,8 @@ import { TagSelectionModal } from "./TagSelectionModal";
 import { ColorPickerModal } from "./ColorPickerModal";
 import { TradeHistory } from "./TradeHistory";
 import type { FrequencyPeriod } from "@/lib/frequency";
-import { PERIOD_DIVISORS, formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
-import { parseZodErrors } from "@/lib/formValidation";
+import { formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
+import { parseZodErrors, buildFrequencyInput, autoSaveOnClose } from "@/lib/formValidation";
 
 interface RewardFormProps {
   reward?: Reward | null;
@@ -94,13 +94,7 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
   const handleSave = async () => {
     setErrors({});
 
-    const rawFrequency = maxDailyFrequency.trim()
-      ? parseFloat(maxDailyFrequency)
-      : null;
-    const frequency = rawFrequency !== null
-      ? rawFrequency / PERIOD_DIVISORS[frequencyPeriod]
-      : null;
-
+    const frequency = buildFrequencyInput(maxDailyFrequency, frequencyPeriod);
     const input = {
       name: name.trim(),
       description: description.trim(),
@@ -147,6 +141,30 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
 
   const allErrors = Object.values(errors).flat();
 
+  const handleClose = useCallback(async () => {
+    if (!isEditing || !reward) {
+      onCancel();
+      return;
+    }
+
+    const frequency = buildFrequencyInput(maxDailyFrequency, frequencyPeriod);
+    await autoSaveOnClose({
+      currentValues: {
+        name: name.trim(),
+        description: description.trim(),
+        max_daily_frequency: frequency,
+      },
+      originalValues: {
+        name: reward.name,
+        description: reward.description,
+        max_daily_frequency: reward.max_daily_frequency,
+      },
+      schema: rewardSchema,
+      onSave,
+      onCancel,
+    });
+  }, [isEditing, reward, name, description, maxDailyFrequency, frequencyPeriod, onSave, onCancel]);
+
   const handleColorEdit = (tag: Tag) => {
     setEditingTag(tag);
     setShowColorPicker(true);
@@ -169,18 +187,13 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
       <ScrollView className="flex-1 p-4">
         {/* Header */}
         <View className="flex-row items-center justify-between mb-6">
-          <Pressable onPress={onCancel} disabled={isLoading}>
-            <Ionicons name="close" size={28} color="var(--color-muted)" />
+          <Pressable onPress={handleClose} disabled={isLoading}>
+            {isSaving ? (
+              <ActivityIndicator color="var(--color-muted)" />
+            ) : (
+              <Ionicons name="close" size={28} color="var(--color-muted)" />
+            )}
           </Pressable>
-          {isEditing && (
-            <Pressable onPress={handleSave} disabled={isLoading}>
-              {isSaving ? (
-                <ActivityIndicator color="var(--color-accent-secondary)" />
-              ) : (
-                <Text className="text-accent-secondary font-semibold text-base">Save</Text>
-              )}
-            </Pressable>
-          )}
         </View>
 
         {allErrors.length > 0 && (

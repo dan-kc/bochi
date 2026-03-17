@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { View, Text, Pressable } from "react-native";
 import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
@@ -5,11 +6,13 @@ import type { DisplayMode } from "@/lib/rewardSorting";
 import { formatShortDate } from "@/lib/rewardSorting";
 import { useTagsForReward } from "@/lib/store/hooks";
 import { TagChips } from "./TagChips";
+import { SwipeableRow } from "./SwipeableRow";
 
 interface RewardItemProps {
   reward: Reward;
   onPress: (reward: Reward) => void;
   onSetDamage?: (reward: Reward) => void;
+  onPurchase?: (reward: Reward) => void;
   isDamageView?: boolean;
   displayMode?: DisplayMode;
 }
@@ -76,6 +79,7 @@ export function RewardItem({
   reward,
   onPress,
   onSetDamage,
+  onPurchase,
   isDamageView,
   displayMode = "price",
 }: RewardItemProps) {
@@ -83,10 +87,14 @@ export function RewardItem({
   const hasDamageRank = reward.damage_rank != null;
   const isUnrankedInDamageView = isDamageView && !hasDamageRank;
 
-  return (
+  const handleAction = useCallback(() => {
+    onPurchase?.(reward);
+  }, [onPurchase, reward]);
+
+  const content = (
     <Pressable
       onPress={() => onPress(reward)}
-      className="border-b border-border py-4 px-2"
+      className="border-b border-border py-4 px-2 bg-background"
     >
       {({ hovered }) => (
         <View className={hovered ? "opacity-80" : ""}>
@@ -138,5 +146,17 @@ export function RewardItem({
         </View>
       )}
     </Pressable>
+  );
+
+  if (!onPurchase) return content;
+
+  return (
+    <SwipeableRow
+      onAction={handleAction}
+      actionColor="#f54900"
+      actionIcon="cart"
+    >
+      {content}
+    </SwipeableRow>
   );
 }

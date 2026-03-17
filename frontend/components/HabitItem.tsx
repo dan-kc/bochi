@@ -1,12 +1,15 @@
+import { useCallback } from "react";
 import { View, Pressable } from "react-native";
 import type { Habit } from "@/lib/habit";
 import { FadingText } from "./FadingText";
 import { PriceDisplay } from "./PriceDisplay";
 import { HabitTagRow } from "./HabitTagRow";
+import { SwipeableRow } from "./SwipeableRow";
 
 interface HabitItemProps {
   habit: Habit;
   onPress: (habit: Habit) => void;
+  onComplete?: (habit: Habit) => void;
 }
 
 function formatFrequency(frequency: number | null): string | null {
@@ -15,13 +18,17 @@ function formatFrequency(frequency: number | null): string | null {
   return `${formatted}/day`;
 }
 
-export function HabitItem({ habit, onPress }: HabitItemProps) {
+export function HabitItem({ habit, onPress, onComplete }: HabitItemProps) {
   const frequencyText = formatFrequency(habit.min_daily_frequency);
 
-  return (
+  const handleAction = useCallback(() => {
+    onComplete?.(habit);
+  }, [onComplete, habit]);
+
+  const content = (
     <Pressable
       onPress={() => onPress(habit)}
-      className="border-b border-border py-4 px-2"
+      className="border-b border-border py-4 px-2 bg-background"
     >
       {({ hovered }) => (
         <View className={hovered ? "opacity-80" : ""}>
@@ -60,5 +67,17 @@ export function HabitItem({ habit, onPress }: HabitItemProps) {
         </View>
       )}
     </Pressable>
+  );
+
+  if (!onComplete) return content;
+
+  return (
+    <SwipeableRow
+      onAction={handleAction}
+      actionColor="#197291"
+      actionIcon="checkmark-circle"
+    >
+      {content}
+    </SwipeableRow>
   );
 }
