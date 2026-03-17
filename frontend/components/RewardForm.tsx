@@ -17,6 +17,7 @@ import type { Tag } from "@/lib/tag";
 import { useTagsForReward, useTagActions, useRewardTagActions } from "@/lib/store/hooks";
 import { TagSelectionModal } from "./TagSelectionModal";
 import { ColorPickerModal } from "./ColorPickerModal";
+import { TradeHistory } from "./TradeHistory";
 import type { FrequencyPeriod } from "@/lib/frequency";
 import { PERIOD_DIVISORS, formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
 import { parseZodErrors } from "@/lib/formValidation";
@@ -385,6 +386,11 @@ export function RewardForm({ reward, userId, onSave, onCancel, onDelete, onReran
                 </Pressable>
               )}
             </View>
+          )}
+
+          {/* Trade history (edit mode only) */}
+          {isEditing && reward && (
+            <TradeHistory userId={userId} rewardId={reward.id} />
           )}
         </View>
       </ScrollView>
