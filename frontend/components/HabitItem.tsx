@@ -7,6 +7,7 @@ import { PriceDisplay } from "./PriceDisplay";
 interface HabitItemProps {
   habit: Habit;
   onPress: (habit: Habit) => void;
+  onComplete?: (habit: Habit) => void;
 }
 
 function formatFrequency(frequency: number | null): string | null {
@@ -27,5 +28,17 @@ export function HabitItem({ habit, onPress }: HabitItemProps) {
       bottomRight={<PriceDisplay habitId={habit.id} />}
       onPress={() => onPress(habit)}
     />
+  );
+
+  if (!onComplete) return content;
+
+  return (
+    <SwipeableRow
+      onAction={handleAction}
+      actionColor="#197291"
+      actionIcon="checkmark-circle"
+    >
+      {content}
+    </SwipeableRow>
   );
 }

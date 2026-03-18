@@ -111,6 +111,8 @@ export default function Rewards() {
 
   const handlePurchase = useCallback(
     async (reward: Reward) => {
+      setIsRewardFormVisible(false);
+      selectReward(null);
       try {
         const price = await purchaseReward(reward);
         // Recalculate prices since purchase count changed
@@ -121,7 +123,7 @@ export default function Rewards() {
         Alert.alert("Cannot Purchase", message);
       }
     },
-    [purchaseReward, updatePrices, rewards],
+    [purchaseReward, updatePrices, rewards, selectReward],
   );
 
   const handleRerank = useCallback(() => {
@@ -137,10 +139,11 @@ export default function Rewards() {
       <RewardItem
         reward={item}
         onPress={handleRewardPress}
+        onPurchase={handlePurchase}
         displayMode={displayMode}
       />
     ),
-    [handleRewardPress, displayMode],
+    [handleRewardPress, handlePurchase, displayMode],
   );
 
   const keyExtractor = useCallback((item: Reward) => item.id, []);

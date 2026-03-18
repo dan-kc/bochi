@@ -93,4 +93,16 @@ export function RewardItem({
       onPress={() => onPress(reward)}
     />
   );
+
+  if (!onPurchase) return content;
+
+  return (
+    <SwipeableRow
+      onAction={handleAction}
+      actionColor="#f54900"
+      actionIcon="cart"
+    >
+      {content}
+    </SwipeableRow>
+  );
 }

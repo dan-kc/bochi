@@ -1,4 +1,5 @@
 import { Slot } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/lib/AuthContext";
 import { SyncProvider } from "@/lib/sync";
 import { HabitProvider } from "@/lib/HabitContext";
@@ -11,21 +12,23 @@ import "../global.css";
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <SyncProvider>
-          <PriceUpdateProvider>
-            <HabitProvider>
-              <RewardPriceUpdateProvider>
-                <RewardProvider>
-                  <Slot />
-                  <SyncToast />
-                </RewardProvider>
-              </RewardPriceUpdateProvider>
-            </HabitProvider>
-          </PriceUpdateProvider>
-        </SyncProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <SyncProvider>
+            <PriceUpdateProvider>
+              <HabitProvider>
+                <RewardPriceUpdateProvider>
+                  <RewardProvider>
+                    <Slot />
+                    <SyncToast />
+                  </RewardProvider>
+                </RewardPriceUpdateProvider>
+              </HabitProvider>
+            </PriceUpdateProvider>
+          </SyncProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
