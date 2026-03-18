@@ -1,19 +1,15 @@
-import { useCallback } from "react";
-import { View, Text, Pressable } from "react-native";
+import { Text } from "react-native";
 import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
 import type { DisplayMode } from "@/lib/rewardSorting";
 import { formatShortDate } from "@/lib/rewardSorting";
 import { useTagsForReward } from "@/lib/store/hooks";
-import { TagChips } from "./TagChips";
-import { SwipeableRow } from "./SwipeableRow";
+import { ListItemCard } from "./ListItemCard";
+import { TagRow } from "./TagRow";
 
 interface RewardItemProps {
   reward: Reward;
   onPress: (reward: Reward) => void;
-  onSetDamage?: (reward: Reward) => void;
-  onPurchase?: (reward: Reward) => void;
-  isDamageView?: boolean;
   displayMode?: DisplayMode;
 }
 
@@ -32,7 +28,7 @@ function InfoDisplay({
     if (!priceData) return null;
 
     return (
-      <Text className="text-sm font-bold text-accent">
+      <Text className="text-base font-bold text-accent">
         {priceData.current} tofu
       </Text>
     );
@@ -75,77 +71,27 @@ function InfoDisplay({
   return null;
 }
 
+function formatFrequency(frequency: number | null): string | null {
+  if (frequency == null) return null;
+  return `${frequency}x max/day`;
+}
+
 export function RewardItem({
   reward,
   onPress,
-  onSetDamage,
-  onPurchase,
-  isDamageView,
   displayMode = "price",
 }: RewardItemProps) {
   const tags = useTagsForReward(reward.id);
-  const hasDamageRank = reward.damage_rank != null;
-  const isUnrankedInDamageView = isDamageView && !hasDamageRank;
 
-  const handleAction = useCallback(() => {
-    onPurchase?.(reward);
-  }, [onPurchase, reward]);
-
-  const content = (
-    <Pressable
+  return (
+    <ListItemCard
+      name={reward.name}
+      description={reward.description}
+      subtitle={formatFrequency(reward.max_daily_frequency)}
+      tags={<TagRow tags={tags} />}
+      bottomRight={<InfoDisplay reward={reward} displayMode={displayMode} />}
       onPress={() => onPress(reward)}
-      className="border-b border-border py-4 px-2 bg-background"
-    >
-      {({ hovered }) => (
-        <View className={hovered ? "opacity-80" : ""}>
-          <View className="flex-row justify-between items-start">
-            <Text className="text-lg font-semibold text-foreground mb-1 flex-1">
-              {reward.name}
-            </Text>
-            <View className="flex-row items-center gap-2 ml-2">
-              <InfoDisplay reward={reward} displayMode={displayMode} />
-              {isUnrankedInDamageView && (
-                <Text className="text-muted text-xs font-medium">
-                  Unranked
-                </Text>
-              )}
-            </View>
-          </View>
-          {reward.description ? (
-            <Text
-              className="text-muted text-sm mb-1"
-              numberOfLines={2}
-              ellipsizeMode="tail"
-            >
-              {reward.description}
-            </Text>
-          ) : null}
-          <TagChips tags={tags} />
-          <View className="flex-row flex-wrap gap-2 mt-2">
-            {reward.max_daily_frequency !== null && (
-              <Text className="text-accent-secondary text-xs">
-                {reward.max_daily_frequency}x max/day
-              </Text>
-            )}
-            {hasDamageRank && isDamageView && (
-              <Text className="text-accent text-xs font-mono">
-                {reward.damage_rank}
-              </Text>
-            )}
-            {!hasDamageRank && onSetDamage && (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onSetDamage(reward);
-                }}
-              >
-                <Text className="text-accent text-xs">Set Damage</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-      )}
-    </Pressable>
+    />
   );
 
   if (!onPurchase) return content;
