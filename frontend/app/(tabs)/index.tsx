@@ -32,6 +32,7 @@ export default function Habits() {
   const [isRankingVisible, setIsRankingVisible] = useState(false);
   const [habitToRank, setHabitToRank] = useState<Habit | null>(null);
   const [sortKey, setSortKey] = useSortPreference();
+  const [formKey, setFormKey] = useState(0);
 
   // Price update context
   const { updatePrices, prices } = usePriceUpdate();
@@ -49,6 +50,7 @@ export default function Habits() {
   const handleAddHabit = useCallback(() => {
     selectHabit(null);
     setIsEditing(false);
+    setFormKey(k => k + 1);
     setIsHabitFormVisible(true);
   }, [selectHabit, setIsEditing]);
 
@@ -56,6 +58,7 @@ export default function Habits() {
     (habit: Habit) => {
       selectHabit(habit);
       setIsEditing(true);
+      setFormKey(k => k + 1);
       setIsHabitFormVisible(true);
     },
     [selectHabit, setIsEditing],
@@ -76,16 +79,14 @@ export default function Habits() {
 
   const handleFormClose = useCallback(() => {
     setIsHabitFormVisible(false);
-    selectHabit(null);
-  }, [selectHabit]);
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (selectedHabit) {
       await deleteHabit(selectedHabit.id);
       setIsHabitFormVisible(false);
-      selectHabit(null);
     }
-  }, [selectedHabit, deleteHabit, selectHabit]);
+  }, [selectedHabit, deleteHabit]);
 
   const handleRankComplete = useCallback(
     async (rank: string) => {
@@ -106,7 +107,6 @@ export default function Habits() {
   const handleComplete = useCallback(
     async (habit: Habit) => {
       setIsHabitFormVisible(false);
-      selectHabit(null);
       try {
         const amount = await completeHabit(habit);
         updatePrices(habits);
@@ -116,7 +116,7 @@ export default function Habits() {
         Alert.alert("Cannot Complete", message);
       }
     },
-    [completeHabit, updatePrices, habits, selectHabit],
+    [completeHabit, updatePrices, habits],
   );
 
   const handleRerank = useCallback(() => {
@@ -195,6 +195,7 @@ export default function Habits() {
         >
           <SafeAreaView className="flex-1 bg-background">
             <HabitForm
+              key={formKey}
               habit={selectedHabit}
               userId={userId}
               onSave={handleSave}

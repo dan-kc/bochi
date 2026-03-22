@@ -31,6 +31,7 @@ export default function Rewards() {
   const [isRankingVisible, setIsRankingVisible] = useState(false);
   const [rewardToRank, setRewardToRank] = useState<Reward | null>(null);
   const [sortKey, setSortKey] = useState<RewardSortKey>(DEFAULT_REWARD_SORT);
+  const [formKey, setFormKey] = useState(0);
 
   // Price update context
   const { updatePrices, prices } = useRewardPriceUpdate();
@@ -50,6 +51,7 @@ export default function Rewards() {
   const handleAddReward = useCallback(() => {
     selectReward(null);
     setIsEditing(false);
+    setFormKey(k => k + 1);
     setIsRewardFormVisible(true);
   }, [selectReward, setIsEditing]);
 
@@ -57,6 +59,7 @@ export default function Rewards() {
     (reward: Reward) => {
       selectReward(reward);
       setIsEditing(true);
+      setFormKey(k => k + 1);
       setIsRewardFormVisible(true);
     },
     [selectReward, setIsEditing],
@@ -77,16 +80,14 @@ export default function Rewards() {
 
   const handleFormClose = useCallback(() => {
     setIsRewardFormVisible(false);
-    selectReward(null);
-  }, [selectReward]);
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (selectedReward) {
       await deleteReward(selectedReward.id);
       setIsRewardFormVisible(false);
-      selectReward(null);
     }
-  }, [selectedReward, deleteReward, selectReward]);
+  }, [selectedReward, deleteReward]);
 
   const handleRankComplete = useCallback(
     async (rank: string) => {
@@ -107,7 +108,6 @@ export default function Rewards() {
   const handlePurchase = useCallback(
     async (reward: Reward) => {
       setIsRewardFormVisible(false);
-      selectReward(null);
       try {
         const price = await purchaseReward(reward);
         // Recalculate prices since purchase count changed
@@ -118,7 +118,7 @@ export default function Rewards() {
         Alert.alert("Cannot Purchase", message);
       }
     },
-    [purchaseReward, updatePrices, rewards, selectReward],
+    [purchaseReward, updatePrices, rewards],
   );
 
   const handleRerank = useCallback(() => {
@@ -203,6 +203,7 @@ export default function Rewards() {
         >
           <SafeAreaView className="flex-1 bg-background">
             <RewardForm
+              key={formKey}
               reward={selectedReward}
               userId={userId}
               onSave={handleSave}
