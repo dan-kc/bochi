@@ -1,3 +1,4 @@
+import { Text, Pressable } from "react-native";
 import type { Habit } from "@/lib/habit";
 import { useTagsForHabit } from "@/lib/store/hooks";
 import { ListItemCard } from "./ListItemCard";
@@ -8,6 +9,7 @@ interface HabitItemProps {
   habit: Habit;
   onPress: (habit: Habit) => void;
   onComplete?: (habit: Habit) => void;
+  onSetRank?: (habit: Habit) => void;
 }
 
 function formatFrequency(frequency: number | null): string | null {
@@ -16,8 +18,16 @@ function formatFrequency(frequency: number | null): string | null {
   return `${formatted}/day`;
 }
 
-export function HabitItem({ habit, onPress }: HabitItemProps) {
+export function HabitItem({ habit, onPress, onSetRank }: HabitItemProps) {
   const tags = useTagsForHabit(habit.id);
+
+  const bottomRight = habit.difficulty_rank == null && onSetRank ? (
+    <Pressable onPress={() => onSetRank(habit)}>
+      <Text className="text-sm font-medium text-accent">Set Difficulty</Text>
+    </Pressable>
+  ) : (
+    <PriceDisplay habitId={habit.id} />
+  );
 
   return (
     <ListItemCard
@@ -25,7 +35,7 @@ export function HabitItem({ habit, onPress }: HabitItemProps) {
       description={habit.description}
       subtitle={formatFrequency(habit.min_daily_frequency)}
       tags={<TagRow tags={tags} />}
-      bottomRight={<PriceDisplay habitId={habit.id} />}
+      bottomRight={bottomRight}
       onPress={() => onPress(habit)}
     />
   );

@@ -1,4 +1,5 @@
 import type { Habit, HabitInput } from "@/lib/habit";
+import { usePriceUpdateOptional } from "@/lib/PriceUpdateContext";
 import { useTagsForHabit, useTagActions, useHabitTagActions } from "@/lib/store/hooks";
 import { ChangeForm, type ChangeFormConfig, type ChangeFormEntity } from "./ChangeForm";
 
@@ -18,13 +19,15 @@ const HABIT_CONFIG: ChangeFormConfig = {
   frequencyLabel: "Frequency",
   frequencyField: "min_daily_frequency",
   rankLabel: "Difficulty",
-  actionLabel: "Complete",
+  actionLabel: "Trade",
 };
 
 export function HabitForm({ habit, userId, onSave, onClose, onDelete, onRerank, onComplete }: HabitFormProps) {
   const habitTags = useTagsForHabit(habit?.id ?? "");
   const { updateTag } = useTagActions();
   const { addTagToHabit, removeTagFromHabit } = useHabitTagActions();
+  const priceContext = usePriceUpdateOptional();
+  const tradeAmount = habit ? (priceContext?.prices[habit.id]?.current ?? null) : null;
 
   return (
     <ChangeForm
@@ -32,6 +35,7 @@ export function HabitForm({ habit, userId, onSave, onClose, onDelete, onRerank, 
       entity={habit}
       userId={userId}
       tags={habitTags}
+      tradeAmount={tradeAmount}
       onSave={(input) => onSave(input as unknown as HabitInput)}
       onClose={onClose}
       onDelete={onDelete}

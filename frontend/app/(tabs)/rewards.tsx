@@ -76,18 +76,9 @@ export default function Rewards() {
   );
 
   const handleFormClose = useCallback(() => {
-    const wasCreating = !selectedReward;
-    const rewardForRanking = selectedReward;
-
     setIsRewardFormVisible(false);
     selectReward(null);
-
-    // Offer ranking for newly created rewards
-    if (!wasCreating && rewardForRanking && !rewardForRanking.damage_rank && rewards.length > 1) {
-      setRewardToRank(rewardForRanking);
-      setIsRankingVisible(true);
-    }
-  }, [selectedReward, selectReward, rewards.length]);
+  }, [selectReward]);
 
   const handleDelete = useCallback(async () => {
     if (selectedReward) {
@@ -138,6 +129,14 @@ export default function Rewards() {
     }
   }, [selectedReward]);
 
+  const handleSetRank = useCallback(
+    (reward: Reward) => {
+      setRewardToRank(reward);
+      setIsRankingVisible(true);
+    },
+    [],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Reward }) => (
       <RewardItem
@@ -145,9 +144,10 @@ export default function Rewards() {
         onPress={handleRewardPress}
         onPurchase={handlePurchase}
         displayMode={displayMode}
+        onSetRank={handleSetRank}
       />
     ),
-    [handleRewardPress, handlePurchase, displayMode],
+    [handleRewardPress, handlePurchase, displayMode, handleSetRank],
   );
 
   const keyExtractor = useCallback((item: Reward) => item.id, []);

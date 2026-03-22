@@ -62,6 +62,7 @@ export interface ChangeFormProps {
   entity?: ChangeFormEntity | null;
   userId: string;
   tags: Tag[];
+  tradeAmount?: number | null;
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
   onDelete?: () => Promise<void>;
@@ -96,6 +97,7 @@ export function ChangeForm({
   entity,
   userId,
   tags,
+  tradeAmount,
   onSave,
   onClose,
   onDelete,
@@ -398,19 +400,48 @@ export function ChangeForm({
           <FieldPillRow pills={pillActions} />
 
           {/* Hero action button (edit mode) */}
-          {isEditing && onAction && entity && (
-            <View className="mt-6">
-              <Pressable
-                onPress={() => onAction(entity)}
-                disabled={isLoading}
-                className="bg-accent py-4 px-6 rounded-lg items-center"
-              >
-                <Text className="text-white font-bold text-lg">
-                  {config.actionLabel}
-                </Text>
-              </Pressable>
-            </View>
-          )}
+          {isEditing && entity && (() => {
+            const hasRank = config.entityType === "habit"
+              ? entity.difficulty_rank != null
+              : entity.damage_rank != null;
+            if (hasRank && onAction) {
+              const amountStr = tradeAmount != null
+                ? ` ${tradeAmount > 0 ? "+" : ""}${tradeAmount}`
+                : "";
+              return (
+                <View className="mt-6">
+                  <Pressable
+                    onPress={() => onAction(entity)}
+                    disabled={isLoading}
+                    className="bg-accent py-4 px-6 rounded-lg items-center"
+                  >
+                    <Text className="text-white font-bold text-lg">
+                      {config.actionLabel}{amountStr}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            if (!hasRank && onRerank) {
+              const setRankLabel = config.entityType === "habit"
+                ? "Set Difficulty"
+                : "Set Damage";
+              return (
+                <View className="mt-6">
+                  <Pressable
+                    onPress={onRerank}
+                    disabled={isLoading}
+                    className="bg-surface py-4 px-6 rounded-lg items-center"
+                  >
+                    <Text className="text-muted font-bold text-lg">
+                      {setRankLabel}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            }
+            return null;
+          })()}
 
           {/* Delete button (edit mode) */}
           {isEditing && onDelete && (

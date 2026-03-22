@@ -1,4 +1,4 @@
-import { Text } from "react-native";
+import { Text, Pressable } from "react-native";
 import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
 import type { DisplayMode } from "@/lib/rewardSorting";
@@ -11,6 +11,7 @@ interface RewardItemProps {
   reward: Reward;
   onPress: (reward: Reward) => void;
   displayMode?: DisplayMode;
+  onSetRank?: (reward: Reward) => void;
 }
 
 function InfoDisplay({
@@ -80,8 +81,17 @@ export function RewardItem({
   reward,
   onPress,
   displayMode = "price",
+  onSetRank,
 }: RewardItemProps) {
   const tags = useTagsForReward(reward.id);
+
+  const bottomRight = reward.damage_rank == null && displayMode === "price" && onSetRank ? (
+    <Pressable onPress={() => onSetRank(reward)}>
+      <Text className="text-sm font-medium text-accent">Set Damage</Text>
+    </Pressable>
+  ) : (
+    <InfoDisplay reward={reward} displayMode={displayMode} />
+  );
 
   return (
     <ListItemCard
@@ -89,7 +99,7 @@ export function RewardItem({
       description={reward.description}
       subtitle={formatFrequency(reward.max_daily_frequency)}
       tags={<TagRow tags={tags} />}
-      bottomRight={<InfoDisplay reward={reward} displayMode={displayMode} />}
+      bottomRight={bottomRight}
       onPress={() => onPress(reward)}
     />
   );

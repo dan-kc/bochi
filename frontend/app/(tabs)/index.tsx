@@ -75,18 +75,9 @@ export default function Habits() {
   );
 
   const handleFormClose = useCallback(() => {
-    const wasCreating = !selectedHabit;
-    const habitForRanking = selectedHabit;
-
     setIsHabitFormVisible(false);
     selectHabit(null);
-
-    // Offer ranking for newly created habits
-    if (!wasCreating && habitForRanking && !habitForRanking.difficulty_rank && habits.length > 1) {
-      setHabitToRank(habitForRanking);
-      setIsRankingVisible(true);
-    }
-  }, [selectedHabit, selectHabit, habits.length]);
+  }, [selectHabit]);
 
   const handleDelete = useCallback(async () => {
     if (selectedHabit) {
@@ -136,11 +127,19 @@ export default function Habits() {
     }
   }, [selectedHabit]);
 
+  const handleSetRank = useCallback(
+    (habit: Habit) => {
+      setHabitToRank(habit);
+      setIsRankingVisible(true);
+    },
+    [],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Habit }) => (
-      <HabitItem habit={item} onPress={handleHabitPress} onComplete={handleComplete} />
+      <HabitItem habit={item} onPress={handleHabitPress} onComplete={handleComplete} onSetRank={handleSetRank} />
     ),
-    [handleHabitPress, handleComplete],
+    [handleHabitPress, handleComplete, handleSetRank],
   );
 
   const keyExtractor = useCallback((item: Habit) => item.id, []);
