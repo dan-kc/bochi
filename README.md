@@ -2,7 +2,7 @@ Tofustash is a gamified productivity tool to handle your habits. It is themed on
 
 ## Frontend
 
-A local-first React Native application for Web, Android and IOS.
+A local-first React Native application for Web, Android and IOS. The web service is only used for easy testing.
 
 ## Backend
 

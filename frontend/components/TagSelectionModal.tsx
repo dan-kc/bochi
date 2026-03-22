@@ -1,12 +1,5 @@
 import { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ScrollView,
-  Modal,
-} from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useAllTagsIncludingDeleted,
@@ -14,6 +7,8 @@ import {
 } from "@/lib/store/hooks";
 import { generateRandomColor } from "@/lib/tag";
 import type { Tag } from "@/lib/tag";
+import { BottomSheet } from "./BottomSheet";
+import { TagEditSheet } from "./TagEditSheet";
 
 interface TagSelectionModalProps {
   visible: boolean;
@@ -23,7 +18,7 @@ interface TagSelectionModalProps {
   selectedTagIds: string[];
   onColorEdit: (tag: Tag) => void;
   addTag: (userId: string, entityId: string, tagId: string) => Promise<any>;
-  removeTag: (entityId: string, tagId: string) => Promise<boolean>;
+  removeTag: (entityId: string, tagId: string) => Promise<unknown>;
 }
 
 export function TagSelectionModal({
@@ -37,11 +32,11 @@ export function TagSelectionModal({
   removeTag,
 }: TagSelectionModalProps) {
   const [search, setSearch] = useState("");
-  const [newTagName, setNewTagName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
 
   const allTags = useAllTagsIncludingDeleted(userId);
-  const { createTag, restoreTag } = useTagActions();
+  const { createTag, restoreTag, updateTag } = useTagActions();
 
   // Filter tags by search query
   const filteredTags = useMemo(() => {
@@ -51,6 +46,13 @@ export function TagSelectionModal({
   }, [allTags, search]);
 
   const selectedSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
+
+  // Check if search matches any existing tag name exactly
+  const searchMatchesExact = useMemo(() => {
+    if (!search.trim()) return true;
+    const query = search.trim().toLowerCase();
+    return allTags.some((tag) => tag.name.toLowerCase() === query);
+  }, [allTags, search]);
 
   const handleToggleTag = async (tag: Tag) => {
     if (selectedSet.has(tag.id)) {
@@ -64,8 +66,8 @@ export function TagSelectionModal({
     await restoreTag(tag.id);
   };
 
-  const handleCreateTag = async () => {
-    const name = newTagName.trim();
+  const handleCreateFromSearch = async () => {
+    const name = search.trim();
     if (!name) return;
 
     setIsCreating(true);
@@ -74,63 +76,38 @@ export function TagSelectionModal({
         name,
         color_hex: generateRandomColor(),
       });
-      // Auto-select the new tag
       await addTag(userId, entityId, tag.id);
-      setNewTagName("");
+      setSearch("");
+      // Open edit sheet for the new tag
+      setEditingTag(tag);
     } finally {
       setIsCreating(false);
     }
   };
 
+  const handleTagEditSave = async (name: string, color: string) => {
+    if (editingTag) {
+      await updateTag(editingTag.id, { name, color_hex: color });
+      setEditingTag(null);
+    }
+  };
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 bg-background">
+    <>
+      <BottomSheet visible={visible && !editingTag} onClose={onClose}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-          <Text className="text-lg font-semibold text-foreground">Select Tags</Text>
-          <Pressable onPress={onClose} className="p-2">
+          <Pressable onPress={onClose} className="p-1">
             <Ionicons name="close" size={24} color="var(--color-muted)" />
+          </Pressable>
+          <Text className="text-base font-semibold text-foreground">Tags</Text>
+          <Pressable onPress={onClose} className="p-1">
+            <Ionicons name="checkmark" size={24} color="var(--color-accent)" />
           </Pressable>
         </View>
 
-        {/* Search */}
-        <View className="px-4 py-3 border-b border-border">
-          <View className="flex-row items-center bg-surface rounded-lg px-3 py-2">
-            <Ionicons name="search" size={20} color="var(--color-muted)" />
-            <TextInput
-              className="flex-1 ml-2 text-base text-foreground"
-              placeholder="Search tags..."
-              placeholderTextColor="var(--color-muted)"
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search ? (
-              <Pressable onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={20} color="var(--color-muted)" />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
         {/* Tag List */}
-        <ScrollView className="flex-1 px-4">
-          {filteredTags.length === 0 && !search && (
-            <View className="py-8 items-center">
-              <Text className="text-muted">No tags yet. Create one below.</Text>
-            </View>
-          )}
-          {filteredTags.length === 0 && search && (
-            <View className="py-8 items-center">
-              <Text className="text-muted">
-                No tags matching &quot;{search}&quot;
-              </Text>
-            </View>
-          )}
+        <ScrollView className="max-h-80 px-4">
           {filteredTags.map((tag) => {
             const isSelected = selectedSet.has(tag.id);
             const isDeleted = tag.deleted_at !== null;
@@ -162,28 +139,34 @@ export function TagSelectionModal({
                   </Pressable>
                 )}
 
-                {/* Color circle */}
+                {/* Color dot + name (pressable to toggle) */}
                 <Pressable
-                  onPress={() => !isDeleted && onColorEdit(tag)}
-                  className="mr-3"
+                  onPress={() => !isDeleted && handleToggleTag(tag)}
+                  className="flex-1 flex-row items-center"
                   disabled={isDeleted}
                 >
                   <View
-                    className="w-8 h-8 rounded-full items-center justify-center"
+                    className="w-6 h-6 rounded-full mr-3"
                     style={{ backgroundColor: tag.color_hex }}
+                  />
+                  <Text
+                    className={`flex-1 text-base ${
+                      isDeleted ? "text-muted line-through" : "text-foreground"
+                    }`}
                   >
-                    <Ionicons name="color-palette-outline" size={16} color="white" />
-                  </View>
+                    {tag.name}
+                  </Text>
                 </Pressable>
 
-                {/* Tag name */}
-                <Text
-                  className={`flex-1 text-base ${
-                    isDeleted ? "text-muted line-through" : "text-foreground"
-                  }`}
-                >
-                  {tag.name}
-                </Text>
+                {/* Edit button */}
+                {!isDeleted && (
+                  <Pressable
+                    onPress={() => setEditingTag(tag)}
+                    className="p-2"
+                  >
+                    <Ionicons name="pencil" size={16} color="var(--color-muted)" />
+                  </Pressable>
+                )}
 
                 {/* Restore button for deleted tags */}
                 {isDeleted && (
@@ -199,33 +182,52 @@ export function TagSelectionModal({
               </View>
             );
           })}
+
+          {/* Add from search */}
+          {search.trim() && !searchMatchesExact && (
+            <Pressable
+              onPress={handleCreateFromSearch}
+              disabled={isCreating}
+              className="flex-row items-center py-3"
+            >
+              <Ionicons name="add-circle-outline" size={24} color="var(--color-accent)" />
+              <Text className="text-accent ml-2 text-base">
+                Add &quot;{search.trim()}&quot;
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
 
-        {/* Create new tag */}
+        {/* Search */}
         <View className="px-4 py-3 border-t border-border">
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center bg-surface rounded-lg px-3 py-2">
+            <Ionicons name="search" size={20} color="var(--color-muted)" />
             <TextInput
-              className="flex-1 border border-border rounded-lg px-4 py-2 text-base text-foreground bg-surface"
-              placeholder="New tag name..."
+              className="flex-1 ml-2 text-base text-foreground"
+              placeholder="Search tags..."
               placeholderTextColor="var(--color-muted)"
-              value={newTagName}
-              onChangeText={setNewTagName}
-              editable={!isCreating}
+              value={search}
+              onChangeText={setSearch}
             />
-            <Pressable
-              onPress={handleCreateTag}
-              disabled={!newTagName.trim() || isCreating}
-              className={`px-4 py-2 rounded-lg ${
-                newTagName.trim() && !isCreating
-                  ? "bg-accent"
-                  : "bg-surface"
-              }`}
-            >
-              <Text className="text-white font-medium">Add</Text>
-            </Pressable>
+            {search ? (
+              <Pressable onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={20} color="var(--color-muted)" />
+              </Pressable>
+            ) : null}
           </View>
         </View>
-      </View>
-    </Modal>
+      </BottomSheet>
+
+      {/* Tag Edit Sheet */}
+      {editingTag && (
+        <TagEditSheet
+          visible={!!editingTag}
+          onClose={() => setEditingTag(null)}
+          tagName={editingTag.name}
+          tagColor={editingTag.color_hex}
+          onSave={handleTagEditSave}
+        />
+      )}
+    </>
   );
 }

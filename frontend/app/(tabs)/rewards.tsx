@@ -66,24 +66,28 @@ export default function Rewards() {
     async (input: RewardInput) => {
       if (selectedReward) {
         await updateReward(selectedReward.id, input);
-        setIsRewardFormVisible(false);
-        selectReward(null);
       } else {
         const newReward = await createReward(input);
-        setIsRewardFormVisible(false);
-        selectReward(null);
-        // After creating a new reward, offer to set damage
-        setRewardToRank(newReward);
-        setIsRankingVisible(true);
+        selectReward(newReward);
+        setIsEditing(true);
       }
     },
-    [selectedReward, updateReward, createReward, selectReward],
+    [selectedReward, updateReward, createReward, selectReward, setIsEditing],
   );
 
-  const handleCancel = useCallback(() => {
+  const handleFormClose = useCallback(() => {
+    const wasCreating = !selectedReward;
+    const rewardForRanking = selectedReward;
+
     setIsRewardFormVisible(false);
     selectReward(null);
-  }, [selectReward]);
+
+    // Offer ranking for newly created rewards
+    if (!wasCreating && rewardForRanking && !rewardForRanking.damage_rank && rewards.length > 1) {
+      setRewardToRank(rewardForRanking);
+      setIsRankingVisible(true);
+    }
+  }, [selectedReward, selectReward, rewards.length]);
 
   const handleDelete = useCallback(async () => {
     if (selectedReward) {
@@ -195,14 +199,14 @@ export default function Rewards() {
           visible={isRewardFormVisible}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={handleCancel}
+          onRequestClose={handleFormClose}
         >
           <SafeAreaView className="flex-1 bg-background">
             <RewardForm
               reward={selectedReward}
               userId={userId}
               onSave={handleSave}
-              onCancel={handleCancel}
+              onClose={handleFormClose}
               onDelete={selectedReward ? handleDelete : undefined}
               onRerank={selectedReward && rewards.length > 1 ? handleRerank : undefined}
               onPurchase={selectedReward ? handlePurchase : undefined}

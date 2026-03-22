@@ -65,24 +65,28 @@ export default function Habits() {
     async (input: HabitInput) => {
       if (selectedHabit) {
         await updateHabit(selectedHabit.id, input);
-        setIsHabitFormVisible(false);
-        selectHabit(null);
       } else {
         const newHabit = await createHabit(input);
-        setIsHabitFormVisible(false);
-        selectHabit(null);
-        // After creating a new habit, offer to set difficulty
-        setHabitToRank(newHabit);
-        setIsRankingVisible(true);
+        selectHabit(newHabit);
+        setIsEditing(true);
       }
     },
-    [selectedHabit, updateHabit, createHabit, selectHabit],
+    [selectedHabit, updateHabit, createHabit, selectHabit, setIsEditing],
   );
 
-  const handleCancel = useCallback(() => {
+  const handleFormClose = useCallback(() => {
+    const wasCreating = !selectedHabit;
+    const habitForRanking = selectedHabit;
+
     setIsHabitFormVisible(false);
     selectHabit(null);
-  }, [selectHabit]);
+
+    // Offer ranking for newly created habits
+    if (!wasCreating && habitForRanking && !habitForRanking.difficulty_rank && habits.length > 1) {
+      setHabitToRank(habitForRanking);
+      setIsRankingVisible(true);
+    }
+  }, [selectedHabit, selectHabit, habits.length]);
 
   const handleDelete = useCallback(async () => {
     if (selectedHabit) {
@@ -188,14 +192,14 @@ export default function Habits() {
           visible={isHabitFormVisible}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={handleCancel}
+          onRequestClose={handleFormClose}
         >
           <SafeAreaView className="flex-1 bg-background">
             <HabitForm
               habit={selectedHabit}
               userId={userId}
               onSave={handleSave}
-              onCancel={handleCancel}
+              onClose={handleFormClose}
               onDelete={selectedHabit ? handleDelete : undefined}
               onRerank={selectedHabit && habits.length > 1 ? handleRerank : undefined}
               onComplete={selectedHabit ? handleComplete : undefined}

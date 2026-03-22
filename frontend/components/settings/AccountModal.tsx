@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BottomSheet } from "../BottomSheet";
 import { UpdateEmailModal } from "./UpdateEmailModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 
@@ -33,53 +34,41 @@ export function AccountModal({
 
   return (
     <>
-      <Modal
+      <BottomSheet
         visible={visible && !showUpdateEmail && !showChangePassword}
-        transparent
-        animationType="fade"
-        onRequestClose={onClose}
+        onClose={onClose}
       >
+        {/* Header */}
+        <View className="p-4 border-b border-border">
+          <Text className="text-lg font-semibold text-foreground text-center">
+            Account
+          </Text>
+        </View>
+
+        {/* Email Row */}
         <Pressable
-          className="flex-1 bg-black/30 justify-end"
-          onPress={onClose}
+          onPress={() => setShowUpdateEmail(true)}
+          className="flex-row items-center px-4 py-4 border-b border-border"
         >
-          <Pressable
-            className="bg-background rounded-t-2xl pb-8"
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View className="p-4 border-b border-border">
-              <Text className="text-lg font-semibold text-foreground text-center">
-                Account
-              </Text>
-            </View>
-
-            {/* Email Row */}
-            <Pressable
-              onPress={() => setShowUpdateEmail(true)}
-              className="flex-row items-center px-4 py-4 border-b border-border"
-            >
-              <Text className="text-muted text-base">Email</Text>
-              <View className="flex-1" />
-              <Text className="text-foreground text-base mr-2" numberOfLines={1}>
-                {currentEmail}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
-            </Pressable>
-
-            {/* Password Row */}
-            <View className="px-4 py-4">
-              <Text className="text-muted text-base mb-3">Password</Text>
-              <Pressable
-                onPress={() => setShowChangePassword(true)}
-                className="bg-surface rounded-xl py-4 items-center"
-              >
-                <Text className="text-foreground text-base">Change Password</Text>
-              </Pressable>
-            </View>
-          </Pressable>
+          <Text className="text-muted text-base">Email</Text>
+          <View className="flex-1" />
+          <Text className="text-foreground text-base mr-2" numberOfLines={1}>
+            {currentEmail}
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
         </Pressable>
-      </Modal>
+
+        {/* Password Row */}
+        <View className="px-4 py-4 pb-8">
+          <Text className="text-muted text-base mb-3">Password</Text>
+          <Pressable
+            onPress={() => setShowChangePassword(true)}
+            className="bg-surface rounded-xl py-4 items-center"
+          >
+            <Text className="text-foreground text-base">Change Password</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
 
       <UpdateEmailModal
         visible={showUpdateEmail}
