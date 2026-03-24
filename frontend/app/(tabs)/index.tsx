@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { View, Text, Pressable, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
@@ -33,6 +33,7 @@ export default function Habits() {
   const [habitToRank, setHabitToRank] = useState<Habit | null>(null);
   const [sortKey, setSortKey] = useSortPreference();
   const [formKey, setFormKey] = useState(0);
+  const rankerFromForm = useRef(false);
 
   // Price update context
   const { updatePrices, prices } = usePriceUpdate();
@@ -95,6 +96,7 @@ export default function Habits() {
       }
       setIsRankingVisible(false);
       setHabitToRank(null);
+      rankerFromForm.current = false;
     },
     [habitToRank, updateHabit],
   );
@@ -102,6 +104,7 @@ export default function Habits() {
   const handleRankSkip = useCallback(() => {
     setIsRankingVisible(false);
     setHabitToRank(null);
+    rankerFromForm.current = false;
   }, []);
 
   const handleComplete = useCallback(
@@ -121,7 +124,7 @@ export default function Habits() {
 
   const handleRerank = useCallback(() => {
     if (selectedHabit) {
-      setIsHabitFormVisible(false);
+      rankerFromForm.current = true;
       setHabitToRank(selectedHabit);
       setIsRankingVisible(true);
     }

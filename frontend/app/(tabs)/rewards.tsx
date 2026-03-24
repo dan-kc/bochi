@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { View, Text, Pressable, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
@@ -32,6 +32,7 @@ export default function Rewards() {
   const [rewardToRank, setRewardToRank] = useState<Reward | null>(null);
   const [sortKey, setSortKey] = useState<RewardSortKey>(DEFAULT_REWARD_SORT);
   const [formKey, setFormKey] = useState(0);
+  const rankerFromForm = useRef(false);
 
   // Price update context
   const { updatePrices, prices } = useRewardPriceUpdate();
@@ -96,6 +97,7 @@ export default function Rewards() {
       }
       setIsRankingVisible(false);
       setRewardToRank(null);
+      rankerFromForm.current = false;
     },
     [rewardToRank, updateReward],
   );
@@ -103,6 +105,7 @@ export default function Rewards() {
   const handleRankSkip = useCallback(() => {
     setIsRankingVisible(false);
     setRewardToRank(null);
+    rankerFromForm.current = false;
   }, []);
 
   const handlePurchase = useCallback(
@@ -123,7 +126,7 @@ export default function Rewards() {
 
   const handleRerank = useCallback(() => {
     if (selectedReward) {
-      setIsRewardFormVisible(false);
+      rankerFromForm.current = true;
       setRewardToRank(selectedReward);
       setIsRankingVisible(true);
     }
