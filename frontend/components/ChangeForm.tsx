@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { z } from "zod";
 import type { Tag, TagInput } from "@/lib/tag";
@@ -122,6 +123,17 @@ export function ChangeForm({
   const isEditing = !!entity;
   const nameInputRef = useRef<TextInput>(null);
 
+  // Description value that only updates from entity sync or after successful saves
+  const [savedDescription, setSavedDescription] = useState(entity?.description ?? "");
+
+  // Delay enabling animations until after the initial layout has settled,
+  // so entering/layout animations only fire for user-driven changes
+  const [isSettled, setIsSettled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsSettled(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Track original values for revert on empty name
   const originalName = useRef("");
 
@@ -141,6 +153,7 @@ export function ChangeForm({
     if (entity) {
       setName(entity.name);
       setDescription(entity.description);
+      setSavedDescription(entity.description);
       originalName.current = entity.name;
 
       const freq = getEntityFrequency(entity);
@@ -202,12 +215,13 @@ export function ChangeForm({
     setIsSaving(true);
     try {
       await onSave(input);
+      setSavedDescription(description.trim());
     } catch {
       setErrors({ general: [`Failed to save ${config.entityLabel.toLowerCase()}`] });
     } finally {
       setIsSaving(false);
     }
-  }, [isEditing, buildInput, onSave, config.frequencyField, config.entityLabel]);
+  }, [isEditing, buildInput, onSave, config.frequencyField, config.entityLabel, description]);
 
   // Close a field sheet (saves in edit mode)
   const closeSheet = useCallback(
@@ -294,14 +308,14 @@ export function ChangeForm({
   // Build pills
   const pills = useMemo(() => {
     return getVisiblePills({
-      description: isEditing ? entity?.description ?? "" : description,
+      description: isEditing ? savedDescription : description,
       tags: tags.map((t) => t.id),
       frequency: frequencySummary,
       frequencyLabel: config.frequencyLabel,
       rankLabel: config.rankLabel,
       isCreateMode: !isEditing,
     });
-  }, [isEditing, entity, description, tags, frequencySummary, config.frequencyLabel, config.rankLabel]);
+  }, [isEditing, savedDescription, description, tags, frequencySummary, config.frequencyLabel, config.rankLabel]);
 
   const pillActions = useMemo(
     () =>
@@ -369,35 +383,43 @@ export function ChangeForm({
           </Pressable>
 
           {/* Description - pressable text (only shown when set) */}
-          {isEditing && (entity?.description || description) ? (
-            <Pressable onPress={() => setActiveSheet("description")}>
-              <Text className="text-foreground text-base" numberOfLines={3}>
-                {entity?.description || description}
-              </Text>
-            </Pressable>
+          {isEditing && savedDescription ? (
+            <Animated.View
+              entering={isSettled ? FadeIn.duration(250) : undefined}
+            >
+              <Pressable onPress={() => setActiveSheet("description")}>
+                <Text className="text-foreground text-base" numberOfLines={3}>
+                  {savedDescription}
+                </Text>
+              </Pressable>
+            </Animated.View>
           ) : null}
 
           {/* Tags row (only in edit mode with tags) */}
           {isEditing && tags.length > 0 && (
-            <Pressable onPress={() => setShowTagModal(true)}>
-              <View className="flex-row flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <View
-                    key={tag.id}
-                    className="px-3 py-1.5 rounded-full"
-                    style={{ backgroundColor: tag.color_hex + "30" }}
-                  >
-                    <Text className="text-sm font-medium" style={{ color: tag.color_hex }}>
-                      {tag.name}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </Pressable>
+            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
+              <Pressable onPress={() => setShowTagModal(true)}>
+                <View className="flex-row flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <View
+                      key={tag.id}
+                      className="px-3 py-1.5 rounded-full"
+                      style={{ backgroundColor: tag.color_hex + "30" }}
+                    >
+                      <Text className="text-sm font-medium" style={{ color: tag.color_hex }}>
+                        {tag.name}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Pressable>
+            </Animated.View>
           )}
 
           {/* Pill row */}
-          <FieldPillRow pills={pillActions} />
+          <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
+            <FieldPillRow pills={pillActions} />
+          </Animated.View>
 
           {/* Hero action button (edit mode) */}
           {isEditing && entity && (() => {
@@ -409,7 +431,7 @@ export function ChangeForm({
                 ? ` ${tradeAmount > 0 ? "+" : ""}${tradeAmount}`
                 : "";
               return (
-                <View className="mt-6">
+                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} className="mt-6">
                   <Pressable
                     onPress={() => onAction(entity)}
                     disabled={isLoading}
@@ -419,7 +441,7 @@ export function ChangeForm({
                       {config.actionLabel}{amountStr}
                     </Text>
                   </Pressable>
-                </View>
+                </Animated.View>
               );
             }
             if (!hasRank && onRerank) {
@@ -427,7 +449,7 @@ export function ChangeForm({
                 ? "Set Difficulty"
                 : "Set Damage";
               return (
-                <View className="mt-6">
+                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} className="mt-6">
                   <Pressable
                     onPress={onRerank}
                     disabled={isLoading}
@@ -437,7 +459,7 @@ export function ChangeForm({
                       {setRankLabel}
                     </Text>
                   </Pressable>
-                </View>
+                </Animated.View>
               );
             }
             return null;
@@ -445,27 +467,31 @@ export function ChangeForm({
 
           {/* Delete button (edit mode) */}
           {isEditing && onDelete && (
-            <Pressable
-              onPress={handleDelete}
-              disabled={isLoading}
-              className="bg-surface py-4 px-6 rounded-lg items-center"
-            >
-              {isDeleting ? (
-                <ActivityIndicator color="var(--color-muted)" />
-              ) : (
-                <Text className="text-muted font-bold text-lg">Delete</Text>
-              )}
-            </Pressable>
+            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
+              <Pressable
+                onPress={handleDelete}
+                disabled={isLoading}
+                className="bg-surface py-4 px-6 rounded-lg items-center"
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="var(--color-muted)" />
+                ) : (
+                  <Text className="text-muted font-bold text-lg">Delete</Text>
+                )}
+              </Pressable>
+            </Animated.View>
           )}
 
           {/* Trade history (edit mode) */}
           {isEditing && entity && (
-            <TradeHistory
-              userId={userId}
-              {...(config.entityType === "habit"
-                ? { habitId: entity.id }
-                : { rewardId: entity.id })}
-            />
+            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
+              <TradeHistory
+                userId={userId}
+                {...(config.entityType === "habit"
+                  ? { habitId: entity.id }
+                  : { rewardId: entity.id })}
+              />
+            </Animated.View>
           )}
         </View>
       </ScrollView>
