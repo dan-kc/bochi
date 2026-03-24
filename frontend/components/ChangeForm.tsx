@@ -418,7 +418,7 @@ export function ChangeForm({
 
           {/* Pill row */}
           <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
-            <FieldPillRow pills={pillActions} />
+            <FieldPillRow pills={pillActions} isSettled={isSettled} />
           </Animated.View>
 
           {/* Hero action button (edit mode) */}

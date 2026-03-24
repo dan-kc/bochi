@@ -1,6 +1,5 @@
-import { useRef, useEffect } from "react";
 import { ScrollView, Pressable, Text } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 
 export interface FieldPill {
   key: string;
@@ -11,14 +10,10 @@ export interface FieldPill {
 
 interface FieldPillRowProps {
   pills: FieldPill[];
+  isSettled?: boolean;
 }
 
-export function FieldPillRow({ pills }: FieldPillRowProps) {
-  const hasMounted = useRef(false);
-  useEffect(() => {
-    hasMounted.current = true;
-  }, []);
-
+export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
   return (
     <ScrollView
       horizontal
@@ -28,9 +23,8 @@ export function FieldPillRow({ pills }: FieldPillRowProps) {
       {pills.map((pill) => (
         <Animated.View
           key={pill.key}
-          entering={hasMounted.current ? FadeIn.duration(200) : undefined}
-          exiting={FadeOut.duration(200)}
-          layout={LinearTransition.duration(200)}
+          entering={isSettled ? FadeIn.duration(200) : undefined}
+          layout={isSettled ? LinearTransition.duration(200) : undefined}
         >
           <Pressable
             onPress={pill.onPress}
