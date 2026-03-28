@@ -105,6 +105,9 @@
               postgresql
               moreutils
             ]
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.cocoapods
+            ]
             ++ scripts;
           shellHook = ''
             # export RUST_BACKTRACE=1
