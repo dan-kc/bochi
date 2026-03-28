@@ -87,6 +87,7 @@
               ])
               typescript-language-server
               nodePackages.prettier
+              nodejs
               eas-cli
               rust-analyzer
               terraform-ls
