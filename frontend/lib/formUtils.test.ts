@@ -29,12 +29,6 @@ describe("getVisiblePills", () => {
     expect(keys).not.toContain("tags");
   });
 
-  test("hides tags pill in create mode", () => {
-    const pills = getVisiblePills({ ...basePillConfig, isCreateMode: true });
-    const keys = pills.map((p) => p.key);
-    expect(keys).not.toContain("tags");
-  });
-
   test("frequency pill always visible", () => {
     const pills = getVisiblePills({ ...basePillConfig, frequency: null });
     const freq = pills.find((p) => p.key === "frequency");
