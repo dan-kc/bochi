@@ -1,4 +1,5 @@
-import { Text, Pressable } from "react-native";
+import { useCallback } from "react";
+import { Text, Pressable, StyleSheet } from "react-native";
 import type { Reward } from "@/lib/reward";
 import { useRewardPriceUpdateOptional } from "@/lib/RewardPriceUpdateContext";
 import type { DisplayMode } from "@/lib/rewardSorting";
@@ -6,10 +7,13 @@ import { formatShortDate } from "@/lib/rewardSorting";
 import { useTagsForReward } from "@/lib/store/hooks";
 import { ListItemCard } from "./ListItemCard";
 import { TagRow } from "./TagRow";
+import { SwipeableRow } from "./SwipeableRow";
+import { useColors, fontSize, fontWeight } from "@/lib/theme";
 
 interface RewardItemProps {
   reward: Reward;
   onPress: (reward: Reward) => void;
+  onPurchase?: (reward: Reward) => void;
   displayMode?: DisplayMode;
   onSetRank?: (reward: Reward) => void;
 }
@@ -22,6 +26,7 @@ function InfoDisplay({
   displayMode: DisplayMode;
 }) {
   const priceContext = useRewardPriceUpdateOptional();
+  const colors = useColors();
 
   if (displayMode === "price") {
     if (!priceContext) return null;
@@ -29,7 +34,7 @@ function InfoDisplay({
     if (!priceData) return null;
 
     return (
-      <Text className="text-base font-bold text-accent">
+      <Text style={[styles.priceText, { color: colors.accent }]}>
         {priceData.current} tofu
       </Text>
     );
@@ -38,11 +43,11 @@ function InfoDisplay({
   if (displayMode === "frequency") {
     if (reward.max_daily_frequency == null) {
       return (
-        <Text className="text-sm text-muted">no limit</Text>
+        <Text style={[styles.smallText, { color: colors.muted }]}>no limit</Text>
       );
     }
     return (
-      <Text className="text-sm text-accent-secondary">
+      <Text style={[styles.smallText, { color: colors.accentSecondary }]}>
         {reward.max_daily_frequency} max/day
       </Text>
     );
@@ -50,7 +55,7 @@ function InfoDisplay({
 
   if (displayMode === "created_at") {
     return (
-      <Text className="text-sm text-muted">
+      <Text style={[styles.smallText, { color: colors.muted }]}>
         {formatShortDate(reward.created_at)}
       </Text>
     );
@@ -59,11 +64,11 @@ function InfoDisplay({
   if (displayMode === "damage") {
     if (reward.damage_rank == null) {
       return (
-        <Text className="text-sm text-muted">not set</Text>
+        <Text style={[styles.smallText, { color: colors.muted }]}>not set</Text>
       );
     }
     return (
-      <Text className="text-sm font-bold text-accent font-mono">
+      <Text style={[styles.damageText, { color: colors.accent }]}>
         {reward.damage_rank}
       </Text>
     );
@@ -80,20 +85,26 @@ function formatFrequency(frequency: number | null): string | null {
 export function RewardItem({
   reward,
   onPress,
+  onPurchase,
   displayMode = "price",
   onSetRank,
 }: RewardItemProps) {
   const tags = useTagsForReward(reward.id);
+  const colors = useColors();
+
+  const handlePurchase = useCallback(() => {
+    onPurchase?.(reward);
+  }, [onPurchase, reward]);
 
   const bottomRight = reward.damage_rank == null && displayMode === "price" && onSetRank ? (
     <Pressable onPress={() => onSetRank(reward)}>
-      <Text className="text-sm font-medium text-accent">Set Damage</Text>
+      <Text style={[styles.setDamageText, { color: colors.accent }]}>Set Damage</Text>
     </Pressable>
   ) : (
     <InfoDisplay reward={reward} displayMode={displayMode} />
   );
 
-  return (
+  const content = (
     <ListItemCard
       name={reward.name}
       description={reward.description}
@@ -108,11 +119,30 @@ export function RewardItem({
 
   return (
     <SwipeableRow
-      onAction={handleAction}
-      actionColor="#f54900"
+      onAction={handlePurchase}
+      actionColor={colors.accent}
       actionIcon="cart"
     >
       {content}
     </SwipeableRow>
   );
 }
+
+const styles = StyleSheet.create({
+  priceText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  smallText: {
+    fontSize: fontSize.sm,
+  },
+  damageText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    fontFamily: "monospace",
+  },
+  setDamageText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+});

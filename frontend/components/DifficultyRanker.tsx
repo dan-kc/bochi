@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import type { Habit } from "@/lib/habit";
 import { generateKeyBetween } from "@/lib/fractionalIndex";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface DifficultyRankerProps {
   habit: Habit;
@@ -18,6 +19,7 @@ export function DifficultyRanker({
   onComplete,
   onSkip,
 }: DifficultyRankerProps) {
+  const colors = useColors();
   const [low, setLow] = useState(0);
   const [high, setHigh] = useState(existingHabits.length);
   const [state, setState] = useState<RankingState>("comparing");
@@ -64,8 +66,8 @@ export function DifficultyRanker({
   // If no habits to compare against, show loading
   if (existingHabits.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center p-6">
-        <Text className="text-muted">Setting up difficulty ranking...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.loadingText, { color: colors.muted }]}>Setting up difficulty ranking...</Text>
       </View>
     );
   }
@@ -73,8 +75,8 @@ export function DifficultyRanker({
   // If comparison habit is undefined (brief window before effect transitions to complete)
   if (!comparisonHabit) {
     return (
-      <View className="flex-1 items-center justify-center p-6">
-        <Text className="text-muted">Finalizing ranking...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.loadingText, { color: colors.muted }]}>Finalizing ranking...</Text>
       </View>
     );
   }
@@ -82,9 +84,9 @@ export function DifficultyRanker({
   // If complete, show confirmation
   if (state === "complete") {
     return (
-      <View className="flex-1 items-center justify-center p-6">
-        <Text className="text-2xl font-bold text-accent-secondary mb-2">Done!</Text>
-        <Text className="text-muted text-center">
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.completeTitle, { color: colors.accentSecondary }]}>Done!</Text>
+        <Text style={[styles.completeText, { color: colors.muted }]}>
           Difficulty ranking has been set after {comparisonCount} comparison{comparisonCount !== 1 ? "s" : ""}.
         </Text>
       </View>
@@ -94,71 +96,71 @@ export function DifficultyRanker({
   const remainingComparisons = Math.ceil(Math.log2(existingHabits.length + 1)) - comparisonCount;
 
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-6">
-        <View className="mb-8">
-          <Text className="text-2xl font-bold text-foreground mb-2 text-center">
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.content}>
+        <View style={styles.headerSection}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
             Set Difficulty
           </Text>
-          <Text className="text-muted text-center">
+          <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
             Compare with existing habits to find where this fits
           </Text>
-          <Text className="text-muted text-sm text-center mt-1">
+          <Text style={[styles.headerRemaining, { color: colors.muted }]}>
             ~{remainingComparisons} comparison{remainingComparisons !== 1 ? "s" : ""} remaining
           </Text>
         </View>
 
-        <View className="bg-surface rounded-xl p-4 mb-6">
-          <Text className="text-sm text-accent font-medium mb-1">New Habit</Text>
-          <Text className="text-lg font-semibold text-foreground">{habit.name}</Text>
+        <View style={[styles.entityCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.entityLabel, { color: colors.accent }]}>New Habit</Text>
+          <Text style={[styles.entityName, { color: colors.foreground }]}>{habit.name}</Text>
           {habit.description ? (
-            <Text className="text-muted text-sm mt-1" numberOfLines={2}>
+            <Text style={[styles.entityDescription, { color: colors.muted }]} numberOfLines={2}>
               {habit.description}
             </Text>
           ) : null}
         </View>
 
-        <Text className="text-center text-foreground text-lg mb-4">
+        <Text style={[styles.questionText, { color: colors.foreground }]}>
           Is this habit harder or easier than:
         </Text>
 
-        <View className="bg-surface rounded-xl p-4 mb-8">
-          <Text className="text-sm text-muted font-medium mb-1">Compare with</Text>
-          <Text className="text-lg font-semibold text-foreground">{comparisonHabit.name}</Text>
+        <View style={[styles.entityCard, styles.comparisonCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.comparisonLabel, { color: colors.muted }]}>Compare with</Text>
+          <Text style={[styles.entityName, { color: colors.foreground }]}>{comparisonHabit.name}</Text>
           {comparisonHabit.description ? (
-            <Text className="text-muted text-sm mt-1" numberOfLines={2}>
+            <Text style={[styles.entityDescription, { color: colors.muted }]} numberOfLines={2}>
               {comparisonHabit.description}
             </Text>
           ) : null}
         </View>
 
-        <View className="gap-3">
+        <View style={styles.buttonContainer}>
           <Pressable
             onPress={handleHarder}
-            className="bg-accent py-4 px-6 rounded-xl items-center"
+            style={[styles.choiceButton, { backgroundColor: colors.accent }]}
           >
-            <Text className="text-white font-bold text-lg">Harder</Text>
-            <Text className="text-white/70 text-sm mt-1">More difficult to complete</Text>
+            <Text style={[styles.choiceButtonTitle, { color: colors.white }]}>Harder</Text>
+            <Text style={[styles.choiceButtonSubtitle, { color: colors.white }]}>More difficult to complete</Text>
           </Pressable>
 
           <Pressable
             onPress={handleEasier}
-            className="bg-accent-secondary py-4 px-6 rounded-xl items-center"
+            style={[styles.choiceButton, { backgroundColor: colors.accentSecondary }]}
           >
-            <Text className="text-white font-bold text-lg">Easier</Text>
-            <Text className="text-white/70 text-sm mt-1">Less difficult to complete</Text>
+            <Text style={[styles.choiceButtonTitle, { color: colors.white }]}>Easier</Text>
+            <Text style={[styles.choiceButtonSubtitle, { color: colors.white }]}>Less difficult to complete</Text>
           </Pressable>
 
           <Pressable
             onPress={onSkip}
-            className="border border-border py-3 px-6 rounded-xl items-center mt-4"
+            style={[styles.skipButton, { borderColor: colors.border }]}
           >
-            <Text className="text-muted font-medium">Skip for now</Text>
+            <Text style={[styles.skipButtonText, { color: colors.muted }]}>Skip for now</Text>
           </Pressable>
         </View>
 
-        <View className="mt-8 pt-4 border-t border-border">
-          <Text className="text-muted text-center text-sm">
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <Text style={[styles.footerText, { color: colors.muted }]}>
             Comparison {comparisonCount + 1} of ~{Math.ceil(Math.log2(existingHabits.length + 1))}
           </Text>
         </View>
@@ -166,3 +168,115 @@ export function DifficultyRanker({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: spacing[6],
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[6],
+  },
+  loadingText: {
+    fontSize: fontSize.base,
+  },
+  completeTitle: {
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[2],
+  },
+  completeText: {
+    textAlign: "center",
+  },
+  headerSection: {
+    marginBottom: spacing[8],
+  },
+  headerTitle: {
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[2],
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    textAlign: "center",
+  },
+  headerRemaining: {
+    fontSize: fontSize.sm,
+    textAlign: "center",
+    marginTop: spacing[1],
+  },
+  entityCard: {
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    marginBottom: spacing[6],
+  },
+  comparisonCard: {
+    marginBottom: spacing[8],
+  },
+  entityLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[1],
+  },
+  comparisonLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[1],
+  },
+  entityName: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+  entityDescription: {
+    fontSize: fontSize.sm,
+    marginTop: spacing[1],
+  },
+  questionText: {
+    textAlign: "center",
+    fontSize: fontSize.lg,
+    marginBottom: spacing[4],
+  },
+  buttonContainer: {
+    gap: spacing[3],
+  },
+  choiceButton: {
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.xl,
+    alignItems: "center",
+  },
+  choiceButtonTitle: {
+    fontWeight: fontWeight.bold,
+    fontSize: fontSize.lg,
+  },
+  choiceButtonSubtitle: {
+    fontSize: fontSize.sm,
+    marginTop: spacing[1],
+    opacity: 0.7,
+  },
+  skipButton: {
+    borderWidth: 1,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.xl,
+    alignItems: "center",
+    marginTop: spacing[4],
+  },
+  skipButtonText: {
+    fontWeight: fontWeight.medium,
+  },
+  footer: {
+    marginTop: spacing[8],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+  },
+  footerText: {
+    textAlign: "center",
+    fontSize: fontSize.sm,
+  },
+});

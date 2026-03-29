@@ -8,7 +8,6 @@ import { RewardProvider } from "@/lib/RewardContext";
 import { RewardPriceUpdateProvider } from "@/lib/RewardPriceUpdateContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { SyncToast } from "@/components/SyncToast";
-import "../global.css";
 
 export default function RootLayout() {
   return (

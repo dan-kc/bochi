@@ -1,5 +1,6 @@
-import { ScrollView, Pressable, Text } from "react-native";
+import { ScrollView, Pressable, Text, StyleSheet } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import { useColors, fontSize, fontWeight, spacing, borderRadius } from "@/lib/theme";
 
 export interface FieldPill {
   key: string;
@@ -14,11 +15,13 @@ interface FieldPillRowProps {
 }
 
 export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
+  const colors = useColors();
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 8 }}
+      contentContainerStyle={styles.scrollContent}
     >
       {pills.map((pill) => (
         <Animated.View
@@ -28,12 +31,19 @@ export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
         >
           <Pressable
             onPress={pill.onPress}
-            className={`px-4 py-1.5 rounded-full border ${
-              pill.isSet ? "bg-surface border-border" : "bg-transparent border-border/50"
-            }`}
+            style={[
+              styles.pill,
+              {
+                backgroundColor: pill.isSet ? colors.surface : "transparent",
+                borderColor: pill.isSet ? colors.border : `${colors.border}80`,
+              },
+            ]}
           >
             <Text
-              className={`text-sm font-medium ${pill.isSet ? "text-foreground" : "text-muted"}`}
+              style={[
+                styles.pillText,
+                { color: pill.isSet ? colors.foreground : colors.muted },
+              ]}
             >
               {pill.label}
             </Text>
@@ -43,3 +53,19 @@ export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    gap: spacing[2],
+  },
+  pill: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  pillText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+});

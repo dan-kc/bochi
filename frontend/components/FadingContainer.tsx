@@ -1,17 +1,17 @@
-import { Platform, View, StyleSheet } from "react-native";
+import { Platform, View, StyleSheet, type ViewStyle } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 
 interface FadingContainerProps {
   children: React.ReactNode;
   fadeWidth?: number;
-  className?: string;
+  style?: ViewStyle | ViewStyle[];
 }
 
 function WebFadingContainer({
   children,
   fadeWidth = 40,
-  className,
+  style,
 }: FadingContainerProps) {
   // Web-specific CSS properties not in React Native types
   const webStyle = {
@@ -21,7 +21,7 @@ function WebFadingContainer({
   } as const;
 
   return (
-    <View className={className} style={webStyle as any}>
+    <View style={[style, webStyle as any]}>
       {children}
     </View>
   );
@@ -30,7 +30,7 @@ function WebFadingContainer({
 function NativeFadingContainer({
   children,
   fadeWidth = 40,
-  className,
+  style,
 }: FadingContainerProps) {
   return (
     <MaskedView
@@ -47,7 +47,7 @@ function NativeFadingContainer({
         </View>
       }
     >
-      <View className={className}>{children}</View>
+      <View style={style}>{children}</View>
     </MaskedView>
   );
 }

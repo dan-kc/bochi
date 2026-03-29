@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Pressable, Modal, TextInput } from "react-native";
+import { View, Text, Pressable, Modal, TextInput, StyleSheet } from "react-native";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface GeneralDifficultyModalProps {
   visible: boolean;
@@ -14,6 +15,7 @@ export function GeneralDifficultyModal({
   currentValue,
   onSave,
 }: GeneralDifficultyModalProps) {
+  const colors = useColors();
   const [inputValue, setInputValue] = useState(currentValue.toString());
   const [error, setError] = useState<string | null>(null);
 
@@ -42,28 +44,35 @@ export function GeneralDifficultyModal({
       onShow={handleOpen}
     >
       <Pressable
-        className="flex-1 bg-black/30 justify-end"
+        style={styles.overlay}
         onPress={onClose}
       >
         <Pressable
-          className="bg-background rounded-t-2xl pb-8"
+          style={[styles.modal, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <View className="p-4 border-b border-border">
-            <Text className="text-lg font-semibold text-foreground text-center">
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.headerText, { color: colors.foreground }]}>
               General Difficulty
             </Text>
           </View>
 
-          <View className="px-4 py-4">
-            <Text className="text-muted text-sm mb-3">
+          <View style={styles.content}>
+            <Text style={[styles.description, { color: colors.muted }]}>
               Controls the overall scale of rewards and costs. Higher values mean
               larger rewards and costs. Default is 5.
             </Text>
 
             <TextInput
-              className="bg-surface text-foreground text-base rounded-xl px-4 py-3 mb-2 border border-border"
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                }
+              ]}
               value={inputValue}
               onChangeText={(text) => {
                 setInputValue(text);
@@ -71,26 +80,26 @@ export function GeneralDifficultyModal({
               }}
               keyboardType="decimal-pad"
               placeholder="e.g. 5.0"
-              placeholderTextColor="var(--color-muted)"
+              placeholderTextColor={colors.muted}
               autoFocus
             />
 
             {error && (
-              <Text className="text-accent text-sm mb-2">{error}</Text>
+              <Text style={[styles.errorText, { color: colors.accent }]}>{error}</Text>
             )}
 
-            <View className="flex-row gap-3 mt-2">
+            <View style={styles.buttonRow}>
               <Pressable
                 onPress={onClose}
-                className="flex-1 bg-surface rounded-xl py-4 items-center"
+                style={[styles.button, { backgroundColor: colors.surface }]}
               >
-                <Text className="text-foreground text-base">Cancel</Text>
+                <Text style={[styles.buttonText, { color: colors.foreground }]}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleSave}
-                className="flex-1 bg-accent rounded-xl py-4 items-center"
+                style={[styles.button, { backgroundColor: colors.accent }]}
               >
-                <Text className="text-white text-base font-semibold">Save</Text>
+                <Text style={styles.buttonTextWhite}>Save</Text>
               </Pressable>
             </View>
           </View>
@@ -99,3 +108,64 @@ export function GeneralDifficultyModal({
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "flex-end",
+  },
+  modal: {
+    borderTopLeftRadius: borderRadius["2xl"],
+    borderTopRightRadius: borderRadius["2xl"],
+    paddingBottom: spacing[8],
+  },
+  header: {
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  headerText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    textAlign: "center",
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+  },
+  description: {
+    fontSize: fontSize.sm,
+    marginBottom: spacing[3],
+  },
+  input: {
+    fontSize: fontSize.base,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    marginBottom: spacing[2],
+    borderWidth: 1,
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+    marginBottom: spacing[2],
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: spacing[3],
+    marginTop: spacing[2],
+  },
+  button: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    alignItems: "center",
+  },
+  buttonText: {
+    fontSize: fontSize.base,
+  },
+  buttonTextWhite: {
+    color: "white",
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+  },
+});

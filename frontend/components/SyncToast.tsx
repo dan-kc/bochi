@@ -5,9 +5,11 @@ import {
   Pressable,
   Animated,
   PanResponder,
+  StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSyncOptional } from "@/lib/sync";
+import { fontSize, fontWeight, spacing, borderRadius } from "@/lib/theme";
 
 type ToastType = "failure" | "recovery";
 
@@ -92,24 +94,20 @@ export function SyncToast() {
   return (
     <Animated.View
       {...panResponder.panHandlers}
-      style={{
-        position: "absolute",
-        bottom: 90,
-        left: 16,
-        right: 16,
-        transform: [{ translateY }],
-      }}
+      style={[styles.container, { transform: [{ translateY }] }]}
     >
       <View
-        className="flex-row items-center rounded-xl px-4 py-3"
-        style={{ backgroundColor: isFailure ? "#f54900" : "#197291" }}
+        style={[
+          styles.toast,
+          { backgroundColor: isFailure ? "#f54900" : "#197291" },
+        ]}
       >
         <Ionicons
           name={isFailure ? "cloud-offline" : "cloud-done"}
           size={20}
           color="#fff"
         />
-        <Text className="flex-1 ml-3 text-sm font-medium" style={{ color: "#fff" }}>
+        <Text style={styles.text}>
           {isFailure ? "Sync failed \u2014 offline" : "Back online"}
         </Text>
         <Pressable onPress={dismiss} hitSlop={8}>
@@ -119,3 +117,26 @@ export function SyncToast() {
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: "absolute",
+    bottom: 90,
+    left: spacing[4],
+    right: spacing[4],
+  },
+  toast: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  text: {
+    flex: 1,
+    marginLeft: spacing[3],
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: "#fff",
+  },
+});

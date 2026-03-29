@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { Modal, Pressable, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { useColors, borderRadius } from "@/lib/theme";
 
 interface BottomSheetProps {
   visible: boolean;
@@ -8,11 +9,13 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
+  const colors = useColors();
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable className="flex-1 bg-black/30 justify-end" onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
-          className="bg-background rounded-t-2xl"
+          style={[styles.sheet, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
         >
           <KeyboardAvoidingView
@@ -25,3 +28,15 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: borderRadius["2xl"],
+    borderTopRightRadius: borderRadius["2xl"],
+  },
+});

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useAllTagsIncludingDeleted,
@@ -9,6 +9,7 @@ import { generateRandomColor } from "@/lib/tag";
 import type { Tag } from "@/lib/tag";
 import { BottomSheet } from "./BottomSheet";
 import { TagEditSheet } from "./TagEditSheet";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface TagSelectionModalProps {
   visible: boolean;
@@ -31,6 +32,7 @@ export function TagSelectionModal({
   addTag,
   removeTag,
 }: TagSelectionModalProps) {
+  const colors = useColors();
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
@@ -96,18 +98,18 @@ export function TagSelectionModal({
     <>
       <BottomSheet visible={visible && !editingTag} onClose={onClose}>
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-          <Pressable onPress={onClose} className="p-1">
-            <Ionicons name="close" size={24} color="var(--color-muted)" />
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Pressable onPress={onClose} style={styles.headerButton}>
+            <Ionicons name="close" size={24} color={colors.muted} />
           </Pressable>
-          <Text className="text-base font-semibold text-foreground">Tags</Text>
-          <Pressable onPress={onClose} className="p-1">
-            <Ionicons name="checkmark" size={24} color="var(--color-accent)" />
+          <Text style={[styles.headerText, { color: colors.foreground }]}>Tags</Text>
+          <Pressable onPress={onClose} style={styles.headerButton}>
+            <Ionicons name="checkmark" size={24} color={colors.accent} />
           </Pressable>
         </View>
 
         {/* Tag List */}
-        <ScrollView className="max-h-80 px-4">
+        <ScrollView style={styles.scrollView}>
           {filteredTags.map((tag) => {
             const isSelected = selectedSet.has(tag.id);
             const isDeleted = tag.deleted_at !== null;
@@ -115,22 +117,25 @@ export function TagSelectionModal({
             return (
               <View
                 key={tag.id}
-                className={`flex-row items-center py-3 border-b border-border ${
-                  isDeleted ? "opacity-50" : ""
-                }`}
+                style={[
+                  styles.tagRow,
+                  { borderBottomColor: colors.border, opacity: isDeleted ? 0.5 : 1 }
+                ]}
               >
                 {/* Checkbox */}
                 {!isDeleted && (
                   <Pressable
                     onPress={() => handleToggleTag(tag)}
-                    className="mr-3"
+                    style={styles.checkboxContainer}
                   >
                     <View
-                      className={`w-6 h-6 rounded border-2 items-center justify-center ${
-                        isSelected
-                          ? "bg-accent border-accent"
-                          : "border-border"
-                      }`}
+                      style={[
+                        styles.checkbox,
+                        {
+                          backgroundColor: isSelected ? colors.accent : "transparent",
+                          borderColor: isSelected ? colors.accent : colors.border,
+                        }
+                      ]}
                     >
                       {isSelected && (
                         <Ionicons name="checkmark" size={16} color="white" />
@@ -142,17 +147,20 @@ export function TagSelectionModal({
                 {/* Color dot + name (pressable to toggle) */}
                 <Pressable
                   onPress={() => !isDeleted && handleToggleTag(tag)}
-                  className="flex-1 flex-row items-center"
+                  style={styles.tagContent}
                   disabled={isDeleted}
                 >
                   <View
-                    className="w-6 h-6 rounded-full mr-3"
-                    style={{ backgroundColor: tag.color_hex }}
+                    style={[styles.colorDot, { backgroundColor: tag.color_hex }]}
                   />
                   <Text
-                    className={`flex-1 text-base ${
-                      isDeleted ? "text-muted line-through" : "text-foreground"
-                    }`}
+                    style={[
+                      styles.tagName,
+                      {
+                        color: isDeleted ? colors.muted : colors.foreground,
+                        textDecorationLine: isDeleted ? "line-through" : "none",
+                      }
+                    ]}
                   >
                     {tag.name}
                   </Text>
@@ -162,9 +170,9 @@ export function TagSelectionModal({
                 {!isDeleted && (
                   <Pressable
                     onPress={() => setEditingTag(tag)}
-                    className="p-2"
+                    style={styles.editButton}
                   >
-                    <Ionicons name="pencil" size={16} color="var(--color-muted)" />
+                    <Ionicons name="pencil" size={16} color={colors.muted} />
                   </Pressable>
                 )}
 
@@ -172,9 +180,9 @@ export function TagSelectionModal({
                 {isDeleted && (
                   <Pressable
                     onPress={() => handleRestoreTag(tag)}
-                    className="bg-surface px-3 py-1 rounded"
+                    style={[styles.restoreButton, { backgroundColor: colors.surface }]}
                   >
-                    <Text className="text-accent-secondary text-sm font-medium">
+                    <Text style={[styles.restoreText, { color: colors.accentSecondary }]}>
                       Restore
                     </Text>
                   </Pressable>
@@ -188,10 +196,10 @@ export function TagSelectionModal({
             <Pressable
               onPress={handleCreateFromSearch}
               disabled={isCreating}
-              className="flex-row items-center py-3"
+              style={styles.addFromSearchButton}
             >
-              <Ionicons name="add-circle-outline" size={24} color="var(--color-accent)" />
-              <Text className="text-accent ml-2 text-base">
+              <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
+              <Text style={[styles.addFromSearchText, { color: colors.accent }]}>
                 Add &quot;{search.trim()}&quot;
               </Text>
             </Pressable>
@@ -199,19 +207,19 @@ export function TagSelectionModal({
         </ScrollView>
 
         {/* Search */}
-        <View className="px-4 py-3 border-t border-border">
-          <View className="flex-row items-center bg-surface rounded-lg px-3 py-2">
-            <Ionicons name="search" size={20} color="var(--color-muted)" />
+        <View style={[styles.searchContainer, { borderTopColor: colors.border }]}>
+          <View style={[styles.searchInput, { backgroundColor: colors.surface }]}>
+            <Ionicons name="search" size={20} color={colors.muted} />
             <TextInput
-              className="flex-1 ml-2 text-base text-foreground"
+              style={[styles.searchInputText, { color: colors.foreground }]}
               placeholder="Search tags..."
-              placeholderTextColor="var(--color-muted)"
+              placeholderTextColor={colors.muted}
               value={search}
               onChangeText={setSearch}
             />
             {search ? (
               <Pressable onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={20} color="var(--color-muted)" />
+                <Ionicons name="close-circle" size={20} color={colors.muted} />
               </Pressable>
             ) : null}
           </View>
@@ -231,3 +239,95 @@ export function TagSelectionModal({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+  },
+  headerButton: {
+    padding: spacing[1],
+  },
+  headerText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+  },
+  scrollView: {
+    maxHeight: 320,
+    paddingHorizontal: spacing[4],
+  },
+  tagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+  },
+  checkboxContainer: {
+    marginRight: spacing[3],
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.DEFAULT,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tagContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  colorDot: {
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.full,
+    marginRight: spacing[3],
+  },
+  tagName: {
+    flex: 1,
+    fontSize: fontSize.base,
+  },
+  editButton: {
+    padding: spacing[2],
+  },
+  restoreButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.DEFAULT,
+  },
+  restoreText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  addFromSearchButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing[3],
+  },
+  addFromSearchText: {
+    marginLeft: spacing[2],
+    fontSize: fontSize.base,
+  },
+  searchContainer: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderTopWidth: 1,
+  },
+  searchInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  searchInputText: {
+    flex: 1,
+    marginLeft: spacing[2],
+    fontSize: fontSize.base,
+  },
+});

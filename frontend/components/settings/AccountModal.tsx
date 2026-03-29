@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheet } from "../BottomSheet";
 import { UpdateEmailModal } from "./UpdateEmailModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface AccountModalProps {
   visible: boolean;
@@ -20,6 +21,7 @@ export function AccountModal({
 }: AccountModalProps) {
   const [showUpdateEmail, setShowUpdateEmail] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const colors = useColors();
 
   const handleEmailSuccess = (newEmail: string) => {
     setShowUpdateEmail(false);
@@ -39,8 +41,8 @@ export function AccountModal({
         onClose={onClose}
       >
         {/* Header */}
-        <View className="p-4 border-b border-border">
-          <Text className="text-lg font-semibold text-foreground text-center">
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerText, { color: colors.foreground }]}>
             Account
           </Text>
         </View>
@@ -48,24 +50,24 @@ export function AccountModal({
         {/* Email Row */}
         <Pressable
           onPress={() => setShowUpdateEmail(true)}
-          className="flex-row items-center px-4 py-4 border-b border-border"
+          style={[styles.emailRow, { borderBottomColor: colors.border }]}
         >
-          <Text className="text-muted text-base">Email</Text>
-          <View className="flex-1" />
-          <Text className="text-foreground text-base mr-2" numberOfLines={1}>
+          <Text style={[styles.labelText, { color: colors.muted }]}>Email</Text>
+          <View style={styles.spacer} />
+          <Text style={[styles.emailText, { color: colors.foreground }]} numberOfLines={1}>
             {currentEmail}
           </Text>
-          <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </Pressable>
 
         {/* Password Row */}
-        <View className="px-4 py-4 pb-8">
-          <Text className="text-muted text-base mb-3">Password</Text>
+        <View style={styles.passwordSection}>
+          <Text style={[styles.passwordLabel, { color: colors.muted }]}>Password</Text>
           <Pressable
             onPress={() => setShowChangePassword(true)}
-            className="bg-surface rounded-xl py-4 items-center"
+            style={[styles.changePasswordButton, { backgroundColor: colors.surface }]}
           >
-            <Text className="text-foreground text-base">Change Password</Text>
+            <Text style={[styles.changePasswordText, { color: colors.foreground }]}>Change Password</Text>
           </Pressable>
         </View>
       </BottomSheet>
@@ -85,3 +87,49 @@ export function AccountModal({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  headerText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    textAlign: "center",
+  },
+  emailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    borderBottomWidth: 1,
+  },
+  labelText: {
+    fontSize: fontSize.base,
+  },
+  spacer: {
+    flex: 1,
+  },
+  emailText: {
+    fontSize: fontSize.base,
+    marginRight: spacing[2],
+  },
+  passwordSection: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    paddingBottom: spacing[8],
+  },
+  passwordLabel: {
+    fontSize: fontSize.base,
+    marginBottom: spacing[3],
+  },
+  changePasswordButton: {
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    alignItems: "center",
+  },
+  changePasswordText: {
+    fontSize: fontSize.base,
+  },
+});

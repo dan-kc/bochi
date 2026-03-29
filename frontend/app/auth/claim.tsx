@@ -7,14 +7,17 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
 import { useAuth } from "@/lib/AuthContext";
 import { validateAuthInput, getErrorMessage } from "@/lib/validation";
 import type { ApiError } from "@/lib/api";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 export default function ClaimAccount() {
+  const colors = useColors();
   const { claimAccount, isAnonymous } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,38 +68,38 @@ export default function ClaimAccount() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+        style={styles.flex1}
       >
-        <View className="flex-1 p-6 justify-center max-w-md mx-auto w-full">
-          <Text className="text-3xl font-bold text-foreground mb-2">
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.foreground }]}>
             Create Your Account
           </Text>
-          <Text className="text-muted mb-8">
+          <Text style={[styles.subtitle, { color: colors.muted }]}>
             Keep your habits safe and sync them across all your devices.
           </Text>
 
           {errors.length > 0 && (
-            <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
+            <View style={[styles.errorContainer, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
               {errors.map((error, index) => (
-                <Text key={index} className="text-accent text-sm">
+                <Text key={index} style={[styles.errorText, { color: colors.accent }]}>
                   {error}
                 </Text>
               ))}
             </View>
           )}
 
-          <View className="gap-4">
+          <View style={styles.formContainer}>
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Email
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.foreground }]}
                 placeholder="you@example.com"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -107,13 +110,13 @@ export default function ClaimAccount() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Password
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.foreground }]}
                 placeholder="At least 8 characters"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -123,13 +126,13 @@ export default function ClaimAccount() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Confirm Password
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.foreground }]}
                 placeholder="Confirm your password"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
@@ -141,31 +144,31 @@ export default function ClaimAccount() {
             <Pressable
               onPress={handleClaim}
               disabled={isLoading}
-              className="bg-accent py-3 px-6 rounded-lg items-center mt-2"
+              style={[styles.button, { backgroundColor: colors.accent }]}
             >
               {isLoading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color={colors.white} />
               ) : (
-                <Text className="text-white font-semibold text-base">
+                <Text style={[styles.buttonText, { color: colors.white }]}>
                   Create Account
                 </Text>
               )}
             </Pressable>
           </View>
 
-          <View className="bg-surface border border-border rounded-lg p-4 mt-6">
-            <Text className="text-accent-secondary text-sm">
+          <View style={[styles.infoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.infoText, { color: colors.accentSecondary }]}>
               Your existing habits will be kept and synced to your new account.
             </Text>
           </View>
 
-          <View className="flex-row justify-center mt-6 gap-1">
-            <Text className="text-muted">Already have an account?</Text>
+          <View style={styles.linkRow}>
+            <Text style={[styles.linkText, { color: colors.muted }]}>Already have an account?</Text>
             <Link href="/auth/login" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`font-semibold ${hovered ? "text-accent" : "text-accent"}`}
+                    style={[styles.linkButton, { color: hovered ? colors.accent : colors.accent }]}
                   >
                     Login instead
                   </Text>
@@ -174,12 +177,12 @@ export default function ClaimAccount() {
             </Link>
           </View>
 
-          <View className="flex-row justify-center mt-4">
+          <View style={styles.linkRowCentered}>
             <Link href="/settings" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`${hovered ? "text-foreground" : "text-muted"}`}
+                    style={[styles.linkText, { color: hovered ? colors.foreground : colors.muted }]}
                   >
                     Back to Settings
                   </Text>
@@ -192,3 +195,89 @@ export default function ClaimAccount() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  flex1: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    padding: spacing[6],
+    justifyContent: "center",
+    maxWidth: 448,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  title: {
+    fontSize: fontSize["3xl"],
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[2],
+  },
+  subtitle: {
+    marginBottom: spacing[8],
+  },
+  errorContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+  },
+  formContainer: {
+    gap: spacing[4],
+  },
+  label: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[1],
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+  },
+  button: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    marginTop: spacing[2],
+  },
+  buttonText: {
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.base,
+  },
+  infoBox: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginTop: spacing[6],
+  },
+  infoText: {
+    fontSize: fontSize.sm,
+  },
+  linkRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing[6],
+    gap: spacing[1],
+  },
+  linkRowCentered: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing[4],
+  },
+  linkText: {
+    fontSize: fontSize.base,
+  },
+  linkButton: {
+    fontWeight: fontWeight.semibold,
+  },
+});

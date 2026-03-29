@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { View, Text, Pressable, Modal, Alert } from "react-native";
+import { View, Text, Pressable, Modal, Alert, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
 import { useHabitsContext } from "@/lib/HabitContext";
@@ -13,8 +13,10 @@ import type { Habit, HabitInput } from "@/lib/habit";
 import { SORT_OPTIONS } from "@/lib/sortOptions";
 import { sortHabits } from "@/lib/habitSorting";
 import { useSortPreference } from "@/lib/store/sortPreferencesStore";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 export default function Habits() {
+  const colors = useColors();
   const {
     habits,
     rankedHabits,
@@ -148,14 +150,14 @@ export default function Habits() {
   const keyExtractor = useCallback((item: Habit) => item.id, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
-      <View className="flex-1">
-        <View className="p-4 border-b border-border">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-2xl font-bold text-foreground">Habits</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+      <View style={styles.container}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.title, { color: colors.foreground }]}>Habits</Text>
             <BalanceDisplay />
           </View>
-          <View className="flex-row justify-end items-center">
+          <View style={styles.sortRow}>
             <SortDropdown
               options={SORT_OPTIONS}
               selectedKey={sortKey}
@@ -165,8 +167,8 @@ export default function Habits() {
         </View>
 
         {displayHabits.length === 0 ? (
-          <View className="flex-1 items-center justify-center p-4">
-            <Text className="text-muted text-center mb-4">
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>
               No habits yet. Add your first habit to get started.
             </Text>
           </View>
@@ -181,12 +183,12 @@ export default function Habits() {
           />
         )}
 
-        <View className="p-4 border-t border-border">
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <Pressable
             onPress={handleAddHabit}
-            className="bg-accent py-3 px-6 rounded-lg items-center"
+            style={[styles.addButton, { backgroundColor: colors.accent }]}
           >
-            <Text className="text-white font-semibold text-base">Add Habit</Text>
+            <Text style={styles.addButtonText}>Add Habit</Text>
           </Pressable>
         </View>
 
@@ -196,7 +198,7 @@ export default function Habits() {
           presentationStyle="pageSheet"
           onRequestClose={handleFormClose}
         >
-          <SafeAreaView className="flex-1 bg-background">
+          <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
             <HabitForm
               key={formKey}
               habit={selectedHabit}
@@ -216,7 +218,7 @@ export default function Habits() {
           presentationStyle="pageSheet"
           onRequestClose={handleRankSkip}
         >
-          <SafeAreaView className="flex-1 bg-background">
+          <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
             {habitToRank && (
               <DifficultyRanker
                 habit={habitToRank}
@@ -231,3 +233,56 @@ export default function Habits() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing[3],
+  },
+  title: {
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+  },
+  sortRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[4],
+  },
+  emptyText: {
+    textAlign: "center",
+    marginBottom: spacing[4],
+  },
+  footer: {
+    padding: spacing[4],
+    borderTopWidth: 1,
+  },
+  addButton: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+  },
+  addButtonText: {
+    color: "white",
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.base,
+  },
+});

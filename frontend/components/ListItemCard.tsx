@@ -1,6 +1,7 @@
-import { View, Pressable } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
 import type { ReactNode } from "react";
 import { FadingText } from "./FadingText";
+import { useColors, spacing, fontSize, fontWeight } from "@/lib/theme";
 
 interface ListItemCardProps {
   name: string;
@@ -19,13 +20,15 @@ export function ListItemCard({
   bottomRight,
   onPress,
 }: ListItemCardProps) {
+  const colors = useColors();
+
   return (
-    <Pressable onPress={onPress} className="border-b border-border py-4 px-2">
+    <Pressable onPress={onPress} style={[styles.container, { borderBottomColor: colors.border }]}>
       {({ hovered }) => (
-        <View className={hovered ? "opacity-80" : ""}>
+        <View style={hovered ? styles.hovered : undefined}>
           <FadingText
             numberOfLines={3}
-            className="text-lg font-semibold text-foreground"
+            style={[styles.nameText, { color: colors.foreground }]}
           >
             {name}
           </FadingText>
@@ -33,7 +36,7 @@ export function ListItemCard({
           {description ? (
             <FadingText
               numberOfLines={1}
-              className="text-muted text-sm mt-1"
+              style={[styles.descriptionText, { color: colors.muted }]}
             >
               {description}
             </FadingText>
@@ -42,19 +45,49 @@ export function ListItemCard({
           {subtitle ? (
             <FadingText
               numberOfLines={1}
-              className="text-accent-secondary text-sm mt-1"
+              style={[styles.subtitleText, { color: colors.accentSecondary }]}
             >
               {subtitle}
             </FadingText>
           ) : null}
 
-          {tags ? <View className="mt-1">{tags}</View> : null}
+          {tags ? <View style={styles.tagsContainer}>{tags}</View> : null}
 
           {bottomRight ? (
-            <View className="items-end mt-2">{bottomRight}</View>
+            <View style={styles.bottomRightContainer}>{bottomRight}</View>
           ) : null}
         </View>
       )}
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    borderBottomWidth: 1,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[2],
+  },
+  hovered: {
+    opacity: 0.8,
+  },
+  nameText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+  descriptionText: {
+    fontSize: fontSize.sm,
+    marginTop: spacing[1],
+  },
+  subtitleText: {
+    fontSize: fontSize.sm,
+    marginTop: spacing[1],
+  },
+  tagsContainer: {
+    marginTop: spacing[1],
+  },
+  bottomRightContainer: {
+    alignItems: "flex-end",
+    marginTop: spacing[2],
+  },
+});

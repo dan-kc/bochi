@@ -1,7 +1,9 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Link, usePathname } from "expo-router";
+import { useColors, spacing, fontSize, fontWeight } from "@/lib/theme";
 
 export default function Navbar() {
+  const colors = useColors();
   const pathname = usePathname();
 
   const navItems = [
@@ -12,10 +14,10 @@ export default function Navbar() {
   ] as const;
 
   return (
-    <View className="bg-background border-b border-border px-6 py-4">
-      <View className="flex-row justify-between items-center max-w-7xl mx-auto w-full">
-        <Text className="text-xl font-bold text-foreground">TOFUSTASH</Text>
-        <View className="flex-row gap-6">
+    <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <View style={styles.inner}>
+        <Text style={[styles.logo, { color: colors.foreground }]}>TOFUSTASH</Text>
+        <View style={styles.nav}>
           {navItems.map((item) => {
             const isActive = pathname === item.path;
             return (
@@ -23,13 +25,16 @@ export default function Navbar() {
                 <Pressable>
                   {({ hovered }) => (
                     <Text
-                      className={`text-base font-medium ${
-                        isActive
-                          ? "text-accent"
-                          : hovered
-                            ? "text-foreground"
-                            : "text-muted"
-                      }`}
+                      style={[
+                        styles.navItem,
+                        {
+                          color: isActive
+                            ? colors.accent
+                            : hovered
+                              ? colors.foreground
+                              : colors.muted
+                        }
+                      ]}
                     >
                       {item.name}
                     </Text>
@@ -43,3 +48,31 @@ export default function Navbar() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[4],
+  },
+  inner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    maxWidth: 1280,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  logo: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+  },
+  nav: {
+    flexDirection: "row",
+    gap: spacing[6],
+  },
+  navItem: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+  },
+});

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LegendList } from "@legendapp/list";
 import { useAuth } from "@/lib/AuthContext";
@@ -12,11 +12,13 @@ import type { Trade } from "@/lib/trade";
 import { TRADE_SORT_OPTIONS, DEFAULT_TRADE_SORT, type TradeSortKey } from "@/lib/tradeSortOptions";
 import { TRADE_FILTER_OPTIONS, DEFAULT_TRADE_FILTER, type TradeFilterKey } from "@/lib/tradeSortOptions";
 import { filterTrades, sortTrades, formatTradeDate, getTradeInfo } from "@/lib/tradeSorting";
+import { useColors, spacing, fontSize, fontWeight } from "@/lib/theme";
 
 export default function Trades() {
   const { user } = useAuth();
   const userId = user?.id ?? LOCAL_USER_ID;
   const trades = useTrades(userId);
+  const colors = useColors();
 
   const [filterKey, setFilterKey] = useState<TradeFilterKey>(DEFAULT_TRADE_FILTER);
   const [sortKey, setSortKey] = useState<TradeSortKey>(DEFAULT_TRADE_SORT);
@@ -44,14 +46,14 @@ export default function Trades() {
   const keyExtractor = useCallback((item: Trade) => item.id, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
-      <View className="flex-1">
-        <View className="p-4 border-b border-border">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-2xl font-bold text-foreground">Trades</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+      <View style={styles.container}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View style={styles.headerTop}>
+            <Text style={[styles.title, { color: colors.foreground }]}>Trades</Text>
             <BalanceDisplay />
           </View>
-          <View className="flex-row justify-between items-center">
+          <View style={styles.headerBottom}>
             <FilterChips
               options={TRADE_FILTER_OPTIONS}
               selectedKey={filterKey}
@@ -66,8 +68,8 @@ export default function Trades() {
         </View>
 
         {displayTrades.length === 0 ? (
-          <View className="flex-1 items-center justify-center p-4">
-            <Text className="text-muted text-center">No trades yet.</Text>
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>No trades yet.</Text>
           </View>
         ) : (
           <LegendList
@@ -83,3 +85,40 @@ export default function Trades() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing[3],
+  },
+  title: {
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+  },
+  headerBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[4],
+  },
+  emptyText: {
+    textAlign: "center",
+  },
+});

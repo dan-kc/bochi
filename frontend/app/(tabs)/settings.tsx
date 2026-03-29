@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import ProfileCard from "@/components/ProfileCard";
@@ -11,6 +11,7 @@ import { markGeneralDifficultyDirty } from "@/lib/sync/syncStorage";
 import { SettingsMenuItem } from "@/components/settings/SettingsMenuItem";
 import { AccountModal } from "@/components/settings/AccountModal";
 import { GeneralDifficultyModal } from "@/components/settings/GeneralDifficultyModal";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 function formatSyncStatus(syncStatus: string, lastSyncTime: string | null, syncError: string | null): string {
   if (syncStatus === "syncing") return "Syncing...";
@@ -74,16 +75,17 @@ export default function Settings() {
   };
 
   const isLoggedIn = user && !isAnonymous && userState.email;
+  const colors = useColors();
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <View className="flex-1 p-4">
-        <Text className="text-2xl font-bold text-foreground mb-4">Settings</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <View style={styles.container}>
+        <Text style={[styles.title, { color: colors.foreground }]}>Settings</Text>
 
         {isLoggedIn ? (
           <>
             {/* Account Settings Menu */}
-            <View className="bg-surface rounded-xl mb-4">
+            <View style={[styles.menuCard, { backgroundColor: colors.surface }]}>
               <SettingsMenuItem
                 icon="person-outline"
                 label="Account"
@@ -111,7 +113,7 @@ export default function Settings() {
         )}
 
         {/* Appearance */}
-        <View className="bg-surface rounded-xl mt-4">
+        <View style={[styles.menuCardWithMargin, { backgroundColor: colors.surface }]}>
           <SettingsMenuItem
             icon={colorScheme === "dark" ? "moon" : "sunny"}
             label="Appearance"
@@ -122,7 +124,7 @@ export default function Settings() {
         </View>
 
         {/* General Difficulty - available to all users */}
-        <View className="bg-surface rounded-xl mt-4">
+        <View style={[styles.menuCardWithMargin, { backgroundColor: colors.surface }]}>
           <SettingsMenuItem
             icon="speedometer-outline"
             label="General Difficulty"
@@ -133,7 +135,7 @@ export default function Settings() {
 
         {/* Sync Status */}
         {sync && (
-          <View className="bg-surface rounded-xl mt-4">
+          <View style={[styles.menuCardWithMargin, { backgroundColor: colors.surface }]}>
             <SettingsMenuItem
               icon={sync.syncStatus === "error" ? "cloud-offline" : "cloud-done-outline"}
               iconColor={sync.syncStatus === "error" ? "#f54900" : "#197291"}
@@ -145,7 +147,7 @@ export default function Settings() {
           </View>
         )}
 
-        <Text className="text-muted mt-4">App settings and preferences.</Text>
+        <Text style={[styles.description, { color: colors.muted }]}>App settings and preferences.</Text>
       </View>
 
       {isLoggedIn && userState.email && (
@@ -166,3 +168,29 @@ export default function Settings() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    padding: spacing[4],
+  },
+  title: {
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[4],
+  },
+  menuCard: {
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing[4],
+  },
+  menuCardWithMargin: {
+    borderRadius: borderRadius.xl,
+    marginTop: spacing[4],
+  },
+  description: {
+    marginTop: spacing[4],
+  },
+});

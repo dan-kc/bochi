@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheet } from "./BottomSheet";
 import { ColorPickerModal } from "./ColorPickerModal";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface TagEditSheetProps {
   visible: boolean;
@@ -22,6 +23,7 @@ export function TagEditSheet({
   const [name, setName] = useState(tagName);
   const [color, setColor] = useState(tagColor);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const colors = useColors();
 
   const handleClose = () => {
     if (name.trim()) {
@@ -38,23 +40,30 @@ export function TagEditSheet({
     <>
       <BottomSheet visible={visible && !showColorPicker} onClose={handleClose}>
         {/* Header */}
-        <View className="px-4 py-3 flex-row items-center justify-between border-b border-border">
-          <Text className="text-base font-semibold text-foreground">Edit Tag</Text>
-          <Pressable onPress={handleClose} className="p-1">
-            <Ionicons name="checkmark" size={24} color="var(--color-accent)" />
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerText, { color: colors.foreground }]}>Edit Tag</Text>
+          <Pressable onPress={handleClose} style={styles.checkButton}>
+            <Ionicons name="checkmark" size={24} color={colors.accent} />
           </Pressable>
         </View>
 
-        <View className="px-4 py-4 gap-4">
+        <View style={styles.content}>
           {/* Name input */}
           <View>
-            <Text className="text-sm font-medium text-muted mb-1">Name</Text>
+            <Text style={[styles.label, { color: colors.muted }]}>Name</Text>
             <TextInput
-              className="border border-border rounded-lg px-4 py-3 text-base text-foreground bg-surface"
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  backgroundColor: colors.surface,
+                },
+              ]}
               value={name}
               onChangeText={setName}
               placeholder="Tag name"
-              placeholderTextColor="var(--color-muted)"
+              placeholderTextColor={colors.muted}
               autoFocus
               maxLength={50}
             />
@@ -63,15 +72,14 @@ export function TagEditSheet({
           {/* Color row */}
           <Pressable
             onPress={() => setShowColorPicker(true)}
-            className="flex-row items-center justify-between"
+            style={styles.colorRow}
           >
-            <Text className="text-sm font-medium text-muted">Color</Text>
-            <View className="flex-row items-center gap-2">
+            <Text style={[styles.colorLabel, { color: colors.muted }]}>Color</Text>
+            <View style={styles.colorRowRight}>
               <View
-                className="w-8 h-8 rounded-full border-2 border-border"
-                style={{ backgroundColor: color }}
+                style={[styles.colorSwatch, { backgroundColor: color, borderColor: colors.border }]}
               />
-              <Ionicons name="chevron-forward" size={20} color="var(--color-muted)" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </View>
           </Pressable>
         </View>
@@ -86,3 +94,58 @@ export function TagEditSheet({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+  },
+  headerText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+  },
+  checkButton: {
+    padding: spacing[1],
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    gap: spacing[4],
+  },
+  label: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[1],
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+  },
+  colorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  colorLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  colorRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  colorSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+  },
+});

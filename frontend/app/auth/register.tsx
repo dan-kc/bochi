@@ -7,14 +7,17 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
 import { useAuth } from "@/lib/AuthContext";
 import { validateAuthInput, getErrorMessage } from "@/lib/validation";
 import type { ApiError } from "@/lib/api";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 export default function Register() {
+  const colors = useColors();
   const { register } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,38 +61,38 @@ export default function Register() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+        style={styles.keyboardView}
       >
-        <View className="flex-1 p-6 justify-center max-w-md mx-auto w-full">
-          <Text className="text-3xl font-bold text-foreground mb-2">
+        <View style={styles.container}>
+          <Text style={[styles.title, { color: colors.foreground }]}>
             Create account
           </Text>
-          <Text className="text-muted mb-8">
+          <Text style={[styles.subtitle, { color: colors.muted }]}>
             Sign up to start using Tofustash
           </Text>
 
           {errors.length > 0 && (
-            <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
+            <View style={[styles.errorContainer, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
               {errors.map((error, index) => (
-                <Text key={index} className="text-accent text-sm">
+                <Text key={index} style={[styles.errorText, { color: colors.accent }]}>
                   {error}
                 </Text>
               ))}
             </View>
           )}
 
-          <View className="gap-4">
+          <View style={styles.formContainer}>
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Email
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border }]}
                 placeholder="you@example.com"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -100,13 +103,13 @@ export default function Register() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Password
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border }]}
                 placeholder="At least 8 characters"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -116,13 +119,13 @@ export default function Register() {
             </View>
 
             <View>
-              <Text className="text-sm font-medium text-muted mb-1">
+              <Text style={[styles.label, { color: colors.muted }]}>
                 Confirm Password
               </Text>
               <TextInput
-                className="border border-border bg-surface rounded-lg px-4 py-3 text-base text-foreground"
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border }]}
                 placeholder="Confirm your password"
-                placeholderTextColor="var(--color-muted)"
+                placeholderTextColor={colors.muted}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
@@ -134,25 +137,25 @@ export default function Register() {
             <Pressable
               onPress={handleRegister}
               disabled={isLoading}
-              className="bg-accent py-3 px-6 rounded-lg items-center mt-2"
+              style={[styles.button, { backgroundColor: colors.accent }]}
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="text-white font-semibold text-base">
+                <Text style={styles.buttonText}>
                   Create Account
                 </Text>
               )}
             </Pressable>
           </View>
 
-          <View className="flex-row justify-center mt-6 gap-1">
-            <Text className="text-muted">Already have an account?</Text>
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerText, { color: colors.muted }]}>Already have an account?</Text>
             <Link href="/auth/login" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`font-semibold ${hovered ? "text-accent" : "text-accent"}`}
+                    style={[styles.footerLink, { color: colors.accent }]}
                   >
                     Log In
                   </Text>
@@ -161,12 +164,12 @@ export default function Register() {
             </Link>
           </View>
 
-          <View className="flex-row justify-center mt-4">
+          <View style={styles.footerCenter}>
             <Link href="/settings" asChild>
               <Pressable>
                 {({ hovered }) => (
                   <Text
-                    className={`${hovered ? "text-foreground" : "text-muted"}`}
+                    style={{ color: hovered ? colors.foreground : colors.muted }}
                   >
                     Back to Settings
                   </Text>
@@ -179,3 +182,81 @@ export default function Register() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    padding: spacing[6],
+    justifyContent: "center",
+    maxWidth: 448,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  title: {
+    fontSize: fontSize["3xl"],
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[2],
+  },
+  subtitle: {
+    marginBottom: spacing[8],
+  },
+  errorContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+  },
+  formContainer: {
+    gap: spacing[4],
+  },
+  label: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[1],
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+  },
+  button: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    marginTop: spacing[2],
+  },
+  buttonText: {
+    color: "white",
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.base,
+  },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing[6],
+    gap: spacing[1],
+  },
+  footerText: {
+    fontSize: fontSize.base,
+  },
+  footerLink: {
+    fontWeight: fontWeight.semibold,
+  },
+  footerCenter: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing[4],
+  },
+});

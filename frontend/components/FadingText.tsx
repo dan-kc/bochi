@@ -1,18 +1,18 @@
-import { Platform, Text, View, StyleSheet } from "react-native";
+import { Platform, Text, View, StyleSheet, type TextStyle } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 
 interface FadingTextProps {
   children: string;
   numberOfLines: number;
-  className?: string;
+  style?: TextStyle | TextStyle[];
   fadeWidth?: number;
 }
 
 function WebFadingText({
   children,
   numberOfLines,
-  className,
+  style,
   fadeWidth = 40,
 }: FadingTextProps) {
   // Web-specific CSS properties not in React Native types
@@ -26,7 +26,7 @@ function WebFadingText({
   } as const;
 
   return (
-    <Text className={className} style={lineClampStyle as any}>
+    <Text style={[style, lineClampStyle as any]}>
       {children}
     </Text>
   );
@@ -35,7 +35,7 @@ function WebFadingText({
 function NativeFadingText({
   children,
   numberOfLines,
-  className,
+  style,
   fadeWidth = 40,
 }: FadingTextProps) {
   return (
@@ -53,7 +53,7 @@ function NativeFadingText({
         </View>
       }
     >
-      <Text className={className} numberOfLines={numberOfLines} ellipsizeMode="clip">
+      <Text style={style} numberOfLines={numberOfLines} ellipsizeMode="clip">
         {children}
       </Text>
     </MaskedView>

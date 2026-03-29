@@ -1,20 +1,21 @@
 import { Tabs, Slot } from "expo-router";
-import { Platform, useWindowDimensions, View } from "react-native";
-import { useColorScheme } from "nativewind";
+import { Platform, useWindowDimensions, View, useColorScheme, StyleSheet } from "react-native";
 import Navbar from "../../components/Navbar";
+import { useColors } from "@/lib/theme";
 
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isDesktop = isWeb && width >= 1024;
-  const { colorScheme } = useColorScheme();
+  const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  const colors = useColors();
 
   if (isDesktop) {
     return (
-      <View className="flex-1 bg-background">
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Navbar />
-        <View className="flex-1 max-w-7xl w-full mx-auto">
+        <View style={styles.content}>
           <Slot />
         </View>
       </View>
@@ -60,3 +61,16 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    maxWidth: 1280,
+    width: "100%",
+    marginLeft: "auto",
+    marginRight: "auto",
+  },
+});

@@ -9,11 +9,13 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { z } from "zod";
 import type { Tag, TagInput } from "@/lib/tag";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 function confirmDiscard(title: string, message: string, onDiscard: () => void) {
   if (Platform.OS === "web") {
@@ -107,6 +109,7 @@ export function ChangeForm({
   tagActions,
   updateTag,
 }: ChangeFormProps) {
+  const colors = useColors();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [frequencyStr, setFrequencyStr] = useState("");
@@ -350,35 +353,35 @@ export function ChangeForm({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1"
+      style={styles.flex1}
     >
-      <ScrollView className="flex-1 p-4">
+      <ScrollView style={[styles.flex1, styles.scrollContent]}>
         {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
+        <View style={styles.header}>
           <Pressable onPress={onClose} disabled={isLoading}>
             {isSaving ? (
-              <ActivityIndicator color="var(--color-muted)" />
+              <ActivityIndicator color={colors.muted} />
             ) : (
-              <Ionicons name="close" size={28} color="var(--color-muted)" />
+              <Ionicons name="close" size={28} color={colors.muted} />
             )}
           </Pressable>
         </View>
 
         {allErrors.length > 0 && (
-          <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
+          <View style={[styles.errorContainer, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
             {allErrors.map((error, index) => (
-              <Text key={index} className="text-accent text-sm">
+              <Text key={index} style={[styles.errorText, { color: colors.accent }]}>
                 {error}
               </Text>
             ))}
           </View>
         )}
 
-        <View className="gap-4">
+        <View style={styles.contentGap}>
           {/* Name - pressable text */}
           <Pressable onPress={() => setActiveSheet("name")}>
             <Text
-              className={`text-lg ${name.trim() ? "text-foreground" : "text-muted"}`}
+              style={[styles.nameText, { color: name.trim() ? colors.foreground : colors.muted }]}
               numberOfLines={2}
             >
               {name.trim() || `${config.entityLabel} name`}
@@ -391,7 +394,7 @@ export function ChangeForm({
               entering={isSettled ? FadeIn.duration(250) : undefined}
             >
               <Pressable onPress={() => setActiveSheet("description")}>
-                <Text className="text-foreground text-base" numberOfLines={3}>
+                <Text style={[styles.descriptionText, { color: colors.foreground }]} numberOfLines={3}>
                   {savedDescription}
                 </Text>
               </Pressable>
@@ -402,14 +405,13 @@ export function ChangeForm({
           {isEditing && tags.length > 0 && (
             <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
               <Pressable onPress={() => setShowTagModal(true)}>
-                <View className="flex-row flex-wrap gap-2">
+                <View style={styles.tagRow}>
                   {tags.map((tag) => (
                     <View
                       key={tag.id}
-                      className="px-3 py-1.5 rounded-full"
-                      style={{ backgroundColor: tag.color_hex + "30" }}
+                      style={[styles.tag, { backgroundColor: tag.color_hex + "30" }]}
                     >
-                      <Text className="text-sm font-medium" style={{ color: tag.color_hex }}>
+                      <Text style={[styles.tagText, { color: tag.color_hex }]}>
                         {tag.name}
                       </Text>
                     </View>
@@ -434,13 +436,13 @@ export function ChangeForm({
                 ? ` ${tradeAmount > 0 ? "+" : ""}${tradeAmount}`
                 : "";
               return (
-                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} className="mt-6">
+                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} style={styles.heroButton}>
                   <Pressable
                     onPress={() => onAction(entity)}
                     disabled={isLoading}
-                    className="bg-accent py-4 px-6 rounded-lg items-center"
+                    style={[styles.actionButton, { backgroundColor: colors.accent }]}
                   >
-                    <Text className="text-white font-bold text-lg">
+                    <Text style={[styles.actionButtonText, { color: colors.white }]}>
                       {config.actionLabel}{amountStr}
                     </Text>
                   </Pressable>
@@ -452,13 +454,13 @@ export function ChangeForm({
                 ? "Set Difficulty"
                 : "Set Damage";
               return (
-                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} className="mt-6">
+                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} style={styles.heroButton}>
                   <Pressable
                     onPress={onRerank}
                     disabled={isLoading}
-                    className="bg-surface py-4 px-6 rounded-lg items-center"
+                    style={[styles.actionButton, { backgroundColor: colors.surface }]}
                   >
-                    <Text className="text-muted font-bold text-lg">
+                    <Text style={[styles.actionButtonText, { color: colors.muted }]}>
                       {setRankLabel}
                     </Text>
                   </Pressable>
@@ -474,12 +476,12 @@ export function ChangeForm({
               <Pressable
                 onPress={handleDelete}
                 disabled={isLoading}
-                className="bg-surface py-4 px-6 rounded-lg items-center"
+                style={[styles.actionButton, { backgroundColor: colors.surface }]}
               >
                 {isDeleting ? (
-                  <ActivityIndicator color="var(--color-muted)" />
+                  <ActivityIndicator color={colors.muted} />
                 ) : (
-                  <Text className="text-muted font-bold text-lg">Delete</Text>
+                  <Text style={[styles.actionButtonText, { color: colors.muted }]}>Delete</Text>
                 )}
               </Pressable>
             </Animated.View>
@@ -507,9 +509,9 @@ export function ChangeForm({
       >
         <TextInput
           ref={nameInputRef}
-          className="border-b border-border px-1 py-3 text-lg text-foreground"
+          style={[styles.sheetInput, { borderBottomColor: colors.border, color: colors.foreground }]}
           placeholder={`${config.entityLabel} name`}
-          placeholderTextColor="var(--color-muted)"
+          placeholderTextColor={colors.muted}
           value={name}
           onChangeText={setName}
           autoFocus
@@ -525,14 +527,13 @@ export function ChangeForm({
         title="Description"
       >
         <TextInput
-          className="border-b border-border px-1 py-3 text-base text-foreground"
+          style={[styles.sheetInputMultiline, { borderBottomColor: colors.border, color: colors.foreground }]}
           placeholder="Description (optional)"
-          placeholderTextColor="var(--color-muted)"
+          placeholderTextColor={colors.muted}
           value={description}
           onChangeText={setDescription}
           multiline
           numberOfLines={4}
-          style={{ textAlignVertical: "top", minHeight: 120 }}
           autoFocus
           maxLength={10000}
         />
@@ -544,34 +545,37 @@ export function ChangeForm({
         onClose={() => closeSheet("frequency")}
         title={config.frequencyLabel}
       >
-        <View className="gap-4">
-          <View className="flex-row gap-2">
+        <View style={styles.frequencyContainer}>
+          <View style={styles.frequencyInputRow}>
             <TextInput
-              className="flex-1 border rounded-lg px-4 py-3 text-base text-foreground bg-surface border-border"
+              style={[styles.frequencyInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.foreground }]}
               placeholder="e.g., 1, 2, 3"
-              placeholderTextColor="var(--color-muted)"
+              placeholderTextColor={colors.muted}
               value={frequencyStr}
               onChangeText={setFrequencyStr}
               keyboardType="decimal-pad"
               autoFocus
             />
-            <Text className="self-center text-muted">per</Text>
+            <Text style={[styles.frequencyPer, { color: colors.muted }]}>per</Text>
           </View>
-          <View className="flex-row gap-2">
+          <View style={styles.frequencyPeriodRow}>
             {(["day", "week", "month"] as const).map((period) => (
               <Pressable
                 key={period}
                 onPress={() => setFrequencyPeriod(period)}
-                className={`flex-1 py-2 px-3 rounded-lg items-center border ${
-                  frequencyPeriod === period
-                    ? "bg-accent border-accent"
-                    : "bg-surface border-border"
-                }`}
+                style={[
+                  styles.frequencyPeriodButton,
+                  {
+                    backgroundColor: frequencyPeriod === period ? colors.accent : colors.surface,
+                    borderColor: frequencyPeriod === period ? colors.accent : colors.border,
+                  }
+                ]}
               >
                 <Text
-                  className={`font-medium ${
-                    frequencyPeriod === period ? "text-white" : "text-foreground"
-                  }`}
+                  style={[
+                    styles.frequencyPeriodText,
+                    { color: frequencyPeriod === period ? colors.white : colors.foreground }
+                  ]}
                 >
                   {period.charAt(0).toUpperCase() + period.slice(1)}
                 </Text>
@@ -611,3 +615,110 @@ export function ChangeForm({
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing[4],
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing[6],
+  },
+  errorContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+  },
+  contentGap: {
+    gap: spacing[4],
+  },
+  nameText: {
+    fontSize: fontSize.lg,
+  },
+  descriptionText: {
+    fontSize: fontSize.base,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  tag: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+  },
+  tagText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  heroButton: {
+    marginTop: spacing[6],
+  },
+  actionButton: {
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    fontWeight: fontWeight.bold,
+    fontSize: fontSize.lg,
+  },
+  sheetInput: {
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing[1],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.lg,
+  },
+  sheetInputMultiline: {
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing[1],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+    textAlignVertical: "top",
+    minHeight: 120,
+  },
+  frequencyContainer: {
+    gap: spacing[4],
+  },
+  frequencyInputRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+  },
+  frequencyInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+  },
+  frequencyPer: {
+    alignSelf: "center",
+  },
+  frequencyPeriodRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+  },
+  frequencyPeriodButton: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  frequencyPeriodText: {
+    fontWeight: fontWeight.medium,
+  },
+});

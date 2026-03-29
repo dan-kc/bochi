@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTrades } from "@/lib/store";
 import { sortTrades, formatTradeDate, getTradeInfo } from "@/lib/tradeSorting";
 import { TradeItem } from "./TradeItem";
+import { useColors, spacing, fontSize, fontWeight } from "@/lib/theme";
 
 const COLLAPSED_COUNT = 5;
 
@@ -13,6 +14,7 @@ interface TradeHistoryProps {
 }
 
 export function TradeHistory({ userId, habitId, rewardId }: TradeHistoryProps) {
+  const colors = useColors();
   const [showAll, setShowAll] = useState(false);
   const trades = useTrades(userId);
 
@@ -27,10 +29,10 @@ export function TradeHistory({ userId, habitId, rewardId }: TradeHistoryProps) {
   const hasMore = filtered.length > COLLAPSED_COUNT;
 
   return (
-    <View className="mt-6">
-      <Text className="text-sm font-medium text-muted mb-2">History</Text>
+    <View style={styles.container}>
+      <Text style={[styles.header, { color: colors.muted }]}>History</Text>
       {filtered.length === 0 ? (
-        <Text className="text-muted text-sm">No trades yet.</Text>
+        <Text style={[styles.emptyText, { color: colors.muted }]}>No trades yet.</Text>
       ) : (
         <>
           {visible.map((trade) => {
@@ -46,8 +48,8 @@ export function TradeHistory({ userId, habitId, rewardId }: TradeHistoryProps) {
             );
           })}
           {hasMore && (
-            <Pressable onPress={() => setShowAll(!showAll)} className="py-3 items-center">
-              <Text className="text-muted text-sm">
+            <Pressable onPress={() => setShowAll(!showAll)} style={styles.showMoreButton}>
+              <Text style={[styles.showMoreText, { color: colors.muted }]}>
                 {showAll ? "Show less" : `Show all (${filtered.length})`}
               </Text>
             </Pressable>
@@ -57,3 +59,24 @@ export function TradeHistory({ userId, habitId, rewardId }: TradeHistoryProps) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginTop: spacing[6],
+  },
+  header: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[2],
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+  },
+  showMoreButton: {
+    paddingVertical: spacing[3],
+    alignItems: "center",
+  },
+  showMoreText: {
+    fontSize: fontSize.sm,
+  },
+});

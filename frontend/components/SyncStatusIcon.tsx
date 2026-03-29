@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/AuthContext";
@@ -7,6 +7,7 @@ import {
   usePriceUpdateOptional,
   formatCountdown,
 } from "@/lib/PriceUpdateContext";
+import { useColors, spacing, fontSize, fontWeight } from "@/lib/theme";
 
 function formatLastSynced(isoString: string): string {
   const date = new Date(isoString);
@@ -36,15 +37,16 @@ function formatLastSynced(isoString: string): string {
 }
 
 function PriceCountdown() {
+  const colors = useColors();
   const priceContext = usePriceUpdateOptional();
   if (!priceContext) return null;
 
   const { secondsUntilUpdate } = priceContext;
 
   return (
-    <View className="flex-row items-center mr-3">
-      <Ionicons name="timer-outline" size={14} color="#f54900" />
-      <Text className="ml-1 text-xs text-accent font-medium">
+    <View style={styles.countdownContainer}>
+      <Ionicons name="timer-outline" size={14} color={colors.accent} />
+      <Text style={[styles.countdownText, { color: colors.accent }]}>
         {formatCountdown(secondsUntilUpdate)}
       </Text>
     </View>
@@ -52,6 +54,7 @@ function PriceCountdown() {
 }
 
 export function SyncStatusIcon() {
+  const colors = useColors();
   const { user } = useAuth();
   const sync = useSyncOptional();
   const router = useRouter();
@@ -59,14 +62,14 @@ export function SyncStatusIcon() {
   // If user is not logged in, show login prompt
   if (!user) {
     return (
-      <View className="flex-row items-center">
+      <View style={styles.container}>
         <PriceCountdown />
         <Pressable
           onPress={() => router.push("/auth/login")}
-          className="flex-row items-center"
+          style={styles.statusContainer}
         >
-          <Ionicons name="cloud-offline-outline" size={20} color="var(--color-muted)" />
-          <Text className="ml-1 text-xs text-muted">Log in to sync</Text>
+          <Ionicons name="cloud-offline-outline" size={20} color={colors.muted} />
+          <Text style={[styles.statusText, { color: colors.muted }]}>Log in to sync</Text>
         </Pressable>
       </View>
     );
@@ -82,7 +85,7 @@ export function SyncStatusIcon() {
   const renderLastSynced = () => {
     if (!lastSyncTime) return null;
     return (
-      <Text className="ml-1 text-xs text-muted">
+      <Text style={[styles.statusText, { color: colors.muted }]}>
         {formatLastSynced(lastSyncTime)}
       </Text>
     );
@@ -91,29 +94,29 @@ export function SyncStatusIcon() {
   switch (syncStatus) {
     case "syncing":
       return (
-        <View className="flex-row items-center">
+        <View style={styles.container}>
           <PriceCountdown />
-          <ActivityIndicator size="small" color="#f54900" />
-          <Text className="ml-1 text-xs text-muted">Syncing...</Text>
+          <ActivityIndicator size="small" color={colors.accent} />
+          <Text style={[styles.statusText, { color: colors.muted }]}>Syncing...</Text>
         </View>
       );
 
     case "synced":
       return (
-        <View className="flex-row items-center">
+        <View style={styles.container}>
           <PriceCountdown />
-          <Ionicons name="checkmark-circle" size={20} color="#197291" />
+          <Ionicons name="checkmark-circle" size={20} color={colors.accentSecondary} />
           {renderLastSynced()}
         </View>
       );
 
     case "error":
       return (
-        <View className="flex-row items-center">
+        <View style={styles.container}>
           <PriceCountdown />
-          <Pressable onPress={triggerSync} className="flex-row items-center">
-            <Ionicons name="cloud-offline" size={20} color="#f54900" />
-            <Text className="ml-1 text-xs text-accent">Not synced</Text>
+          <Pressable onPress={triggerSync} style={styles.statusContainer}>
+            <Ionicons name="cloud-offline" size={20} color={colors.accent} />
+            <Text style={[styles.statusText, { color: colors.accent }]}>Not synced</Text>
           </Pressable>
         </View>
       );
@@ -121,11 +124,36 @@ export function SyncStatusIcon() {
     case "idle":
     default:
       return (
-        <View className="flex-row items-center">
+        <View style={styles.container}>
           <PriceCountdown />
-          <Ionicons name="cloud-outline" size={20} color="var(--color-muted)" />
+          <Ionicons name="cloud-outline" size={20} color={colors.muted} />
           {renderLastSynced()}
         </View>
       );
   }
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statusText: {
+    marginLeft: spacing[1],
+    fontSize: fontSize.xs,
+  },
+  countdownContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: spacing[3],
+  },
+  countdownText: {
+    marginLeft: spacing[1],
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+  },
+});

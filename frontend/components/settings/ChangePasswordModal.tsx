@@ -8,11 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, ApiError } from "@/lib/api";
 import { getStoredTokens } from "@/lib/storage";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface ChangePasswordModalProps {
   visible: boolean;
@@ -25,6 +27,7 @@ export function ChangePasswordModal({
   onClose,
   onSuccess,
 }: ChangePasswordModalProps) {
+  const colors = useColors();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -97,37 +100,37 @@ export function ChangePasswordModal({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <SafeAreaView className="flex-1 bg-background">
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
+          style={styles.flex1}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-            <Pressable onPress={handleClose} className="p-2">
-              <Ionicons name="close" size={24} color="var(--color-muted)" />
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={handleClose} style={styles.headerButton}>
+              <Ionicons name="close" size={24} color={colors.muted} />
             </Pressable>
-            <Text className="text-lg font-semibold text-foreground">
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
               Change Password
             </Text>
             <Pressable
               onPress={handleSubmit}
               disabled={isLoading}
-              className="p-2"
+              style={styles.headerButton}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="var(--color-muted)" />
+                <ActivityIndicator size="small" color={colors.muted} />
               ) : (
-                <Ionicons name="checkmark" size={24} color="var(--color-muted)" />
+                <Ionicons name="checkmark" size={24} color={colors.muted} />
               )}
             </Pressable>
           </View>
 
-          <View className="flex-1 p-4">
+          <View style={styles.content}>
             {errors.length > 0 && (
-              <View className="bg-surface border border-accent rounded-lg p-4 mb-4">
+              <View style={[styles.errorContainer, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
                 {errors.map((error, index) => (
-                  <Text key={index} className="text-accent text-sm">
+                  <Text key={index} style={[styles.errorText, { color: colors.accent }]}>
                     {error}
                   </Text>
                 ))}
@@ -135,13 +138,13 @@ export function ChangePasswordModal({
             )}
 
             {/* Current Password */}
-            <View className="bg-surface rounded-xl mb-6">
-              <View className="flex-row items-center px-4 py-3">
-                <Text className="text-muted w-24">Current</Text>
+            <View style={[styles.inputSection, { backgroundColor: colors.surface }]}>
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Current</Text>
                 <TextInput
-                  className="flex-1 text-foreground text-base"
+                  style={[styles.input, { color: colors.foreground }]}
                   placeholder="current password"
-                  placeholderTextColor="var(--color-muted)"
+                  placeholderTextColor={colors.muted}
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   secureTextEntry
@@ -152,13 +155,13 @@ export function ChangePasswordModal({
             </View>
 
             {/* New Password Section */}
-            <View className="bg-surface rounded-xl mb-4">
-              <View className="flex-row items-center px-4 py-3 border-b border-border">
-                <Text className="text-muted w-24">New</Text>
+            <View style={[styles.inputSection, { backgroundColor: colors.surface }]}>
+              <View style={[styles.inputRow, styles.inputRowBorder, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>New</Text>
                 <TextInput
-                  className="flex-1 text-foreground text-base"
+                  style={[styles.input, { color: colors.foreground }]}
                   placeholder="enter password"
-                  placeholderTextColor="var(--color-muted)"
+                  placeholderTextColor={colors.muted}
                   value={newPassword}
                   onChangeText={setNewPassword}
                   secureTextEntry
@@ -166,12 +169,12 @@ export function ChangePasswordModal({
                   editable={!isLoading}
                 />
               </View>
-              <View className="flex-row items-center px-4 py-3">
-                <Text className="text-muted w-24">Confirm</Text>
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Confirm</Text>
                 <TextInput
-                  className="flex-1 text-foreground text-base"
+                  style={[styles.input, { color: colors.foreground }]}
                   placeholder="re-enter password"
-                  placeholderTextColor="var(--color-muted)"
+                  placeholderTextColor={colors.muted}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry
@@ -181,7 +184,7 @@ export function ChangePasswordModal({
               </View>
             </View>
 
-            <Text className="text-muted text-sm px-1">
+            <Text style={[styles.helperText, { color: colors.muted }]}>
               Your password must be at least 8 characters long.{"\n"}
               Avoid common passwords or patterns.
             </Text>
@@ -191,3 +194,64 @@ export function ChangePasswordModal({
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  flex1: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+  },
+  headerButton: {
+    padding: spacing[2],
+  },
+  headerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+  content: {
+    flex: 1,
+    padding: spacing[4],
+  },
+  errorContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+  },
+  inputSection: {
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing[6],
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  inputRowBorder: {
+    borderBottomWidth: 1,
+  },
+  inputLabel: {
+    width: 96,
+  },
+  input: {
+    flex: 1,
+    fontSize: fontSize.base,
+  },
+  helperText: {
+    fontSize: fontSize.sm,
+    paddingHorizontal: spacing[1],
+  },
+});

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from "react-native";
 import { BottomSheet } from "./BottomSheet";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 // Predefined color palette
 const PRESET_COLORS = [
@@ -39,6 +40,7 @@ export function ColorPickerModal({
   currentColor,
   onColorSelect,
 }: ColorPickerModalProps) {
+  const colors = useColors();
   const [customColor, setCustomColor] = useState(currentColor);
   const [selectedColor, setSelectedColor] = useState(currentColor);
 
@@ -68,26 +70,36 @@ export function ColorPickerModal({
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <ScrollView className="px-4 py-4 max-h-96">
+      <ScrollView style={styles.scrollView}>
         {/* Color Preview */}
-        <View className="items-center mb-4">
+        <View style={styles.previewContainer}>
           <View
-            className="w-16 h-16 rounded-full border-4 border-border"
-            style={{ backgroundColor: isValidColor ? selectedColor : "#ccc" }}
+            style={[
+              styles.previewCircle,
+              {
+                backgroundColor: isValidColor ? selectedColor : "#ccc",
+                borderColor: colors.border,
+              }
+            ]}
           />
-          <Text className="mt-2 font-mono text-muted text-sm">
+          <Text style={[styles.previewText, { color: colors.muted }]}>
             {isValidColor ? selectedColor : "Invalid color"}
           </Text>
         </View>
 
         {/* Custom Color Input */}
-        <View className="mb-4">
+        <View style={styles.inputContainer}>
           <TextInput
-            className={`border rounded-lg px-4 py-3 text-base font-mono text-foreground bg-surface ${
-              isValidColor ? "border-border" : "border-accent"
-            }`}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                color: colors.foreground,
+                borderColor: isValidColor ? colors.border : colors.accent,
+              }
+            ]}
             placeholder="#000000"
-            placeholderTextColor="var(--color-muted)"
+            placeholderTextColor={colors.muted}
             value={customColor}
             onChangeText={handleCustomColorChange}
             autoCapitalize="characters"
@@ -96,40 +108,109 @@ export function ColorPickerModal({
         </View>
 
         {/* Preset Colors */}
-        <View className="flex-row flex-wrap gap-3 mb-4">
+        <View style={styles.colorGrid}>
           {PRESET_COLORS.map((color) => (
             <Pressable
               key={color}
               onPress={() => handleColorPress(color)}
-              className={`w-10 h-10 rounded-full ${
-                selectedColor === color
-                  ? "border-4 border-foreground"
-                  : "border-2 border-border"
-              }`}
-              style={{ backgroundColor: color }}
+              style={[
+                styles.colorSwatch,
+                {
+                  backgroundColor: color,
+                  borderWidth: selectedColor === color ? 4 : 2,
+                  borderColor: selectedColor === color ? colors.foreground : colors.border,
+                }
+              ]}
             />
           ))}
         </View>
       </ScrollView>
 
       {/* Actions */}
-      <View className="flex-row gap-3 px-4 py-3 border-t border-border">
+      <View style={[styles.actionsContainer, { borderTopColor: colors.border }]}>
         <Pressable
           onPress={onClose}
-          className="flex-1 border border-border py-3 rounded-lg items-center"
+          style={[styles.button, { borderColor: colors.border }]}
         >
-          <Text className="text-foreground font-semibold">Cancel</Text>
+          <Text style={[styles.buttonText, { color: colors.foreground }]}>Cancel</Text>
         </Pressable>
         <Pressable
           onPress={handleApply}
           disabled={!isValidColor}
-          className={`flex-1 py-3 rounded-lg items-center ${
-            isValidColor ? "bg-accent" : "bg-surface"
-          }`}
+          style={[
+            styles.button,
+            { backgroundColor: isValidColor ? colors.accent : colors.surface }
+          ]}
         >
-          <Text className="text-white font-semibold">Apply</Text>
+          <Text style={styles.buttonTextWhite}>Apply</Text>
         </Pressable>
       </View>
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollView: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    maxHeight: 384,
+  },
+  previewContainer: {
+    alignItems: "center",
+    marginBottom: spacing[4],
+  },
+  previewCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.full,
+    borderWidth: 4,
+  },
+  previewText: {
+    marginTop: spacing[2],
+    fontFamily: "monospace",
+    fontSize: fontSize.sm,
+  },
+  inputContainer: {
+    marginBottom: spacing[4],
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+    fontFamily: "monospace",
+  },
+  colorGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[3],
+    marginBottom: spacing[4],
+  },
+  colorSwatch: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderTopWidth: 1,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  buttonText: {
+    fontWeight: fontWeight.semibold,
+  },
+  buttonTextWhite: {
+    color: "white",
+    fontWeight: fontWeight.semibold,
+  },
+});

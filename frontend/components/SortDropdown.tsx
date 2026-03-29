@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useColors, spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
 
 interface SortOption<K extends string> {
   key: K;
@@ -19,6 +20,7 @@ export function SortDropdown<K extends string>({
   onSelect,
 }: SortDropdownProps<K>) {
   const [isOpen, setIsOpen] = useState(false);
+  const colors = useColors();
 
   const selectedOption = options.find((opt) => opt.key === selectedKey);
   const selectedLabel = selectedOption?.label ?? "Sort";
@@ -32,17 +34,17 @@ export function SortDropdown<K extends string>({
     <>
       <Pressable
         onPress={() => setIsOpen(true)}
-        className="flex-row items-center"
+        style={styles.trigger}
       >
-        <Text className="text-muted text-sm">sort by </Text>
-        <Text className="text-accent text-sm font-medium underline">
+        <Text style={[styles.sortByText, { color: colors.muted }]}>sort by </Text>
+        <Text style={[styles.selectedText, { color: colors.accent }]}>
           {selectedLabel}
         </Text>
         <Ionicons
           name="chevron-down"
           size={14}
-          color="#f54900"
-          style={{ marginLeft: 2 }}
+          color={colors.accent}
+          style={styles.chevron}
         />
       </Pressable>
 
@@ -53,39 +55,42 @@ export function SortDropdown<K extends string>({
         onRequestClose={() => setIsOpen(false)}
       >
         <Pressable
-          className="flex-1 bg-black/30 justify-end"
+          style={styles.modalOverlay}
           onPress={() => setIsOpen(false)}
         >
           <Pressable
-            className="bg-background rounded-t-2xl pb-8"
+            style={[styles.modalContent, { backgroundColor: colors.background }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <View className="p-4 border-b border-border">
-              <Text className="text-lg font-semibold text-foreground text-center">
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
                 Sort By
               </Text>
             </View>
-            <View className="p-2">
+            <View style={styles.optionsContainer}>
               {options.map((option) => (
                 <Pressable
                   key={option.key}
                   onPress={() => handleSelect(option.key)}
-                  className={`p-4 rounded-lg ${
-                    option.key === selectedKey ? "bg-surface" : ""
-                  }`}
+                  style={[
+                    styles.optionItem,
+                    option.key === selectedKey && { backgroundColor: colors.surface },
+                  ]}
                 >
-                  <View className="flex-row items-center justify-between">
+                  <View style={styles.optionContent}>
                     <Text
-                      className={`text-base ${
-                        option.key === selectedKey
-                          ? "text-accent font-medium"
-                          : "text-foreground"
-                      }`}
+                      style={[
+                        styles.optionText,
+                        {
+                          color: option.key === selectedKey ? colors.accent : colors.foreground,
+                          fontWeight: option.key === selectedKey ? fontWeight.medium : fontWeight.normal,
+                        },
+                      ]}
                     >
                       {option.label}
                     </Text>
                     {option.key === selectedKey && (
-                      <Ionicons name="checkmark" size={20} color="#f54900" />
+                      <Ionicons name="checkmark" size={20} color={colors.accent} />
                     )}
                   </View>
                 </Pressable>
@@ -97,3 +102,55 @@ export function SortDropdown<K extends string>({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  trigger: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  sortByText: {
+    fontSize: fontSize.sm,
+  },
+  selectedText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    textDecorationLine: "underline",
+  },
+  chevron: {
+    marginLeft: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    borderTopLeftRadius: borderRadius["2xl"],
+    borderTopRightRadius: borderRadius["2xl"],
+    paddingBottom: spacing[8],
+  },
+  modalHeader: {
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    textAlign: "center",
+  },
+  optionsContainer: {
+    padding: spacing[2],
+  },
+  optionItem: {
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  optionText: {
+    fontSize: fontSize.base,
+  },
+});

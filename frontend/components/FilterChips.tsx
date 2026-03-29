@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useColors, fontSize, fontWeight, spacing, borderRadius } from "@/lib/theme";
 
 interface FilterOption<K extends string> {
   key: K;
@@ -16,24 +17,28 @@ export function FilterChips<K extends string>({
   selectedKey,
   onSelect,
 }: FilterChipsProps<K>) {
+  const colors = useColors();
+
   return (
-    <View className="flex-row gap-2">
+    <View style={styles.container}>
       {options.map((option) => {
         const isActive = option.key === selectedKey;
         return (
           <Pressable
             key={option.key}
             onPress={() => onSelect(option.key)}
-            className={`px-4 py-1.5 rounded-full ${
+            style={[
+              styles.chip,
               isActive
-                ? "bg-accent"
-                : "bg-surface border border-border"
-            }`}
+                ? { backgroundColor: colors.accent }
+                : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+            ]}
           >
             <Text
-              className={`text-sm font-medium ${
-                isActive ? "text-white" : "text-muted"
-              }`}
+              style={[
+                styles.chipText,
+                { color: isActive ? colors.white : colors.muted },
+              ]}
             >
               {option.label}
             </Text>
@@ -43,3 +48,19 @@ export function FilterChips<K extends string>({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    gap: spacing[2],
+  },
+  chip: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+  },
+  chipText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+});
