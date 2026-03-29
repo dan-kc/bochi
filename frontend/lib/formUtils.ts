@@ -20,7 +20,7 @@ export function getVisiblePills(config: PillConfig): VisiblePill[] {
     pills.push({ key: "description", label: "Description", isSet: false });
   }
 
-  if (!config.isCreateMode && config.tags.length === 0) {
+  if (config.tags.length === 0) {
     pills.push({ key: "tags", label: "Tags", isSet: false });
   }
 

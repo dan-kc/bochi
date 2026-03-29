@@ -327,7 +327,10 @@ export function ChangeForm({
               setActiveSheet("description");
               break;
             case "tags":
-              setShowTagModal(true);
+              // Tags can only be added after entity is created
+              if (isEditing) {
+                setShowTagModal(true);
+              }
               break;
             case "frequency":
               setActiveSheet("frequency");
@@ -338,7 +341,7 @@ export function ChangeForm({
           }
         },
       })),
-    [pills, onRerank],
+    [pills, onRerank, isEditing],
   );
 
   const isLoading = isSaving || isDeleting;
