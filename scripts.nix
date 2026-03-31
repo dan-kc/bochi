@@ -297,6 +297,35 @@ let
       (cd frontend && npm run web "$@")
     '';
 
+    # Run iOS simulator with clean environment
+    ios = pkgs.writeShellScriptBin "ios" ''
+      set -e
+      ROOT="$PWD"
+
+      echo "Cleaning Metro cache..."
+      rm -rf "$ROOT/frontend/node_modules/.cache" 2>/dev/null || true
+      rm -rf /tmp/metro-* 2>/dev/null || true
+      rm -rf /tmp/haste-map-* 2>/dev/null || true
+
+      # Get paths to required tools (capture before env -i clears PATH)
+      NODE_BIN=$(dirname $(which node))
+      POD_BIN=$(dirname $(which pod) 2>/dev/null || echo "/usr/local/bin")
+
+      echo "Starting iOS build and Metro bundler..."
+      cd "$ROOT/frontend"
+
+      # Run with sanitized environment (removes Nix toolchain interference)
+      exec env -i \
+        HOME="$HOME" \
+        USER="$USER" \
+        SHELL="/bin/bash" \
+        TERM="$TERM" \
+        LANG="en_US.UTF-8" \
+        PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:$NODE_BIN:$POD_BIN" \
+        DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
+        bash -c "npx expo run:ios $*"
+    '';
+
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
       set -e

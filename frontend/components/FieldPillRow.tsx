@@ -1,5 +1,4 @@
-import { ScrollView, Pressable, Text, StyleSheet } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import { ScrollView, Pressable, Text, StyleSheet, View } from "react-native";
 import { useColors, fontSize, fontWeight, spacing, borderRadius } from "@/lib/theme";
 
 export interface FieldPill {
@@ -11,10 +10,9 @@ export interface FieldPill {
 
 interface FieldPillRowProps {
   pills: FieldPill[];
-  isSettled?: boolean;
 }
 
-export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
+export function FieldPillRow({ pills }: FieldPillRowProps) {
   const colors = useColors();
 
   return (
@@ -24,11 +22,7 @@ export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
       contentContainerStyle={styles.scrollContent}
     >
       {pills.map((pill) => (
-        <Animated.View
-          key={pill.key}
-          entering={isSettled ? FadeIn.duration(200) : undefined}
-          layout={isSettled ? LinearTransition.duration(200) : undefined}
-        >
+        <View key={pill.key}>
           <Pressable
             onPress={pill.onPress}
             style={[
@@ -48,7 +42,7 @@ export function FieldPillRow({ pills, isSettled }: FieldPillRowProps) {
               {pill.label}
             </Text>
           </Pressable>
-        </Animated.View>
+        </View>
       ))}
     </ScrollView>
   );

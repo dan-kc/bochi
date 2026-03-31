@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { z } from "zod";
 import type { Tag, TagInput } from "@/lib/tag";
@@ -129,13 +128,6 @@ export function ChangeForm({
   // Description value that only updates from entity sync or after successful saves
   const [savedDescription, setSavedDescription] = useState(entity?.description ?? "");
 
-  // Delay enabling animations until after the initial layout has settled,
-  // so entering/layout animations only fire for user-driven changes
-  const [isSettled, setIsSettled] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setIsSettled(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Track original values for revert on empty name
   const originalName = useRef("");
@@ -390,41 +382,35 @@ export function ChangeForm({
 
           {/* Description - pressable text (only shown when set) */}
           {isEditing && savedDescription ? (
-            <Animated.View
-              entering={isSettled ? FadeIn.duration(250) : undefined}
-            >
+            <View>
               <Pressable onPress={() => setActiveSheet("description")}>
                 <Text style={[styles.descriptionText, { color: colors.foreground }]} numberOfLines={3}>
                   {savedDescription}
                 </Text>
               </Pressable>
-            </Animated.View>
+            </View>
           ) : null}
 
           {/* Tags row (only in edit mode with tags) */}
           {isEditing && tags.length > 0 && (
-            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
-              <Pressable onPress={() => setShowTagModal(true)}>
-                <View style={styles.tagRow}>
-                  {tags.map((tag) => (
-                    <View
-                      key={tag.id}
-                      style={[styles.tag, { backgroundColor: tag.color_hex + "30" }]}
-                    >
-                      <Text style={[styles.tagText, { color: tag.color_hex }]}>
-                        {tag.name}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </Pressable>
-            </Animated.View>
+            <Pressable onPress={() => setShowTagModal(true)}>
+              <View style={styles.tagRow}>
+                {tags.map((tag) => (
+                  <View
+                    key={tag.id}
+                    style={[styles.tag, { backgroundColor: tag.color_hex + "30" }]}
+                  >
+                    <Text style={[styles.tagText, { color: tag.color_hex }]}>
+                      {tag.name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Pressable>
           )}
 
           {/* Pill row */}
-          <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
-            <FieldPillRow pills={pillActions} isSettled={isSettled} />
-          </Animated.View>
+          <FieldPillRow pills={pillActions} />
 
           {/* Hero action button (edit mode) */}
           {isEditing && entity && (() => {
@@ -436,7 +422,7 @@ export function ChangeForm({
                 ? ` ${tradeAmount > 0 ? "+" : ""}${tradeAmount}`
                 : "";
               return (
-                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} style={styles.heroButton}>
+                <View style={styles.heroButton}>
                   <Pressable
                     onPress={() => onAction(entity)}
                     disabled={isLoading}
@@ -446,7 +432,7 @@ export function ChangeForm({
                       {config.actionLabel}{amountStr}
                     </Text>
                   </Pressable>
-                </Animated.View>
+                </View>
               );
             }
             if (!hasRank && onRerank) {
@@ -454,7 +440,7 @@ export function ChangeForm({
                 ? "Set Difficulty"
                 : "Set Damage";
               return (
-                <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined} style={styles.heroButton}>
+                <View style={styles.heroButton}>
                   <Pressable
                     onPress={onRerank}
                     disabled={isLoading}
@@ -464,7 +450,7 @@ export function ChangeForm({
                       {setRankLabel}
                     </Text>
                   </Pressable>
-                </Animated.View>
+                </View>
               );
             }
             return null;
@@ -472,31 +458,27 @@ export function ChangeForm({
 
           {/* Delete button (edit mode) */}
           {isEditing && onDelete && (
-            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
-              <Pressable
-                onPress={handleDelete}
-                disabled={isLoading}
-                style={[styles.actionButton, { backgroundColor: colors.surface }]}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator color={colors.muted} />
-                ) : (
-                  <Text style={[styles.actionButtonText, { color: colors.muted }]}>Delete</Text>
-                )}
-              </Pressable>
-            </Animated.View>
+            <Pressable
+              onPress={handleDelete}
+              disabled={isLoading}
+              style={[styles.actionButton, { backgroundColor: colors.surface }]}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color={colors.muted} />
+              ) : (
+                <Text style={[styles.actionButtonText, { color: colors.muted }]}>Delete</Text>
+              )}
+            </Pressable>
           )}
 
           {/* Trade history (edit mode) */}
           {isEditing && entity && (
-            <Animated.View layout={isSettled ? LinearTransition.duration(250) : undefined}>
-              <TradeHistory
-                userId={userId}
-                {...(config.entityType === "habit"
-                  ? { habitId: entity.id }
-                  : { rewardId: entity.id })}
-              />
-            </Animated.View>
+            <TradeHistory
+              userId={userId}
+              {...(config.entityType === "habit"
+                ? { habitId: entity.id }
+                : { rewardId: entity.id })}
+            />
           )}
         </View>
       </ScrollView>

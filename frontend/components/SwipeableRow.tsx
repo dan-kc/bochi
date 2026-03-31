@@ -1,19 +1,16 @@
-import { type ReactNode, useCallback } from "react";
-import { StyleSheet, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withSequence,
-  withTiming,
-  runOnJS,
-} from "react-native-reanimated";
+import { type ReactNode, useCallback, useRef } from "react";
+import {
+  StyleSheet,
+  View,
+  Animated,
+  PanResponder,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 const THRESHOLD = -80;
-const SPRING_CONFIG = { damping: 20, stiffness: 200 };
 
 interface SwipeableRowProps {
   children: ReactNode;
@@ -28,79 +25,118 @@ export function SwipeableRow({
   actionColor,
   actionIcon,
 }: SwipeableRowProps) {
-  const translateX = useSharedValue(0);
-  const flashOpacity = useSharedValue(0);
-  const passedThreshold = useSharedValue(false);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const flashOpacity = useRef(new Animated.Value(0)).current;
+  const passedThreshold = useRef(false);
 
   const triggerHaptic = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
-  const triggerAction = useCallback(() => {
-    onAction();
-  }, [onAction]);
-
-  const pan = Gesture.Pan()
-    .activeOffsetX([-15, 15])
-    .failOffsetY([-10, 10])
-    .onUpdate((e) => {
-      // Only allow swipe left (negative)
-      const x = Math.min(0, e.translationX);
-      translateX.value = x;
-
-      if (x <= THRESHOLD && !passedThreshold.value) {
-        passedThreshold.value = true;
-        runOnJS(triggerHaptic)();
-      } else if (x > THRESHOLD && passedThreshold.value) {
-        passedThreshold.value = false;
-      }
-    })
-    .onEnd(() => {
-      if (translateX.value <= THRESHOLD) {
-        // Flash and snap back
-        flashOpacity.value = withSequence(
-          withTiming(0.3, { duration: 100 }),
-          withTiming(0, { duration: 200 }),
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (
+        _evt: GestureResponderEvent,
+        gestureState: PanResponderGestureState
+      ) => {
+        // Only respond to horizontal swipes
+        return (
+          Math.abs(gestureState.dx) > 15 &&
+          Math.abs(gestureState.dy) < 10
         );
-        runOnJS(triggerAction)();
-      }
-      translateX.value = withSpring(0, SPRING_CONFIG);
-      passedThreshold.value = false;
-    });
+      },
+      onPanResponderMove: (
+        _evt: GestureResponderEvent,
+        gestureState: PanResponderGestureState
+      ) => {
+        // Only allow swipe left (negative)
+        const x = Math.min(0, gestureState.dx);
+        translateX.setValue(x);
 
-  const rowStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
+        if (x <= THRESHOLD && !passedThreshold.current) {
+          passedThreshold.current = true;
+          triggerHaptic();
+        } else if (x > THRESHOLD && passedThreshold.current) {
+          passedThreshold.current = false;
+        }
+      },
+      onPanResponderRelease: (
+        _evt: GestureResponderEvent,
+        gestureState: PanResponderGestureState
+      ) => {
+        const x = Math.min(0, gestureState.dx);
 
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: flashOpacity.value,
-  }));
+        if (x <= THRESHOLD) {
+          // Flash and trigger action
+          Animated.sequence([
+            Animated.timing(flashOpacity, {
+              toValue: 0.3,
+              duration: 100,
+              useNativeDriver: true,
+            }),
+            Animated.timing(flashOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
+          onAction();
+        }
 
-  const iconOpacity = useAnimatedStyle(() => {
-    const progress = Math.min(1, Math.abs(translateX.value) / Math.abs(THRESHOLD));
-    return { opacity: progress };
+        // Spring back to original position
+        Animated.spring(translateX, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 200,
+          useNativeDriver: true,
+        }).start();
+
+        passedThreshold.current = false;
+      },
+      onPanResponderTerminate: () => {
+        // Reset on termination
+        Animated.spring(translateX, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 200,
+          useNativeDriver: true,
+        }).start();
+        passedThreshold.current = false;
+      },
+    })
+  ).current;
+
+  const iconOpacity = translateX.interpolate({
+    inputRange: [THRESHOLD, 0],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
   });
 
   return (
     <View style={styles.container}>
       {/* Revealed action panel behind the row */}
       <View style={[styles.actionPanel, { backgroundColor: actionColor }]}>
-        <Animated.View style={[styles.iconContainer, iconOpacity]}>
+        <Animated.View style={[styles.iconContainer, { opacity: iconOpacity }]}>
           <Ionicons name={actionIcon} size={28} color="white" />
         </Animated.View>
       </View>
 
       {/* Sliding row */}
-      <GestureDetector gesture={pan}>
-        <Animated.View style={rowStyle}>
-          {children}
-          {/* Flash overlay */}
-          <Animated.View
-            style={[styles.flash, { backgroundColor: actionColor }, flashStyle]}
-            pointerEvents="none"
-          />
-        </Animated.View>
-      </GestureDetector>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
+        {children}
+        {/* Flash overlay */}
+        <Animated.View
+          style={[
+            styles.flash,
+            { backgroundColor: actionColor, opacity: flashOpacity },
+          ]}
+          pointerEvents="none"
+        />
+      </Animated.View>
     </View>
   );
 }
