@@ -28,6 +28,21 @@ function confirmDiscard(title: string, message: string, onDiscard: () => void) {
     ]);
   }
 }
+
+function confirmDelete(entityLabel: string, onDelete: () => void) {
+  const title = `Delete ${entityLabel}?`;
+  const message = "This action cannot be undone.";
+  if (Platform.OS === "web") {
+    if (window.confirm(`${title}\n${message}`)) {
+      onDelete();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: onDelete },
+    ]);
+  }
+}
 import type { FrequencyPeriod } from "@/lib/frequency";
 import { formatFrequencySummary, fromDailyFrequency } from "@/lib/frequency";
 import { parseZodErrors, buildFrequencyInput } from "@/lib/formValidation";
@@ -267,16 +282,18 @@ export function ChangeForm({
     [isEditing, name, config.entityLabel, config.frequencyField, onSave, onClose, handleFieldSave],
   );
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!onDelete) return;
-    setIsDeleting(true);
-    try {
-      await onDelete();
-    } catch {
-      setErrors({ general: [`Failed to delete ${config.entityLabel.toLowerCase()}`] });
-    } finally {
-      setIsDeleting(false);
-    }
+    confirmDelete(config.entityLabel, async () => {
+      setIsDeleting(true);
+      try {
+        await onDelete();
+      } catch {
+        setErrors({ general: [`Failed to delete ${config.entityLabel.toLowerCase()}`] });
+      } finally {
+        setIsDeleting(false);
+      }
+    });
   }, [onDelete, config.entityLabel]);
 
   const handleColorEdit = useCallback((tag: Tag) => {
