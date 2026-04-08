@@ -297,33 +297,69 @@ let
       (cd frontend && npm run web "$@")
     '';
 
-    # Run iOS simulator with clean environment
+    # Build and run native iOS app in simulator
     ios = pkgs.writeShellScriptBin "ios" ''
       set -e
       ROOT="$PWD"
+      PROJECT="$ROOT/ios/tofustash.xcodeproj"
+      SCHEME="tofustash"
+      BUNDLE_ID="dev.keone.tofustash"
+      BUILD_DIR="$ROOT/ios/build"
 
-      echo "Cleaning Metro cache..."
-      rm -rf "$ROOT/frontend/node_modules/.cache" 2>/dev/null || true
-      rm -rf /tmp/metro-* 2>/dev/null || true
-      rm -rf /tmp/haste-map-* 2>/dev/null || true
+      # Determine simulator device
+      DEVICE="''${1:-iPhone 17 Pro}"
 
-      # Get paths to required tools (capture before env -i clears PATH)
-      NODE_BIN=$(dirname $(which node))
-      POD_BIN=$(dirname $(which pod) 2>/dev/null || echo "/usr/local/bin")
+      echo "Building $SCHEME for $DEVICE..."
 
-      echo "Starting iOS build and Metro bundler..."
-      cd "$ROOT/frontend"
-
-      # Run with sanitized environment (removes Nix toolchain interference)
-      exec env -i \
+      # Run xcodebuild with sanitized environment (removes Nix toolchain interference)
+      env -i \
         HOME="$HOME" \
         USER="$USER" \
         SHELL="/bin/bash" \
         TERM="$TERM" \
         LANG="en_US.UTF-8" \
-        PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:$NODE_BIN:$POD_BIN" \
+        PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin" \
         DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
-        bash -c "npx expo run:ios $*"
+        bash -c "
+          set -e
+
+          # Build for simulator
+          xcodebuild \
+            -project '$PROJECT' \
+            -scheme '$SCHEME' \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=$DEVICE' \
+            -derivedDataPath '$BUILD_DIR' \
+            build 2>&1 | tail -20
+
+          # Find the built .app
+          APP_PATH=\$(find '$BUILD_DIR' -name '$SCHEME.app' -path '*/Debug-iphonesimulator/*' | head -1)
+          if [ -z \"\$APP_PATH\" ]; then
+            echo 'Error: Could not find built .app bundle'
+            exit 1
+          fi
+          echo \"Built: \$APP_PATH\"
+
+          # Boot simulator if not already booted (pick the last match to prefer the latest runtime)
+          DEVICE_ID=\$(xcrun simctl list devices available | grep '$DEVICE' | grep -oE '[A-F0-9-]{36}' | tail -1)
+          if [ -z \"\$DEVICE_ID\" ]; then
+            echo 'Error: Could not find simulator device: $DEVICE'
+            echo 'Available devices:'
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          # Boot the simulator (ignore error if already booted)
+          xcrun simctl boot \"\$DEVICE_ID\" 2>/dev/null || true
+          open -a Simulator
+
+          # Install and launch
+          xcrun simctl install \"\$DEVICE_ID\" \"\$APP_PATH\"
+          xcrun simctl terminate \"\$DEVICE_ID\" '$BUNDLE_ID' 2>/dev/null || true
+          xcrun simctl launch \"\$DEVICE_ID\" '$BUNDLE_ID'
+
+          echo 'App launched in simulator.'
+        "
     '';
 
     # Sets up and tears down the test environment. Wraps `cargo test`.
