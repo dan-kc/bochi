@@ -1,24 +1,30 @@
 import Foundation
-import Testing
-@testable import tofustash
+import Testing // Swift Testing framework — the modern replacement for XCTest
+@testable import tofustash // Like importing from '../src' but bypassing access control (exposes `internal` symbols to tests)
 
+// A plain struct works as a test suite — no base class needed. Think: `describe("JWTParser", ...)` in Jest.
 struct JWTParserTests {
 
-    // Helper to create a fake JWT with a given payload
+    // [String: Any] is like Record<string, any> in TS — a loosely-typed dictionary
     private func makeJWT(payload: [String: Any]) -> String {
         let header = Data("{}".utf8).base64EncodedString()
+        // try! force-unwraps a throwing call — like Rust's .unwrap(). Panics if it fails.
         let payloadData = try! JSONSerialization.data(withJSONObject: payload)
         let payloadBase64 = payloadData.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
         let signature = "fakesig"
+        // String interpolation: \(...) is Swift's ${...}
         return "\(header).\(payloadBase64).\(signature)"
     }
 
+    // @Test = Jest's test() / it(). The func name is the test label.
     @Test func parsesSubjectFromValidJWT() {
         let token = makeJWT(payload: ["sub": "user-123", "exp": 1710000000])
         let result = JWTParser.parse(token)
+        // #expect() = Jest's expect().toBe(). It's a macro (compile-time code transform, like Rust macros).
+        // ?. is optional chaining — same as TS's ?.
         #expect(result?.subject == "user-123")
     }
 

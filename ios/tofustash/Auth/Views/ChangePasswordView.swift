@@ -1,19 +1,20 @@
 import SwiftUI
 
+// Same patterns as RegisterView — see that file for detailed explanations of @State, @Environment, guard, etc.
 struct ChangePasswordView: View {
-    @Environment(AuthManager.self) private var authManager
+    @Environment(AuthManager.self) private var authManager // useContext(AuthManager)
     @Environment(\.dismiss) private var dismiss
 
-    @State private var currentPassword = ""
+    @State private var currentPassword = "" // useState("")
     @State private var newPassword = ""
     @State private var confirmPassword = ""
-    @State private var errorMessage: String?
+    @State private var errorMessage: String? // useState<string | undefined>()
     @State private var isLoading = false
 
     var body: some View {
         Form {
             Section {
-                SecureField("Current Password", text: $currentPassword)
+                SecureField("Current Password", text: $currentPassword) // $ = two-way binding ref
                     .textContentType(.password)
                     .disabled(isLoading)
 
@@ -26,7 +27,7 @@ struct ChangePasswordView: View {
                     .disabled(isLoading)
             }
 
-            if let errorMessage {
+            if let errorMessage { // unwrap Optional — renders only when non-nil
                 Section {
                     Text(errorMessage)
                         .foregroundStyle(.red)
@@ -49,7 +50,7 @@ struct ChangePasswordView: View {
     }
 
     private func performChange() async {
-        guard newPassword == confirmPassword else {
+        guard newPassword == confirmPassword else { // early return if mismatch
             errorMessage = "Passwords do not match"
             return
         }
@@ -60,7 +61,7 @@ struct ChangePasswordView: View {
 
         let passwordErrors = validatePassword(newPassword)
         if !passwordErrors.isEmpty {
-            errorMessage = passwordErrors.map(\.message).joined(separator: "\n")
+            errorMessage = passwordErrors.map(\.message).joined(separator: "\n") // \.message = key path
             return
         }
 
@@ -71,7 +72,7 @@ struct ChangePasswordView: View {
             try await authManager.changePassword(currentPassword: currentPassword, newPassword: newPassword)
             dismiss()
         } catch {
-            if let apiError = error as? ApiError {
+            if let apiError = error as? ApiError { // conditional downcast (TS: instanceof check)
                 errorMessage = apiError.displayMessage
             } else {
                 errorMessage = "Failed to change password"

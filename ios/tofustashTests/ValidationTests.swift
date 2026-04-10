@@ -3,7 +3,7 @@ import Testing
 
 struct ValidationTests {
 
-    // MARK: - Email validation
+    // MARK: - Email validation  ← MARK is a pragma for Xcode's jump bar (like #region in TS, but actually useful)
 
     @Test func validEmailPasses() {
         let errors = validateEmail("user@example.com")
@@ -112,6 +112,8 @@ struct ValidationTests {
     // MARK: - Error messages
 
     @Test func allErrorCasesHaveMessages() {
+        // .invalidEmailAddress etc. are enum variants — like Rust enums, not TS enums.
+        // Each variant can carry associated data (not used here, but they can).
         let allCases: [ValidationError] = [
             .invalidEmailAddress,
             .emailTooLong,

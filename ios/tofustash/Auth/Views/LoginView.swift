@@ -1,14 +1,15 @@
 import SwiftUI
 
+// Same patterns as RegisterView — see that file for detailed explanations.
 struct LoginView: View {
-    @Environment(AuthManager.self) private var authManager
+    @Environment(AuthManager.self) private var authManager // useContext(AuthManager)
     @Environment(\.dismiss) private var dismiss
 
     @State private var email = ""
     @State private var password = ""
     @State private var errorMessage: String?
     @State private var isLoading = false
-    @State private var showRegister = false
+    @State private var showRegister = false // drives navigation — like a boolean that triggers a <Navigate> in React Router
 
     var body: some View {
         Form {
@@ -48,6 +49,8 @@ struct LoginView: View {
             }
         }
         .navigationTitle("Log In")
+        // Programmatic navigation: when $showRegister becomes true, push RegisterView onto the nav stack.
+        // Like useNavigate() in React Router, but declarative — driven by state, not imperative calls.
         .navigationDestination(isPresented: $showRegister) {
             RegisterView()
         }

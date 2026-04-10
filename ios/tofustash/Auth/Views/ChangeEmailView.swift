@@ -1,19 +1,20 @@
 import SwiftUI
 
+// Same patterns as RegisterView — see that file for detailed explanations.
 struct ChangeEmailView: View {
-    @Environment(AuthManager.self) private var authManager
+    @Environment(AuthManager.self) private var authManager // useContext(AuthManager)
     @Environment(\.dismiss) private var dismiss
 
-    @State private var newEmail = ""
+    @State private var newEmail = "" // useState("")
     @State private var confirmEmail = ""
     @State private var password = ""
-    @State private var errorMessage: String?
+    @State private var errorMessage: String? // Optional<String> — like string | undefined
     @State private var isLoading = false
 
     var body: some View {
         Form {
             Section {
-                TextField("New Email", text: $newEmail)
+                TextField("New Email", text: $newEmail) // $ = two-way binding
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)

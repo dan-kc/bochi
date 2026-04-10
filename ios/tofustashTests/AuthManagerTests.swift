@@ -2,20 +2,28 @@ import Foundation
 import Testing
 @testable import tofustash
 
+// @MainActor pins this entire struct to the main thread — like ensuring all code runs
+// in React's render thread. Needed because AuthManager likely uses @Published/@Observable
+// properties that must be accessed from the main actor (Swift's concurrency safety).
 @MainActor
 struct AuthManagerTests {
 
+    // SUT = "System Under Test". Returns a tuple (like a Go multi-return).
+    // Default param values (= MockAuthAPIClient()) work like TS default params.
     private func makeSUT(
         apiClient: MockAuthAPIClient = MockAuthAPIClient(),
         storage: MockTokenStorage = MockTokenStorage()
     ) -> (AuthManager, MockAuthAPIClient, MockTokenStorage) {
+        // Dependency injection via constructor — same pattern as passing mock props in React tests
         let manager = AuthManager(apiClient: apiClient, tokenStorage: storage)
         return (manager, apiClient, storage)
     }
 
     // MARK: - Bootstrap
 
+    // async test — like an async Jest test. Swift Testing handles the await natively.
     @Test func bootstrapWithNoStoredTokensPerformsAnonymousAuth() async {
+        // Destructuring a tuple — like JS const [manager, api, storage] = makeSUT()
         let (manager, api, storage) = makeSUT()
         let tokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
         api.anonymousAuthResult = .success(tokens)
@@ -77,6 +85,8 @@ struct AuthManagerTests {
 
     // MARK: - Login
 
+    // `async throws` = this test can both await and throw errors. `throws` is like
+    // Rust's Result — but the test runner catches thrown errors as failures automatically.
     @Test func loginCallsAPIAndSetsUser() async throws {
         let (manager, api, storage) = makeSUT()
         let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
@@ -103,11 +113,12 @@ struct AuthManagerTests {
 
         api.loginResult = .failure(ApiError(errors: nil, message: "Invalid credentials", statusCode: 401))
 
+        // do/catch = try/catch in TS. `try` keyword before throwing calls is mandatory in Swift.
         do {
             try await manager.login(email: "test@example.com", password: "wrong")
-            Issue.record("Expected login to throw")
+            Issue.record("Expected login to throw") // Like Jest's fail() — marks test as failed
         } catch {
-            // Expected
+            // `error` is implicitly available in catch blocks (like Go's err)
             #expect(manager.user?.id == "anon-1") // User unchanged
         }
     }

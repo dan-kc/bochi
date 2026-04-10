@@ -1,10 +1,19 @@
 import Foundation
 @testable import tofustash
 
+// `AuthAPIClient` is a protocol (= TS interface / Go interface / Rust trait).
+// This class conforms to it, providing a mock implementation — same pattern as
+// jest.fn() mocks but done manually since Swift has no built-in mocking.
+//
+// `final` = cannot be subclassed (like Go structs / Rust types by default).
+// `@unchecked Sendable` opts out of Swift's compile-time thread-safety checks —
+// like `unsafe impl Send` in Rust. Needed because mutable state in a class isn't
+// normally safe to share across threads, but in tests we control access.
 final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
+    // Result<T, E> is exactly like Rust's Result<T, E>. .success(val) / .failure(err).
     var anonymousAuthResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
     var anonymousAuthCallCount = 0
-    var lastAnonymousAuthDeviceId: String?
+    var lastAnonymousAuthDeviceId: String? // Optional — like T | undefined in TS, Option<T> in Rust
 
     var registerResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
     var registerCallCount = 0
@@ -33,9 +42,12 @@ final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
     var changeEmailCallCount = 0
     var lastChangeEmailAccessToken: String?
 
+    // Each method fulfills a protocol requirement — like implementing an interface method.
+    // `async throws` = can await + can throw (combines Go's error return with JS async).
     func anonymousAuth(deviceId: String) async throws -> AuthTokens {
         anonymousAuthCallCount += 1
         lastAnonymousAuthDeviceId = deviceId
+        // .get() extracts the success value or throws the error — like Rust's `?` operator
         return try anonymousAuthResult.get()
     }
 
@@ -81,6 +93,8 @@ final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
     }
 }
 
+// Enum conforming to Error protocol — like implementing the error interface in Go
+// or impl std::error::Error in Rust
 enum MockError: Error {
     case notConfigured
 }

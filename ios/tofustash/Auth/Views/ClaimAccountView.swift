@@ -1,7 +1,8 @@
 import SwiftUI
 
+// Same patterns as RegisterView — see that file for detailed explanations.
 struct ClaimAccountView: View {
-    @Environment(AuthManager.self) private var authManager
+    @Environment(AuthManager.self) private var authManager // useContext(AuthManager)
     @Environment(\.dismiss) private var dismiss
 
     @State private var email = ""
@@ -66,6 +67,8 @@ struct ClaimAccountView: View {
                 ProgressView()
             }
         }
+        // .onAppear = React's useEffect(() => { ... }, []) — runs once when the view appears.
+        // Used here as a guard to dismiss if the user is already logged in (not anonymous).
         .onAppear {
             if !authManager.isAnonymous {
                 dismiss()
