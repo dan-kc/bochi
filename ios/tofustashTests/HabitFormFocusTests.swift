@@ -29,4 +29,48 @@ struct HabitFormFocusTests {
     @Test func tagsIsNotNameDescription() {
         #expect(HabitFormFocus.tags.isNameDescription == false)
     }
+
+    // MARK: - hasContent
+
+    @Test func emptyFormHasNoContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "", frequency: nil, difficultyRank: nil, tagCount: 0
+        ) == false)
+    }
+
+    @Test func whitespaceOnlyHasNoContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "  \n\t  ", frequency: nil, difficultyRank: nil, tagCount: 0
+        ) == false)
+    }
+
+    @Test func nameOnlyHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "Run", description: "", frequency: nil, difficultyRank: nil, tagCount: 0
+        ) == true)
+    }
+
+    @Test func descriptionOnlyHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "Some desc", frequency: nil, difficultyRank: nil, tagCount: 0
+        ) == true)
+    }
+
+    @Test func frequencyOnlyHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "", frequency: 7.0, difficultyRank: nil, tagCount: 0
+        ) == true)
+    }
+
+    @Test func difficultyOnlyHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "", frequency: nil, difficultyRank: "easy", tagCount: 0
+        ) == true)
+    }
+
+    @Test func tagsOnlyHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "", frequency: nil, difficultyRank: nil, tagCount: 2
+        ) == true)
+    }
 }

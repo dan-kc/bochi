@@ -70,23 +70,21 @@ struct HabitsView: View {
         // on a child VStack gets swallowed by the List's gesture handling.
         // This is like wrapping a <div> in an <a> or <button> in React.
         //
-        // Inner elements (description, frequency, difficulty, tags) use
-        // .onTapGesture to intercept taps before they bubble up to this Button.
-        // In React terms: e.stopPropagation() on the inner onClick handler.
+        // Inner elements use .highPriorityGesture to reliably intercept taps
+        // before they bubble up to this Button.
         return Button {
             openChangeForm(habit, focus: nil)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 // Row 1: Name — tapping the name itself opens the name/desc editor.
-                // The .onTapGesture intercepts before the outer Button fires,
-                // like e.stopPropagation() in React.
                 Text(habit.name)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .onTapGesture {
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(TapGesture().onEnded {
                         openChangeForm(habit, focus: .name)
-                    }
+                    })
 
                 // Row 2: Description, Frequency, Difficulty — orange indicators
                 let hasSecondRow = !habit.description.isEmpty || habit.frequency != nil || habit.difficultyRank != nil
@@ -99,27 +97,30 @@ struct HabitsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                                 .lineLimit(1)
-                                .onTapGesture {
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(TapGesture().onEnded {
                                     openChangeForm(habit, focus: .description)
-                                }
+                                })
                         }
 
                         if let freq = habit.frequency {
                             Text(FrequencyConversion.formatSummary(freq) ?? "")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
-                                .onTapGesture {
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(TapGesture().onEnded {
                                     openChangeForm(habit, focus: .frequency)
-                                }
+                                })
                         }
 
                         if habit.difficultyRank != nil {
                             Text("Difficulty")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
-                                .onTapGesture {
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(TapGesture().onEnded {
                                     openChangeForm(habit, focus: .difficulty)
-                                }
+                                })
                         }
                     }
                 }

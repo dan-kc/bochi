@@ -119,11 +119,27 @@ struct HabitFormView: View {
     // Whether the user has entered any content into the form.
     // Used to decide if we need a discard confirmation on new forms.
     private var hasContent: Bool {
-        !trimmedName.isEmpty
-            || !description.trimmingCharacters(in: .whitespaces).isEmpty
+        Self.hasContent(
+            name: trimmedName,
+            description: description,
+            frequency: frequency,
+            difficultyRank: difficultyRank,
+            tagCount: habitTags.count
+        )
+    }
+
+    static func hasContent(
+        name: String,
+        description: String,
+        frequency: Double?,
+        difficultyRank: String?,
+        tagCount: Int
+    ) -> Bool {
+        !name.isEmpty
+            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || frequency != nil
             || difficultyRank != nil
-            || !habitTags.isEmpty
+            || tagCount > 0
     }
 
     init(mode: HabitFormMode = .new, initialFocus: HabitFormFocus? = nil) {
@@ -236,8 +252,8 @@ struct HabitFormView: View {
             .sheet(isPresented: $showingTags) {
                 TagsView(habitId: habitId)
             }
-            .onAppear {
-                initializeForm()
+            .task {
+                await initializeForm()
             }
             .onDisappear {
                 // Auto-save for change mode: persist the current form state when
@@ -337,10 +353,8 @@ struct HabitFormView: View {
     }
 
     // Fullscreen-ish scrollable editor for name and description.
-    // Replaces the old NameDescriptionModal sheet — instead of presenting a new
-    // sheet on top, this view morphs in-place within the same sheet.
-    //
-    // Like the old modal, but rendered inline with a cross-fade transition.
+    // Instead of presenting a separate sheet, this view morphs in-place
+    // within the same sheet via the ZStack cross-fade.
     // The ScrollView handles long content (names/descriptions can be very long).
     // Because this view is created fresh each time showingNameDescription becomes
     // true, it always starts scrolled to the top.
@@ -362,13 +376,12 @@ struct HabitFormView: View {
             }
             .padding()
         }
-        .onAppear {
+        .task {
             // Small delay ensures the view is fully laid out before focusing.
             // Without this, focus sometimes doesn't take effect — similar to
             // needing setTimeout(fn, 0) before calling ref.current.focus() in React.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                focusedField = nameDescFocus
-            }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            focusedField = nameDescFocus
         }
     }
 
@@ -411,7 +424,7 @@ struct HabitFormView: View {
     }
 
     // Initialize form state from the habit (change mode) or defaults (new mode)
-    private func initializeForm() {
+    private func initializeForm() async {
         guard !hasAppliedInitialFocus else { return }
         hasAppliedInitialFocus = true
 
@@ -429,20 +442,18 @@ struct HabitFormView: View {
         // Other focus targets still need a short delay for sheet presentation.
         let focus = initialFocus ?? (isNewMode ? .name : nil)
 
-        // Dispatch async to let the view finish layout before presenting sheets.
-        // Like using setTimeout(fn, 0) in React to defer modal opening.
+        // Delay to let the view finish layout before presenting sheets.
         if let focus = focus, !focus.isNameDescription {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                switch focus {
-                case .name, .description:
-                    break // handled in init()
-                case .frequency:
-                    showingFrequency = true
-                case .difficulty:
-                    showingDifficulty = true
-                case .tags:
-                    showingTags = true
-                }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            switch focus {
+            case .name, .description:
+                break // handled in init()
+            case .frequency:
+                showingFrequency = true
+            case .difficulty:
+                showingDifficulty = true
+            case .tags:
+                showingTags = true
             }
         }
     }
