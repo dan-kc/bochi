@@ -365,6 +365,36 @@ let
         "
     '';
 
+    # Run iOS unit tests on macOS (no simulator needed)
+    ios-test = pkgs.writeShellScriptBin "ios-test" ''
+      set -e -o pipefail
+      ROOT="$PWD"
+      PROJECT="$ROOT/ios/tofustash.xcodeproj"
+      SCHEME="tofustash"
+      BUILD_DIR="$ROOT/ios/build"
+
+      echo "Running unit tests for $SCHEME on macOS..."
+
+      env -i \
+        HOME="$HOME" \
+        USER="$USER" \
+        SHELL="/bin/bash" \
+        TERM="$TERM" \
+        LANG="en_US.UTF-8" \
+        PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin" \
+        DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
+        bash -c "
+          set -e -o pipefail
+          xcodebuild \
+            -project '$PROJECT' \
+            -scheme '$SCHEME' \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -derivedDataPath '$BUILD_DIR' \
+            test 2>&1 | ${pkgs.xcbeautify}/bin/xcbeautify
+        "
+    '';
+
     # Sets up and tears down the test environment. Wraps `cargo test`.
     t = pkgs.writeShellScriptBin "t" ''
       set -e

@@ -107,6 +107,7 @@
             ]
             ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
               pkgs.cocoapods
+              pkgs.xcpretty
             ]
             ++ scripts;
           shellHook = ''

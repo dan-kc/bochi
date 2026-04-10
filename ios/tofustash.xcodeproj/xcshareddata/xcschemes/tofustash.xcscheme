@@ -46,17 +46,6 @@
                ReferencedContainer = "container:tofustash.xcodeproj">
             </BuildableReference>
          </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "820441DF2F7FDED400952DFF"
-               BuildableName = "tofustashUITests.xctest"
-               BlueprintName = "tofustashUITests"
-               ReferencedContainer = "container:tofustash.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

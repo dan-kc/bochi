@@ -6,7 +6,7 @@ Create a new script "run-ios" that runs the simulator and builds the app in ios.
 I am rewriting my reat-native project in Swift.
 The old project is in ./frontend, the new project is in ./ios.
 Do not copy any styling. Use default styling for SwiftUI including icons etc.
-Use strict TDD, always write tests first.
+Use strict TDD, always write unit tests first. No UI tests.
 I will run tests manually for validation, do not run any xcode commands - notify if you need me to run any.
 
 Implement the auth flow for the settings page. It needs to support annon accounts just like the react-native-project.

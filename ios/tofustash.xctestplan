@@ -24,14 +24,6 @@
         "identifier" : "820441D52F7FDED400952DFF",
         "name" : "tofustashTests"
       }
-    },
-    {
-      "parallelizable" : true,
-      "target" : {
-        "containerPath" : "container:tofustash.xcodeproj",
-        "identifier" : "820441DF2F7FDED400952DFF",
-        "name" : "tofustashUITests"
-      }
     }
   ],
   "version" : 1

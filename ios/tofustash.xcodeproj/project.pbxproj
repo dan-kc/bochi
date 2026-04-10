@@ -14,19 +14,11 @@
 			remoteGlobalIDString = 820441C62F7FDED200952DFF;
 			remoteInfo = tofustash;
 		};
-		820441E12F7FDED400952DFF /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 820441BF2F7FDED200952DFF /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 820441C62F7FDED200952DFF;
-			remoteInfo = tofustash;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		820441C72F7FDED200952DFF /* tofustash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = tofustash.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		820441D62F7FDED400952DFF /* tofustashTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = tofustashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		820441E02F7FDED400952DFF /* tofustashUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = tofustashUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		826602A92F86CB2A000510C1 /* tofustash.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = tofustash.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -39,11 +31,6 @@
 		820441D92F7FDED400952DFF /* tofustashTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = tofustashTests;
-			sourceTree = "<group>";
-		};
-		820441E32F7FDED400952DFF /* tofustashUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = tofustashUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -63,13 +50,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		820441DD2F7FDED400952DFF /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,7 +59,6 @@
 				826602A92F86CB2A000510C1 /* tofustash.xctestplan */,
 				820441C92F7FDED200952DFF /* tofustash */,
 				820441D92F7FDED400952DFF /* tofustashTests */,
-				820441E32F7FDED400952DFF /* tofustashUITests */,
 				820441C82F7FDED200952DFF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -89,7 +68,6 @@
 			children = (
 				820441C72F7FDED200952DFF /* tofustash.app */,
 				820441D62F7FDED400952DFF /* tofustashTests.xctest */,
-				820441E02F7FDED400952DFF /* tofustashUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,29 +120,6 @@
 			productReference = 820441D62F7FDED400952DFF /* tofustashTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		820441DF2F7FDED400952DFF /* tofustashUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 820441F02F7FDED400952DFF /* Build configuration list for PBXNativeTarget "tofustashUITests" */;
-			buildPhases = (
-				820441DC2F7FDED400952DFF /* Sources */,
-				820441DD2F7FDED400952DFF /* Frameworks */,
-				820441DE2F7FDED400952DFF /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				820441E22F7FDED400952DFF /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				820441E32F7FDED400952DFF /* tofustashUITests */,
-			);
-			name = tofustashUITests;
-			packageProductDependencies = (
-			);
-			productName = tofustashUITests;
-			productReference = 820441E02F7FDED400952DFF /* tofustashUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -179,10 +134,6 @@
 						CreatedOnToolsVersion = 26.4;
 					};
 					820441D52F7FDED400952DFF = {
-						CreatedOnToolsVersion = 26.4;
-						TestTargetID = 820441C62F7FDED200952DFF;
-					};
-					820441DF2F7FDED400952DFF = {
 						CreatedOnToolsVersion = 26.4;
 						TestTargetID = 820441C62F7FDED200952DFF;
 					};
@@ -204,7 +155,6 @@
 			targets = (
 				820441C62F7FDED200952DFF /* tofustash */,
 				820441D52F7FDED400952DFF /* tofustashTests */,
-				820441DF2F7FDED400952DFF /* tofustashUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -218,13 +168,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		820441D42F7FDED400952DFF /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		820441DE2F7FDED400952DFF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -248,13 +191,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		820441DC2F7FDED400952DFF /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -262,11 +198,6 @@
 			isa = PBXTargetDependency;
 			target = 820441C62F7FDED200952DFF /* tofustash */;
 			targetProxy = 820441D72F7FDED400952DFF /* PBXContainerItemProxy */;
-		};
-		820441E22F7FDED400952DFF /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 820441C62F7FDED200952DFF /* tofustash */;
-			targetProxy = 820441E12F7FDED400952DFF /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -500,46 +431,6 @@
 			};
 			name = Release;
 		};
-		820441F12F7FDED400952DFF /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4424D9K858;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.keone.tofustashUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = tofustash;
-			};
-			name = Debug;
-		};
-		820441F22F7FDED400952DFF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4424D9K858;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.keone.tofustashUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = tofustash;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -566,15 +457,6 @@
 			buildConfigurations = (
 				820441EE2F7FDED400952DFF /* Debug */,
 				820441EF2F7FDED400952DFF /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		820441F02F7FDED400952DFF /* Build configuration list for PBXNativeTarget "tofustashUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				820441F12F7FDED400952DFF /* Debug */,
-				820441F22F7FDED400952DFF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
