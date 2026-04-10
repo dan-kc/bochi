@@ -7,11 +7,7 @@ Use strict TDD, always write unit tests first. No UI tests.
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-# In the IOS Swift app, ensure the difficulty is already set if there are no habits and we are on a new form OR if there is one habit and we are on the change form. The difficulty should be automatically set here.
-
-
-# If you click on the description it should focus the description, not the name as it does now
-
+Fix the existing Auth tests. Also fix the settings page, often it just stays on loading. My server is definately running just fine on localost:8501
 
 # Add a "tick" to the name/description edit modal. It should have an "x" and a "tick", if you click the x it should ask "Are you sure you want to discard changes?" Also this behaviour should replicate if I touch outside of the modal.
 

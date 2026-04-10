@@ -30,7 +30,9 @@ final class AuthManager {
 
     // `async` — like TS async. Called with `await` just like JS/Rust.
     func bootstrap() async {
-        // `defer` — runs when scope exits, success or failure (exactly like Go's `defer`, or Rust's Drop)
+        // `defer` — runs when scope exits, success or failure (exactly like Go's `defer`, or Rust's Drop).
+        // Like a `finally` block in JS/React — guarantees isLoading becomes false no matter which code path runs.
+        defer { isLoading = false }
 
         let storedTokens = await tokenStorage.getTokens()
         let storedIsAnonymous = await tokenStorage.getIsAnonymous()
