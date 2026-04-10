@@ -46,7 +46,7 @@ final class HabitStore {
     // would produce a warning. There's no JS equivalent — JS never warns about
     // unused return values.
     @discardableResult
-    func addHabit(name: String, description: String = "", frequency: Double? = nil) -> Habit? {
+    func addHabit(name: String, description: String = "", frequency: Double? = nil, difficultyRank: String? = nil) -> Habit? {
         // .trimmingCharacters(in: .whitespaces) is like .trim() in JS.
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
 
@@ -69,7 +69,8 @@ final class HabitStore {
             createdAt: now,
             updatedAt: now,
             deletedAt: nil,
-            frequency: frequency
+            frequency: frequency,
+            difficultyRank: difficultyRank
         )
 
         // .append() is like .push() in JS — adds to the end of the array.
@@ -102,7 +103,61 @@ final class HabitStore {
             createdAt: existing.createdAt,
             updatedAt: Date(),
             deletedAt: Date(),
-            frequency: existing.frequency
+            frequency: existing.frequency,
+            difficultyRank: existing.difficultyRank
+        )
+    }
+
+    // Updates an existing habit's fields. Only fields with non-nil values are
+    // changed — pass nil (the default) to leave a field unchanged.
+    //
+    // The `Double??` and `String??` types use Swift's nested Optional pattern:
+    //   - `.none` (outer nil) → "don't change this field"
+    //   - `.some(nil)` → "clear this field (set to nil)"
+    //   - `.some(.some(value))` → "set this field to value"
+    //
+    // In JavaScript, this maps to:
+    //   - `undefined` → don't change
+    //   - `null` → clear
+    //   - `value` → set
+    // But JS conflates undefined/null in most APIs. Swift's type system makes
+    // the three states explicit and enforced at compile time.
+    func updateHabit(
+        id: String,
+        name: String? = nil,
+        description: String? = nil,
+        frequency: Double?? = nil,
+        difficultyRank: String?? = nil
+    ) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        let existing = habits[index]
+
+        // For each field: if the parameter is nil (outer), keep existing value.
+        // Otherwise unwrap one level to get the new value (which may itself be nil).
+        let newName: String
+        if let name = name {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            // Validate: if invalid name, keep existing
+            guard !trimmed.isEmpty, trimmed.count <= 100 else { return }
+            newName = trimmed
+        } else {
+            newName = existing.name
+        }
+
+        habits[index] = Habit(
+            id: existing.id,
+            name: newName,
+            description: description ?? existing.description,
+            createdAt: existing.createdAt,
+            updatedAt: Date(),
+            deletedAt: existing.deletedAt,
+            // `frequency ?? existing.frequency` — if outer Optional is nil, keep existing.
+            // If outer is .some, unwrap to get the inner Optional<Double>.
+            frequency: frequency ?? existing.frequency,
+            difficultyRank: difficultyRank ?? existing.difficultyRank
         )
     }
 }

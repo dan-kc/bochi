@@ -18,6 +18,10 @@ struct tofustashApp: App {
     // @Environment(HabitStore.self). Like creating a second context provider.
     @State private var habitStore = HabitStore()
 
+    // TagStore follows the same pattern — a separate @Observable class for
+    // managing tags and their associations with habits.
+    @State private var tagStore = TagStore()
+
     // `body` is like the render function — SwiftUI calls it to get the view tree.
     var body: some Scene {
         // WindowGroup is roughly <StrictMode><App /></StrictMode> — the root container.
@@ -28,6 +32,7 @@ struct tofustashApp: App {
                 // access it with @Environment, which is useContext().
                 .environment(authManager)
                 .environment(habitStore)
+                .environment(tagStore)
                 // .task is useEffect with an empty dep array — runs once on mount.
                 // `await` is native here; no need for the async-function-inside-useEffect pattern.
                 .task { await authManager.bootstrap() }

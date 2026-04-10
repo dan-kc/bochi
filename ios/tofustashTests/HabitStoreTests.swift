@@ -84,12 +84,19 @@ struct HabitStoreTests {
     @Test func addHabitWithMinimalFields() {
         let sut = makeSUT()
 
-        // `description` and `frequency` have default values in the function signature,
-        // so you can omit them — like default params in JS/TS.
         let habit = sut.addHabit(name: "Exercise")
 
         #expect(habit?.description == "")
         #expect(habit?.frequency == nil)
+        #expect(habit?.difficultyRank == nil)
+    }
+
+    @Test func addHabitWithDifficultyRank() {
+        let sut = makeSUT()
+
+        let habit = sut.addHabit(name: "Exercise", difficultyRank: "m")
+
+        #expect(habit?.difficultyRank == "m")
     }
 
     @Test func addHabitTrimsWhitespace() {
@@ -172,10 +179,123 @@ struct HabitStoreTests {
         let sut = makeSUT()
         _ = sut.addHabit(name: "Exercise")
 
-        // Deleting a non-existent ID should not crash or change anything.
         sut.deleteHabit(id: "nonexistent-id")
 
         #expect(sut.habits.count == 1)
         #expect(sut.activeHabits.count == 1)
+    }
+
+    @Test func deleteHabitPreservesDifficultyRank() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise", difficultyRank: "m")!
+
+        sut.deleteHabit(id: habit.id)
+
+        let deleted = sut.habits.first(where: { $0.id == habit.id })
+        #expect(deleted?.difficultyRank == "m")
+    }
+
+    // MARK: - Updating Habits
+
+    @Test func updateHabitChangesName() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, name: "Workout")
+
+        #expect(sut.habits.first?.name == "Workout")
+    }
+
+    @Test func updateHabitChangesDescription() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, description: "Daily workout")
+
+        #expect(sut.habits.first?.description == "Daily workout")
+    }
+
+    @Test func updateHabitChangesFrequency() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        // .some(2.0) sets the frequency to 2.0
+        sut.updateHabit(id: habit.id, frequency: .some(2.0))
+
+        #expect(sut.habits.first?.frequency == 2.0)
+    }
+
+    @Test func updateHabitClearsFrequency() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise", frequency: 1.0)!
+
+        // .some(nil) explicitly clears the frequency — like setting to null in JS
+        sut.updateHabit(id: habit.id, frequency: .some(nil))
+
+        #expect(sut.habits.first?.frequency == nil)
+    }
+
+    @Test func updateHabitChangesDifficultyRank() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, difficultyRank: .some("m"))
+
+        #expect(sut.habits.first?.difficultyRank == "m")
+    }
+
+    @Test func updateHabitSetsUpdatedAt() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+        let originalUpdatedAt = habit.updatedAt
+
+        // Small delay to ensure timestamp differs
+        sut.updateHabit(id: habit.id, name: "Workout")
+
+        let updated = sut.habits.first!
+        #expect(updated.updatedAt >= originalUpdatedAt)
+    }
+
+    @Test func updateHabitPreservesUnchangedFields() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise", description: "Daily", frequency: 1.0, difficultyRank: "m")!
+
+        // Only update the name — all other fields should stay the same
+        sut.updateHabit(id: habit.id, name: "Workout")
+
+        let updated = sut.habits.first!
+        #expect(updated.name == "Workout")
+        #expect(updated.description == "Daily")
+        #expect(updated.frequency == 1.0)
+        #expect(updated.difficultyRank == "m")
+        #expect(updated.createdAt == habit.createdAt)
+    }
+
+    @Test func updateHabitTrimsName() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, name: "  Workout  ")
+
+        #expect(sut.habits.first?.name == "Workout")
+    }
+
+    @Test func updateHabitWithEmptyNameIsNoOp() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, name: "")
+
+        // Name should remain unchanged
+        #expect(sut.habits.first?.name == "Exercise")
+    }
+
+    @Test func updateNonexistentHabitIsNoOp() {
+        let sut = makeSUT()
+        _ = sut.addHabit(name: "Exercise")
+
+        sut.updateHabit(id: "nonexistent-id", name: "Workout")
+
+        #expect(sut.habits.first?.name == "Exercise")
     }
 }
