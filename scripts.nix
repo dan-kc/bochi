@@ -309,6 +309,8 @@ let
       # Determine simulator device
       DEVICE="''${1:-iPhone 17 Pro}"
 
+      mkdir -p "$ROOT/logs"
+
       echo "Building $SCHEME for $DEVICE..."
 
       # Run xcodebuild with sanitized environment (removes Nix toolchain interference)
@@ -353,12 +355,13 @@ let
           xcrun simctl boot \"\$DEVICE_ID\" 2>/dev/null || true
           open -a Simulator
 
-          # Install and launch
+          # Install and launch with console output for runtime logs
           xcrun simctl install \"\$DEVICE_ID\" \"\$APP_PATH\"
           xcrun simctl terminate \"\$DEVICE_ID\" '$BUNDLE_ID' 2>/dev/null || true
-          xcrun simctl launch \"\$DEVICE_ID\" '$BUNDLE_ID'
 
-          echo 'App launched in simulator.'
+          echo 'App launched. Streaming runtime logs (also saved to $ROOT/logs/ios.log)...'
+          echo
+          exec xcrun simctl launch --console-pty \"\$DEVICE_ID\" '$BUNDLE_ID' 2>&1 | tee '$ROOT/logs/ios.log'
         "
     '';
 

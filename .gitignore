@@ -18,6 +18,9 @@ web-build/
 expo-env.d.ts
 
 # Native
+xcuserdata/
+*.xcuserstate
+DerivedData/
 .kotlin/
 *.orig.*
 *.jks
