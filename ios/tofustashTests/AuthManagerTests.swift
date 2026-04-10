@@ -23,7 +23,6 @@ struct AuthManagerTests {
 
     // async test — like an async Jest test. Swift Testing handles the await natively.
     @Test func bootstrapWithNoStoredTokensPerformsAnonymousAuth() async {
-        // Destructuring a tuple — like JS const [manager, api, storage] = makeSUT()
         let (manager, api, storage) = makeSUT()
         let tokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
         api.anonymousAuthResult = .success(tokens)

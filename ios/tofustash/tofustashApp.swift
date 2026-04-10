@@ -13,6 +13,11 @@ struct tofustashApp: App {
         tokenStorage: KeychainTokenStorage()
     )
 
+    // HabitStore follows the same pattern as AuthManager — an @Observable class
+    // injected into the environment so all child views can access it via
+    // @Environment(HabitStore.self). Like creating a second context provider.
+    @State private var habitStore = HabitStore()
+
     // `body` is like the render function — SwiftUI calls it to get the view tree.
     var body: some Scene {
         // WindowGroup is roughly <StrictMode><App /></StrictMode> — the root container.
@@ -22,6 +27,7 @@ struct tofustashApp: App {
                 // <AuthContext.Provider value={authManager}>. Child views
                 // access it with @Environment, which is useContext().
                 .environment(authManager)
+                .environment(habitStore)
                 // .task is useEffect with an empty dep array — runs once on mount.
                 // `await` is native here; no need for the async-function-inside-useEffect pattern.
                 .task { await authManager.bootstrap() }

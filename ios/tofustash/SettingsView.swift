@@ -9,7 +9,6 @@ struct SettingsView: View {
         NavigationStack {
             // List — like <ul> with native iOS styling and scroll behavior
             List {
-                // SwiftUI supports inline conditionals in the body builder (like ternary/&& in JSX, but with full if/else)
                 if authManager.isLoading {
                     ProgressView()
                 } else if authManager.isAnonymous {
@@ -22,7 +21,6 @@ struct SettingsView: View {
         }
     }
 
-    // Computed property returning `some View` — extract sub-views like extracting a JSX fragment into a const
     private var anonymousSection: some View {
         // Section — groups list items with a header/footer (like a fieldset)
         Section {

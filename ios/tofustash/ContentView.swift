@@ -32,4 +32,5 @@ struct ContentView: View {
             apiClient: LiveAuthAPIClient(baseURL: URL(string: "http://localhost:8501")!),
             tokenStorage: KeychainTokenStorage()
         ))
+        .environment(HabitStore())
 }
