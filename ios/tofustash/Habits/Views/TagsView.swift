@@ -62,6 +62,7 @@ struct TagsView: View {
             .searchable(text: $searchText, prompt: "Search tags...")
             .navigationTitle("Tags")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium, .large])
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
@@ -185,6 +186,7 @@ struct TagsView: View {
             }
             .navigationTitle("Edit Tag")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium, .large])
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

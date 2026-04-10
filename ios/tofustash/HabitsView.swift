@@ -64,66 +64,82 @@ struct HabitsView: View {
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
 
-        return VStack(alignment: .leading, spacing: 6) {
-            // Row 1: Name — tapping opens change form with name/description modal
-            Button {
-                openChangeForm(habit, focus: .nameDescription)
-            } label: {
+        // The whole row is a Button so tapping anywhere (including whitespace)
+        // opens the change form. In SwiftUI List, a row-level Button is the
+        // only reliable way to make the entire row tappable — .onTapGesture
+        // on a child VStack gets swallowed by the List's gesture handling.
+        // This is like wrapping a <div> in an <a> or <button> in React.
+        //
+        // Inner elements (description, frequency, difficulty, tags) use
+        // .onTapGesture to intercept taps before they bubble up to this Button.
+        // In React terms: e.stopPropagation() on the inner onClick handler.
+        return Button {
+            openChangeForm(habit, focus: nil)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                // Row 1: Name — tapping the name itself opens the name/desc editor.
+                // The .onTapGesture intercepts before the outer Button fires,
+                // like e.stopPropagation() in React.
                 Text(habit.name)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+                    .onTapGesture {
+                        openChangeForm(habit, focus: .name)
+                    }
 
-            // Row 2: Description, Frequency, Difficulty — orange indicators
-            // FlowLayout-like: uses HStack that wraps content
-            let hasSecondRow = !habit.description.isEmpty || habit.frequency != nil || habit.difficultyRank != nil
-            if hasSecondRow {
-                HStack(spacing: 8) {
-                    if !habit.description.isEmpty {
-                        Button {
-                            openChangeForm(habit, focus: .nameDescription)
-                        } label: {
+                // Row 2: Description, Frequency, Difficulty — orange indicators
+                let hasSecondRow = !habit.description.isEmpty || habit.frequency != nil || habit.difficultyRank != nil
+                if hasSecondRow {
+                    HStack(spacing: 8) {
+                        if !habit.description.isEmpty {
+                            // Description tap focuses the description field in the editor,
+                            // not the name field — uses .description instead of .name.
                             Text(habit.description)
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                                 .lineLimit(1)
+                                .onTapGesture {
+                                    openChangeForm(habit, focus: .description)
+                                }
                         }
-                        .buttonStyle(.plain)
-                    }
 
-                    if let freq = habit.frequency {
-                        Button {
-                            openChangeForm(habit, focus: .frequency)
-                        } label: {
+                        if let freq = habit.frequency {
                             Text(FrequencyConversion.formatSummary(freq) ?? "")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
+                                .onTapGesture {
+                                    openChangeForm(habit, focus: .frequency)
+                                }
                         }
-                        .buttonStyle(.plain)
-                    }
 
-                    if habit.difficultyRank != nil {
-                        Button {
-                            openChangeForm(habit, focus: .difficulty)
-                        } label: {
+                        if habit.difficultyRank != nil {
                             Text("Difficulty")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
+                                .onTapGesture {
+                                    openChangeForm(habit, focus: .difficulty)
+                                }
                         }
-                        .buttonStyle(.plain)
+                    }
+                }
+
+                // Row 3: Tag pills — colored with hex code backgrounds
+                if !tags.isEmpty {
+                    TagPillsRow(tags: tags) {
+                        openChangeForm(habit, focus: .tags)
                     }
                 }
             }
-
-            // Row 3: Tag pills — colored with hex code backgrounds
-            if !tags.isEmpty {
-                TagPillsRow(tags: tags) {
-                    openChangeForm(habit, focus: .tags)
-                }
-            }
+            // .frame(maxWidth:) stretches the VStack to fill the full row width.
+            // Without this, the button's tap target only covers the text content,
+            // leaving the whitespace to the right of short text untappable.
+            // .contentShape ensures taps register on the gaps between text rows too.
+            // Together they make the entire List row a single tap target.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     // Opens the change form for a habit, optionally auto-opening a sub-modal

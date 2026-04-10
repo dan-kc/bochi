@@ -47,6 +47,7 @@ struct NameDescriptionModal: View {
             }
             .navigationTitle("Name & Description")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium])
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {

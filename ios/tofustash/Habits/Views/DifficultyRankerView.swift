@@ -42,6 +42,7 @@ struct DifficultyRankerView: View {
             }
             .navigationTitle("Set Difficulty")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium, .large])
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {

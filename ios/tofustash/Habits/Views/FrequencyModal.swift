@@ -63,6 +63,7 @@ struct FrequencyModal: View {
             }
             .navigationTitle("Frequency")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium])
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
