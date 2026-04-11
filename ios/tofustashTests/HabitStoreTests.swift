@@ -298,4 +298,46 @@ struct HabitStoreTests {
 
         #expect(sut.habits.first?.name == "Exercise")
     }
+
+    // MARK: - Invalid Name Should Not Block Other Fields
+
+    // When the user is typing in the name field, it may temporarily be empty.
+    // An invalid name should NOT prevent other field updates (frequency, description,
+    // etc.) from saving — otherwise auto-save breaks when name is mid-edit.
+
+    @Test func updateWithEmptyNameStillUpdatesFrequency() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise", frequency: 1.0)!
+
+        // Pass an empty name alongside a frequency change — frequency should still save,
+        // and the existing name should be preserved.
+        sut.updateHabit(id: habit.id, name: "", frequency: .some(2.0))
+
+        let updated = sut.habits.first!
+        #expect(updated.name == "Exercise")
+        #expect(updated.frequency == 2.0)
+    }
+
+    @Test func updateWithTooLongNameStillUpdatesDescription() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        let longName = String(repeating: "a", count: 101)
+        sut.updateHabit(id: habit.id, name: longName, description: "New desc")
+
+        let updated = sut.habits.first!
+        #expect(updated.name == "Exercise")
+        #expect(updated.description == "New desc")
+    }
+
+    @Test func updateWithWhitespaceOnlyNameStillUpdatesDifficultyRank() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(id: habit.id, name: "   ", difficultyRank: .some("m"))
+
+        let updated = sut.habits.first!
+        #expect(updated.name == "Exercise")
+        #expect(updated.difficultyRank == "m")
+    }
 }

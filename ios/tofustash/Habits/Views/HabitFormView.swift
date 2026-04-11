@@ -142,6 +142,15 @@ struct HabitFormView: View {
             || tagCount > 0
     }
 
+    // Prepares the name for auto-save by trimming whitespace.
+    // The trimmed value is passed to updateHabit, which handles validation:
+    // if the name is empty or too long, updateHabit keeps the existing name.
+    // This lets other fields (frequency, description, etc.) still save
+    // even while the user is mid-edit on the name field.
+    static func nameForAutoSave(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
     init(mode: HabitFormMode = .new, initialFocus: HabitFormFocus? = nil) {
         self.mode = mode
         self.initialFocus = initialFocus
@@ -255,14 +264,19 @@ struct HabitFormView: View {
             .task {
                 await initializeForm()
             }
-            .onDisappear {
-                // Auto-save for change mode: persist the current form state when
-                // the sheet dismisses. Like an onUnmount cleanup in React's useEffect.
-                // New mode only saves via the explicit "Add" button.
-                if !isNewMode && isValid {
-                    persistHabit()
-                }
-            }
+            // Auto-save: in change mode, persist to the store whenever any field
+            // changes. This makes the HabitListItem update immediately — like
+            // calling onChange on every controlled input in React and dispatching
+            // to the store on each keystroke.
+            //
+            // .onChange(of:) fires whenever the watched value changes — similar to
+            // useEffect(() => { ... }, [dep]) in React, but synchronous.
+            // The `guard hasAppliedInitialFocus` check prevents saving during
+            // initial form population (when .task sets fields from the habit).
+            .onChange(of: name) { _, _ in autoSave() }
+            .onChange(of: description) { _, _ in autoSave() }
+            .onChange(of: frequency) { _, _ in autoSave() }
+            .onChange(of: difficultyRank) { _, _ in autoSave() }
             // DismissGuard intercepts drag-down and tap-outside dismiss attempts
             // on new forms that have content, showing a discard confirmation instead.
             // Only included in the view tree for new mode — for change mode, we don't
@@ -458,9 +472,21 @@ struct HabitFormView: View {
         }
     }
 
+    // Auto-save for change mode: called by .onChange handlers whenever any
+    // form field changes. Skips save during initial form population (before
+    // hasAppliedInitialFocus is set) and in new mode (which uses explicit "Add").
+    //
+    // Like having a useEffect that runs on every state change and dispatches
+    // to the store — except SwiftUI's .onChange is more targeted (one per field).
+    private func autoSave() {
+        guard !isNewMode, hasAppliedInitialFocus else { return }
+        persistHabit()
+    }
+
     // Writes the current form state to the store (add or update).
-    // Separated from saveHabit() so it can also be called from onDisappear
-    // for auto-save in change mode, without triggering dismiss().
+    // For change mode, always passes the name — updateHabit handles validation
+    // and keeps the existing name if the new one is invalid (empty/too long).
+    // This lets other fields save even while the name is mid-edit.
     private func persistHabit() {
         if case .new = mode {
             habitStore.addHabit(
@@ -472,7 +498,7 @@ struct HabitFormView: View {
         } else {
             habitStore.updateHabit(
                 id: habitId,
-                name: name,
+                name: Self.nameForAutoSave(name),
                 description: description,
                 frequency: .some(frequency),
                 difficultyRank: .some(difficultyRank)

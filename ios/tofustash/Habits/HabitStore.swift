@@ -137,12 +137,19 @@ final class HabitStore {
 
         // For each field: if the parameter is nil (outer), keep existing value.
         // Otherwise unwrap one level to get the new value (which may itself be nil).
+        // Determine the new name: if a valid name was provided, use it.
+        // If the provided name is invalid (empty or too long), fall through
+        // and keep the existing name — don't reject the entire update.
+        // This is important for auto-save: the user may temporarily have an
+        // empty name field while editing other fields like frequency or tags.
         let newName: String
         if let name = name {
             let trimmed = name.trimmingCharacters(in: .whitespaces)
-            // Validate: if invalid name, keep existing
-            guard !trimmed.isEmpty, trimmed.count <= 100 else { return }
-            newName = trimmed
+            if !trimmed.isEmpty && trimmed.count <= 100 {
+                newName = trimmed
+            } else {
+                newName = existing.name
+            }
         } else {
             newName = existing.name
         }
