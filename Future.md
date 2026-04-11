@@ -7,7 +7,7 @@ Use strict TDD, always write unit tests first. No UI tests.
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-Ensure that when a user taps on a habit list item it opens the change menu. Currently it opens the NameDesc modal when you tap on the name or desc, but not when i tap the rest of it. It also currently opens the appropriate modal when tapping on the frequency/tags/difficulty which is good, but I need it to work for the rest of the item. Also ensure that when you tap on the description, it focuses on the description in the NameDesc modal
+Make the HabitListItem update immediately when a change form is changed. All changes on the change form should save immediately, not when the modal is closed.
 
 # Add a "tick" to the name/description edit modal. It should have an "x" and a "tick", if you click the x it should ask "Are you sure you want to discard changes?" Also this behaviour should replicate if I touch outside of the modal.
 

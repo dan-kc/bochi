@@ -56,11 +56,13 @@ struct HabitsView: View {
     }
 
     // Each habit row in the list. Layout:
-    //   Name (tappable → name/desc modal)
-    //   [Description] [Frequency] [Difficulty]  (orange if set)
+    //   Name (tappable → opens main change form)
+    //   [Description]  (its own line, truncated)
+    //   [Frequency pill] [Difficulty pill]  (bordered capsules)
     //   [Tag1] [Tag2]  (colored pills)
     //
-    // Tapping any element opens the change form with the appropriate sub-modal.
+    // Tapping name/description opens the change form (no sub-modal).
+    // Tapping frequency/difficulty/tags opens the form focused on that field.
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
 
@@ -70,62 +72,50 @@ struct HabitsView: View {
         // on a child VStack gets swallowed by the List's gesture handling.
         // This is like wrapping a <div> in an <a> or <button> in React.
         //
-        // Inner elements use .highPriorityGesture to reliably intercept taps
-        // before they bubble up to this Button.
+        // Inner elements (pills, tags) use nested Buttons to intercept taps
+        // before they bubble up to this row-level Button. SwiftUI's gesture
+        // system gives inner Buttons priority, similar to stopPropagation().
         return Button {
             openChangeForm(habit, focus: nil)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                // Row 1: Name — tapping the name itself opens the name/desc editor.
+                // Row 1: Name — tapping opens the main change form (not name editor)
                 Text(habit.name)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .contentShape(Rectangle())
-                    .highPriorityGesture(TapGesture().onEnded {
-                        openChangeForm(habit, focus: .name)
-                    })
 
-                // Row 2: Description, Frequency, Difficulty — orange indicators
-                let hasSecondRow = !habit.description.isEmpty || habit.frequency != nil || habit.difficultyRank != nil
-                if hasSecondRow {
+                // Row 2: Description on its own line, truncated to one line
+                if !habit.description.isEmpty {
+                    Text(habit.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                // Row 3: Frequency & Difficulty as bordered capsule pills.
+                // No background fill — just a colored border outline.
+                // Each pill is a Button so it gets the same subtle press
+                // animation that tag pills have (default SwiftUI tap feedback).
+                if habit.frequency != nil || habit.difficultyRank != nil {
                     HStack(spacing: 8) {
-                        if !habit.description.isEmpty {
-                            // Description tap focuses the description field in the editor,
-                            // not the name field — uses .description instead of .name.
-                            Text(habit.description)
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .lineLimit(1)
-                                .contentShape(Rectangle())
-                                .highPriorityGesture(TapGesture().onEnded {
-                                    openChangeForm(habit, focus: .description)
-                                })
-                        }
-
                         if let freq = habit.frequency {
-                            Text(FrequencyConversion.formatSummary(freq) ?? "")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .contentShape(Rectangle())
-                                .highPriorityGesture(TapGesture().onEnded {
-                                    openChangeForm(habit, focus: .frequency)
-                                })
+                            borderedPill(
+                                text: FrequencyConversion.formatSummary(freq) ?? "",
+                                onTap: { openChangeForm(habit, focus: .frequency) }
+                            )
                         }
 
                         if habit.difficultyRank != nil {
-                            Text("Difficulty")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .contentShape(Rectangle())
-                                .highPriorityGesture(TapGesture().onEnded {
-                                    openChangeForm(habit, focus: .difficulty)
-                                })
+                            borderedPill(
+                                text: "Difficulty",
+                                onTap: { openChangeForm(habit, focus: .difficulty) }
+                            )
                         }
                     }
                 }
 
-                // Row 3: Tag pills — colored with hex code backgrounds
+                // Row 4: Tag pills — colored with hex code backgrounds
                 if !tags.isEmpty {
                     TagPillsRow(tags: tags) {
                         openChangeForm(habit, focus: .tags)
@@ -141,6 +131,25 @@ struct HabitsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    // A pill with a colored border outline and no background fill.
+    // Used for frequency and difficulty indicators in the list row.
+    // The Button wrapper provides the same subtle press animation
+    // that tag pills get — like a <Pressable> with opacity feedback in React Native.
+    private func borderedPill(text: String, onTap: @escaping () -> Void) -> some View {
+        Button {
+            onTap()
+        } label: {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                // Capsule().stroke draws only the border — no fill.
+                // Like border + borderRadius: 999 with no backgroundColor in CSS.
+                .overlay(Capsule().stroke(.orange, lineWidth: 1))
+        }
     }
 
     // Opens the change form for a habit, optionally auto-opening a sub-modal
