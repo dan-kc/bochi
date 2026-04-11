@@ -91,7 +91,9 @@ struct HabitFormView: View {
     // set changes (e.g. switching to name/description editor). The binding
     // pins it to .medium so it only goes large if the user drags up.
     // Like a controlled component in React — we own the state, not the framework.
-    @State private var selectedDetent: PresentationDetent = .medium
+    // Initialized based on whether we start on the name/description editor or
+    // the main form. Set in init() alongside showingNameDescription.
+    @State private var selectedDetent: PresentationDetent
 
     // Controls the discard confirmation dialog shown when the user tries to
     // interactively dismiss (drag-down or tap-outside) a new form with content.
@@ -151,6 +153,22 @@ struct HabitFormView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
+    // Whether the name/description editor should auto-expand to .large detent.
+    // Short/empty content stays in a compact sheet so the HabitList remains
+    // visible underneath. Triggers when total character count exceeds 100 or
+    // the description has 4+ lines (3+ newlines), since that overflows the
+    // compact sheet height.
+    static func shouldUseLargeDetent(name: String, description: String) -> Bool {
+        let totalLength = name.count + description.count
+        let newlineCount = description.filter { $0 == "\n" }.count
+        return totalLength > 100 || newlineCount >= 3
+    }
+
+    // Height for the compact name/description editor detent.
+    // Sized to fit the nav bar + name field + a few description lines
+    // while leaving the HabitList visible underneath.
+    static let compactDetentHeight: CGFloat = 250
+
     init(mode: HabitFormMode = .new, initialFocus: HabitFormFocus? = nil) {
         self.mode = mode
         self.initialFocus = initialFocus
@@ -167,6 +185,13 @@ struct HabitFormView: View {
             startOnNameDesc = initialFocus?.isNameDescription == true
         }
         self._showingNameDescription = State(initialValue: startOnNameDesc)
+
+        // Start at the compact height when opening the name/description editor,
+        // or .medium for the main form.
+        self._selectedDetent = State(initialValue: startOnNameDesc
+            ? .height(Self.compactDetentHeight)
+            : .medium
+        )
 
         // If opening for description, focus description field; otherwise default to name.
         if initialFocus == .description {
@@ -200,17 +225,27 @@ struct HabitFormView: View {
                 ? "Name & Description"
                 : (isNewMode ? "New Habit" : "Edit Habit"))
             .navigationBarTitleDisplayMode(.inline)
-            // Dynamic detents: name/description editor offers both .medium and .large
-            // so it starts at half-screen but the user can drag up for more space
-            // when content is long. The form always uses .medium.
+            // Dynamic detents: name/description editor starts at a compact height
+            // so the HabitList stays visible underneath. .large is only added to the
+            // available detent set when content overflows the compact height — this
+            // prevents iOS from auto-expanding the sheet to .large when the keyboard
+            // appears. Without this, iOS sees .large as available and jumps to it.
+            // The form always uses .medium.
             .presentationDetents(
-                showingNameDescription ? [.medium, .large] : [.medium],
+                showingNameDescription
+                    ? (Self.shouldUseLargeDetent(name: name, description: description)
+                        ? [.height(Self.compactDetentHeight), .large]
+                        : [.height(Self.compactDetentHeight)])
+                    : [.medium],
                 selection: $selectedDetent
             )
             // Reset to .medium when leaving the name/description editor,
             // so the main form doesn't stay at .large if the user dragged up.
+            // When entering the editor, start at the compact height.
             .onChange(of: showingNameDescription) { _, newValue in
-                if !newValue {
+                if newValue {
+                    selectedDetent = .height(Self.compactDetentHeight)
+                } else {
                     selectedDetent = .medium
                 }
             }
@@ -390,12 +425,27 @@ struct HabitFormView: View {
             }
             .padding()
         }
-        .task {
-            // Small delay ensures the view is fully laid out before focusing.
-            // Without this, focus sometimes doesn't take effect — similar to
-            // needing setTimeout(fn, 0) before calling ref.current.focus() in React.
-            try? await Task.sleep(nanoseconds: 300_000_000)
+        .onAppear {
+            // Set focus immediately so the keyboard appears at the same time
+            // as the modal, rather than after a visible delay. On iOS 17+,
+            // onAppear is reliable for focus — no setTimeout-style hack needed.
+            // Like calling ref.current.focus() in a useEffect with [] deps.
             focusedField = nameDescFocus
+        }
+        // Auto-expand the sheet to .large when content outgrows the compact
+        // detent. Like a React useEffect that watches content length and
+        // updates a CSS class to resize a modal.
+        .onChange(of: name) { _, _ in updateDetentForContent() }
+        .onChange(of: description) { _, _ in updateDetentForContent() }
+    }
+
+    // Expands the sheet to .large when name/description content is long enough
+    // to overflow the compact detent. Only expands — never shrinks back, since
+    // the user may have manually dragged to .large and we don't want to fight them.
+    private func updateDetentForContent() {
+        guard showingNameDescription else { return }
+        if Self.shouldUseLargeDetent(name: name, description: description) {
+            selectedDetent = .large
         }
     }
 

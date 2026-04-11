@@ -99,4 +99,53 @@ struct HabitFormFocusTests {
         let longName = String(repeating: "a", count: 101)
         #expect(HabitFormView.nameForAutoSave(longName) == longName)
     }
+
+    // MARK: - shouldUseLargeDetent
+
+    // Determines whether the name/description editor sheet should auto-expand
+    // to full-screen (.large). Short/empty content stays in a compact detent
+    // so the HabitList remains visible underneath. When the user types enough
+    // content, the sheet expands to give them room.
+
+    @Test func emptyContentShouldNotUseLargeDetent() {
+        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: "") == false)
+    }
+
+    @Test func shortContentShouldNotUseLargeDetent() {
+        #expect(HabitFormView.shouldUseLargeDetent(name: "Run", description: "Quick jog") == false)
+    }
+
+    @Test func contentAtBoundaryShouldNotUseLargeDetent() {
+        let desc = String(repeating: "a", count: 100)
+        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == false)
+    }
+
+    @Test func longDescriptionShouldUseLargeDetent() {
+        let longDesc = String(repeating: "a", count: 101)
+        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: longDesc) == true)
+    }
+
+    @Test func longNameShouldUseLargeDetent() {
+        let longName = String(repeating: "a", count: 101)
+        #expect(HabitFormView.shouldUseLargeDetent(name: longName, description: "") == true)
+    }
+
+    @Test func combinedLengthShouldUseLargeDetent() {
+        // Each alone is under 100, but combined they exceed it
+        let name = String(repeating: "a", count: 60)
+        let desc = String(repeating: "b", count: 50)
+        #expect(HabitFormView.shouldUseLargeDetent(name: name, description: desc) == true)
+    }
+
+    @Test func multilineDescriptionShouldUseLargeDetent() {
+        // 4+ lines (3+ newlines) should trigger large even if total chars < 100
+        let desc = "Line 1\nLine 2\nLine 3\nLine 4"
+        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == true)
+    }
+
+    @Test func threeLineDescriptionShouldNotUseLargeDetent() {
+        // 3 lines (2 newlines) fits in the compact sheet
+        let desc = "Line 1\nLine 2\nLine 3"
+        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == false)
+    }
 }

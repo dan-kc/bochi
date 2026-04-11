@@ -7,7 +7,9 @@ Use strict TDD, always write unit tests first. No UI tests.
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-Make the HabitListItem update immediately when a change form is changed. All changes on the change form should save immediately, not when the modal is closed.
+Change the behaviour of the Habit new/change form in the following way:
+
+In the Habit new/change form, a user should be able to Click on the whitespace to open the main tags section. Instead of having each tag open up the tags modal, ensure that whole section is the button effectively. You should also remove the buttons from the tags themselves too
 
 # Add a "tick" to the name/description edit modal. It should have an "x" and a "tick", if you click the x it should ask "Are you sure you want to discard changes?" Also this behaviour should replicate if I touch outside of the modal.
 
