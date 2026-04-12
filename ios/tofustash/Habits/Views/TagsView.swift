@@ -64,14 +64,8 @@ struct TagsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .presentationDetents([.medium, .large])
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-
+                // Single "Done" button — tag changes are applied immediately
+                // (no save/cancel distinction), so only a dismiss is needed.
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         dismiss()

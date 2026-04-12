@@ -9,6 +9,11 @@ import SwiftUI
 enum HabitFormMode: Equatable {
     case new
     case change(Habit)
+
+    var isNew: Bool {
+        if case .new = self { return true }
+        return false
+    }
 }
 
 // Which sub-modal should auto-open when the form appears.
@@ -67,17 +72,14 @@ struct HabitFormView: View {
     @State private var showingDifficulty = false
     @State private var showingTags = false
 
-    // Which field in the name/description editor should be focused.
-    // Like a ref target in React — determines which input to auto-focus.
+    // Which field in the name/description editor has keyboard focus.
+    // @FocusState is SwiftUI's way to programmatically control keyboard focus.
+    // Like using useRef + ref.current.focus() in React, but declarative —
+    // set the state variable and SwiftUI moves focus automatically.
     enum NameDescField: Hashable {
         case name, description
     }
 
-    @State private var nameDescFocus: NameDescField = .name
-
-    // @FocusState is SwiftUI's way to programmatically control keyboard focus.
-    // Like using useRef + ref.current.focus() in React, but declarative —
-    // set the state variable and SwiftUI moves focus automatically.
     @FocusState private var focusedField: NameDescField?
 
     // Track whether the initial focus has been applied
@@ -91,16 +93,6 @@ struct HabitFormView: View {
     // Initialized based on whether we start on the name/description editor or
     // the main form. Set in init() alongside showingNameDescription.
     @State private var selectedDetent: PresentationDetent
-
-    // Controls the discard confirmation dialog shown when the user tries to
-    // interactively dismiss (drag-down or tap-outside) a new form with content.
-    @State private var showDiscardConfirmation = false
-
-    // Convenience: is this a new habit form?
-    private var isNewMode: Bool {
-        if case .new = mode { return true }
-        return false
-    }
 
     // Tags currently applied to this habit
     private var habitTags: [Tag] {
@@ -190,10 +182,6 @@ struct HabitFormView: View {
             : .medium
         )
 
-        // If opening for description, focus description field; otherwise default to name.
-        if initialFocus == .description {
-            self._nameDescFocus = State(initialValue: .description)
-        }
     }
 
     var body: some View {
@@ -220,7 +208,7 @@ struct HabitFormView: View {
             .animation(.easeInOut(duration: 0.25), value: showingNameDescription)
             .navigationTitle(showingNameDescription
                 ? "Name & Description"
-                : (isNewMode ? "New Habit" : "Edit Habit"))
+                : (mode.isNew ? "New Habit" : "Edit Habit"))
             .navigationBarTitleDisplayMode(.inline)
             // Dynamic detents: name/description editor starts at a compact height
             // so the HabitList stays visible underneath. .large is only added to the
@@ -263,7 +251,7 @@ struct HabitFormView: View {
                             Image(systemName: "checkmark")
                         }
                     }
-                } else if isNewMode {
+                } else if mode.isNew {
                     // Cancel and Add buttons only appear on the new form.
                     // The change form auto-saves when dismissed (no buttons needed).
                     ToolbarItem(placement: .cancellationAction) {
@@ -274,7 +262,8 @@ struct HabitFormView: View {
 
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Add") {
-                            saveHabit()
+                            persistHabit()
+                            dismiss()
                         }
                         .disabled(!isValid)
                     }
@@ -287,7 +276,7 @@ struct HabitFormView: View {
                 DifficultyRankerView(
                     habitName: trimmedName.isEmpty ? "New Habit" : trimmedName,
                     difficultyRank: $difficultyRank,
-                    excludeHabitId: isNewMode ? nil : habitId
+                    excludeHabitId: mode.isNew ? nil : habitId
                 )
             }
             .sheet(isPresented: $showingTags) {
@@ -309,31 +298,11 @@ struct HabitFormView: View {
             .onChange(of: description) { _, _ in autoSave() }
             .onChange(of: frequency) { _, _ in autoSave() }
             .onChange(of: difficultyRank) { _, _ in autoSave() }
-            // DismissGuard intercepts drag-down and tap-outside dismiss attempts
-            // on new forms that have content, showing a discard confirmation instead.
-            // Only included in the view tree for new mode — for change mode, we don't
-            // want it at all because it overrides SwiftUI's presentation controller
-            // delegate, which would break normal tap-outside-to-dismiss behavior.
-            .background {
-                if isNewMode {
-                    DismissGuard(isEnabled: hasContent) {
-                        showDiscardConfirmation = true
-                    }
-                }
-            }
-            // The discard confirmation — a small action sheet that slides up from the bottom.
-            // Like window.confirm() in the browser, but styled natively.
-            .confirmationDialog(
-                "Discard this habit?",
-                isPresented: $showDiscardConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Discard", role: .destructive) {
-                    dismiss()
-                }
-                // "Cancel" (keep editing) is added automatically by SwiftUI
-                // when using .confirmationDialog — no need to add it explicitly.
-            }
+            // Block drag-to-dismiss when the new form has content, so the user
+            // doesn't accidentally lose their work. They can still tap Cancel
+            // to dismiss intentionally. Like preventing accidental navigation
+            // away from a dirty form in React (but without a confirmation dialog).
+            .interactiveDismissDisabled(mode.isNew && hasContent)
         }
     }
 
@@ -353,7 +322,7 @@ struct HabitFormView: View {
             Section {
                 // Name button — shows truncated name, taps to edit
                 Button {
-                    nameDescFocus = .name
+                    focusedField = .name
                     showingNameDescription = true
                 } label: {
                     if trimmedName.isEmpty {
@@ -368,7 +337,7 @@ struct HabitFormView: View {
 
                 // Description button — shows truncated description, taps to edit
                 Button {
-                    nameDescFocus = .description
+                    focusedField = .description
                     showingNameDescription = true
                 } label: {
                     if description.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -429,11 +398,13 @@ struct HabitFormView: View {
             .padding()
         }
         .onAppear {
-            // Set focus immediately so the keyboard appears at the same time
-            // as the modal, rather than after a visible delay. On iOS 17+,
-            // onAppear is reliable for focus — no setTimeout-style hack needed.
-            // Like calling ref.current.focus() in a useEffect with [] deps.
-            focusedField = nameDescFocus
+            // Ensure focus is set when the editor appears. If a button tap
+            // already set focusedField, this is a no-op. Otherwise (e.g. initial
+            // open), default to the name field — or description if that was the
+            // initialFocus. Like calling ref.current.focus() in useEffect.
+            if focusedField == nil {
+                focusedField = (initialFocus == .description) ? .description : .name
+            }
         }
         // Auto-expand the sheet to .large when content outgrows the compact
         // detent. Like a React useEffect that watches content length and
@@ -452,57 +423,48 @@ struct HabitFormView: View {
         }
     }
 
-    // Pure data for the pill row — no closures, so it can be unit tested.
+    // Pure data for the pill row — actions are nil so it can be unit tested.
     // In React terms, this is like a selector that derives render data from state,
     // separated from the event handlers.
     static func buildPillData(
         hasTagsApplied: Bool,
         difficultyRank: String?,
         frequency: Double?
-    ) -> [PillItemData] {
+    ) -> [PillItem] {
         let freqLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
         return [
-            // Tags pill — always shown. Orange when tags are applied.
-            PillItemData(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
-            // Difficulty pill — orange when ranked
-            PillItemData(id: "difficulty", label: "Difficulty", icon: "chart.bar", isSet: difficultyRank != nil),
-            // Frequency pill — shows formatted summary when set
-            PillItemData(id: "frequency", label: freqLabel, icon: "clock", isSet: frequency != nil),
+            PillItem(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
+            PillItem(id: "difficulty", label: "Difficulty", icon: "chart.bar", isSet: difficultyRank != nil),
+            PillItem(id: "frequency", label: freqLabel, icon: "clock", isSet: frequency != nil),
         ]
     }
 
-    // Build the pill items for the pill row, attaching actions to the pure data.
+    // Build the pill items for the pill row, attaching action closures.
+    // Like adding onClick handlers to stateless component props in React.
     private func buildPills() -> [PillItem] {
-        let data = Self.buildPillData(
+        var pills = Self.buildPillData(
             hasTagsApplied: !habitTags.isEmpty,
             difficultyRank: difficultyRank,
             frequency: frequency
         )
 
-        // Map each data item to a PillItem with the appropriate action closure.
-        // Like adding onClick handlers to stateless component props in React.
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "difficulty": { showingDifficulty = true },
             "frequency": { showingFrequency = true },
         ]
 
-        return data.map { item in
-            PillItem(
-                id: item.id,
-                label: item.label,
-                icon: item.icon,
-                isSet: item.isSet,
-                action: actions[item.id] ?? {}
-            )
+        for i in pills.indices {
+            pills[i].action = actions[pills[i].id]
         }
+        return pills
     }
 
-    // Initialize form state from the habit (change mode) or defaults (new mode)
+    // Initialize form state from the habit (change mode) or defaults (new mode).
+    // Called from .task, which only runs once per view lifecycle (like useEffect
+    // with [] deps). Sets hasAppliedInitialFocus at the end so auto-save
+    // .onChange handlers skip firing during initial population.
     private func initializeForm() async {
-        guard !hasAppliedInitialFocus else { return }
-        hasAppliedInitialFocus = true
-
         if case .change(let habit) = mode {
             // Populate form from existing habit
             name = habit.name
@@ -512,10 +474,13 @@ struct HabitFormView: View {
             habitId = habit.id
         }
 
+        // Mark initialization complete so auto-save .onChange handlers start firing.
+        hasAppliedInitialFocus = true
+
         // Apply initial focus — open the appropriate sub-modal.
         // .name/.description are handled in init() (no async delay needed, avoids flash).
         // Other focus targets still need a short delay for sheet presentation.
-        let focus = initialFocus ?? (isNewMode ? .name : nil)
+        let focus = initialFocus ?? (mode.isNew ? .name : nil)
 
         // Delay to let the view finish layout before presenting sheets.
         if let focus = focus, !focus.isNameDescription {
@@ -540,7 +505,7 @@ struct HabitFormView: View {
     // Like having a useEffect that runs on every state change and dispatches
     // to the store — except SwiftUI's .onChange is more targeted (one per field).
     private func autoSave() {
-        guard !isNewMode, hasAppliedInitialFocus else { return }
+        guard !mode.isNew, hasAppliedInitialFocus else { return }
         persistHabit()
     }
 
@@ -571,11 +536,6 @@ struct HabitFormView: View {
         }
     }
 
-    // Called by the "Add" button (new mode only). Saves and closes the form.
-    private func saveHabit() {
-        persistHabit()
-        dismiss()
-    }
 }
 
 #Preview("New") {

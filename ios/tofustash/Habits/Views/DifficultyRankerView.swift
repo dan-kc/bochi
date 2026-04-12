@@ -43,15 +43,6 @@ struct DifficultyRankerView: View {
             .navigationTitle("Set Difficulty")
             .navigationBarTitleDisplayMode(.inline)
             .presentationDetents([.medium, .large])
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-            }
             .onAppear {
                 initializeSession()
             }

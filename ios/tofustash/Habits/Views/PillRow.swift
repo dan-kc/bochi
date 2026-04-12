@@ -16,7 +16,7 @@ struct PillRow: View {
             HStack(spacing: 8) {
                 ForEach(pills) { pill in
                     Button {
-                        pill.action()
+                        pill.action?()
                     } label: {
                         Label(pill.label, systemImage: pill.icon)
                             .font(.subheadline)
@@ -32,20 +32,13 @@ struct PillRow: View {
 }
 
 // Represents a single pill in the row. Identifiable so ForEach can diff.
+// `action` is optional so the same type works for both rendering (with action)
+// and unit testing pill-building logic (without action). In React terms,
+// this is like having an optional onClick prop on a button component.
 struct PillItem: Identifiable {
     let id: String
     let label: String
     let icon: String          // SF Symbol name (like Material Icon names in React)
     let isSet: Bool           // true = orange, false = gray
-    let action: () -> Void    // called when tapped — like onClick in React
-}
-
-// Pure data version of PillItem (no closure) for unit testing pill-building logic.
-// In React terms, this separates the "what to render" data from the "what to do on click"
-// handler, so the data part can be tested without needing a UI.
-struct PillItemData: Identifiable {
-    let id: String
-    let label: String
-    let icon: String
-    let isSet: Bool
+    var action: (() -> Void)? = nil  // called when tapped — like onClick in React
 }
