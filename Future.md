@@ -2,12 +2,22 @@
 
 I am writing a native IOS version (./ios) of an existing react-native frontend (./frontend).
 Do not copy any styling. Use default SwiftUI styling including icons etc.
-Write comments assuming I don't know anything about Swift. When comparable, compare to React as I am an expert in that.
-Use strict TDD, always write unit tests first. No UI tests.
+Write comments assuming I don't know anything about Swift. When comparable, compare to React as I am an expert in that. Document behaviours too.
+Use strict TDD, always write unit tests first. No UI tests. When writing tests, ensure you comment what behaviour you are testing for. I do not want redundant tests. This should resemple BDD. If there is no appropriate test, don't write one. I only want relevant BDD tests that match user workflows in the app.
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-Remove the feature where if you tap on the tags section in the habitRow it opens the tags section. It should just open the change form. In fact, make the entire row a button which opens the change form. There should be no other buttons on each list item. Ensure you only change the behaviour for the habitRow, DO NOT touch the behaviour in side of the change form.
+Go over all tests in this project and add a behaviour comment or change the test to make it BDD. If there are any test cases that you think are impossible and will not be reached ever, then remove the test completely. I only want relevant BDD tests that match user workflows in the app. 
+
+--------------
+
+Change the logic around the height of the new/change modal. It currently sometimes is too small. Whatever calculations are being run to determin the height of this modal is incorrect. I want it to work as follows:
+
+- Default height: small.
+- When the content is larger than the height, the height of the modal should increase accordingly. It should gradually be getting taller from the bottom.
+- Once the modal reaches the top, it is then scrollable.
+
+Remove the bar on the modal that allows you to drag the form. It's height should only be derived from its contents.
 
 
 

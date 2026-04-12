@@ -82,6 +82,15 @@ struct HabitFormView: View {
 
     @FocusState private var focusedField: NameDescField?
 
+    // Tracks which field should receive focus when the name/description editor
+    // next appears. We can't rely on @FocusState alone because SwiftUI resets
+    // it to nil when the target TextField isn't in the view hierarchy yet
+    // (during the ZStack cross-fade). This @State survives the transition and
+    // is read by .onAppear to set the correct focus.
+    // In React terms: @FocusState is like an uncontrolled ref that the browser
+    // can reset; pendingFocus is the controlled state that tells us what to do.
+    @State private var pendingFocus: NameDescField = .name
+
     // Track whether the initial focus has been applied
     @State private var hasAppliedInitialFocus = false
 
@@ -174,6 +183,7 @@ struct HabitFormView: View {
             startOnNameDesc = initialFocus?.isNameDescription == true
         }
         self._showingNameDescription = State(initialValue: startOnNameDesc)
+        self._pendingFocus = State(initialValue: initialFocus == .description ? .description : .name)
 
         // Start at the compact height when opening the name/description editor,
         // or .medium for the main form.
@@ -322,7 +332,7 @@ struct HabitFormView: View {
             Section {
                 // Name button — shows truncated name, taps to edit
                 Button {
-                    focusedField = .name
+                    pendingFocus = .name
                     showingNameDescription = true
                 } label: {
                     if trimmedName.isEmpty {
@@ -337,7 +347,7 @@ struct HabitFormView: View {
 
                 // Description button — shows truncated description, taps to edit
                 Button {
-                    focusedField = .description
+                    pendingFocus = .description
                     showingNameDescription = true
                 } label: {
                     if description.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -398,13 +408,13 @@ struct HabitFormView: View {
             .padding()
         }
         .onAppear {
-            // Ensure focus is set when the editor appears. If a button tap
-            // already set focusedField, this is a no-op. Otherwise (e.g. initial
-            // open), default to the name field — or description if that was the
-            // initialFocus. Like calling ref.current.focus() in useEffect.
-            if focusedField == nil {
-                focusedField = (initialFocus == .description) ? .description : .name
-            }
+            // Apply the pending focus when the editor appears.
+            // We read from pendingFocus (a @State that survives the ZStack
+            // cross-fade) rather than focusedField (@FocusState which SwiftUI
+            // resets to nil when the target TextField isn't in the hierarchy).
+            // Like calling ref.current.focus() in useEffect based on a state
+            // variable, not the DOM's current activeElement.
+            focusedField = pendingFocus
         }
         // Auto-expand the sheet to .large when content outgrows the compact
         // detent. Like a React useEffect that watches content length and
