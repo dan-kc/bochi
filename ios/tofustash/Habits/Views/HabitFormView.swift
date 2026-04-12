@@ -338,8 +338,9 @@ struct HabitFormView: View {
     private var nameDescriptionEditor: some View {
         // ScrollViewReader lets us programmatically scroll to a specific child
         // view by ID — like calling element.scrollIntoView() in the DOM.
-        // We use it to auto-scroll to the bottom anchor whenever the user types,
-        // keeping the cursor visible above the keyboard.
+        // Used only for initial positioning when the editor opens with
+        // description focused — ongoing cursor tracking is handled by
+        // SwiftUI's built-in keyboard avoidance.
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -352,16 +353,11 @@ struct HabitFormView: View {
 
                     // axis: .vertical makes this a multiline text field (like <textarea>).
                     // .lineLimit(5...) means at least 5 lines tall, grows as needed.
+                    // The .id lets ScrollViewReader target this field for initial scroll.
                     TextField("Description", text: $description, axis: .vertical)
                         .focused($focusedField, equals: .description)
                         .lineLimit(5...)
-
-                    // Invisible anchor at the bottom of the content. When the user
-                    // types in the description, we scrollTo this anchor so the cursor
-                    // (which is at the end of the growing text) stays visible above
-                    // the keyboard. Like a <div ref={bottomRef}/> that you
-                    // scrollIntoView() in a React useEffect.
-                    Color.clear.frame(height: 1).id("bottom")
+                        .id("description")
                 }
                 .padding()
             }
@@ -374,33 +370,21 @@ struct HabitFormView: View {
                 // variable, not the DOM's current activeElement.
                 focusedField = pendingFocus
 
-                // If focusing description, scroll to the bottom anchor immediately
-                // so the cursor is visible from the start (not off-screen requiring
-                // the first keystroke to trigger the scroll).
+                // If focusing description, scroll to show the bottom of the
+                // description field (where the cursor is placed by default).
+                // DispatchQueue.main.async defers to the next run loop tick so
+                // SwiftUI finishes layout first — like setTimeout(fn, 0) in React.
                 if pendingFocus == .description {
-                    // DispatchQueue.main.async defers the scroll to the next run loop
-                    // tick, giving SwiftUI time to lay out the ScrollView content
-                    // first. Without this, scrollTo fires before layout is complete
-                    // and has no effect. Like using setTimeout(fn, 0) in React to
-                    // defer a DOM operation until after the browser paints.
                     DispatchQueue.main.async {
-                        proxy.scrollTo("bottom", anchor: .bottom)
+                        proxy.scrollTo("description", anchor: .bottom)
                     }
                 }
             }
-            // Auto-scroll to keep cursor visible when typing in the description.
-            // When the user adds a new line or text wraps, the content grows
-            // downward. Without this, the cursor would disappear behind the
-            // keyboard or below the visible area.
-            .onChange(of: description) { _, _ in
-                if focusedField == .description {
-                    // .bottom anchor positions the anchor at the bottom edge of
-                    // the visible area — right above the keyboard.
-                    withAnimation(.easeOut(duration: 0.1)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                }
-            }
+            // No .onChange scroll handler — SwiftUI's built-in keyboard avoidance
+            // tracks the cursor position within the focused TextField and scrolls
+            // the parent ScrollView automatically. Manually scrolling to a fixed
+            // anchor would override this, jumping to the bottom even when the
+            // cursor is in the middle of the text.
         }
     }
 
