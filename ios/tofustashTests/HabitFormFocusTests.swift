@@ -148,4 +148,85 @@ struct HabitFormFocusTests {
         let desc = "Line 1\nLine 2\nLine 3"
         #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == false)
     }
+
+    // MARK: - buildPillData
+
+    // buildPillData is a static/pure function that returns the data for the pill
+    // row (Tags, Difficulty, Frequency). This lets us test the logic without
+    // needing to instantiate a full SwiftUI view.
+    //
+    // Key behavior: the Tags pill should ALWAYS appear in the list, regardless
+    // of whether tags are applied. When tags are applied, its `isSet` flag
+    // should be true (renders orange), matching the frequency/difficulty pattern.
+
+    @Test func tagsPillAlwaysPresent_noTags() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyRank: nil,
+            frequency: nil
+        )
+        // Tags pill should exist even when no tags are applied
+        let tagsPill = pills.first { $0.id == "tags" }
+        #expect(tagsPill != nil)
+        #expect(tagsPill?.isSet == false)
+        #expect(tagsPill?.label == "Tags")
+    }
+
+    @Test func tagsPillAlwaysPresent_withTags() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: true,
+            difficultyRank: nil,
+            frequency: nil
+        )
+        // Tags pill should still exist when tags are applied, but highlighted orange
+        let tagsPill = pills.first { $0.id == "tags" }
+        #expect(tagsPill != nil)
+        #expect(tagsPill?.isSet == true)
+        #expect(tagsPill?.label == "Tags")
+    }
+
+    @Test func pillOrderIsTagsDifficultyFrequency() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyRank: nil,
+            frequency: nil
+        )
+        #expect(pills.count == 3)
+        #expect(pills[0].id == "tags")
+        #expect(pills[1].id == "difficulty")
+        #expect(pills[2].id == "frequency")
+    }
+
+    @Test func difficultyPillIsSetWhenRanked() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyRank: "hard",
+            frequency: nil
+        )
+        let diffPill = pills.first { $0.id == "difficulty" }
+        #expect(diffPill?.isSet == true)
+    }
+
+    @Test func frequencyPillShowsSummaryWhenSet() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyRank: nil,
+            frequency: 1.0  // 1/day
+        )
+        let freqPill = pills.first { $0.id == "frequency" }
+        #expect(freqPill?.isSet == true)
+        // Should show the formatted summary, not "Frequency"
+        #expect(freqPill?.label != "Frequency")
+    }
+
+    @Test func frequencyPillShowsDefaultLabelWhenUnset() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyRank: nil,
+            frequency: nil
+        )
+        let freqPill = pills.first { $0.id == "frequency" }
+        #expect(freqPill?.isSet == false)
+        #expect(freqPill?.label == "Frequency")
+    }
 }

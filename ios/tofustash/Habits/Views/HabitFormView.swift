@@ -38,9 +38,6 @@ enum HabitFormFocus: Equatable {
 }
 
 // The main habit form — handles both creating new habits and editing existing ones.
-//
-// DRY: a single view with a mode enum instead of two separate views.
-// Like React's pattern of `<HabitForm mode="new" />` vs `<HabitForm mode="change" habit={habit} />`.
 struct HabitFormView: View {
     let mode: HabitFormMode
     let initialFocus: HabitFormFocus?
@@ -390,12 +387,18 @@ struct HabitFormView: View {
                 PillRow(pills: buildPills())
             }
 
-            // Section 3: Tag pills — shown only when tags are applied
+            // Section 3: Tag pills — shown only when tags are applied.
+            // The entire section is a tap target to open the tags modal.
+            // In React, this is like wrapping a <div> with onClick instead of
+            // putting onClick on each child. contentShape(Rectangle()) makes the
+            // whitespace tappable too — without it, only the text/pills respond.
             if !habitTags.isEmpty {
                 Section {
-                    TagPillsRow(tags: habitTags) {
-                        showingTags = true
-                    }
+                    TagPillsRow(tags: habitTags)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showingTags = true
                 }
             }
         }
@@ -449,42 +452,50 @@ struct HabitFormView: View {
         }
     }
 
-    // Build the pill items for the pill row
-    private func buildPills() -> [PillItem] {
-        var pills: [PillItem] = []
-
-        // Tags pill — only show if no tags are currently applied.
-        // When tags exist, they appear in the TagPillsRow below instead.
-        if habitTags.isEmpty {
-            pills.append(PillItem(
-                id: "tags",
-                label: "Tags",
-                icon: "tag",
-                isSet: false,
-                action: { showingTags = true }
-            ))
-        }
-
-        // Difficulty pill — turns orange when set
-        pills.append(PillItem(
-            id: "difficulty",
-            label: "Difficulty",
-            icon: "chart.bar",
-            isSet: difficultyRank != nil,
-            action: { showingDifficulty = true }
-        ))
-
-        // Frequency pill — shows summary when set
+    // Pure data for the pill row — no closures, so it can be unit tested.
+    // In React terms, this is like a selector that derives render data from state,
+    // separated from the event handlers.
+    static func buildPillData(
+        hasTagsApplied: Bool,
+        difficultyRank: String?,
+        frequency: Double?
+    ) -> [PillItemData] {
         let freqLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
-        pills.append(PillItem(
-            id: "frequency",
-            label: freqLabel,
-            icon: "clock",
-            isSet: frequency != nil,
-            action: { showingFrequency = true }
-        ))
+        return [
+            // Tags pill — always shown. Orange when tags are applied.
+            PillItemData(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
+            // Difficulty pill — orange when ranked
+            PillItemData(id: "difficulty", label: "Difficulty", icon: "chart.bar", isSet: difficultyRank != nil),
+            // Frequency pill — shows formatted summary when set
+            PillItemData(id: "frequency", label: freqLabel, icon: "clock", isSet: frequency != nil),
+        ]
+    }
 
-        return pills
+    // Build the pill items for the pill row, attaching actions to the pure data.
+    private func buildPills() -> [PillItem] {
+        let data = Self.buildPillData(
+            hasTagsApplied: !habitTags.isEmpty,
+            difficultyRank: difficultyRank,
+            frequency: frequency
+        )
+
+        // Map each data item to a PillItem with the appropriate action closure.
+        // Like adding onClick handlers to stateless component props in React.
+        let actions: [String: () -> Void] = [
+            "tags": { showingTags = true },
+            "difficulty": { showingDifficulty = true },
+            "frequency": { showingFrequency = true },
+        ]
+
+        return data.map { item in
+            PillItem(
+                id: item.id,
+                label: item.label,
+                icon: item.icon,
+                isSet: item.isSet,
+                action: actions[item.id] ?? {}
+            )
+        }
     }
 
     // Initialize form state from the habit (change mode) or defaults (new mode)
@@ -539,7 +550,11 @@ struct HabitFormView: View {
     // This lets other fields save even while the name is mid-edit.
     private func persistHabit() {
         if case .new = mode {
+            // Pass the pre-generated habitId so the saved habit matches any tag
+            // associations created during the form session. Without this, addHabit
+            // would generate a new UUID and the tags would point to nowhere.
             habitStore.addHabit(
+                id: habitId,
                 name: name,
                 description: description,
                 frequency: frequency,

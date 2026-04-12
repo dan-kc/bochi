@@ -39,3 +39,13 @@ struct PillItem: Identifiable {
     let isSet: Bool           // true = orange, false = gray
     let action: () -> Void    // called when tapped — like onClick in React
 }
+
+// Pure data version of PillItem (no closure) for unit testing pill-building logic.
+// In React terms, this separates the "what to render" data from the "what to do on click"
+// handler, so the data part can be tested without needing a UI.
+struct PillItemData: Identifiable {
+    let id: String
+    let label: String
+    let icon: String
+    let isSet: Bool
+}

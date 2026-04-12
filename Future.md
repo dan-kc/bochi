@@ -9,7 +9,7 @@ Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, 
 
 Change the behaviour of the Habit new/change form in the following way:
 
-In the Habit new/change form, a user should be able to Click on the whitespace to open the main tags section. Instead of having each tag open up the tags modal, ensure that whole section is the button effectively. You should also remove the buttons from the tags themselves too
+In the Habit new/change form, a user should be able to Click on the whitespace to open the main tags section. Instead of having each tag open up the tags modal, ensure that whole section is the button effectively. You should also remove the buttons from the tags themselves too, as it should all be covered from touching the section. Also, keep the "tags" pill in the pill list section when a tag is added. Currently, if there is one or more tags then it will automaticaaly remove itself from the pill list. I want it to still feature in the pill list but be hilighted orange, similar to the frequency pill but have it still say "tags".
 
 # Add a "tick" to the name/description edit modal. It should have an "x" and a "tick", if you click the x it should ask "Are you sure you want to discard changes?" Also this behaviour should replicate if I touch outside of the modal.
 

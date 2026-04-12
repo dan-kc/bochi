@@ -46,7 +46,7 @@ final class HabitStore {
     // would produce a warning. There's no JS equivalent — JS never warns about
     // unused return values.
     @discardableResult
-    func addHabit(name: String, description: String = "", frequency: Double? = nil, difficultyRank: String? = nil) -> Habit? {
+    func addHabit(id: String? = nil, name: String, description: String = "", frequency: Double? = nil, difficultyRank: String? = nil) -> Habit? {
         // .trimmingCharacters(in: .whitespaces) is like .trim() in JS.
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
 
@@ -61,9 +61,9 @@ final class HabitStore {
         let now = Date() // Date() with no args = current time, like `new Date()` in JS
 
         let habit = Habit(
-            // UUID().uuidString generates a random UUID string like "A1B2C3D4-..."
+            // Use the provided ID (for tag associations) or generate a new one.
             // Similar to crypto.randomUUID() in JS.
-            id: UUID().uuidString,
+            id: id ?? UUID().uuidString,
             name: trimmedName,
             description: description,
             createdAt: now,

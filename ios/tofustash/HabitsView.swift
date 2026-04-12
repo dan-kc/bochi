@@ -115,11 +115,13 @@ struct HabitsView: View {
                     }
                 }
 
-                // Row 4: Tag pills — colored with hex code backgrounds
+                // Row 4: Tag pills — colored with hex code backgrounds.
+                // The whole row is tappable via onTapGesture (no per-tag buttons).
                 if !tags.isEmpty {
-                    TagPillsRow(tags: tags) {
-                        openChangeForm(habit, focus: .tags)
-                    }
+                    TagPillsRow(tags: tags)
+                        .onTapGesture {
+                            openChangeForm(habit, focus: .tags)
+                        }
                 }
             }
             // .frame(maxWidth:) stretches the VStack to fill the full row width.

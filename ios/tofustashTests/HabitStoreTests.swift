@@ -340,4 +340,31 @@ struct HabitStoreTests {
         #expect(updated.name == "Exercise")
         #expect(updated.difficultyRank == "m")
     }
+
+    // MARK: - Adding with pre-generated ID
+
+    // When creating a new habit, tags can be associated before the habit is saved
+    // (using a pre-generated ID). The addHabit method must accept this ID so the
+    // saved habit matches the tag associations. Like passing a UUID from a React
+    // form's useState to the API call instead of letting the backend generate one.
+
+    @Test func addHabitWithProvidedIdUsesIt() {
+        let sut = makeSUT()
+        let preGeneratedId = "my-custom-id-123"
+
+        let habit = sut.addHabit(id: preGeneratedId, name: "Exercise")
+
+        #expect(habit != nil)
+        #expect(habit?.id == preGeneratedId)
+    }
+
+    @Test func addHabitWithoutIdGeneratesOne() {
+        let sut = makeSUT()
+
+        let habit = sut.addHabit(name: "Exercise")
+
+        #expect(habit != nil)
+        // Should still generate a UUID when no id is provided
+        #expect(!habit!.id.isEmpty)
+    }
 }
