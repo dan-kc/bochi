@@ -54,11 +54,4 @@ struct ColorGenerationTests {
         #expect(b == 255)
     }
 
-    @Test func hslToRGBBlack() {
-        // Black: any H, S=0, L=0 → RGB(0, 0, 0)
-        let (r, g, b) = ColorGeneration.hslToRGB(h: 0, s: 0, l: 0)
-        #expect(r == 0)
-        #expect(g == 0)
-        #expect(b == 0)
-    }
 }

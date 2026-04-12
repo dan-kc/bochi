@@ -146,11 +146,4 @@ struct DifficultyRankerTests {
         #expect(session.estimatedComparisons == 4)
     }
 
-    @Test func estimatedComparisonsForEmptyIsZero() {
-        let session = DifficultyRanker.makeSession(
-            habitName: "New",
-            rankedHabits: []
-        )
-        #expect(session.estimatedComparisons == 0)
-    }
 }

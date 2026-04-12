@@ -36,7 +36,7 @@ struct AuthManagerTests {
         #expect(manager.isLoading == false)
     }
 
-    @Test func bootstrapWithStoredTokensRestoresUser() async {
+    @Test func bootstrapWithStoredTokensRestoresUserAndRefreshes() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
         let tokens = TestHelpers.makeTokens(userId: "user-456")
@@ -51,19 +51,7 @@ struct AuthManagerTests {
         #expect(manager.user?.isAnonymous == false)
         #expect(api.anonymousAuthCallCount == 0)
         #expect(manager.isLoading == false)
-    }
-
-    @Test func bootstrapWithStoredTokensAttemptsRefresh() async {
-        let api = MockAuthAPIClient()
-        let storage = MockTokenStorage()
-        let tokens = TestHelpers.makeTokens(userId: "user-456")
-        storage.storedTokens = tokens
-        storage.storedIsAnonymous = false
-        api.refreshTokensResult = .success(tokens)
-
-        let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
-        await manager.bootstrap()
-
+        // Verifies refresh was attempted with the stored token
         #expect(api.refreshTokensCallCount == 1)
         #expect(api.lastRefreshToken == tokens.refreshToken)
     }
@@ -143,28 +131,13 @@ struct AuthManagerTests {
 
     // MARK: - Claim Account
 
-    @Test func claimAccountSendsCurrentAccessToken() async throws {
+    @Test func claimAccountConvertsToNonAnonymous() async throws {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
         let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
         api.anonymousAuthResult = .success(anonTokens)
 
         let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
-        await manager.bootstrap()
-
-        let claimTokens = TestHelpers.makeTokens(userId: "claimed-user")
-        api.claimAccountResult = .success(claimTokens)
-
-        try await manager.claimAccount(email: "claim@example.com", password: "password123")
-
-        #expect(api.claimAccountCallCount == 1)
-        #expect(api.lastClaimAccessToken == anonTokens.accessToken)
-    }
-
-    @Test func claimAccountConvertsToNonAnonymous() async throws {
-        let (manager, api, storage) = makeSUT()
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
         await manager.bootstrap()
 
         #expect(manager.isAnonymous == true)
@@ -174,6 +147,9 @@ struct AuthManagerTests {
 
         try await manager.claimAccount(email: "claim@example.com", password: "password123")
 
+        // Verifies the current access token was sent for claiming
+        #expect(api.claimAccountCallCount == 1)
+        #expect(api.lastClaimAccessToken == anonTokens.accessToken)
         #expect(manager.user?.id == "claimed-user")
         #expect(manager.isAnonymous == false)
         #expect(storage.storedIsAnonymous == false)

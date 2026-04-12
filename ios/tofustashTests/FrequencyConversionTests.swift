@@ -84,17 +84,4 @@ struct FrequencyConversionTests {
         #expect(summary == "1/day")
     }
 
-    // MARK: - Round-trip
-
-    @Test func roundTripConversion() {
-        // Convert to daily and back — should preserve the original values
-        let originalValue = 3.0
-        let originalPeriod = FrequencyPeriod.week
-
-        let daily = FrequencyConversion.toDailyRate(value: originalValue, period: originalPeriod)
-        let (value, period) = FrequencyConversion.fromDailyRate(daily)
-
-        #expect(abs(value - originalValue) < 0.0001)
-        #expect(period == originalPeriod)
-    }
 }

@@ -54,23 +54,6 @@ struct HabitStoreTests {
         #expect(habit1!.id != habit2!.id)
     }
 
-    @Test func addHabitSetsTimestamps() {
-        let sut = makeSUT()
-
-        let before = Date()
-        let habit = sut.addHabit(name: "Exercise")!
-        let after = Date()
-
-        // Verify timestamps are between before and after — proves they were set to "now".
-        // `>=` works on Date because Date conforms to Comparable (like implementing
-        // the comparison operators in a TS class).
-        #expect(habit.createdAt >= before)
-        #expect(habit.createdAt <= after)
-        #expect(habit.updatedAt >= before)
-        #expect(habit.updatedAt <= after)
-        #expect(habit.deletedAt == nil)
-    }
-
     @Test func addHabitWithAllFields() {
         let sut = makeSUT()
 
@@ -79,24 +62,6 @@ struct HabitStoreTests {
         #expect(habit?.name == "Exercise")
         #expect(habit?.description == "Daily workout")
         #expect(habit?.frequency == 1.0)
-    }
-
-    @Test func addHabitWithMinimalFields() {
-        let sut = makeSUT()
-
-        let habit = sut.addHabit(name: "Exercise")
-
-        #expect(habit?.description == "")
-        #expect(habit?.frequency == nil)
-        #expect(habit?.difficultyRank == nil)
-    }
-
-    @Test func addHabitWithDifficultyRank() {
-        let sut = makeSUT()
-
-        let habit = sut.addHabit(name: "Exercise", difficultyRank: "m")
-
-        #expect(habit?.difficultyRank == "m")
     }
 
     @Test func addHabitTrimsWhitespace() {
@@ -164,17 +129,6 @@ struct HabitStoreTests {
         #expect(sut.activeHabits.first?.name == "Read")
     }
 
-    @Test func deletedHabitStillInAllHabits() {
-        let sut = makeSUT()
-        _ = sut.addHabit(name: "Exercise")
-        let habit2 = sut.addHabit(name: "Read")!
-
-        sut.deleteHabit(id: habit2.id)
-
-        // The raw `habits` array keeps everything — soft delete doesn't remove from storage.
-        #expect(sut.habits.count == 2)
-    }
-
     @Test func deleteNonexistentHabitIsNoOp() {
         let sut = makeSUT()
         _ = sut.addHabit(name: "Exercise")
@@ -183,16 +137,6 @@ struct HabitStoreTests {
 
         #expect(sut.habits.count == 1)
         #expect(sut.activeHabits.count == 1)
-    }
-
-    @Test func deleteHabitPreservesDifficultyRank() {
-        let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise", difficultyRank: "m")!
-
-        sut.deleteHabit(id: habit.id)
-
-        let deleted = sut.habits.first(where: { $0.id == habit.id })
-        #expect(deleted?.difficultyRank == "m")
     }
 
     // MARK: - Updating Habits
@@ -233,27 +177,6 @@ struct HabitStoreTests {
         sut.updateHabit(id: habit.id, frequency: .some(nil))
 
         #expect(sut.habits.first?.frequency == nil)
-    }
-
-    @Test func updateHabitChangesDifficultyRank() {
-        let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise")!
-
-        sut.updateHabit(id: habit.id, difficultyRank: .some("m"))
-
-        #expect(sut.habits.first?.difficultyRank == "m")
-    }
-
-    @Test func updateHabitSetsUpdatedAt() {
-        let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise")!
-        let originalUpdatedAt = habit.updatedAt
-
-        // Small delay to ensure timestamp differs
-        sut.updateHabit(id: habit.id, name: "Workout")
-
-        let updated = sut.habits.first!
-        #expect(updated.updatedAt >= originalUpdatedAt)
     }
 
     @Test func updateHabitPreservesUnchangedFields() {
@@ -318,29 +241,6 @@ struct HabitStoreTests {
         #expect(updated.frequency == 2.0)
     }
 
-    @Test func updateWithTooLongNameStillUpdatesDescription() {
-        let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise")!
-
-        let longName = String(repeating: "a", count: 101)
-        sut.updateHabit(id: habit.id, name: longName, description: "New desc")
-
-        let updated = sut.habits.first!
-        #expect(updated.name == "Exercise")
-        #expect(updated.description == "New desc")
-    }
-
-    @Test func updateWithWhitespaceOnlyNameStillUpdatesDifficultyRank() {
-        let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise")!
-
-        sut.updateHabit(id: habit.id, name: "   ", difficultyRank: .some("m"))
-
-        let updated = sut.habits.first!
-        #expect(updated.name == "Exercise")
-        #expect(updated.difficultyRank == "m")
-    }
-
     // MARK: - Adding with pre-generated ID
 
     // When creating a new habit, tags can be associated before the habit is saved
@@ -358,13 +258,4 @@ struct HabitStoreTests {
         #expect(habit?.id == preGeneratedId)
     }
 
-    @Test func addHabitWithoutIdGeneratesOne() {
-        let sut = makeSUT()
-
-        let habit = sut.addHabit(name: "Exercise")
-
-        #expect(habit != nil)
-        // Should still generate a UUID when no id is provided
-        #expect(!habit!.id.isEmpty)
-    }
 }

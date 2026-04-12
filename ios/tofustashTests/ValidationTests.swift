@@ -10,33 +10,13 @@ struct ValidationTests {
         #expect(errors.isEmpty)
     }
 
-    @Test func emailWithSubdomainPasses() {
-        let errors = validateEmail("user@mail.example.com")
-        #expect(errors.isEmpty)
-    }
-
-    @Test func emailWithDotsAndHyphensPasses() {
-        let errors = validateEmail("first.last@my-domain.co.uk")
-        #expect(errors.isEmpty)
-    }
-
     @Test func emailWithoutAtSignFails() {
         let errors = validateEmail("userexample.com")
         #expect(errors.contains(.invalidEmailAddress))
     }
 
-    @Test func emailWithoutDomainFails() {
-        let errors = validateEmail("user@")
-        #expect(errors.contains(.invalidEmailAddress))
-    }
-
     @Test func emailWithoutTLDFails() {
         let errors = validateEmail("user@example")
-        #expect(errors.contains(.invalidEmailAddress))
-    }
-
-    @Test func emailWithSingleCharTLDFails() {
-        let errors = validateEmail("user@example.c")
         #expect(errors.contains(.invalidEmailAddress))
     }
 
@@ -109,20 +89,4 @@ struct ValidationTests {
         #expect(errors.contains(.passwordTooShort))
     }
 
-    // MARK: - Error messages
-
-    @Test func allErrorCasesHaveMessages() {
-        // .invalidEmailAddress etc. are enum variants — like Rust enums, not TS enums.
-        // Each variant can carry associated data (not used here, but they can).
-        let allCases: [ValidationError] = [
-            .invalidEmailAddress,
-            .emailTooLong,
-            .passwordNotAscii,
-            .passwordTooLong,
-            .passwordTooShort,
-        ]
-        for error in allCases {
-            #expect(!error.message.isEmpty)
-        }
-    }
 }

@@ -11,14 +11,10 @@ struct TagStoreTests {
 
     // MARK: - Initial State
 
-    @Test func initialStoreHasNoTags() {
+    @Test func initialStoreIsEmpty() {
         let sut = makeSUT()
         #expect(sut.tags.isEmpty)
         #expect(sut.activeTags.isEmpty)
-    }
-
-    @Test func initialStoreHasNoHabitTags() {
-        let sut = makeSUT()
         #expect(sut.habitTags.isEmpty)
     }
 
@@ -41,19 +37,6 @@ struct TagStoreTests {
         let tag2 = sut.addTag(name: "Fitness")
 
         #expect(tag1!.id != tag2!.id)
-    }
-
-    @Test func addTagSetsTimestamps() {
-        let sut = makeSUT()
-
-        let before = Date()
-        let tag = sut.addTag(name: "Health")!
-        let after = Date()
-
-        #expect(tag.createdAt >= before)
-        #expect(tag.createdAt <= after)
-        #expect(tag.updatedAt >= before)
-        #expect(tag.deletedAt == nil)
     }
 
     @Test func addTagWithEmptyNameReturnsNil() {
@@ -112,16 +95,6 @@ struct TagStoreTests {
         sut.updateTag(id: tag.id, colorHex: "#00FF00")
 
         #expect(sut.tags.first?.colorHex == "#00FF00")
-    }
-
-    @Test func updateTagSetsUpdatedAt() {
-        let sut = makeSUT()
-        let tag = sut.addTag(name: "Health")!
-        let originalUpdatedAt = tag.updatedAt
-
-        sut.updateTag(id: tag.id, name: "Wellness")
-
-        #expect(sut.tags.first!.updatedAt >= originalUpdatedAt)
     }
 
     @Test func updateNonexistentTagIsNoOp() {

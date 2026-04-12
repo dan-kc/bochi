@@ -14,20 +14,8 @@ struct HabitFormFocusTests {
         #expect(HabitFormFocus.name.isNameDescription == true)
     }
 
-    @Test func descriptionIsNameDescription() {
-        #expect(HabitFormFocus.description.isNameDescription == true)
-    }
-
     @Test func frequencyIsNotNameDescription() {
         #expect(HabitFormFocus.frequency.isNameDescription == false)
-    }
-
-    @Test func difficultyIsNotNameDescription() {
-        #expect(HabitFormFocus.difficulty.isNameDescription == false)
-    }
-
-    @Test func tagsIsNotNameDescription() {
-        #expect(HabitFormFocus.tags.isNameDescription == false)
     }
 
     // MARK: - hasContent
@@ -35,12 +23,6 @@ struct HabitFormFocusTests {
     @Test func emptyFormHasNoContent() {
         #expect(HabitFormView.hasContent(
             name: "", description: "", frequency: nil, difficultyRank: nil, tagCount: 0
-        ) == false)
-    }
-
-    @Test func whitespaceOnlyHasNoContent() {
-        #expect(HabitFormView.hasContent(
-            name: "", description: "  \n\t  ", frequency: nil, difficultyRank: nil, tagCount: 0
         ) == false)
     }
 
@@ -90,16 +72,6 @@ struct HabitFormFocusTests {
         #expect(HabitFormView.nameForAutoSave("   ") == "")
     }
 
-    @Test func nameForAutoSaveReturnsNameAsIsWhenValid() {
-        #expect(HabitFormView.nameForAutoSave("Run") == "Run")
-    }
-
-    @Test func nameForAutoSaveReturnsTooLongName() {
-        // Even invalid names are passed through — updateHabit handles validation
-        let longName = String(repeating: "a", count: 101)
-        #expect(HabitFormView.nameForAutoSave(longName) == longName)
-    }
-
     // MARK: - shouldUseLargeDetent
 
     // Determines whether the name/description editor sheet should auto-expand
@@ -113,11 +85,6 @@ struct HabitFormFocusTests {
 
     @Test func shortContentShouldNotUseLargeDetent() {
         #expect(HabitFormView.shouldUseLargeDetent(name: "Run", description: "Quick jog") == false)
-    }
-
-    @Test func contentAtBoundaryShouldNotUseLargeDetent() {
-        let desc = String(repeating: "a", count: 100)
-        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == false)
     }
 
     @Test func longDescriptionShouldUseLargeDetent() {

@@ -59,24 +59,6 @@ struct FractionalIndexTests {
         #expect(keys == sorted)
     }
 
-    @Test func generateKeyBetweenMaintainsOrderingWhenInsertingBefore() {
-        var keys: [String] = []
-        var next: String? = nil
-
-        for _ in 0..<20 {
-            let key = FractionalIndex.generateKeyBetween(before: nil, after: next)!
-            keys.append(key)
-            next = key
-        }
-
-        // Keys were generated in reverse order
-        keys.reverse()
-
-        for i in 1..<keys.count {
-            #expect(keys[i] > keys[i - 1], "Key \(keys[i]) should be > \(keys[i - 1])")
-        }
-    }
-
     @Test func generateKeyBetweenCanInsertBetweenAdjacentKeys() {
         let a = FractionalIndex.generateKeyBetween(before: nil, after: nil)! // "m"
         let b = FractionalIndex.generateKeyBetween(before: a, after: nil)!

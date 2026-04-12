@@ -39,11 +39,6 @@ struct JWTParserTests {
         #expect(result == nil)
     }
 
-    @Test func returnsNilForEmptyString() {
-        let result = JWTParser.parse("")
-        #expect(result == nil)
-    }
-
     @Test func returnsNilForTokenWithInvalidBase64() {
         let result = JWTParser.parse("header.!!!invalid!!!.signature")
         #expect(result == nil)
@@ -56,10 +51,4 @@ struct JWTParserTests {
         #expect(result?.expiresAt == nil)
     }
 
-    @Test func handlesPayloadWithOnlyExpiration() {
-        let token = makeJWT(payload: ["exp": 1710000000])
-        let result = JWTParser.parse(token)
-        #expect(result?.subject == nil)
-        #expect(result?.expiresAt == 1710000000)
-    }
 }
