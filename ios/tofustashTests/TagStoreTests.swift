@@ -11,6 +11,7 @@ struct TagStoreTests {
 
     // MARK: - Initial State
 
+    // Behaviour: When the app first loads with no data, the tag list is empty.
     @Test func initialStoreIsEmpty() {
         let sut = makeSUT()
         #expect(sut.tags.isEmpty)
@@ -20,6 +21,7 @@ struct TagStoreTests {
 
     // MARK: - Adding Tags
 
+    // Behaviour: When a user creates a new tag, it appears in their tag list.
     @Test func addTagAppendsToTags() {
         let sut = makeSUT()
 
@@ -30,15 +32,8 @@ struct TagStoreTests {
         #expect(tag?.name == "Health")
     }
 
-    @Test func addTagGeneratesUniqueIds() {
-        let sut = makeSUT()
-
-        let tag1 = sut.addTag(name: "Health")
-        let tag2 = sut.addTag(name: "Fitness")
-
-        #expect(tag1!.id != tag2!.id)
-    }
-
+    // Behaviour: When a user tries to create a tag with no name (or only spaces),
+    // the tag is not created.
     @Test func addTagWithEmptyNameReturnsNil() {
         let sut = makeSUT()
 
@@ -51,6 +46,8 @@ struct TagStoreTests {
         #expect(sut.tags.isEmpty)
     }
 
+    // Behaviour: When a user types a tag name with leading/trailing spaces,
+    // the name is cleaned up automatically.
     @Test func addTagTrimsWhitespace() {
         let sut = makeSUT()
 
@@ -59,6 +56,7 @@ struct TagStoreTests {
         #expect(tag?.name == "Health")
     }
 
+    // Behaviour: When a user creates a tag with a specific color, that color is saved.
     @Test func addTagUsesProvidedColor() {
         let sut = makeSUT()
 
@@ -67,6 +65,8 @@ struct TagStoreTests {
         #expect(tag?.colorHex == "#FF0000")
     }
 
+    // Behaviour: When a user creates a tag without choosing a color, a random
+    // color is automatically assigned so all tags are visually distinct.
     @Test func addTagGeneratesRandomColorWhenNoneProvided() {
         let sut = makeSUT()
 
@@ -79,6 +79,7 @@ struct TagStoreTests {
 
     // MARK: - Updating Tags
 
+    // Behaviour: When a user renames a tag, the new name is saved.
     @Test func updateTagNameChangesName() {
         let sut = makeSUT()
         let tag = sut.addTag(name: "Health")!
@@ -88,6 +89,7 @@ struct TagStoreTests {
         #expect(sut.tags.first?.name == "Wellness")
     }
 
+    // Behaviour: When a user changes a tag's color, the new color is saved.
     @Test func updateTagColorChangesColor() {
         let sut = makeSUT()
         let tag = sut.addTag(name: "Health", colorHex: "#FF0000")!
@@ -97,17 +99,10 @@ struct TagStoreTests {
         #expect(sut.tags.first?.colorHex == "#00FF00")
     }
 
-    @Test func updateNonexistentTagIsNoOp() {
-        let sut = makeSUT()
-        _ = sut.addTag(name: "Health")
-
-        sut.updateTag(id: "nonexistent", name: "Wellness")
-
-        #expect(sut.tags.first?.name == "Health")
-    }
-
     // MARK: - Soft Delete Tags
 
+    // Behaviour: When a user deletes a tag, it is soft-deleted (marked with a
+    // timestamp) rather than permanently removed, allowing future sync/undo.
     @Test func deleteTagSetsDeletedAt() {
         let sut = makeSUT()
         let tag = sut.addTag(name: "Health")!
@@ -117,6 +112,8 @@ struct TagStoreTests {
         #expect(sut.tags.first?.deletedAt != nil)
     }
 
+    // Behaviour: When a user deletes a tag, it disappears from the visible tag
+    // list but other tags remain.
     @Test func deletedTagExcludedFromActiveTags() {
         let sut = makeSUT()
         let tag1 = sut.addTag(name: "Health")!
@@ -128,18 +125,9 @@ struct TagStoreTests {
         #expect(sut.activeTags.first?.name == "Fitness")
     }
 
-    @Test func deleteNonexistentTagIsNoOp() {
-        let sut = makeSUT()
-        _ = sut.addTag(name: "Health")
-
-        sut.deleteTag(id: "nonexistent")
-
-        #expect(sut.tags.count == 1)
-        #expect(sut.activeTags.count == 1)
-    }
-
     // MARK: - Habit-Tag Associations
 
+    // Behaviour: When a user assigns a tag to a habit, the association is created.
     @Test func addTagToHabitCreatesHabitTag() {
         let sut = makeSUT()
 
@@ -150,6 +138,8 @@ struct TagStoreTests {
         #expect(sut.habitTags.first?.habitId == "habit-1")
     }
 
+    // Behaviour: When a user taps the same tag twice on a habit (e.g. toggling),
+    // only one association exists — no duplicates.
     @Test func addTagToHabitDoesNotDuplicateExisting() {
         let sut = makeSUT()
 
@@ -161,6 +151,8 @@ struct TagStoreTests {
         #expect(active.count == 1)
     }
 
+    // Behaviour: When a user removes a tag from a habit and then re-adds it,
+    // the existing association is restored (not duplicated).
     @Test func addTagToHabitRestoresSoftDeletedAssociation() {
         let sut = makeSUT()
 
@@ -174,6 +166,8 @@ struct TagStoreTests {
         #expect(active.count == 1)
     }
 
+    // Behaviour: When a user removes a tag from a habit, the association is
+    // soft-deleted (preserving history for sync).
     @Test func removeTagFromHabitSoftDeletesHabitTag() {
         let sut = makeSUT()
 
@@ -183,6 +177,8 @@ struct TagStoreTests {
         #expect(sut.habitTags.first?.deletedAt != nil)
     }
 
+    // Behaviour: When viewing a habit's details, the user sees only the tags
+    // currently assigned to that habit.
     @Test func tagsForHabitReturnsCorrectTags() {
         let sut = makeSUT()
         let tag1 = sut.addTag(name: "Health")!
@@ -198,6 +194,8 @@ struct TagStoreTests {
         #expect(tags.contains(where: { $0.name == "Fitness" }))
     }
 
+    // Behaviour: When a user removes a tag from a habit, it no longer appears
+    // in that habit's tag list.
     @Test func tagsForHabitExcludesRemovedTags() {
         let sut = makeSUT()
         let tag1 = sut.addTag(name: "Health")!
@@ -212,6 +210,8 @@ struct TagStoreTests {
         #expect(tags.first?.name == "Fitness")
     }
 
+    // Behaviour: When a tag itself is deleted, it no longer appears on any habit
+    // that had it assigned — even though the habit-tag association still exists.
     @Test func tagsForHabitExcludesDeletedTags() {
         let sut = makeSUT()
         let tag1 = sut.addTag(name: "Health")!

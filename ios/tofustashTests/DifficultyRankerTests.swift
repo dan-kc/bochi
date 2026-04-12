@@ -20,9 +20,9 @@ struct DifficultyRankerTests {
 
     // MARK: - Session creation
 
+    // Behaviour: When a user creates their very first habit, there are no other habits
+    // to compare against, so the difficulty ranking step is skipped entirely.
     @Test func sessionWithNoRankedHabitsIsImmediatelyComplete() {
-        // When there are no existing ranked habits, the session completes
-        // immediately — like the React effect that fires when existingHabits.length === 0
         let session = DifficultyRanker.makeSession(
             habitName: "New Habit",
             rankedHabits: []
@@ -31,6 +31,8 @@ struct DifficultyRankerTests {
         #expect(session.isComplete)
     }
 
+    // Behaviour: The first habit ever ranked gets a middle position, leaving room
+    // for future habits to be ranked above or below it.
     @Test func rankFirstHabitReturnsMiddleKey() {
         let session = DifficultyRanker.makeSession(
             habitName: "New Habit",
@@ -43,6 +45,8 @@ struct DifficultyRankerTests {
 
     // MARK: - Binary search
 
+    // Behaviour: When only one habit exists, the user only needs to answer one
+    // comparison ("Is this harder or easier than X?") to place the new habit.
     @Test func sessionWithOneHabitNeedsOneComparison() {
         let existing = makeHabit(name: "Existing", rank: "m")
         var session = DifficultyRanker.makeSession(
@@ -58,6 +62,8 @@ struct DifficultyRankerTests {
         #expect(session.isComplete)
     }
 
+    // Behaviour: When a user says their new habit is harder than all existing habits,
+    // it gets placed at the top of the difficulty list.
     @Test func rankHarderThanAllReturnsHigherKey() {
         let existing = makeHabit(name: "Existing", rank: "m")
         var session = DifficultyRanker.makeSession(
@@ -72,6 +78,8 @@ struct DifficultyRankerTests {
         #expect(rank > "m")
     }
 
+    // Behaviour: When a user says their new habit is easier than all existing habits,
+    // it gets placed at the bottom of the difficulty list.
     @Test func rankEasierThanAllReturnsLowerKey() {
         let existing = makeHabit(name: "Existing", rank: "m")
         var session = DifficultyRanker.makeSession(
@@ -86,6 +94,8 @@ struct DifficultyRankerTests {
         #expect(rank < "m")
     }
 
+    // Behaviour: When a user ranks a habit between two existing habits (harder than
+    // one, easier than the other), it gets placed correctly between them.
     @Test func rankBetweenTwoHabitsReturnsMidpointKey() {
         let hard = makeHabit(name: "Hard", rank: "t")
         let easy = makeHabit(name: "Easy", rank: "f")
@@ -110,6 +120,8 @@ struct DifficultyRankerTests {
         #expect(rank < "t")
     }
 
+    // Behaviour: Even with many habits (8), the ranking process converges efficiently
+    // via binary search — the user answers at most ~4 questions, not 8.
     @Test func binarySearchConvergesCorrectly() {
         // Create 8 habits with ordered ranks
         let ranks = ["d", "f", "h", "j", "m", "p", "r", "t"]
@@ -135,6 +147,8 @@ struct DifficultyRankerTests {
         #expect(rank < "d")
     }
 
+    // Behaviour: The app can tell the user approximately how many comparisons
+    // they'll need to make, so the ranking process feels predictable.
     @Test func estimatedComparisonsIsCorrect() {
         let habits = (0..<8).map { makeHabit(name: "H\($0)", rank: "m") }
         let session = DifficultyRanker.makeSession(

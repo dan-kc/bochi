@@ -21,6 +21,8 @@ struct AuthManagerTests {
 
     // MARK: - Bootstrap
 
+    // Behaviour: When the app launches with no saved session, it creates an anonymous account
+    // so the user can start using the app immediately without signing up.
     // async test — like an async Jest test. Swift Testing handles the await natively.
     @Test func bootstrapWithNoStoredTokensPerformsAnonymousAuth() async {
         let (manager, api, storage) = makeSUT()
@@ -36,6 +38,8 @@ struct AuthManagerTests {
         #expect(manager.isLoading == false)
     }
 
+    // Behaviour: When the app launches with a previously saved session, the user is
+    // restored to their logged-in state and tokens are refreshed for continued access.
     @Test func bootstrapWithStoredTokensRestoresUserAndRefreshes() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
@@ -56,6 +60,8 @@ struct AuthManagerTests {
         #expect(api.lastRefreshToken == tokens.refreshToken)
     }
 
+    // Behaviour: When the app launches with a saved anonymous session, the user
+    // remains anonymous (they haven't signed up yet but had data from a prior session).
     @Test func bootstrapWithStoredAnonymousTokensRestoresAnonymousUser() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
@@ -72,6 +78,7 @@ struct AuthManagerTests {
 
     // MARK: - Login
 
+    // Behaviour: When a user logs in with valid credentials, they become the authenticated user.
     // `async throws` = this test can both await and throw errors. `throws` is like
     // Rust's Result — but the test runner catches thrown errors as failures automatically.
     @Test func loginCallsAPIAndSetsUser() async throws {
@@ -92,6 +99,8 @@ struct AuthManagerTests {
         #expect(storage.storedIsAnonymous == false)
     }
 
+    // Behaviour: When a user logs in with wrong credentials, login fails and
+    // they remain on their current (anonymous) account.
     @Test func loginWithInvalidCredentialsThrows() async {
         let (manager, api, _) = makeSUT()
         let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
@@ -112,6 +121,7 @@ struct AuthManagerTests {
 
     // MARK: - Register
 
+    // Behaviour: When a user registers a new account, they become the authenticated user.
     @Test func registerCallsAPIAndSetsUser() async throws {
         let (manager, api, storage) = makeSUT()
         let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
@@ -131,6 +141,8 @@ struct AuthManagerTests {
 
     // MARK: - Claim Account
 
+    // Behaviour: When an anonymous user claims their account (signs up), their data
+    // is preserved and they become a fully authenticated user.
     @Test func claimAccountConvertsToNonAnonymous() async throws {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
@@ -157,6 +169,8 @@ struct AuthManagerTests {
 
     // MARK: - Logout
 
+    // Behaviour: When a user logs out, their session is cleared and a fresh
+    // anonymous session is created so the app remains usable.
     @Test func logoutCallsAPIAndCreatesNewAnonymousSession() async throws {
         let (manager, api, storage) = makeSUT()
         let loginTokens = TestHelpers.makeTokens(userId: "user-1")
@@ -176,6 +190,8 @@ struct AuthManagerTests {
         #expect(manager.user?.isAnonymous == true)
     }
 
+    // Behaviour: When a user logs out but the server is unreachable, the local
+    // session is still cleared so the user isn't stuck in a broken state.
     @Test func logoutStillClearsLocallyIfAPIFails() async throws {
         let (manager, api, storage) = makeSUT()
         let loginTokens = TestHelpers.makeTokens(userId: "user-1")
@@ -197,6 +213,7 @@ struct AuthManagerTests {
 
     // MARK: - Change Password
 
+    // Behaviour: When a user changes their password, the request is sent with their current session.
     @Test func changePasswordCallsAPIWithAccessToken() async throws {
         let (manager, api, storage) = makeSUT()
         let tokens = TestHelpers.makeTokens(userId: "user-1")
@@ -213,6 +230,7 @@ struct AuthManagerTests {
 
     // MARK: - Change Email
 
+    // Behaviour: When a user changes their email, the request is sent with their current session.
     @Test func changeEmailCallsAPIWithAccessToken() async throws {
         let (manager, api, storage) = makeSUT()
         let tokens = TestHelpers.makeTokens(userId: "user-1")
@@ -229,6 +247,8 @@ struct AuthManagerTests {
 
     // MARK: - Token Refresh Failure
 
+    // Behaviour: When a returning user's session has expired (server rejects refresh),
+    // they are logged out and given a fresh anonymous session instead of seeing an error.
     @Test func refreshFailsWith401FallsBackToAnonymous() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()

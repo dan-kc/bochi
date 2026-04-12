@@ -19,6 +19,8 @@ struct JWTParserTests {
         return "\(header).\(payloadBase64).\(signature)"
     }
 
+    // Behaviour: When the app receives an auth token, it correctly identifies which
+    // user it belongs to by parsing the subject claim.
     // @Test = Jest's test() / it(). The func name is the test label.
     @Test func parsesSubjectFromValidJWT() {
         let token = makeJWT(payload: ["sub": "user-123", "exp": 1710000000])
@@ -28,22 +30,30 @@ struct JWTParserTests {
         #expect(result?.subject == "user-123")
     }
 
+    // Behaviour: When the app receives an auth token, it can determine when the
+    // token expires so it knows when to refresh.
     @Test func parsesExpirationFromValidJWT() {
         let token = makeJWT(payload: ["sub": "user-123", "exp": 1710000000])
         let result = JWTParser.parse(token)
         #expect(result?.expiresAt == 1710000000)
     }
 
+    // Behaviour: When the app receives a corrupted token (e.g. network error),
+    // it gracefully returns nil instead of crashing.
     @Test func returnsNilForMalformedToken() {
         let result = JWTParser.parse("not-a-jwt")
         #expect(result == nil)
     }
 
+    // Behaviour: When the app receives a token with invalid encoding, it
+    // gracefully returns nil instead of crashing.
     @Test func returnsNilForTokenWithInvalidBase64() {
         let result = JWTParser.parse("header.!!!invalid!!!.signature")
         #expect(result == nil)
     }
 
+    // Behaviour: When a token has no expiration claim (e.g. long-lived service token),
+    // the subject is still parsed and expiresAt is nil.
     @Test func handlesPayloadWithOnlySubject() {
         let token = makeJWT(payload: ["sub": "user-456"])
         let result = JWTParser.parse(token)

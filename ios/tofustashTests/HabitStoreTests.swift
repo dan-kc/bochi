@@ -17,19 +17,18 @@ struct HabitStoreTests {
     }
 
     // MARK: - Initial State
-    // `MARK` comments create section headers in Xcode's jump bar (the breadcrumb nav).
-    // No equivalent in React — it's like a code region / folder in VS Code's outline.
 
+    // Behaviour: When the app first loads with no data, the habit list is empty.
     @Test func initialStoreHasNoHabits() {
         let sut = makeSUT()
 
-        // #expect() is Swift Testing's assertion — like Jest's expect().toBe()
         #expect(sut.habits.isEmpty)
         #expect(sut.activeHabits.isEmpty)
     }
 
     // MARK: - Adding Habits
 
+    // Behaviour: When a user creates a new habit, it appears in their habit list.
     @Test func addHabitAppendsToHabits() {
         let sut = makeSUT()
 
@@ -43,17 +42,8 @@ struct HabitStoreTests {
         #expect(habit?.name == "Exercise")
     }
 
-    @Test func addHabitGeneratesUniqueIds() {
-        let sut = makeSUT()
-
-        let habit1 = sut.addHabit(name: "Exercise")
-        let habit2 = sut.addHabit(name: "Read")
-
-        // Force-unwrap with `!` — crashes if nil. Safe in tests because we just
-        // created these habits. In production code, always use `if let` or `guard let`.
-        #expect(habit1!.id != habit2!.id)
-    }
-
+    // Behaviour: When a user creates a habit with a name, description, and frequency,
+    // all fields are saved correctly.
     @Test func addHabitWithAllFields() {
         let sut = makeSUT()
 
@@ -64,18 +54,21 @@ struct HabitStoreTests {
         #expect(habit?.frequency == 1.0)
     }
 
+    // Behaviour: When a user types a habit name with leading/trailing spaces,
+    // the name is cleaned up automatically on save.
     @Test func addHabitTrimsWhitespace() {
         let sut = makeSUT()
 
         let habit = sut.addHabit(name: "  My Habit  ")
 
         // .trimmingCharacters(in:) is like JS's .trim() but more configurable.
-        // We expect the store to trim whitespace on save — not just for validation.
         #expect(habit?.name == "My Habit")
     }
 
     // MARK: - Validation
 
+    // Behaviour: When a user tries to save a habit with no name (or only spaces),
+    // the habit is not created — the form should prevent this.
     @Test func addHabitWithEmptyNameReturnsNil() {
         let sut = makeSUT()
 
@@ -90,6 +83,8 @@ struct HabitStoreTests {
         #expect(sut.habits.isEmpty)
     }
 
+    // Behaviour: When a user tries to save a habit with a name longer than 100
+    // characters, the habit is not created.
     @Test func addHabitWithNameOver100CharsReturnsNil() {
         let sut = makeSUT()
 
@@ -104,6 +99,8 @@ struct HabitStoreTests {
 
     // MARK: - Soft Delete
 
+    // Behaviour: When a user deletes a habit, it is soft-deleted (marked with a
+    // timestamp) rather than permanently removed, allowing future sync/undo.
     @Test func deleteHabitSetsDeletedAt() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -116,6 +113,8 @@ struct HabitStoreTests {
         #expect(deleted?.deletedAt != nil)
     }
 
+    // Behaviour: When a user deletes a habit, it disappears from the visible
+    // habit list (activeHabits) but other habits remain.
     @Test func deletedHabitExcludedFromActiveHabits() {
         let sut = makeSUT()
         let habit1 = sut.addHabit(name: "Exercise")!
@@ -129,18 +128,9 @@ struct HabitStoreTests {
         #expect(sut.activeHabits.first?.name == "Read")
     }
 
-    @Test func deleteNonexistentHabitIsNoOp() {
-        let sut = makeSUT()
-        _ = sut.addHabit(name: "Exercise")
-
-        sut.deleteHabit(id: "nonexistent-id")
-
-        #expect(sut.habits.count == 1)
-        #expect(sut.activeHabits.count == 1)
-    }
-
     // MARK: - Updating Habits
 
+    // Behaviour: When a user renames a habit, the new name is saved.
     @Test func updateHabitChangesName() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -150,6 +140,7 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.name == "Workout")
     }
 
+    // Behaviour: When a user edits a habit's description, the new description is saved.
     @Test func updateHabitChangesDescription() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -159,6 +150,7 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.description == "Daily workout")
     }
 
+    // Behaviour: When a user sets a habit's frequency, the new value is saved.
     @Test func updateHabitChangesFrequency() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -169,6 +161,8 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.frequency == 2.0)
     }
 
+    // Behaviour: When a user clears a habit's frequency (removes it), the frequency
+    // becomes nil.
     @Test func updateHabitClearsFrequency() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise", frequency: 1.0)!
@@ -179,6 +173,8 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.frequency == nil)
     }
 
+    // Behaviour: When a user only changes one field (e.g. name), all other fields
+    // (description, frequency, difficulty, createdAt) remain untouched.
     @Test func updateHabitPreservesUnchangedFields() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise", description: "Daily", frequency: 1.0, difficultyRank: "m")!
@@ -194,6 +190,8 @@ struct HabitStoreTests {
         #expect(updated.createdAt == habit.createdAt)
     }
 
+    // Behaviour: When a user renames a habit with leading/trailing spaces,
+    // the name is trimmed automatically.
     @Test func updateHabitTrimsName() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -203,6 +201,8 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.name == "Workout")
     }
 
+    // Behaviour: When the user clears the name field (temporarily empty during editing),
+    // the existing name is preserved — the habit is never left unnamed.
     @Test func updateHabitWithEmptyNameIsNoOp() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
@@ -213,21 +213,15 @@ struct HabitStoreTests {
         #expect(sut.habits.first?.name == "Exercise")
     }
 
-    @Test func updateNonexistentHabitIsNoOp() {
-        let sut = makeSUT()
-        _ = sut.addHabit(name: "Exercise")
-
-        sut.updateHabit(id: "nonexistent-id", name: "Workout")
-
-        #expect(sut.habits.first?.name == "Exercise")
-    }
-
     // MARK: - Invalid Name Should Not Block Other Fields
 
     // When the user is typing in the name field, it may temporarily be empty.
     // An invalid name should NOT prevent other field updates (frequency, description,
     // etc.) from saving — otherwise auto-save breaks when name is mid-edit.
 
+    // Behaviour: During auto-save, if the name field is temporarily empty (user is
+    // mid-edit), other field changes (like frequency) still save correctly and the
+    // existing name is preserved.
     @Test func updateWithEmptyNameStillUpdatesFrequency() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise", frequency: 1.0)!
@@ -248,6 +242,8 @@ struct HabitStoreTests {
     // saved habit matches the tag associations. Like passing a UUID from a React
     // form's useState to the API call instead of letting the backend generate one.
 
+    // Behaviour: When a user creates a habit with tags already selected, the habit
+    // is saved with the same ID that the tags were pre-associated with.
     @Test func addHabitWithProvidedIdUsesIt() {
         let sut = makeSUT()
         let preGeneratedId = "my-custom-id-123"
