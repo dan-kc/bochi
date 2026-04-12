@@ -86,58 +86,6 @@ struct HabitFormFocusTests {
         #expect(HabitFormView.nameForAutoSave("   ") == "")
     }
 
-    // MARK: - shouldUseLargeDetent
-
-    // Determines whether the name/description editor sheet should auto-expand
-    // to full-screen (.large). Short/empty content stays in a compact detent
-    // so the HabitList remains visible underneath. When the user types enough
-    // content, the sheet expands to give them room.
-
-    // Behaviour: An empty name/description editor stays compact so the habit
-    // list is visible underneath.
-    @Test func emptyContentShouldNotUseLargeDetent() {
-        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: "") == false)
-    }
-
-    // Behaviour: Short content keeps the editor compact.
-    @Test func shortContentShouldNotUseLargeDetent() {
-        #expect(HabitFormView.shouldUseLargeDetent(name: "Run", description: "Quick jog") == false)
-    }
-
-    // Behaviour: When the user types a long description (100+ chars), the editor
-    // auto-expands to full screen to give them room.
-    @Test func longDescriptionShouldUseLargeDetent() {
-        let longDesc = String(repeating: "a", count: 101)
-        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: longDesc) == true)
-    }
-
-    // Behaviour: When the user types a long name (100+ chars), the editor auto-expands.
-    @Test func longNameShouldUseLargeDetent() {
-        let longName = String(repeating: "a", count: 101)
-        #expect(HabitFormView.shouldUseLargeDetent(name: longName, description: "") == true)
-    }
-
-    // Behaviour: When the combined name + description length exceeds 100 chars,
-    // the editor auto-expands even if neither field alone is over the limit.
-    @Test func combinedLengthShouldUseLargeDetent() {
-        let name = String(repeating: "a", count: 60)
-        let desc = String(repeating: "b", count: 50)
-        #expect(HabitFormView.shouldUseLargeDetent(name: name, description: desc) == true)
-    }
-
-    // Behaviour: When the description has 4+ lines, the editor auto-expands to
-    // accommodate the vertical content even if total characters are low.
-    @Test func multilineDescriptionShouldUseLargeDetent() {
-        let desc = "Line 1\nLine 2\nLine 3\nLine 4"
-        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == true)
-    }
-
-    // Behaviour: A 3-line description still fits in the compact sheet (only 4+ lines trigger expansion).
-    @Test func threeLineDescriptionShouldNotUseLargeDetent() {
-        let desc = "Line 1\nLine 2\nLine 3"
-        #expect(HabitFormView.shouldUseLargeDetent(name: "", description: desc) == false)
-    }
-
     // MARK: - buildPillData
 
     // buildPillData is a static/pure function that returns the data for the pill

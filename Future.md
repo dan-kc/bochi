@@ -18,9 +18,9 @@ Also remove the bar on the modal that allows you to drag the form. It's height s
 
 
 
-Remove the Discard? modal completely. It should never pop up. If a user taps on the outside of the new habit modal/form, or if they hit cancel, it should automatically cancel straight away and return to the HabitList view. However, it should the spawn a Toast saying something like "New Habit Discarded, Recover?" - giving the oppertunity for a user to recover the recently discarded new habit.
+Remove the confirm Discard modal popup completely. It should never pop up. If a user taps on the outside of the new habit modal/form, or if they hit cancel, it should automatically cancel straight away and return to the HabitList view. However, it should also spawn a Toast saying something like "New Habit Discarded, Recover?" - giving the oppertunity for a user to recover the recently discarded new habit.
 
-5 second timer on the toast. Toasts should stack over eachother if multiple are live, clearing one toast should reveal the other. All toasts should be the same size. One shold be able to swipe away the Toast or wait until the timer is done, or tap on a button somewhere to clear it.
+5 second timer on the toast, visible on the toast itself. Toasts should stack over eachother if multiple are live, clearing one toast should reveal the other. All toasts should be the same size. One shold be able to swipe away the Toast or wait until the timer is done, or tap on a button somewhere to clear it, or press on the "recover" (or some other word) button to recover the item, which brins up the new form again (but does not focus on anything - usually the new form auto focuses on Name but not this time)
 
 - Change the NameDescription 
 
@@ -45,3 +45,24 @@ Implement the Rewards page. There are subtle differences in the Reward type. It 
 Add the price
 
 Also ensure that this pill scroll correctly conveys the case where there is overflow.
+
+
+
+
+
+£etrntiernt
+
+
+This does not work as desired.
+
+When I tap on "+" to create a new habit I see this. @IMG_0374.PNG  This is a perfect initial height for the NameDescription modal.
+I then type out a long description with many newlines and my cursor begins to flow underneath the keyboard as seen here @IMG_0375.PNG  I then have to scroll to see it. I do not want the user to ever have to scroll to see their cursor. The cursor should *always* be in view. I want the modal to here to get taller and for the cursor to remain at the bottom.
+
+To show you how it's done, this is the behaviour from the todoist app after pressing the '+' button: @IMG_0376.PNG 
+And when i type in the descripiton and make it really long: @IMG_0377.PNG observer how the modal increases in height
+And when i type such that the description overflows and the modal is at max height: @IMG_0378.PNG observe that it is now a scrollable container where whenever I type, the viewbox scrolls to the cursor position such that it's at the bottom. This also happens when I scroll the container to the top and start typing with the cursor still at the bottom, it will auto scroll to the correct position
+
+Fix this for the NameDescription modal, we will look at the change modal later.
+
+Also, could this article be relevant? https://dev.to/mrcflorian/managing-the-keyboard-in-swiftui-a-comprehensive-tutorial-11p0
+

@@ -94,15 +94,6 @@ struct HabitFormView: View {
     // Track whether the initial focus has been applied
     @State private var hasAppliedInitialFocus = false
 
-    // Controls which sheet height (detent) is currently active.
-    // Without this binding, SwiftUI may auto-select .large when the detent
-    // set changes (e.g. switching to name/description editor). The binding
-    // pins it to .medium so it only goes large if the user drags up.
-    // Like a controlled component in React — we own the state, not the framework.
-    // Initialized based on whether we start on the name/description editor or
-    // the main form. Set in init() alongside showingNameDescription.
-    @State private var selectedDetent: PresentationDetent
-
     // Tags currently applied to this habit
     private var habitTags: [Tag] {
         tagStore.tagsForHabit(habitId: habitId)
@@ -151,22 +142,6 @@ struct HabitFormView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    // Whether the name/description editor should auto-expand to .large detent.
-    // Short/empty content stays in a compact sheet so the HabitList remains
-    // visible underneath. Triggers when total character count exceeds 100 or
-    // the description has 4+ lines (3+ newlines), since that overflows the
-    // compact sheet height.
-    static func shouldUseLargeDetent(name: String, description: String) -> Bool {
-        let totalLength = name.count + description.count
-        let newlineCount = description.filter { $0 == "\n" }.count
-        return totalLength > 100 || newlineCount >= 3
-    }
-
-    // Height for the compact name/description editor detent.
-    // Sized to fit the nav bar + name field + a few description lines
-    // while leaving the HabitList visible underneath.
-    static let compactDetentHeight: CGFloat = 250
-
     init(mode: HabitFormMode = .new, initialFocus: HabitFormFocus? = nil) {
         self.mode = mode
         self.initialFocus = initialFocus
@@ -184,14 +159,6 @@ struct HabitFormView: View {
         }
         self._showingNameDescription = State(initialValue: startOnNameDesc)
         self._pendingFocus = State(initialValue: initialFocus == .description ? .description : .name)
-
-        // Start at the compact height when opening the name/description editor,
-        // or .medium for the main form.
-        self._selectedDetent = State(initialValue: startOnNameDesc
-            ? .height(Self.compactDetentHeight)
-            : .medium
-        )
-
     }
 
     var body: some View {
@@ -220,33 +187,12 @@ struct HabitFormView: View {
                 ? "Name & Description"
                 : (mode.isNew ? "New Habit" : "Edit Habit"))
             .navigationBarTitleDisplayMode(.inline)
-            // Dynamic detents: name/description editor starts at a compact height
-            // so the HabitList stays visible underneath. .large is only added to the
-            // available detent set when content overflows the compact height — this
-            // prevents iOS from auto-expanding the sheet to .large when the keyboard
-            // appears. Without this, iOS sees .large as available and jumps to it.
-            // The form always uses .medium.
-            .presentationDetents(
-                showingNameDescription
-                    ? (Self.shouldUseLargeDetent(name: name, description: description)
-                        ? [.height(Self.compactDetentHeight), .large]
-                        : [.height(Self.compactDetentHeight)])
-                    : [.medium],
-                selection: $selectedDetent
-            )
-            // Reset to .medium when leaving the name/description editor,
-            // so the main form doesn't stay at .large if the user dragged up.
-            // When entering the editor, start at the compact height.
-            .onChange(of: showingNameDescription) { _, newValue in
-                if newValue {
-                    selectedDetent = .height(Self.compactDetentHeight)
-                } else {
-                    selectedDetent = .medium
-                }
-            }
-            // Shows a small horizontal bar at the top of the sheet — a visual
-            // hint that the user can drag down to dismiss. Like a drawer handle.
-            .presentationDragIndicator(.visible)
+            // Fixed .medium detent (~half screen). Content scrolls within this
+            // height. The sheet never resizes — simpler and more predictable.
+            .presentationDetents([.medium])
+            // Hide the drag indicator bar — the sheet height is fixed,
+            // not user-draggable. The user can still swipe down to dismiss.
+            .presentationDragIndicator(.hidden)
             .toolbar {
                 if showingNameDescription {
                     // Done button (checkmark) to return from name/description to the form.
@@ -383,53 +329,78 @@ struct HabitFormView: View {
         }
     }
 
-    // Fullscreen-ish scrollable editor for name and description.
+    // Scrollable editor for name and description.
     // Instead of presenting a separate sheet, this view morphs in-place
     // within the same sheet via the ZStack cross-fade.
     // The ScrollView handles long content (names/descriptions can be very long).
     // Because this view is created fresh each time showingNameDescription becomes
     // true, it always starts scrolled to the top.
     private var nameDescriptionEditor: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                TextField("Name", text: $name)
-                    .font(.title2)
-                    // .focused binds this field's keyboard focus to the focusedField
-                    // state. When focusedField == .name, this field gets focus.
-                    // Like managing focus via a ref in React, but declarative.
-                    .focused($focusedField, equals: .name)
+        // ScrollViewReader lets us programmatically scroll to a specific child
+        // view by ID — like calling element.scrollIntoView() in the DOM.
+        // We use it to auto-scroll to the bottom anchor whenever the user types,
+        // keeping the cursor visible above the keyboard.
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    TextField("Name", text: $name)
+                        .font(.title2)
+                        // .focused binds this field's keyboard focus to the focusedField
+                        // state. When focusedField == .name, this field gets focus.
+                        // Like managing focus via a ref in React, but declarative.
+                        .focused($focusedField, equals: .name)
 
-                // axis: .vertical makes this a multiline text field (like <textarea>).
-                // .lineLimit(5...) means at least 5 lines tall, grows as needed.
-                TextField("Description", text: $description, axis: .vertical)
-                    .focused($focusedField, equals: .description)
-                    .lineLimit(5...)
+                    // axis: .vertical makes this a multiline text field (like <textarea>).
+                    // .lineLimit(5...) means at least 5 lines tall, grows as needed.
+                    TextField("Description", text: $description, axis: .vertical)
+                        .focused($focusedField, equals: .description)
+                        .lineLimit(5...)
+
+                    // Invisible anchor at the bottom of the content. When the user
+                    // types in the description, we scrollTo this anchor so the cursor
+                    // (which is at the end of the growing text) stays visible above
+                    // the keyboard. Like a <div ref={bottomRef}/> that you
+                    // scrollIntoView() in a React useEffect.
+                    Color.clear.frame(height: 1).id("bottom")
+                }
+                .padding()
             }
-            .padding()
-        }
-        .onAppear {
-            // Apply the pending focus when the editor appears.
-            // We read from pendingFocus (a @State that survives the ZStack
-            // cross-fade) rather than focusedField (@FocusState which SwiftUI
-            // resets to nil when the target TextField isn't in the hierarchy).
-            // Like calling ref.current.focus() in useEffect based on a state
-            // variable, not the DOM's current activeElement.
-            focusedField = pendingFocus
-        }
-        // Auto-expand the sheet to .large when content outgrows the compact
-        // detent. Like a React useEffect that watches content length and
-        // updates a CSS class to resize a modal.
-        .onChange(of: name) { _, _ in updateDetentForContent() }
-        .onChange(of: description) { _, _ in updateDetentForContent() }
-    }
+            .onAppear {
+                // Apply the pending focus when the editor appears.
+                // We read from pendingFocus (a @State that survives the ZStack
+                // cross-fade) rather than focusedField (@FocusState which SwiftUI
+                // resets to nil when the target TextField isn't in the hierarchy).
+                // Like calling ref.current.focus() in useEffect based on a state
+                // variable, not the DOM's current activeElement.
+                focusedField = pendingFocus
 
-    // Expands the sheet to .large when name/description content is long enough
-    // to overflow the compact detent. Only expands — never shrinks back, since
-    // the user may have manually dragged to .large and we don't want to fight them.
-    private func updateDetentForContent() {
-        guard showingNameDescription else { return }
-        if Self.shouldUseLargeDetent(name: name, description: description) {
-            selectedDetent = .large
+                // If focusing description, scroll to the bottom anchor immediately
+                // so the cursor is visible from the start (not off-screen requiring
+                // the first keystroke to trigger the scroll).
+                if pendingFocus == .description {
+                    // DispatchQueue.main.async defers the scroll to the next run loop
+                    // tick, giving SwiftUI time to lay out the ScrollView content
+                    // first. Without this, scrollTo fires before layout is complete
+                    // and has no effect. Like using setTimeout(fn, 0) in React to
+                    // defer a DOM operation until after the browser paints.
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+            }
+            // Auto-scroll to keep cursor visible when typing in the description.
+            // When the user adds a new line or text wraps, the content grows
+            // downward. Without this, the cursor would disappear behind the
+            // keyboard or below the visible area.
+            .onChange(of: description) { _, _ in
+                if focusedField == .description {
+                    // .bottom anchor positions the anchor at the bottom edge of
+                    // the visible area — right above the keyboard.
+                    withAnimation(.easeOut(duration: 0.1)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+            }
         }
     }
 
