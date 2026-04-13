@@ -25,6 +25,11 @@ struct PillRow: View {
                     // .tint sets the color — orange when the field is set.
                     .buttonStyle(.bordered)
                     .tint(pill.isSet ? .orange : .secondary)
+                    // Scale-bounce animation: when `animating` toggles to true,
+                    // the pill grows 15% then springs back. Like CSS transform:
+                    // scale(1.15) with a spring transition.
+                    .scaleEffect(pill.animating ? 1.15 : 1.0)
+                    .animation(.spring(duration: 0.5, bounce: 0.4), value: pill.animating)
                 }
             }
         }
@@ -41,4 +46,8 @@ struct PillItem: Identifiable {
     let icon: String          // SF Symbol name (like Material Icon names in React)
     let isSet: Bool           // true = orange, false = gray
     var action: (() -> Void)? = nil  // called when tapped — like onClick in React
+    // When true, the pill plays a scale-bounce animation to draw the user's
+    // attention — e.g. after difficulty is set via the ranker. Like adding a
+    // CSS animation class via state in React: className={animating ? "bounce" : ""}
+    var animating: Bool = false
 }

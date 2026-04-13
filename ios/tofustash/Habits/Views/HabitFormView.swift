@@ -92,6 +92,17 @@ struct HabitFormView: View {
     @State private var showingDifficulty = false
     @State private var showingTags = false
 
+    // Alert shown when the user taps the difficulty pill for the first habit.
+    // Since difficulty is auto-set, the ranker isn't needed — this explains why.
+    // Like a window.alert() in React, but declarative: set the bool and SwiftUI
+    // renders the alert. Dismissed by the system when the user taps "OK".
+    @State private var showingFirstHabitAlert = false
+
+    // Triggers a bounce animation on the difficulty pill after the ranker
+    // sheet dismisses with a rank set. Like a CSS animation class toggled
+    // via state in React: className={animating ? "bounce" : ""}
+    @State private var difficultyPillAnimating = false
+
     // Which field in the name/description editor has keyboard focus.
     // @FocusState is SwiftUI's way to programmatically control keyboard focus.
     // Like using useRef + ref.current.focus() in React, but declarative —
@@ -119,6 +130,21 @@ struct HabitFormView: View {
         tagStore.tagsForHabit(habitId: habitId)
     }
 
+    // Whether this is the very first habit being created. Computed from store state.
+    // Like a derived selector in React: useMemo(() => isFirstHabit(mode, habits), [mode, habits])
+    private var isFirstHabit: Bool {
+        Self.isFirstHabit(mode: mode, activeHabitsCount: habitStore.activeHabits.count)
+    }
+
+    // Whether there are other ranked habits to compare against. When false,
+    // tapping the difficulty pill shows an alert instead of opening the ranker.
+    private var hasComparableHabits: Bool {
+        let rankedCount = habitStore.activeHabits
+            .filter { $0.difficultyRank != nil && $0.id != habitId }
+            .count
+        return Self.hasComparableHabits(rankedHabitCount: rankedCount, excludeHabitId: mode.isNew ? nil : habitId)
+    }
+
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespaces)
     }
@@ -135,7 +161,8 @@ struct HabitFormView: View {
             description: description,
             frequency: frequency,
             difficultyRank: difficultyRank,
-            tagCount: habitTags.count
+            tagCount: habitTags.count,
+            isFirstHabit: isFirstHabit
         )
     }
 
@@ -144,12 +171,18 @@ struct HabitFormView: View {
         description: String,
         frequency: Double?,
         difficultyRank: String?,
-        tagCount: Int
+        tagCount: Int,
+        isFirstHabit: Bool = false
     ) -> Bool {
-        !name.isEmpty
+        // For the first habit, difficulty is auto-set (not user-entered), so
+        // ignore it when deciding if the form has content. This prevents the
+        // discard/recovery toast from appearing when the user opens a new form
+        // and immediately dismisses it without entering anything.
+        let hasDifficulty = isFirstHabit ? false : difficultyRank != nil
+        return !name.isEmpty
             || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || frequency != nil
-            || difficultyRank != nil
+            || hasDifficulty
             || tagCount > 0
     }
 
@@ -271,10 +304,29 @@ struct HabitFormView: View {
             .sheet(isPresented: $showingFrequency) {
                 FrequencyModal(frequency: $frequency)
             }
-            .sheet(isPresented: $showingDifficulty) {
+            .sheet(isPresented: $showingDifficulty, onDismiss: {
+                // After the difficulty sheet closes, if a rank was set,
+                // animate the pill to draw the user's attention.
+                // The onDismiss fires after the sheet's dismiss animation
+                // completes, so the form is fully visible again.
+                if difficultyRank != nil {
+                    // withAnimation triggers the scale-up immediately.
+                    // DispatchQueue resets after 0.6s so the pill springs back.
+                    // Like: setState(true); setTimeout(() => setState(false), 600)
+                    withAnimation(.spring(duration: 0.5, bounce: 0.4)) {
+                        difficultyPillAnimating = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        withAnimation(.spring(duration: 0.5, bounce: 0.4)) {
+                            difficultyPillAnimating = false
+                        }
+                    }
+                }
+            }) {
                 DifficultyRankerView(
                     habitName: trimmedName.isEmpty ? "New Habit" : trimmedName,
                     difficultyRank: $difficultyRank,
+                    currentDifficultyRank: difficultyRank,
                     excludeHabitId: mode.isNew ? nil : habitId
                 )
             }
@@ -293,6 +345,14 @@ struct HabitFormView: View {
             // useEffect(() => { ... }, [dep]) in React, but synchronous.
             // The `guard hasAppliedInitialFocus` check prevents saving during
             // initial form population (when .task sets fields from the habit).
+            // Alert for tapping the difficulty pill on the first habit.
+            // Since difficulty is auto-set, the ranker isn't needed — this
+            // explains why. Like a <dialog> element shown via state in React.
+            .alert("Difficulty Set", isPresented: $showingFirstHabitAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("There are no other habits to compare against. Add more habits to adjust difficulty ranking.")
+            }
             .onChange(of: name) { _, _ in autoSave() }
             .onChange(of: description) { _, _ in autoSave() }
             .onChange(of: frequency) { _, _ in autoSave() }
@@ -441,6 +501,37 @@ struct HabitFormView: View {
         }
     }
 
+    // Whether this is the very first habit being created (no existing active habits).
+    // When true, difficulty is auto-set to the midpoint since there's nothing to compare.
+    // Like a selector in React: `const isFirstHabit = habits.length === 0 && mode === "new"`
+    static func isFirstHabit(mode: HabitFormMode, activeHabitsCount: Int) -> Bool {
+        mode.isNew && activeHabitsCount == 0
+    }
+
+    // The default difficulty rank assigned to the first habit ever created.
+    // Delegates to the ranker's empty-session logic to get the midpoint key ("m").
+    // Reuses existing DifficultyRanker logic rather than hardcoding the value.
+    static func defaultDifficultyRankForFirstHabit() -> String {
+        DifficultyRanker.makeSession(habitName: "", rankedHabits: []).generateRank()
+    }
+
+    // Whether there are ranked habits available for comparison, excluding the
+    // current habit (which can't compare against itself). When false, the
+    // ranker would immediately complete with nothing to show.
+    // `rankedHabitCount` is the count of active habits with a difficultyRank,
+    // already excluding the current habit's ID.
+    static func hasComparableHabits(rankedHabitCount: Int, excludeHabitId: String?) -> Bool {
+        rankedHabitCount > 0
+    }
+
+    // Whether tapping the difficulty pill should open the ranker modal.
+    // Returns false when there's nothing to compare against — either because
+    // it's the first habit (auto-set) or because no other ranked habits exist
+    // (e.g. editing the only habit). An alert is shown instead.
+    static func shouldOpenDifficultyRanker(isFirstHabit: Bool, hasComparableHabits: Bool) -> Bool {
+        !isFirstHabit && hasComparableHabits
+    }
+
     // Pure data for the pill row — actions are nil so it can be unit tested.
     // In React terms, this is like a selector that derives render data from state,
     // separated from the event handlers.
@@ -468,12 +559,25 @@ struct HabitFormView: View {
 
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
-            "difficulty": { showingDifficulty = true },
+            // When there's nothing to compare against (first habit or editing
+            // the only habit), show an informational alert instead of the ranker.
+            "difficulty": {
+                if Self.shouldOpenDifficultyRanker(isFirstHabit: isFirstHabit, hasComparableHabits: hasComparableHabits) {
+                    showingDifficulty = true
+                } else {
+                    showingFirstHabitAlert = true
+                }
+            },
             "frequency": { showingFrequency = true },
         ]
 
         for i in pills.indices {
             pills[i].action = actions[pills[i].id]
+            // Pass the animation state to the difficulty pill so it bounces
+            // after the ranker sheet dismisses with a rank set.
+            if pills[i].id == "difficulty" {
+                pills[i].animating = difficultyPillAnimating
+            }
         }
         return pills
     }
@@ -497,6 +601,13 @@ struct HabitFormView: View {
             frequency = habit.frequency
             difficultyRank = habit.difficultyRank
             habitId = habit.id
+        }
+
+        // Auto-set difficulty for the first habit — no comparisons needed since
+        // there are no other habits to compare against. The midpoint key ("m")
+        // is used, leaving room for future habits above and below.
+        if isFirstHabit && difficultyRank == nil {
+            difficultyRank = Self.defaultDifficultyRankForFirstHabit()
         }
 
         // Mark initialization complete so auto-save .onChange handlers start firing.

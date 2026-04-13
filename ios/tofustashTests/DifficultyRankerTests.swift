@@ -160,4 +160,18 @@ struct DifficultyRankerTests {
         #expect(session.estimatedComparisons == 4)
     }
 
+    // MARK: - Unset button visibility
+
+    // Behaviour: When a habit already has a difficulty rank and the user opens the
+    // ranker, they should see an "Unset" button to clear it.
+    @Test func shouldShowUnsetButton_whenRankIsSet_returnsTrue() {
+        #expect(DifficultyRankerView.shouldShowUnsetButton(currentDifficultyRank: "m") == true)
+    }
+
+    // Behaviour: When difficulty isn't set yet, there's nothing to unset,
+    // so the button is hidden.
+    @Test func shouldShowUnsetButton_whenRankIsNil_returnsFalse() {
+        #expect(DifficultyRankerView.shouldShowUnsetButton(currentDifficultyRank: nil) == false)
+    }
+
 }

@@ -68,6 +68,25 @@ struct HabitFormFocusTests {
         ) == true)
     }
 
+    // Behaviour: When difficulty is auto-set for the first habit (no other habits exist),
+    // the form should NOT be considered to have content — the user didn't actively enter
+    // anything, so dismissing shouldn't trigger a recovery toast.
+    @Test func autoSetDifficultyAloneHasNoContent() {
+        #expect(HabitFormView.hasContent(
+            name: "", description: "", frequency: nil, difficultyRank: "m",
+            tagCount: 0, isFirstHabit: true
+        ) == false)
+    }
+
+    // Behaviour: When the first habit has user-entered content beyond the auto-set
+    // difficulty (e.g. a name), it should still count as having content.
+    @Test func firstHabitWithNameHasContent() {
+        #expect(HabitFormView.hasContent(
+            name: "Run", description: "", frequency: nil, difficultyRank: "m",
+            tagCount: 0, isFirstHabit: true
+        ) == true)
+    }
+
     // MARK: - nameForAutoSave
 
     // In change mode, the form auto-saves on every field change. The name field
@@ -171,5 +190,83 @@ struct HabitFormFocusTests {
         let freqPill = pills.first { $0.id == "frequency" }
         #expect(freqPill?.isSet == false)
         #expect(freqPill?.label == "Frequency")
+    }
+
+    // MARK: - First habit detection
+
+    // Behaviour: When the user creates their very first habit (no active habits exist),
+    // difficulty is pre-set automatically since there's nothing to compare against.
+    @Test func isFirstHabit_newModeNoActiveHabits_returnsTrue() {
+        #expect(HabitFormView.isFirstHabit(mode: .new, activeHabitsCount: 0) == true)
+    }
+
+    // Behaviour: When active habits already exist, the user must go through the
+    // difficulty ranker to compare against them.
+    @Test func isFirstHabit_newModeWithActiveHabits_returnsFalse() {
+        #expect(HabitFormView.isFirstHabit(mode: .new, activeHabitsCount: 3) == false)
+    }
+
+    // Behaviour: When editing an existing habit, it's never treated as "first habit"
+    // even if it's the only one — the habit already exists.
+    @Test func isFirstHabit_changeMode_returnsFalse() {
+        let habit = Habit(
+            id: "1", name: "Test", description: "",
+            createdAt: Date(), updatedAt: Date(), deletedAt: nil,
+            frequency: nil, difficultyRank: nil
+        )
+        #expect(HabitFormView.isFirstHabit(mode: .change(habit), activeHabitsCount: 1) == false)
+    }
+
+    // Behaviour: The default difficulty rank for the first habit is the midpoint key,
+    // leaving room for future habits above and below.
+    @Test func defaultDifficultyRankForFirstHabit_returnsMidpointKey() {
+        #expect(HabitFormView.defaultDifficultyRankForFirstHabit() == "m")
+    }
+
+    // MARK: - Comparable habits detection
+
+    // Behaviour: When creating the first habit, there are no other ranked habits
+    // to compare against, so the ranker should not open.
+    @Test func hasComparableHabits_newModeNoHabits_returnsFalse() {
+        #expect(HabitFormView.hasComparableHabits(
+            rankedHabitCount: 0, excludeHabitId: nil
+        ) == false)
+    }
+
+    // Behaviour: When editing the only habit (which is ranked), after excluding
+    // itself there are no other ranked habits to compare against.
+    @Test func hasComparableHabits_changeModeSingleHabit_returnsFalse() {
+        // 1 ranked habit exists, but it's the one being edited (excluded)
+        #expect(HabitFormView.hasComparableHabits(
+            rankedHabitCount: 0, excludeHabitId: "habit-1"
+        ) == false)
+    }
+
+    // Behaviour: When other ranked habits exist to compare against, the ranker
+    // should open so the user can rank their habit via binary search.
+    @Test func hasComparableHabits_multipleHabits_returnsTrue() {
+        #expect(HabitFormView.hasComparableHabits(
+            rankedHabitCount: 2, excludeHabitId: "habit-1"
+        ) == true)
+    }
+
+    // MARK: - Difficulty pill tap behavior
+
+    // Behaviour: For the first habit, tapping the difficulty pill should not open
+    // the ranker since difficulty is already auto-set.
+    @Test func shouldOpenDifficultyRanker_firstHabit_returnsFalse() {
+        #expect(HabitFormView.shouldOpenDifficultyRanker(isFirstHabit: true, hasComparableHabits: false) == false)
+    }
+
+    // Behaviour: For subsequent habits, tapping the difficulty pill opens the ranker
+    // so the user can compare against existing habits.
+    @Test func shouldOpenDifficultyRanker_notFirstHabit_returnsTrue() {
+        #expect(HabitFormView.shouldOpenDifficultyRanker(isFirstHabit: false, hasComparableHabits: true) == true)
+    }
+
+    // Behaviour: When editing the only habit, tapping the difficulty pill should
+    // show the alert instead of opening the ranker — there's nothing to compare against.
+    @Test func shouldOpenDifficultyRanker_changeModeSingleHabit_returnsFalse() {
+        #expect(HabitFormView.shouldOpenDifficultyRanker(isFirstHabit: false, hasComparableHabits: false) == false)
     }
 }

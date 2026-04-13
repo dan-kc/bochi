@@ -17,11 +17,33 @@ struct DifficultyRankerView: View {
     // The ranking session — drives the binary search state machine
     @State private var session: DifficultyRanker.Session
 
+    // Whether initializeSession() has run. The session starts with empty
+    // rankedHabits (isComplete == true) because @Environment isn't available
+    // in init(). We gate the completion view on this flag so it doesn't
+    // flash the checkmark and auto-dismiss before the real session loads.
+    @State private var isInitialized = false
+
+    // Drives the checkmark pop-in animation. Starts false (scaled to 0),
+    // set to true on appear so the checkmark springs into view.
+    // Like a CSS class toggle: className={showCheck ? "scale-100" : "scale-0"}
+    @State private var showCheckmark = false
+
     // Exclude this habit from comparisons (for change form editing existing habit)
     let excludeHabitId: String?
 
-    init(habitName: String, difficultyRank: Binding<String?>, excludeHabitId: String? = nil) {
+    // The difficulty rank when the ranker was opened — used to decide whether
+    // to show the "Unset" toolbar button. Captured at init time so it doesn't
+    // change mid-session. Like capturing props.initialValue in React.
+    let currentDifficultyRank: String?
+
+    init(
+        habitName: String,
+        difficultyRank: Binding<String?>,
+        currentDifficultyRank: String? = nil,
+        excludeHabitId: String? = nil
+    ) {
         self._difficultyRank = difficultyRank
+        self.currentDifficultyRank = currentDifficultyRank
         self.excludeHabitId = excludeHabitId
         // Initialize with empty session — will be replaced in .onAppear
         // when we have access to habitStore via @Environment
@@ -34,37 +56,79 @@ struct DifficultyRankerView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if session.isComplete {
+                if !isInitialized {
+                    // Show nothing until the real session loads from habitStore.
+                    // Without this gate, the empty initial session (isComplete == true)
+                    // would render the completion view and auto-dismiss immediately.
+                    Color.clear
+                } else if session.isComplete {
                     completionView
                 } else if let comparison = session.currentComparison {
                     comparisonView(comparison)
                 }
             }
-            .navigationTitle("Set Difficulty")
+            .navigationTitle(session.isComplete ? "" : "Set Difficulty")
             .navigationBarTitleDisplayMode(.inline)
             .presentationDetents([.medium, .large])
+            // Toolbar only shows during active comparison — the completion
+            // screen auto-dismisses, so no navigation buttons are needed.
+            .toolbar(session.isComplete ? .hidden : .visible, for: .navigationBar)
+            .toolbar {
+                // Cancel button — replaces the old "Skip" at the bottom.
+                // Placed top-left (cancellationAction) per iOS convention.
+                // Like a "Cancel" button in a React modal header.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                // Unset button — only shown when difficulty is already set.
+                // Clears the rank and dismisses, like a "Reset" action.
+                if Self.shouldShowUnsetButton(currentDifficultyRank: currentDifficultyRank) {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Unset") {
+                            difficultyRank = nil
+                            dismiss()
+                        }
+                    }
+                }
+            }
             .onAppear {
                 initializeSession()
             }
         }
     }
 
-    // Shown when binary search is complete
+    // Shown when binary search is complete — just the green checkmark,
+    // no text or buttons. The checkmark pops in with a spring animation,
+    // then the sheet auto-dismisses after 1 second.
+    // Task.sleep is like setTimeout in JS but cooperative — it cancels
+    // automatically if the view disappears (user swipes sheet away).
     private var completionView: some View {
-        VStack(spacing: 16) {
-            // "checkmark.circle.fill" is an SF Symbol — like a Material Icon
+        VStack {
+            // "checkmark.circle.fill" is an SF Symbol — like a Material Icon.
+            // Starts at scale 0 and springs to full size on appear —
+            // like a CSS keyframe: 0% { transform: scale(0) } 100% { transform: scale(1) }
             Image(systemName: "checkmark.circle.fill")
-                .font(.largeTitle)
+                .font(.system(size: 64))
                 .foregroundStyle(.green)
-
-            Text("Done!")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Difficulty set after \(session.comparisonCount) comparison\(session.comparisonCount != 1 ? "s" : "").")
-                .foregroundStyle(.secondary)
+                .scaleEffect(showCheckmark ? 1.0 : 0.0)
+                .animation(.spring(duration: 0.4, bounce: 0.5), value: showCheckmark)
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Small delay so the view is laid out before animating.
+            // Without this, the spring may not be visible because SwiftUI
+            // could batch the initial layout and the state change together.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                showCheckmark = true
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(1))
+            dismiss()
+        }
     }
 
     // Shown during active comparison — asks user "harder or easier?"
@@ -111,7 +175,8 @@ struct DifficultyRankerView: View {
                 .background(.fill.tertiary)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                // Action buttons
+                // Action buttons — Harder and Easier only. Cancel/Unset
+                // are in the toolbar now (top-left / top-right).
                 VStack(spacing: 12) {
                     Button {
                         session.chooseHarder()
@@ -132,16 +197,17 @@ struct DifficultyRankerView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-
-                    Button("Skip") {
-                        dismiss()
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
                 }
             }
             .padding()
         }
+    }
+
+    // Whether to show the "Unset" toolbar button. Only shown when difficulty
+    // is already set — gives the user a way to clear it without re-ranking.
+    // Static so it can be unit tested without instantiating the view.
+    static func shouldShowUnsetButton(currentDifficultyRank: String?) -> Bool {
+        currentDifficultyRank != nil
     }
 
     private func initializeSession() {
@@ -154,6 +220,8 @@ struct DifficultyRankerView: View {
             habitName: session.habitName,
             rankedHabits: ranked
         )
+
+        isInitialized = true
 
         // If no ranked habits exist, complete immediately
         if session.isComplete {
