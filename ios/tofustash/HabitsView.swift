@@ -13,6 +13,15 @@ struct HabitsView: View {
     @State private var editingHabit: Habit? = nil
     @State private var editFocus: HabitFormFocus? = nil
 
+    // Toast manager for showing recovery toasts when habits are discarded.
+    // Like a useState + context provider for a toast notification system in React.
+    @State private var toastManager = ToastManager()
+
+    // Holds saved form state for recovery. When the user taps "Recover" on
+    // a toast, this is set to re-open the form with the discarded values.
+    // Like a useState<FormSnapshot | null>(null) in React.
+    @State private var recoveringPrefill: HabitFormSnapshot? = nil
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -31,6 +40,9 @@ struct HabitsView: View {
             .navigationTitle("Habits")
             .overlay(alignment: .bottomTrailing) {
                 Button {
+                    // Clear any lingering recovery state so the FAB always
+                    // opens a fresh form, not a recovered one.
+                    recoveringPrefill = nil
                     showingNewForm = true
                 } label: {
                     Image(systemName: "plus")
@@ -43,15 +55,45 @@ struct HabitsView: View {
                 }
                 .padding()
             }
-            // New habit sheet
+            // New habit sheet — passes an onDiscard callback so we can show a
+            // recovery toast when the user dismisses a form that had content.
+            // The prefill parameter restores form state when recovering.
             .sheet(isPresented: $showingNewForm) {
-                HabitFormView(mode: .new)
+                HabitFormView(
+                    mode: .new,
+                    prefill: recoveringPrefill,
+                    onDiscard: { snapshot in
+                        showDiscardToast(snapshot: snapshot)
+                    }
+                )
             }
             // Change/edit habit sheet — triggered by tapping a row element.
             // .sheet(item:) automatically sets editingHabit back to nil on dismiss.
             .sheet(item: $editingHabit) { habit in
                 HabitFormView(mode: .change(habit), initialFocus: editFocus)
             }
+            // Toast overlay sits on top of everything, at the bottom of the screen.
+            // Like a portal-rendered <ToastContainer /> in React.
+            .overlay {
+                ToastOverlay(toastManager: toastManager)
+            }
+        }
+    }
+
+    // Show a toast that lets the user recover a discarded habit form.
+    // The toast has a 5-second countdown, after which it auto-dismisses.
+    private func showDiscardToast(snapshot: HabitFormSnapshot) {
+        // Clear any previous prefill so it doesn't leak into new forms.
+        recoveringPrefill = nil
+
+        toastManager.show(
+            message: "Habit Discarded",
+            actionLabel: "Recover"
+        ) {
+            // When the user taps "Recover", save the snapshot and re-open
+            // the form. The form reads recoveringPrefill to restore state.
+            recoveringPrefill = snapshot
+            showingNewForm = true
         }
     }
 

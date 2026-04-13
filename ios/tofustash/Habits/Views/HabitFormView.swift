@@ -42,10 +42,30 @@ enum HabitFormFocus: Equatable {
     }
 }
 
+// Captures the form state when a new habit is discarded so it can be
+// recovered later. Like serializing a React form's state to restore it.
+// The habitId is preserved so any tag associations created during the
+// form session remain valid on recovery.
+struct HabitFormSnapshot {
+    let name: String
+    let description: String
+    let frequency: Double?
+    let difficultyRank: String?
+    let habitId: String
+}
+
 // The main habit form — handles both creating new habits and editing existing ones.
 struct HabitFormView: View {
     let mode: HabitFormMode
     let initialFocus: HabitFormFocus?
+    // Called when a new form with content is dismissed without saving.
+    // The snapshot contains all form values so the caller can offer recovery.
+    // Like an onDiscard callback prop in React.
+    let onDiscard: ((HabitFormSnapshot) -> Void)?
+    // Pre-populates form fields when recovering a discarded habit.
+    // When set, the form opens to the main view (not the name editor)
+    // and does not auto-focus any field.
+    let prefill: HabitFormSnapshot?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(HabitStore.self) private var habitStore
@@ -108,7 +128,7 @@ struct HabitFormView: View {
     }
 
     // Whether the user has entered any content into the form.
-    // Used to decide if we need a discard confirmation on new forms.
+    // Used to decide if we should show a recovery toast on dismiss.
     private var hasContent: Bool {
         Self.hasContent(
             name: trimmedName,
@@ -142,23 +162,45 @@ struct HabitFormView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    init(mode: HabitFormMode = .new, initialFocus: HabitFormFocus? = nil) {
+    // Tracks whether the habit was saved via "Add". When the form disappears
+    // without this being true (and it has content), we treat it as a discard
+    // and call onDiscard so the parent can show a recovery toast.
+    @State private var didPersist = false
+
+    init(
+        mode: HabitFormMode = .new,
+        initialFocus: HabitFormFocus? = nil,
+        prefill: HabitFormSnapshot? = nil,
+        onDiscard: ((HabitFormSnapshot) -> Void)? = nil
+    ) {
         self.mode = mode
         self.initialFocus = initialFocus
+        self.prefill = prefill
+        self.onDiscard = onDiscard
 
-        // For new forms, start directly on the name/description editor so the user
-        // never sees a flash of the empty main form. For change forms, start on the
-        // main form unless initialFocus says otherwise.
+        // When recovering from a discard (prefill is set), skip the name/description
+        // editor and show the main form instead — don't auto-focus anything.
+        // For normal new forms, start directly on the name/description editor so the
+        // user never sees a flash of the empty main form. For change forms, start on
+        // the main form unless initialFocus says otherwise.
         // In Swift, @State must be initialized via _propertyName = State(initialValue:)
         // inside init — like setting useState's initial value in React.
         let startOnNameDesc: Bool
-        if case .new = mode {
+        if prefill != nil {
+            // Recovery mode: show main form, no auto-focus.
+            startOnNameDesc = false
+        } else if case .new = mode {
             startOnNameDesc = initialFocus == nil || initialFocus?.isNameDescription == true
         } else {
             startOnNameDesc = initialFocus?.isNameDescription == true
         }
         self._showingNameDescription = State(initialValue: startOnNameDesc)
         self._pendingFocus = State(initialValue: initialFocus == .description ? .description : .name)
+
+        // If recovering, pre-populate the habitId so tag associations are preserved.
+        if let prefill {
+            self._habitId = State(initialValue: prefill.habitId)
+        }
     }
 
     var body: some View {
@@ -219,6 +261,7 @@ struct HabitFormView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Add") {
                             persistHabit()
+                            didPersist = true
                             dismiss()
                         }
                         .disabled(!isValid)
@@ -254,11 +297,21 @@ struct HabitFormView: View {
             .onChange(of: description) { _, _ in autoSave() }
             .onChange(of: frequency) { _, _ in autoSave() }
             .onChange(of: difficultyRank) { _, _ in autoSave() }
-            // Block drag-to-dismiss when the new form has content, so the user
-            // doesn't accidentally lose their work. They can still tap Cancel
-            // to dismiss intentionally. Like preventing accidental navigation
-            // away from a dirty form in React (but without a confirmation dialog).
-            .interactiveDismissDisabled(mode.isNew && hasContent)
+            // When the form disappears without saving (user swiped, tapped
+            // outside, or hit Cancel), notify the parent so it can show a
+            // recovery toast. Like calling an onUnmount cleanup in React's
+            // useEffect that checks if the form was "dirty".
+            .onDisappear {
+                if mode.isNew && !didPersist && hasContent {
+                    onDiscard?(HabitFormSnapshot(
+                        name: name,
+                        description: description,
+                        frequency: frequency,
+                        difficultyRank: difficultyRank,
+                        habitId: habitId
+                    ))
+                }
+            }
         }
     }
 
@@ -430,7 +483,14 @@ struct HabitFormView: View {
     // with [] deps). Sets hasAppliedInitialFocus at the end so auto-save
     // .onChange handlers skip firing during initial population.
     private func initializeForm() async {
-        if case .change(let habit) = mode {
+        if let prefill, mode.isNew {
+            // Recovery mode: restore the discarded form state.
+            // habitId was already set in init() to preserve tag associations.
+            name = prefill.name
+            description = prefill.description
+            frequency = prefill.frequency
+            difficultyRank = prefill.difficultyRank
+        } else if case .change(let habit) = mode {
             // Populate form from existing habit
             name = habit.name
             description = habit.description

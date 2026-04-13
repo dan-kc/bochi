@@ -23,9 +23,9 @@ struct HabitFormFocusTests {
 
     // MARK: - hasContent
 
-    // Behaviour: The discard confirmation dialog only appears when the form has content.
+    // Behaviour: A recovery toast only appears when the dismissed form had content.
     // An empty form (no name, description, frequency, difficulty, or tags) is considered
-    // content-free and can be dismissed without warning.
+    // content-free and can be dismissed without showing a toast.
 
     @Test func emptyFormHasNoContent() {
         #expect(HabitFormView.hasContent(
