@@ -62,6 +62,10 @@ struct HabitFormView: View {
     // The snapshot contains all form values so the caller can offer recovery.
     // Like an onDiscard callback prop in React.
     let onDiscard: ((HabitFormSnapshot) -> Void)?
+    // Called when the user taps "Delete" in the form. The form dismisses
+    // itself and passes the habit back so the parent can show the delete
+    // confirmation alert. Like an onDelete prop in React.
+    let onDelete: ((Habit) -> Void)?
     // Pre-populates form fields when recovering a discarded habit.
     // When set, the form opens to the main view (not the name editor)
     // and does not auto-focus any field.
@@ -242,12 +246,14 @@ struct HabitFormView: View {
         mode: HabitFormMode = .new,
         initialFocus: HabitFormFocus? = nil,
         prefill: HabitFormSnapshot? = nil,
-        onDiscard: ((HabitFormSnapshot) -> Void)? = nil
+        onDiscard: ((HabitFormSnapshot) -> Void)? = nil,
+        onDelete: ((Habit) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
         self.onDiscard = onDiscard
+        self.onDelete = onDelete
 
         // When recovering from a discard (prefill is set), skip the name/description
         // editor and show the main form instead — don't auto-focus anything.
@@ -494,6 +500,19 @@ struct HabitFormView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     showingTags = true
+                }
+            }
+
+            // Delete section — only shown in change mode. Dismisses the form
+            // and delegates to the parent to show the confirmation alert.
+            // Like a <button onClick={() => { onDelete(habit); close(); }}>
+            // in React. The `role: .destructive` makes the button red.
+            if case .change(let habitForDelete) = mode {
+                Section {
+                    Button("Delete Habit", role: .destructive) {
+                        dismiss()
+                        onDelete?(habitForDelete)
+                    }
                 }
             }
 

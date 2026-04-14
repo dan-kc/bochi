@@ -11,29 +11,9 @@ Implement the tofu reward amount calculation feature from the old frontend. Each
 Implement a tofu balance feature that tracks the current tofu balance of the user.
 Also add to settings the "general difficulty" so you can properly calculate the value.
 
-# Balance
-
-A users balance should be displayed in the top right of the ui, regardless of what view you are on, it needs to be always visible. I think it should be on the same line as the "Habits" title. Make it big, similar size to the Title. It should be "1000T" for example where T is some appropriate icon.
-
-# Trade buttons
-
-- Each habit list item should have the price in a button on the RHS of the item. The button should open a "trade" modal.
-- A button should also feature in the habit change view (NOT on the new view) at the bottom. (Make the modal slightly taller as it will need more space). This should also open the trade modal
-
-# trade modal
-
-Should have the following:
-- The name of the Habit (non editable from this modal)
-- "Cancel" button verbatim
-- "Claim" button verbatim that executes the trade
-- A counter for the quantity (this should be the main center peice of the modal). one habit could be "Do 10 pushups" for example, and if i do 20, I want a way to indicate that I've cliamed this reward twice. 
-- The total price of everything. Bare in mind that the calculated reward should not just be double what the price is if I put the count at 2. This is because purchasing 1, changes the prices of the next as per the formula found in ./frontend. So this calculation needs to account for that.
-
-  Tapping cancel should hide the modal and return to either the change form or the habitList depending on where you opened the modal. 
-
-  Tapping yes should display some animation to user indicating they just cliamed a reward, then it should close the modal and always return to the habit list view. It should also animate the total tofu balance in the top bar next to the title over 2 seconds because the total should have changed. Also, at the same time the balance is animating, the price/reward amount should animate in the change view and the habit list item, to it's new value (because the price/reward amount is derived from how ofen you do the habit, so it should generally change after completing a habit).
-
 # Delete button
+
+Add a delete button to Habits. Also, swiping on the Habits in the list view should also delete them. Both of them should bring up a delete alert asking if they want to delete this habit. I'm not sure which way we should swipe to delete, I am probably going to add a different feature to the other direction swipe at a later date. Use whatever is idiomatic and Apple recommends.
 
 # Filters
 

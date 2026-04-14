@@ -20,6 +20,12 @@ struct HabitsView: View {
     // Set when the user taps a price button on a habit list item.
     @State private var tradingHabit: Habit? = nil
 
+    // State for the delete confirmation alert — which habit the user is
+    // about to delete. Set by swipe action; the alert reads this to know
+    // which habit to delete on confirmation. Like a useState<Habit | null>
+    // that gates a <ConfirmDialog> in React.
+    @State private var habitToDelete: Habit? = nil
+
     // Toast manager for showing recovery toasts when habits are discarded.
     // Like a useState + context provider for a toast notification system in React.
     @State private var toastManager = ToastManager()
@@ -46,6 +52,18 @@ struct HabitsView: View {
                 } else {
                     List(habitStore.activeHabits) { habit in
                         habitRow(habit)
+                            // Trailing swipe = swipe left. This is Apple's standard
+                            // delete gesture (like Mail, Notes, Reminders). The
+                            // .trailing edge is idiomatic for destructive actions.
+                            // In React terms, this is like attaching an onSwipeLeft
+                            // handler that renders a red "Delete" button.
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    habitToDelete = habit
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }
@@ -82,10 +100,46 @@ struct HabitsView: View {
             // Change/edit habit sheet — triggered by tapping a row element.
             // .sheet(item:) automatically sets editingHabit back to nil on dismiss.
             .sheet(item: $editingHabit) { habit in
-                HabitFormView(mode: .change(habit), initialFocus: editFocus)
+                HabitFormView(
+                    mode: .change(habit),
+                    initialFocus: editFocus,
+                    onDelete: { habitToDelete in
+                        // The form requests deletion — set the state so the
+                        // confirmation alert appears after the sheet dismisses.
+                        // editingHabit is cleared by .sheet(item:) on dismiss,
+                        // then the alert takes over.
+                        self.habitToDelete = habitToDelete
+                    }
+                )
             }
             .sheet(item: $tradingHabit) { habit in
                 TradeModalView(habit: habit)
+            }
+            // Delete confirmation alert — triggered by swipe action or the
+            // delete button in the edit form. Uses .alert(item:) which
+            // automatically sets habitToDelete back to nil on dismiss.
+            // Like a <ConfirmDialog open={!!habitToDelete}> in React.
+            //
+            // `role: .destructive` makes the "Delete" button red — the
+            // system standard for irreversible actions.
+            .alert(
+                "Delete Habit?",
+                isPresented: Binding(
+                    get: { habitToDelete != nil },
+                    set: { if !$0 { habitToDelete = nil } }
+                )
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let habit = habitToDelete {
+                        habitStore.deleteHabit(id: habit.id)
+                    }
+                    habitToDelete = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    habitToDelete = nil
+                }
+            } message: {
+                Text("This action cannot be undone.")
             }
             // Toast overlay sits on top of everything, at the bottom of the screen.
             // Like a portal-rendered <ToastContainer /> in React.
