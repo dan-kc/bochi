@@ -24,6 +24,8 @@ struct TradeModalView: View {
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
     // How many times the user wants to claim this habit. Starts at 1.
+    // Capped at maxQuantity to prevent accidental excessive claims.
+    static let maxQuantity = 99
     @State private var quantity = 1
 
     // Controls whether the celebration view replaces the form content.
@@ -124,12 +126,13 @@ struct TradeModalView: View {
                     .frame(minWidth: 80)
 
                 Button {
-                    quantity += 1
+                    if quantity < Self.maxQuantity { quantity += 1 }
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(quantity < Self.maxQuantity ? .blue : .gray)
                 }
+                .disabled(quantity >= Self.maxQuantity)
             }
 
             Spacer()

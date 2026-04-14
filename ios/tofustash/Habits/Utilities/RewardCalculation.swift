@@ -155,6 +155,35 @@ enum RewardCalculation {
         return Int(reward.rounded())
     }
 
+    // MARK: - Trade Helpers
+
+    // Human-readable text describing which trade-required properties are missing.
+    // Returns nil when both are set (i.e. the habit can trade).
+    static func missingTradeProperties(frequency: Double?, difficultyRank: String?) -> String? {
+        switch (frequency == nil, difficultyRank == nil) {
+        case (true, true): return "frequency and difficulty"
+        case (true, false): return "frequency"
+        case (false, true): return "difficulty"
+        case (false, false): return nil
+        }
+    }
+
+    // MARK: - Time Bucket Helpers
+
+    // Returns the number of nanoseconds until the next 30-minute time bucket
+    // boundary. Used to sleep precisely until the price will change, rather
+    // than polling on a fixed interval.
+    static func nanosUntilNextBucket(now: Date = Date()) -> UInt64 {
+        let epochMs = now.timeIntervalSince1970 * 1000
+        let bucketMs = Double(timeBucketMs)
+        let msIntoCurrentBucket = epochMs.truncatingRemainder(dividingBy: bucketMs)
+        let msUntilNext = bucketMs - msIntoCurrentBucket
+        // Convert ms → nanoseconds. Add a small buffer (100ms) to ensure we
+        // land just after the boundary, not right on the edge due to floating
+        // point imprecision.
+        return UInt64((msUntilNext + 100) * 1_000_000)
+    }
+
     // MARK: - Multi-Purchase Total
 
     // Calculates the total reward for completing a habit multiple times in one

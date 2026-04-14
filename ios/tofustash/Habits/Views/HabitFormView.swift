@@ -170,21 +170,17 @@ struct HabitFormView: View {
         )
     }
 
-    // Whether this habit has the required properties to calculate a price.
-    // Both frequency and difficulty rank must be set.
+    // Whether the current form state has the required properties to trade.
+    // Uses the local form state (not the persisted habit) since the user may
+    // have just set frequency/difficulty without saving yet.
     private var canTrade: Bool {
         frequency != nil && difficultyRank != nil
     }
 
     // Human-readable text describing which properties are missing.
-    // Used in the helper message when canTrade is false.
+    // Delegates to RewardCalculation to keep the logic in one place.
     private var missingPropertiesText: String {
-        switch (frequency == nil, difficultyRank == nil) {
-        case (true, true): return "frequency and difficulty"
-        case (true, false): return "frequency"
-        case (false, true): return "difficulty"
-        case (false, false): return "" // shouldn't happen when canTrade is false
-        }
+        RewardCalculation.missingTradeProperties(frequency: frequency, difficultyRank: difficultyRank) ?? ""
     }
 
     private var trimmedName: String {

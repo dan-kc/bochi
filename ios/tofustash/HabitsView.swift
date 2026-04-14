@@ -21,13 +21,17 @@ struct HabitsView: View {
     @State private var tradingHabit: Habit? = nil
 
     // Toast manager for showing recovery toasts when habits are discarded.
+    // Like a useState + context provider for a toast notification system in React.
     @State private var toastManager = ToastManager()
 
-    // Holds saved form state for recovery.
+    // Holds saved form state for recovery. When the user taps "Recover" on
+    // a toast, this is set to re-open the form with the discarded values.
+    // Like a useState<FormSnapshot | null>(null) in React.
     @State private var recoveringPrefill: HabitFormSnapshot? = nil
 
-    // Current time bucket for price calculations. Updated every 60 seconds
-    // to detect when the 30-minute bucket changes.
+    // Current time bucket for price calculations. Sleeps until the next
+    // 30-minute boundary, then updates — so prices refresh exactly when
+    // the bucket rolls over.
     @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
 
     var body: some View {
@@ -48,6 +52,8 @@ struct HabitsView: View {
             .navigationTitle("Habits")
             .overlay(alignment: .bottomTrailing) {
                 Button {
+                    // Clear any lingering recovery state so the FAB always
+                    // opens a fresh form, not a recovered one.
                     recoveringPrefill = nil
                     showingNewForm = true
                 } label: {
@@ -61,6 +67,9 @@ struct HabitsView: View {
                 }
                 .padding()
             }
+            // New habit sheet — passes an onDiscard callback so we can show a
+            // recovery toast when the user dismisses a form that had content.
+            // The prefill parameter restores form state when recovering.
             .sheet(isPresented: $showingNewForm) {
                 HabitFormView(
                     mode: .new,
@@ -70,42 +79,46 @@ struct HabitsView: View {
                     }
                 )
             }
+            // Change/edit habit sheet — triggered by tapping a row element.
+            // .sheet(item:) automatically sets editingHabit back to nil on dismiss.
             .sheet(item: $editingHabit) { habit in
                 HabitFormView(mode: .change(habit), initialFocus: editFocus)
             }
             .sheet(item: $tradingHabit) { habit in
                 TradeModalView(habit: habit)
             }
+            // Toast overlay sits on top of everything, at the bottom of the screen.
+            // Like a portal-rendered <ToastContainer /> in React.
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
+            // Sleep until the next 30-minute bucket boundary, then update.
+            // More efficient than polling every 60s — wakes exactly once per
+            // bucket change instead of ~29 unnecessary checks.
             .task {
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    let nanos = RewardCalculation.nanosUntilNextBucket()
+                    try? await Task.sleep(nanoseconds: nanos)
                     timeBucket = RewardCalculation.getCurrentTimeBucket()
                 }
             }
         }
     }
 
+    // Show a toast that lets the user recover a discarded habit form.
+    // The toast has a 5-second countdown, after which it auto-dismisses.
     private func showDiscardToast(snapshot: HabitFormSnapshot) {
+        // Clear any previous prefill so it doesn't leak into new forms.
         recoveringPrefill = nil
         toastManager.show(
             message: "Habit Discarded",
             actionLabel: "Recover"
         ) {
+            // When the user taps "Recover", save the snapshot and re-open
+            // the form. The form reads recoveringPrefill to restore state.
             recoveringPrefill = snapshot
             showingNewForm = true
         }
-    }
-
-    // Whether a habit has the required properties to calculate a price.
-    // Both frequency and difficulty rank must be set for the reward formula
-    // to produce meaningful results — without frequency, the frequency
-    // multiplier F is always 1 (no diminishing returns), and without
-    // difficulty rank, D defaults to 0.5 (no relative positioning).
-    private func habitCanTrade(_ habit: Habit) -> Bool {
-        habit.frequency != nil && habit.difficultyRank != nil
     }
 
     // Calculate the current reward price for a habit.
@@ -120,10 +133,16 @@ struct HabitsView: View {
         )
     }
 
-    // Each habit row in the list.
+    // Each habit row in the list. Layout:
+    //   [Habit info (left)]     [Price button OR warning icon (right)]
+    //
+    // Split into two buttons in an HStack: the left side opens the change form,
+    // the right side opens the trade modal (or change form if incomplete).
+    // This replaces the old single-button approach since the row now has two
+    // distinct tap targets.
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
-        let canTrade = habitCanTrade(habit)
+        let canTrade = habit.canTrade
 
         return HStack(alignment: .center) {
             // Left side: habit info, taps to open change form.
@@ -160,6 +179,9 @@ struct HabitsView: View {
                         TagPillsRow(tags: tags)
                     }
                 }
+                // .frame(maxWidth:) stretches the VStack to fill the available width.
+                // .contentShape ensures taps register on the gaps between text rows.
+                // Together they make the entire left side a single tap target.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -207,6 +229,9 @@ struct HabitsView: View {
         }
     }
 
+    // A pill with a colored border outline and no background fill.
+    // Used for frequency and difficulty indicators in the list row.
+    // Like border + borderRadius: 999 with no backgroundColor in CSS.
     private func borderedPill(text: String) -> some View {
         Text(text)
             .font(.caption)
@@ -216,6 +241,7 @@ struct HabitsView: View {
             .overlay(Capsule().stroke(.orange, lineWidth: 1))
     }
 
+    // Opens the change form for a habit, optionally auto-opening a sub-modal.
     private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
         editFocus = focus
         editingHabit = habit
