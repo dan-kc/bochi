@@ -11,4 +11,5 @@ struct RewardsView: View {
 
 #Preview {
     RewardsView()
+        .environment(BalanceStore())
 }

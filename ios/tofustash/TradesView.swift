@@ -11,4 +11,5 @@ struct TradesView: View {
 
 #Preview {
     TradesView()
+        .environment(BalanceStore())
 }

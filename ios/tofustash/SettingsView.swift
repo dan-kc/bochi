@@ -3,12 +3,30 @@ import SwiftUI
 struct SettingsView: View {
     // @Environment — reads from SwiftUI's environment (exactly like React's useContext). The AuthManager was provided via .environment() up the tree.
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserSettingsStore.self) private var userSettingsStore
+
+    // Controls whether the general difficulty sheet is presented.
+    @State private var showingDifficulty = false
 
     var body: some View {
         // NavigationStack — like React Router's <Routes> wrapper, manages a push/pop navigation stack
         NavigationStack {
             // List — like <ul> with native iOS styling and scroll behavior
             List {
+                // General difficulty setting — controls the scale of all rewards.
+                Section("Gameplay") {
+                    Button {
+                        showingDifficulty = true
+                    } label: {
+                        HStack {
+                            Text("General Difficulty")
+                            Spacer()
+                            Text(String(format: "%g", userSettingsStore.generalDifficulty))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 if authManager.isLoading {
                     ProgressView()
                 } else if authManager.isAnonymous {
@@ -18,6 +36,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showingDifficulty) {
+                GeneralDifficultyView()
+            }
         }
     }
 
@@ -88,4 +109,6 @@ struct SettingsView: View {
             apiClient: LiveAuthAPIClient(baseURL: URL(string: "http://localhost:8501")!),
             tokenStorage: KeychainTokenStorage()
         ))
+        .environment(UserSettingsStore())
+        .environment(BalanceStore())
 }

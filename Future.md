@@ -3,23 +3,37 @@
 I am writing a native IOS version (./ios) of an existing react-native frontend (./frontend).
 Do not copy any styling. Use default SwiftUI styling including icons etc.
 Write comments assuming I don't know anything about Swift. When comparable, compare to React as I am an expert in that. Document behaviours too.
-Use strict TDD, always write unit tests first. No UI tests. When writing tests, ensure you comment what behaviour you are testing for. I do not want redundant tests. This should resemple BDD. If there is no appropriate test, don't write one. I only want relevant BDD tests that match user workflows in the app.
+Use strict TDD, always write unit tests first. No UI tests. When writing tests, ensure you comment what behaviour you are testing for. I do not want redundant tests. This should resemple BDD. If there is no appropriate test, don't write one. I only want relevant BDD tests that match user workflows in the app. Most tests should fail first, Red, Green, Refactor. But I am not strict for that, indeed if there is a behaviour that ought to be a test it should be added even if it already passes.
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-On the difficulty modal make the following changes:
+Implement the tofu reward amount calculation feature from the old frontend. Each habit should have a reward amount derived from its properties.
+Implement a tofu balance feature that tracks the current tofu balance of the user.
+Also add to settings the "general difficulty" so you can properly calculate the value.
 
-The final "done" screen should only show for a second. It should have no buttons or text and should just show the green checkmark as it does now. After that it should automatically collapse and return the user to the change form. THEN the difficulty pill should animate to show that it has been set. Make it a medium/strong animation so the user notices.
+# Balance
 
-For the other stages in the difficulty flow:
+A users balance should be displayed in the top right of the ui, regardless of what view you are on, it needs to be always visible. I think it should be on the same line as the "Habits" title. Make it big, similar size to the Title. It should be "1000T" for example where T is some appropriate icon.
 
-Move the skip button to the top left and rename it "cancel".
+# Trade buttons
 
-If the difficulty is already set, then it should have an additional button "unset" in the top right that removes the difficulty
+- Each habit list item should have the price in a button on the RHS of the item. The button should open a "trade" modal.
+- A button should also feature in the habit change view (NOT on the new view) at the bottom. (Make the modal slightly taller as it will need more space). This should also open the trade modal
 
-Ensure that if a new Habit form is opened when there are no prev habits, it automatically sets the difficulty. It should be already set when the habit form is opened such that the difficulty pill is already hilighted. If one clicks on the difficulty pill, it should show a message saying that you don't need to set the difficulty because it is the first habit. A user should not be able to unset this difficulty at all. In this case, the cancel button in the top left should be an "x"
+# trade modal
 
-# Add a "tick" to the name/description edit modal. It should have an "x" and a "tick", if you click the x it should ask "Are you sure you want to discard changes?" Also this behaviour should replicate if I touch outside of the modal.
+Should have the following:
+- The name of the Habit (non editable from this modal)
+- "Cancel" button verbatim
+- "Claim" button verbatim that executes the trade
+- A counter for the quantity (this should be the main center peice of the modal). one habit could be "Do 10 pushups" for example, and if i do 20, I want a way to indicate that I've cliamed this reward twice. 
+- The total price of everything. Bare in mind that the calculated reward should not just be double what the price is if I put the count at 2. This is because purchasing 1, changes the prices of the next as per the formula found in ./frontend. So this calculation needs to account for that.
+
+  Tapping cancel should hide the modal and return to either the change form or the habitList depending on where you opened the modal. 
+
+  Tapping yes should display some animation to user indicating they just cliamed a reward, then it should close the modal and always return to the habit list view. It should also animate the total tofu balance in the top bar next to the title over 2 seconds because the total should have changed. Also, at the same time the balance is animating, the price/reward amount should animate in the change view and the habit list item, to it's new value (because the price/reward amount is derived from how ofen you do the habit, so it should generally change after completing a habit).
+
+# Delete button
 
 # Filters
 
@@ -40,16 +54,3 @@ Implement the Rewards page. There are subtle differences in the Reward type. It 
 Add the price
 
 Also ensure that this pill scroll correctly conveys the case where there is overflow.
-
-
-
-
-     2. Manual testing scenarios:
-       - Open new habit form with no existing habits → difficulty pill already highlighted
-       - Tap difficulty pill on first habit → alert appears
-       - Open new habit form with existing habits → difficulty pill not highlighted
-       - Tap difficulty pill → ranker opens with "Cancel" top-left
-       - Complete ranking → checkmark shows for 1s, sheet dismisses, pill bounces
-       - Open ranker when difficulty already set → "Unset" button visible top-right
-       - Tap "Unset" → difficulty cleared, sheet dismisses
-       - Tap "Cancel" → sheet dismisses without changes

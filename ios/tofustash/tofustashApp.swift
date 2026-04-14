@@ -22,6 +22,16 @@ struct tofustashApp: App {
     // managing tags and their associations with habits.
     @State private var tagStore = TagStore()
 
+    // TradeStore tracks habit completion records. The completion count feeds
+    // into the reward formula's frequency multiplier.
+    @State private var tradeStore = TradeStore()
+
+    // BalanceStore tracks the user's tofu currency balance.
+    @State private var balanceStore = BalanceStore()
+
+    // UserSettingsStore holds gameplay settings like general difficulty.
+    @State private var userSettingsStore = UserSettingsStore()
+
     // `body` is like the render function — SwiftUI calls it to get the view tree.
     var body: some Scene {
         // WindowGroup is roughly <StrictMode><App /></StrictMode> — the root container.
@@ -33,6 +43,9 @@ struct tofustashApp: App {
                 .environment(authManager)
                 .environment(habitStore)
                 .environment(tagStore)
+                .environment(tradeStore)
+                .environment(balanceStore)
+                .environment(userSettingsStore)
                 // .task is useEffect with an empty dep array — runs once on mount.
                 // `await` is native here; no need for the async-function-inside-useEffect pattern.
                 .task { await authManager.bootstrap() }

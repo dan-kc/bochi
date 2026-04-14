@@ -70,6 +70,9 @@ struct HabitFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
+    @Environment(TradeStore.self) private var tradeStore
+    @Environment(BalanceStore.self) private var balanceStore
+    @Environment(UserSettingsStore.self) private var userSettingsStore
 
     // Form state — initialized from the habit in .onAppear for change mode.
     // In React, these would be multiple useState hooks.
@@ -91,6 +94,12 @@ struct HabitFormView: View {
     @State private var showingFrequency = false
     @State private var showingDifficulty = false
     @State private var showingTags = false
+
+    // Trade modal presentation state — only used in .change mode.
+    // When the trade completes, shouldDismissAfterTrade is set so the
+    // form also dismisses (returning to the habit list).
+    @State private var showingTradeModal = false
+    @State private var shouldDismissAfterTrade = false
 
     // Alert shown when the user taps the difficulty pill for the first habit.
     // Since difficulty is auto-set, the ranker isn't needed — this explains why.
@@ -143,6 +152,39 @@ struct HabitFormView: View {
             .filter { $0.difficultyRank != nil && $0.id != habitId }
             .count
         return Self.hasComparableHabits(rankedHabitCount: rankedCount, excludeHabitId: mode.isNew ? nil : habitId)
+    }
+
+    // Current reward price for this habit — used by the trade button.
+    // Recalculates automatically when trade history or settings change.
+    // Uses the actual habit from the store (via the mode's associated value)
+    // rather than creating a throwaway Habit, so properties like createdAt
+    // are correct for the formula.
+    private var currentPrice: Int {
+        guard case .change(let habit) = mode else { return 0 }
+        let completions = tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
+        return RewardCalculation.calculateReward(
+            habit: habit,
+            allHabits: habitStore.activeHabits,
+            completionsInPeriod: completions,
+            generalDifficulty: userSettingsStore.generalDifficulty
+        )
+    }
+
+    // Whether this habit has the required properties to calculate a price.
+    // Both frequency and difficulty rank must be set.
+    private var canTrade: Bool {
+        frequency != nil && difficultyRank != nil
+    }
+
+    // Human-readable text describing which properties are missing.
+    // Used in the helper message when canTrade is false.
+    private var missingPropertiesText: String {
+        switch (frequency == nil, difficultyRank == nil) {
+        case (true, true): return "frequency and difficulty"
+        case (true, false): return "frequency"
+        case (false, true): return "difficulty"
+        case (false, false): return "" // shouldn't happen when canTrade is false
+        }
     }
 
     private var trimmedName: String {
@@ -264,7 +306,10 @@ struct HabitFormView: View {
             .navigationBarTitleDisplayMode(.inline)
             // Fixed .medium detent (~half screen). Content scrolls within this
             // height. The sheet never resizes — simpler and more predictable.
-            .presentationDetents([.medium])
+            // Change mode gets a slightly taller sheet to accommodate the trade
+            // button at bottom. .fraction(0.55) is just a bit taller than .medium
+            // (~50%). New mode stays at .medium since there's no trade button.
+            .presentationDetents([mode.isNew ? .medium : .fraction(0.55)])
             // Hide the drag indicator bar — the sheet height is fixed,
             // not user-draggable. The user can still swipe down to dismiss.
             .presentationDragIndicator(.hidden)
@@ -332,6 +377,22 @@ struct HabitFormView: View {
             }
             .sheet(isPresented: $showingTags) {
                 TagsView(habitId: habitId)
+            }
+            // Trade modal — presented when the "Claim Reward" button is tapped.
+            // When the trade completes, onClaim fires, setting shouldDismissAfterTrade.
+            // On dismiss, if the flag is set, this form also dismisses — returning
+            // the user to the habit list (chained dismissal).
+            .sheet(isPresented: $showingTradeModal, onDismiss: {
+                if shouldDismissAfterTrade {
+                    shouldDismissAfterTrade = false
+                    dismiss()
+                }
+            }) {
+                if case .change(let habit) = mode {
+                    TradeModalView(habit: habit) {
+                        shouldDismissAfterTrade = true
+                    }
+                }
             }
             .task {
                 await initializeForm()
@@ -437,6 +498,44 @@ struct HabitFormView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     showingTags = true
+                }
+            }
+
+            // Trade section — only shown in change mode (not for new habits).
+            // If frequency and difficulty are both set, shows a "Claim Reward"
+            // button with the price. Otherwise shows a helper message telling
+            // the user what they need to set.
+            if case .change = mode {
+                if canTrade {
+                    Section {
+                        Button {
+                            showingTradeModal = true
+                        } label: {
+                            HStack {
+                                Text("Claim Reward")
+                                Spacer()
+                                HStack(spacing: 2) {
+                                    Text("\(currentPrice)")
+                                        .contentTransition(.numericText())
+                                    Image(systemName: "cube.fill")
+                                        .font(.caption2)
+                                }
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                } else {
+                    Section {
+                        Label {
+                            Text("Set \(missingPropertiesText) to enable rewards")
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -678,4 +777,7 @@ struct HabitFormView: View {
     HabitFormView(mode: .new)
         .environment(HabitStore())
         .environment(TagStore())
+        .environment(TradeStore())
+        .environment(BalanceStore())
+        .environment(UserSettingsStore())
 }
