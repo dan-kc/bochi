@@ -116,6 +116,12 @@ struct HabitFormView: View {
     // via state in React: className={animating ? "bounce" : ""}
     @State private var difficultyPillAnimating = false
 
+    // The measured height of the form content, reported by MeasureHeight
+    // via a PreferenceKey. Used to set a dynamic .height() detent so the
+    // sheet fits its content exactly. Like reading a ref's clientHeight
+    // in React to set a container's style.height.
+    @State private var formContentHeight: CGFloat = 0
+
     // Which field in the name/description editor has keyboard focus.
     // @FocusState is SwiftUI's way to programmatically control keyboard focus.
     // Like using useRef + ref.current.focus() in React, but declarative —
@@ -299,6 +305,12 @@ struct HabitFormView: View {
                         .transition(.opacity)
                 }
             }
+            // Measure the ZStack's rendered height so the sheet detent can
+            // match it. The MeasureHeight modifier places an invisible
+            // GeometryReader in the background that reports the height via
+            // FormHeightPreferenceKey. Like attaching a ResizeObserver to
+            // a container div in React.
+            .modifier(MeasureHeight())
             // .animation makes SwiftUI interpolate between the two states —
             // fading one out and the other in. Like CSS `transition: opacity 0.25s`.
             .animation(.easeInOut(duration: 0.25), value: showingNameDescription)
@@ -306,13 +318,18 @@ struct HabitFormView: View {
                 ? "Name & Description"
                 : (mode.isNew ? "New Habit" : "Edit Habit"))
             .navigationBarTitleDisplayMode(.inline)
-            // Fixed .medium detent (~half screen). Content scrolls within this
-            // height. The sheet never resizes — simpler and more predictable.
-            // Change mode gets a slightly taller sheet to accommodate the trade
-            // button at bottom. .fraction(0.55) is just a bit taller than .medium
-            // (~50%). New mode stays at .medium since there's no trade button.
-            .presentationDetents([mode.isNew ? .medium : .fraction(0.55)])
-            // Hide the drag indicator bar — the sheet height is fixed,
+            // Dynamic height detent: the sheet sizes to match the measured
+            // content height. formContentHeight is reported by MeasureHeight
+            // (via a PreferenceKey) attached to the ZStack content below.
+            // Falls back to .medium while the first measurement arrives
+            // (formContentHeight == 0 on the initial render pass).
+            // In React, this is like setting style={{ height: measuredRef.current }}
+            // where measuredRef is updated by a ResizeObserver callback.
+            .presentationDetents([formContentHeight > 0 ? .height(formContentHeight) : .medium])
+            .onPreferenceChange(FormHeightPreferenceKey.self) { height in
+                formContentHeight = height
+            }
+            // Hide the drag indicator bar — the sheet height is fitted,
             // not user-draggable. The user can still swipe down to dismiss.
             .presentationDragIndicator(.hidden)
             .toolbar {

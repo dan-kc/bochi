@@ -7,13 +7,17 @@ Use strict TDD, always write unit tests first. No UI tests. When writing tests, 
 Ensure the codebase is as DRY as possible. Do not repeat code when avoidable.
 Use `ios-test` to run unit tests, this may take a few minutes. Outside of this, do not run any xcode commands - notify if you need me to run any.
 
-Implement the tofu reward amount calculation feature from the old frontend. Each habit should have a reward amount derived from its properties.
-Implement a tofu balance feature that tracks the current tofu balance of the user.
-Also add to settings the "general difficulty" so you can properly calculate the value.
+# Rewards
 
-# Delete button
+Make the textbox "search tags..." always have focus. The IOS keyboard should always be out when this modal is open. It should only close when one opens the edit tag modal. Ensure that the tick in the top right is always visible. Currently it dissapears While the user is typing until they hit the "X" next to the keyboard.
 
-Add a delete button to Habits. Also, swiping on the Habits in the list view should also delete them. Both of them should bring up a delete alert asking if they want to delete this habit. I'm not sure which way we should swipe to delete, I am probably going to add a different feature to the other direction swipe at a later date. Use whatever is idiomatic and Apple recommends.
+# Rewards
+
+Implement the rewards section. See how it is implemented in ./frontend.
+
+Much of the content in the rewards section will be very similar to the habits section. Be sure to keep things DRY and re-use when appropriate. Do not over abstract be reasonable. Ask if you are unsure.
+
+Copy UI decisions from the Habits page in ./ios.
 
 # Filters
 
