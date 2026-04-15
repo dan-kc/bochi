@@ -4,6 +4,71 @@ import Testing
 
 struct HabitFormFocusTests {
 
+    // MARK: - Initial flow surface
+
+    // Behaviour: Tapping "+" to create a habit should open directly into the
+    // name/description editor, so the user does not see the full habit form yet.
+    @Test func newHabitStartsOnNameDescriptionSurface() {
+        #expect(HabitFormView.initialSurface(
+            mode: .new,
+            initialFocus: nil,
+            hasPrefill: false
+        ) == .nameDescription)
+    }
+
+    // Behaviour: Recovering a discarded draft should re-open on the full form,
+    // because the user already went past the name/description step before.
+    @Test func recoveredDraftStartsOnMainFormSurface() {
+        #expect(HabitFormView.initialSurface(
+            mode: .new,
+            initialFocus: nil,
+            hasPrefill: true
+        ) == .form)
+    }
+
+    // Behaviour: Editing an existing habit normally starts on the full form.
+    @Test func editHabitStartsOnMainFormSurface() {
+        let habit = Habit(
+            id: "1", name: "Test", description: "",
+            createdAt: Date(), updatedAt: Date(), deletedAt: nil,
+            frequency: nil, difficultyRank: nil
+        )
+
+        #expect(HabitFormView.initialSurface(
+            mode: .change(habit),
+            initialFocus: nil,
+            hasPrefill: false
+        ) == .form)
+    }
+
+    // Behaviour: If the user specifically tapped the description row, editing
+    // should jump straight into the name/description editor again.
+    @Test func tappedDescriptionStartsOnNameDescriptionSurface() {
+        let habit = Habit(
+            id: "1", name: "Test", description: "",
+            createdAt: Date(), updatedAt: Date(), deletedAt: nil,
+            frequency: nil, difficultyRank: nil
+        )
+
+        #expect(HabitFormView.initialSurface(
+            mode: .change(habit),
+            initialFocus: .description,
+            hasPrefill: false
+        ) == .nameDescription)
+    }
+
+    // Behaviour: When the user enters through the description affordance, the
+    // description field should receive focus instead of the name field.
+    @Test func descriptionEntryPrefersDescriptionFocus() {
+        #expect(HabitFormView.initialEntryFocus(initialFocus: .description) == .description)
+    }
+
+    // Behaviour: All other entry paths default keyboard focus to the name field.
+    @Test func defaultEntryPrefersNameFocus() {
+        #expect(HabitFormView.initialEntryFocus(initialFocus: nil) == .name)
+        #expect(HabitFormView.initialEntryFocus(initialFocus: .name) == .name)
+    }
+
     // MARK: - isNameDescription
 
     // HabitFormFocus has a computed property `isNameDescription` that returns true

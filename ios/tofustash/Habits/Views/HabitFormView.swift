@@ -1,11 +1,12 @@
+import Combine
 import SwiftUI
+import UIKit
 
-// HabitFormMode is like a tagged union / discriminated union in TypeScript:
-//   type FormMode = { type: "new" } | { type: "change", habit: Habit }
+// HabitFormMode is like a discriminated union in TypeScript:
+//   { type: "new" } | { type: "change", habit: Habit }
 //
-// Swift enums can carry associated values — each case is like a variant
-// that holds different data. `.new` carries nothing, `.change` carries
-// the Habit being edited.
+// Swift enums can carry data for each case, so `.change` can include the habit
+// being edited without needing a separate wrapper object.
 enum HabitFormMode: Equatable {
     case new
     case change(Habit)
@@ -16,17 +17,9 @@ enum HabitFormMode: Equatable {
     }
 }
 
-// Which sub-modal should auto-open when the form appears.
-// Used when tapping a specific field in the list view — e.g. tapping
-// "Frequency" opens the change form AND immediately shows the frequency modal.
-//
-// nil = don't auto-open any sub-modal (default for change form).
-// For new forms, .name is the default (focus on name).
-//
-// .name and .description both open the same name/description editor —
-// the difference is which text field gets keyboard focus. Like having
-// two React onClick handlers that open the same modal but call
-// different ref.current.focus() targets.
+// Which part of the habit flow should open first.
+// The user can land directly in name/description, frequency, difficulty, or tags
+// depending on which control they tapped before opening the modal.
 enum HabitFormFocus: Equatable {
     case name
     case description
@@ -34,18 +27,23 @@ enum HabitFormFocus: Equatable {
     case difficulty
     case tags
 
-    // Whether this focus opens the name/description editor.
-    // Both .name and .description open the same inline editor view,
-    // just focusing different fields — so they share this check.
     var isNameDescription: Bool {
         self == .name || self == .description
     }
 }
 
-// Captures the form state when a new habit is discarded so it can be
-// recovered later. Like serializing a React form's state to restore it.
-// The habitId is preserved so any tag associations created during the
-// form session remain valid on recovery.
+// The habit flow has two visual surfaces inside one modal:
+// 1. a small name/description editor
+// 2. the full habit form
+//
+// Keeping this as explicit state makes the "morph" animation predictable.
+enum HabitFormSurface: Equatable {
+    case nameDescription
+    case form
+}
+
+// Captures a discarded new-habit draft so the parent can offer recovery.
+// Like serializing controlled-input state before unmounting a React modal.
 struct HabitFormSnapshot {
     let name: String
     let description: String
@@ -54,109 +52,179 @@ struct HabitFormSnapshot {
     let habitId: String
 }
 
-// The main habit form — handles both creating new habits and editing existing ones.
+// Custom modal wrapper for the habit flow.
+// We intentionally avoid SwiftUI's sheet detents here because the user wants:
+// - content-sized height
+// - an editor that morphs into the full form
+// - the keyboard to animate with the opening modal
+//
+// A custom overlay gives us direct control over height, keyboard avoidance,
+// and enter/exit transitions.
+struct HabitFormModal: View {
+    let mode: HabitFormMode
+    let initialFocus: HabitFormFocus?
+    let prefill: HabitFormSnapshot?
+    let onDiscard: ((HabitFormSnapshot) -> Void)?
+    let onDelete: ((Habit) -> Void)?
+    let onClose: () -> Void
+
+    @State private var contentHeight: CGFloat = 0
+    @State private var keyboardOverlap: CGFloat = 0
+    @State private var keyboardAnimation = Animation.easeOut(duration: 0.25)
+
+    var body: some View {
+        GeometryReader { proxy in
+            let sideInset: CGFloat = 12
+            let cardWidth = min(560, proxy.size.width - (sideInset * 2))
+            let bottomInset = keyboardOverlap > 0 ? keyboardOverlap : proxy.safeAreaInsets.bottom
+            let maxCardHeight = max(0, proxy.size.height - proxy.safeAreaInsets.top - bottomInset)
+            let needsScroll = contentHeight > maxCardHeight
+
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(0.18)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onClose()
+                    }
+
+                if needsScroll {
+                    ScrollView(showsIndicators: false) {
+                        measuredContent
+                    }
+                    .frame(width: cardWidth, height: maxCardHeight, alignment: .top)
+                    .modifier(HabitFormCardChrome())
+                    .padding(.horizontal, sideInset)
+                    .padding(.bottom, bottomInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    measuredContent
+                        .frame(width: cardWidth, alignment: .top)
+                        .modifier(HabitFormCardChrome())
+                        .padding(.horizontal, sideInset)
+                        .padding(.bottom, bottomInset)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .ignoresSafeArea()
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .onPreferenceChange(ContentHeightPreferenceKey.self) { newHeight in
+                contentHeight = newHeight
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                updateKeyboard(with: note, in: proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
+                updateKeyboard(with: note, in: proxy)
+            }
+            .animation(.easeInOut(duration: 0.24), value: needsScroll)
+        }
+    }
+
+    private var measuredContent: some View {
+        HabitFormView(
+            mode: mode,
+            initialFocus: initialFocus,
+            prefill: prefill,
+            onClose: onClose,
+            onDiscard: onDiscard,
+            onDelete: onDelete
+        )
+        // Measure the card from its intrinsic content height, not from a scroll
+        // container or full-screen presentation host.
+        .fixedSize(horizontal: false, vertical: true)
+        .background(HeightReader())
+    }
+
+    private func updateKeyboard(with note: Notification, in proxy: GeometryProxy) {
+        let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+        keyboardAnimation = .easeOut(duration: duration)
+
+        let screenEndFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+        let overlap = max(0, proxy.frame(in: .global).maxY - screenEndFrame.minY)
+
+        withAnimation(keyboardAnimation) {
+            keyboardOverlap = overlap
+        }
+    }
+}
+
+private struct HabitFormCardChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.regularMaterial)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(.quaternary, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.12), radius: 24, y: 10)
+    }
+}
+
 struct HabitFormView: View {
     let mode: HabitFormMode
     let initialFocus: HabitFormFocus?
-    // Called when a new form with content is dismissed without saving.
-    // The snapshot contains all form values so the caller can offer recovery.
-    // Like an onDiscard callback prop in React.
-    let onDiscard: ((HabitFormSnapshot) -> Void)?
-    // Called when the user taps "Delete" in the form. The form dismisses
-    // itself and passes the habit back so the parent can show the delete
-    // confirmation alert. Like an onDelete prop in React.
-    let onDelete: ((Habit) -> Void)?
-    // Pre-populates form fields when recovering a discarded habit.
-    // When set, the form opens to the main view (not the name editor)
-    // and does not auto-focus any field.
     let prefill: HabitFormSnapshot?
+    let onClose: () -> Void
+    let onDiscard: ((HabitFormSnapshot) -> Void)?
+    let onDelete: ((Habit) -> Void)?
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
-    @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
-    // Form state — initialized from the habit in .onAppear for change mode.
-    // In React, these would be multiple useState hooks.
+    @State private var surface: HabitFormSurface
+    @State private var hasShownMainForm: Bool
     @State private var name = ""
     @State private var description = ""
     @State private var frequency: Double? = nil
     @State private var difficultyRank: String? = nil
-
-    // The habit's ID — needed for tag associations in change mode.
-    // For new mode, we generate one up front so tags can be associated
-    // before the habit is actually saved.
     @State private var habitId: String = UUID().uuidString
 
-    // Sub-modal presentation states — like multiple useState booleans in React.
-    // When set to true, the corresponding .sheet modifier presents the modal.
-    // showingNameDescription is NOT initialized here — it's set in init() based
-    // on mode, so new forms start directly on the name/description editor (no flash).
-    @State private var showingNameDescription: Bool
     @State private var showingFrequency = false
     @State private var showingDifficulty = false
     @State private var showingTags = false
-
-    // Trade modal presentation state — only used in .change mode.
-    // When the trade completes, shouldDismissAfterTrade is set so the
-    // form also dismisses (returning to the habit list).
     @State private var showingTradeModal = false
-    @State private var shouldDismissAfterTrade = false
-
-    // Alert shown when the user taps the difficulty pill for the first habit.
-    // Since difficulty is auto-set, the ranker isn't needed — this explains why.
-    // Like a window.alert() in React, but declarative: set the bool and SwiftUI
-    // renders the alert. Dismissed by the system when the user taps "OK".
+    @State private var shouldCloseAfterTrade = false
     @State private var showingFirstHabitAlert = false
-
-    // Triggers a bounce animation on the difficulty pill after the ranker
-    // sheet dismisses with a rank set. Like a CSS animation class toggled
-    // via state in React: className={animating ? "bounce" : ""}
     @State private var difficultyPillAnimating = false
 
-    // The measured height of the form content, reported by MeasureHeight
-    // via a PreferenceKey. Used to set a dynamic .height() detent so the
-    // sheet fits its content exactly. Like reading a ref's clientHeight
-    // in React to set a container's style.height.
-    @State private var formContentHeight: CGFloat = 0
+    @State private var activeEntryField: EntryField
+    @State private var focusedEntryField: EntryField? = nil
+    @State private var descriptionHeight = Self.minimumDescriptionHeight
 
-    // Which field in the name/description editor has keyboard focus.
-    // @FocusState is SwiftUI's way to programmatically control keyboard focus.
-    // Like using useRef + ref.current.focus() in React, but declarative —
-    // set the state variable and SwiftUI moves focus automatically.
-    enum NameDescField: Hashable {
-        case name, description
+    @State private var hasInitialized = false
+    @State private var hasAppliedInitialLoad = false
+    @State private var didPersist = false
+
+    enum EntryField: Hashable {
+        case name
+        case description
     }
 
-    @FocusState private var focusedField: NameDescField?
-
-    // Tracks which field should receive focus when the name/description editor
-    // next appears. We can't rely on @FocusState alone because SwiftUI resets
-    // it to nil when the target TextField isn't in the view hierarchy yet
-    // (during the ZStack cross-fade). This @State survives the transition and
-    // is read by .onAppear to set the correct focus.
-    // In React terms: @FocusState is like an uncontrolled ref that the browser
-    // can reset; pendingFocus is the controlled state that tells us what to do.
-    @State private var pendingFocus: NameDescField = .name
-
-    // Track whether the initial focus has been applied
-    @State private var hasAppliedInitialFocus = false
-
-    // Tags currently applied to this habit
     private var habitTags: [Tag] {
         tagStore.tagsForHabit(habitId: habitId)
     }
 
-    // Whether this is the very first habit being created. Computed from store state.
-    // Like a derived selector in React: useMemo(() => isFirstHabit(mode, habits), [mode, habits])
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var trimmedDescription: String {
+        description.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isValid: Bool {
+        !trimmedName.isEmpty && trimmedName.count <= 100
+    }
+
     private var isFirstHabit: Bool {
         Self.isFirstHabit(mode: mode, activeHabitsCount: habitStore.activeHabits.count)
     }
 
-    // Whether there are other ranked habits to compare against. When false,
-    // tapping the difficulty pill shows an alert instead of opening the ranker.
     private var hasComparableHabits: Bool {
         let rankedCount = habitStore.activeHabits
             .filter { $0.difficultyRank != nil && $0.id != habitId }
@@ -164,11 +232,6 @@ struct HabitFormView: View {
         return Self.hasComparableHabits(rankedHabitCount: rankedCount, excludeHabitId: mode.isNew ? nil : habitId)
     }
 
-    // Current reward price for this habit — used by the trade button.
-    // Recalculates automatically when trade history or settings change.
-    // Uses the actual habit from the store (via the mode's associated value)
-    // rather than creating a throwaway Habit, so properties like createdAt
-    // are correct for the formula.
     private var currentPrice: Int {
         guard case .change(let habit) = mode else { return 0 }
         let completions = tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
@@ -180,29 +243,14 @@ struct HabitFormView: View {
         )
     }
 
-    // Whether the current form state has the required properties to trade.
-    // Uses the local form state (not the persisted habit) since the user may
-    // have just set frequency/difficulty without saving yet.
     private var canTrade: Bool {
         frequency != nil && difficultyRank != nil
     }
 
-    // Human-readable text describing which properties are missing.
-    // Delegates to RewardCalculation to keep the logic in one place.
     private var missingPropertiesText: String {
         RewardCalculation.missingTradeProperties(frequency: frequency, difficultyRank: difficultyRank) ?? ""
     }
 
-    private var trimmedName: String {
-        name.trimmingCharacters(in: .whitespaces)
-    }
-
-    private var isValid: Bool {
-        !trimmedName.isEmpty && trimmedName.count <= 100
-    }
-
-    // Whether the user has entered any content into the form.
-    // Used to decide if we should show a recovery toast on dismiss.
     private var hasContent: Bool {
         Self.hasContent(
             name: trimmedName,
@@ -214,332 +262,193 @@ struct HabitFormView: View {
         )
     }
 
-    static func hasContent(
-        name: String,
-        description: String,
-        frequency: Double?,
-        difficultyRank: String?,
-        tagCount: Int,
-        isFirstHabit: Bool = false
-    ) -> Bool {
-        // For the first habit, difficulty is auto-set (not user-entered), so
-        // ignore it when deciding if the form has content. This prevents the
-        // discard/recovery toast from appearing when the user opens a new form
-        // and immediately dismisses it without entering anything.
-        let hasDifficulty = isFirstHabit ? false : difficultyRank != nil
-        return !name.isEmpty
-            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || frequency != nil
-            || hasDifficulty
-            || tagCount > 0
+    private var toolbarTitle: String {
+        switch surface {
+        case .nameDescription:
+            "Name & Description"
+        case .form:
+            mode.isNew ? "New Habit" : "Edit Habit"
+        }
     }
-
-    // Prepares the name for auto-save by trimming whitespace.
-    // The trimmed value is passed to updateHabit, which handles validation:
-    // if the name is empty or too long, updateHabit keeps the existing name.
-    // This lets other fields (frequency, description, etc.) still save
-    // even while the user is mid-edit on the name field.
-    static func nameForAutoSave(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespaces)
-    }
-
-    // Tracks whether the habit was saved via "Add". When the form disappears
-    // without this being true (and it has content), we treat it as a discard
-    // and call onDiscard so the parent can show a recovery toast.
-    @State private var didPersist = false
 
     init(
         mode: HabitFormMode = .new,
         initialFocus: HabitFormFocus? = nil,
         prefill: HabitFormSnapshot? = nil,
+        onClose: @escaping () -> Void = {},
         onDiscard: ((HabitFormSnapshot) -> Void)? = nil,
         onDelete: ((Habit) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
+        self.onClose = onClose
         self.onDiscard = onDiscard
         self.onDelete = onDelete
 
-        // When recovering from a discard (prefill is set), skip the name/description
-        // editor and show the main form instead — don't auto-focus anything.
-        // For normal new forms, start directly on the name/description editor so the
-        // user never sees a flash of the empty main form. For change forms, start on
-        // the main form unless initialFocus says otherwise.
-        // In Swift, @State must be initialized via _propertyName = State(initialValue:)
-        // inside init — like setting useState's initial value in React.
-        let startOnNameDesc: Bool
-        if prefill != nil {
-            // Recovery mode: show main form, no auto-focus.
-            startOnNameDesc = false
-        } else if case .new = mode {
-            startOnNameDesc = initialFocus == nil || initialFocus?.isNameDescription == true
-        } else {
-            startOnNameDesc = initialFocus?.isNameDescription == true
-        }
-        self._showingNameDescription = State(initialValue: startOnNameDesc)
-        self._pendingFocus = State(initialValue: initialFocus == .description ? .description : .name)
+        let initialSurface = Self.initialSurface(mode: mode, initialFocus: initialFocus, hasPrefill: prefill != nil)
+        self._surface = State(initialValue: initialSurface)
+        self._hasShownMainForm = State(initialValue: initialSurface == .form)
+        self._activeEntryField = State(initialValue: Self.entryField(for: Self.initialEntryFocus(initialFocus: initialFocus)))
 
-        // If recovering, pre-populate the habitId so tag associations are preserved.
         if let prefill {
             self._habitId = State(initialValue: prefill.habitId)
         }
     }
 
     var body: some View {
-        NavigationStack {
-            // ZStack layers the form and name/description editor on top of each
-            // other. Only one is visible at a time — they cross-fade via .opacity
-            // transitions. This is the "morph" effect: the sheet content transforms
-            // in-place rather than presenting a new sheet on top.
-            // In React, this is like conditionally rendering two components with
-            // CSS transitions (opacity + transform) on a shared container.
+        VStack(spacing: 0) {
+            toolbar
+
             ZStack {
-                if !showingNameDescription {
+                if surface == .form {
                     mainFormContent
                         .transition(.opacity)
                 }
 
-                if showingNameDescription {
-                    nameDescriptionEditor
+                if surface == .nameDescription {
+                    nameDescriptionContent
                         .transition(.opacity)
                 }
             }
-            // Measure the ZStack's rendered height so the sheet detent can
-            // match it. The MeasureHeight modifier places an invisible
-            // GeometryReader in the background that reports the height via
-            // FormHeightPreferenceKey. Like attaching a ResizeObserver to
-            // a container div in React.
-            .modifier(MeasureHeight())
-            // .animation makes SwiftUI interpolate between the two states —
-            // fading one out and the other in. Like CSS `transition: opacity 0.25s`.
-            .animation(.easeInOut(duration: 0.25), value: showingNameDescription)
-            .navigationTitle(showingNameDescription
-                ? "Name & Description"
-                : (mode.isNew ? "New Habit" : "Edit Habit"))
-            .navigationBarTitleDisplayMode(.inline)
-            // Dynamic height detent: the sheet sizes to match the measured
-            // content height. formContentHeight is reported by MeasureHeight
-            // (via a PreferenceKey) attached to the ZStack content below.
-            // Falls back to .medium while the first measurement arrives
-            // (formContentHeight == 0 on the initial render pass).
-            // In React, this is like setting style={{ height: measuredRef.current }}
-            // where measuredRef is updated by a ResizeObserver callback.
-            .presentationDetents([formContentHeight > 0 ? .height(formContentHeight) : .medium])
-            .onPreferenceChange(FormHeightPreferenceKey.self) { height in
-                formContentHeight = height
-            }
-            // Hide the drag indicator bar — the sheet height is fitted,
-            // not user-draggable. The user can still swipe down to dismiss.
-            .presentationDragIndicator(.hidden)
-            .toolbar {
-                if showingNameDescription {
-                    // Done button (checkmark) to return from name/description to the form.
-                    // Placed on the right (confirmationAction) — like a "Done" button in iOS conventions.
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button {
-                            // Clear keyboard focus before closing, otherwise the
-                            // keyboard may briefly flash during the transition.
-                            focusedField = nil
-                            showingNameDescription = false
-                        } label: {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                } else if mode.isNew {
-                    // Cancel and Add buttons only appear on the new form.
-                    // The change form auto-saves when dismissed (no buttons needed).
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
-                            dismiss()
-                        }
-                    }
-
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Add") {
-                            persistHabit()
-                            didPersist = true
-                            dismiss()
-                        }
-                        .disabled(!isValid)
-                    }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 16)
+            .animation(.easeInOut(duration: 0.24), value: surface)
+        }
+        .sheet(isPresented: $showingFrequency) {
+            FrequencyModal(frequency: $frequency)
+        }
+        .sheet(isPresented: $showingDifficulty, onDismiss: {
+            if difficultyRank != nil {
+                withAnimation(.spring(duration: 0.5, bounce: 0.4)) {
+                    difficultyPillAnimating = true
                 }
-            }
-            .sheet(isPresented: $showingFrequency) {
-                FrequencyModal(frequency: $frequency)
-            }
-            .sheet(isPresented: $showingDifficulty, onDismiss: {
-                // After the difficulty sheet closes, if a rank was set,
-                // animate the pill to draw the user's attention.
-                // The onDismiss fires after the sheet's dismiss animation
-                // completes, so the form is fully visible again.
-                if difficultyRank != nil {
-                    // withAnimation triggers the scale-up immediately.
-                    // DispatchQueue resets after 0.6s so the pill springs back.
-                    // Like: setState(true); setTimeout(() => setState(false), 600)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     withAnimation(.spring(duration: 0.5, bounce: 0.4)) {
-                        difficultyPillAnimating = true
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        withAnimation(.spring(duration: 0.5, bounce: 0.4)) {
-                            difficultyPillAnimating = false
-                        }
-                    }
-                }
-            }) {
-                DifficultyRankerView(
-                    habitName: trimmedName.isEmpty ? "New Habit" : trimmedName,
-                    difficultyRank: $difficultyRank,
-                    currentDifficultyRank: difficultyRank,
-                    excludeHabitId: mode.isNew ? nil : habitId
-                )
-            }
-            .sheet(isPresented: $showingTags) {
-                TagsView(habitId: habitId)
-            }
-            // Trade modal — presented when the "Claim Reward" button is tapped.
-            // When the trade completes, onClaim fires, setting shouldDismissAfterTrade.
-            // On dismiss, if the flag is set, this form also dismisses — returning
-            // the user to the habit list (chained dismissal).
-            .sheet(isPresented: $showingTradeModal, onDismiss: {
-                if shouldDismissAfterTrade {
-                    shouldDismissAfterTrade = false
-                    dismiss()
-                }
-            }) {
-                if case .change(let habit) = mode {
-                    TradeModalView(habit: habit) {
-                        shouldDismissAfterTrade = true
+                        difficultyPillAnimating = false
                     }
                 }
             }
-            .task {
-                await initializeForm()
+        }) {
+            DifficultyRankerView(
+                habitName: trimmedName.isEmpty ? "New Habit" : trimmedName,
+                difficultyRank: $difficultyRank,
+                currentDifficultyRank: difficultyRank,
+                excludeHabitId: mode.isNew ? nil : habitId
+            )
+        }
+        .sheet(isPresented: $showingTags) {
+            TagsView(habitId: habitId)
+        }
+        .sheet(isPresented: $showingTradeModal, onDismiss: {
+            if shouldCloseAfterTrade {
+                shouldCloseAfterTrade = false
+                onClose()
             }
-            // Auto-save: in change mode, persist to the store whenever any field
-            // changes. This makes the HabitListItem update immediately — like
-            // calling onChange on every controlled input in React and dispatching
-            // to the store on each keystroke.
-            //
-            // .onChange(of:) fires whenever the watched value changes — similar to
-            // useEffect(() => { ... }, [dep]) in React, but synchronous.
-            // The `guard hasAppliedInitialFocus` check prevents saving during
-            // initial form population (when .task sets fields from the habit).
-            // Alert for tapping the difficulty pill on the first habit.
-            // Since difficulty is auto-set, the ranker isn't needed — this
-            // explains why. Like a <dialog> element shown via state in React.
-            .alert("Difficulty Set", isPresented: $showingFirstHabitAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("There are no other habits to compare against. Add more habits to adjust difficulty ranking.")
-            }
-            .onChange(of: name) { _, _ in autoSave() }
-            .onChange(of: description) { _, _ in autoSave() }
-            .onChange(of: frequency) { _, _ in autoSave() }
-            .onChange(of: difficultyRank) { _, _ in autoSave() }
-            // When the form disappears without saving (user swiped, tapped
-            // outside, or hit Cancel), notify the parent so it can show a
-            // recovery toast. Like calling an onUnmount cleanup in React's
-            // useEffect that checks if the form was "dirty".
-            .onDisappear {
-                if mode.isNew && !didPersist && hasContent {
-                    onDiscard?(HabitFormSnapshot(
-                        name: name,
-                        description: description,
-                        frequency: frequency,
-                        difficultyRank: difficultyRank,
-                        habitId: habitId
-                    ))
+        }) {
+            if case .change(let habit) = mode {
+                TradeModalView(habit: habit) {
+                    shouldCloseAfterTrade = true
                 }
             }
         }
+        .alert("Difficulty Set", isPresented: $showingFirstHabitAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("There are no other habits to compare against. Add more habits to adjust difficulty ranking.")
+        }
+        .onAppear {
+            initializeIfNeeded()
+        }
+        .onChange(of: name) { _, _ in autoSave() }
+        .onChange(of: description) { _, _ in autoSave() }
+        .onChange(of: frequency) { _, _ in autoSave() }
+        .onChange(of: difficultyRank) { _, _ in autoSave() }
     }
 
-    // MARK: - Sub-views
+    private var toolbar: some View {
+        HStack {
+            leadingToolbarButton
 
-    // The main form showing name/description buttons, pills, and tags.
-    // Extracted from body so the ZStack can swap between this and the editor.
-    // In React terms, this is like a component rendered inside a conditional:
-    //   {!showingNameDesc && <MainForm />}
-    //
-    // Because this view is removed/re-added via the `if` conditional in the ZStack,
-    // SwiftUI destroys and recreates it on each transition. This means the Form's
-    // scroll position resets to the top automatically — no manual scrollTo needed.
+            Spacer()
+
+            Text(toolbarTitle)
+                .font(.headline)
+                .lineLimit(1)
+
+            Spacer()
+
+            trailingToolbarButton
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var leadingToolbarButton: some View {
+        switch surface {
+        case .nameDescription where hasShownMainForm:
+            Button {
+                closeNameDescriptionEditor()
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.bordered)
+        default:
+            Button {
+                requestClose()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var trailingToolbarButton: some View {
+        switch surface {
+        case .nameDescription:
+            Button {
+                closeNameDescriptionEditor()
+            } label: {
+                Image(systemName: "checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+        case .form where mode.isNew:
+            Button("Add") {
+                persistHabit()
+                didPersist = true
+                onClose()
+            }
+            .disabled(!isValid)
+            .buttonStyle(.borderedProminent)
+        default:
+            Color.clear
+                .frame(width: 36, height: 36)
+        }
+    }
+
     private var mainFormContent: some View {
-        Form {
-            // Section 1: Name & Description — tappable buttons that open the editor
-            Section {
-                // Name button — shows truncated name, taps to edit
-                Button {
-                    pendingFocus = .name
-                    showingNameDescription = true
-                } label: {
-                    if trimmedName.isEmpty {
-                        Text("Name")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(name)
-                            .lineLimit(1)
-                            .foregroundStyle(.primary)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            mainFieldCard
 
-                // Description button — shows truncated description, taps to edit
-                Button {
-                    pendingFocus = .description
-                    showingNameDescription = true
-                } label: {
-                    if description.trimmingCharacters(in: .whitespaces).isEmpty {
-                        Text("Description")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(description)
-                            .lineLimit(3)
-                            .foregroundStyle(.primary)
-                    }
-                }
-            }
+            PillRow(pills: buildPills())
 
-            // Section 2: Pill row — Tags, Difficulty, Frequency
-            Section {
-                PillRow(pills: buildPills())
-            }
-
-            // Section 3: Tag pills — shown only when tags are applied.
-            // The entire section is a tap target to open the tags modal.
-            // In React, this is like wrapping a <div> with onClick instead of
-            // putting onClick on each child. contentShape(Rectangle()) makes the
-            // whitespace tappable too — without it, only the text/pills respond.
             if !habitTags.isEmpty {
-                Section {
+                sectionCard {
                     TagPillsRow(tags: habitTags)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showingTags = true
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            showingTags = true
+                        }
                 }
             }
 
-            // Delete section — only shown in change mode. Dismisses the form
-            // and delegates to the parent to show the confirmation alert.
-            // Like a <button onClick={() => { onDelete(habit); close(); }}>
-            // in React. The `role: .destructive` makes the button red.
             if case .change(let habitForDelete) = mode {
-                Section {
-                    Button("Delete Habit", role: .destructive) {
-                        dismiss()
-                        onDelete?(habitForDelete)
-                    }
-                }
-            }
-
-            // Trade section — only shown in change mode (not for new habits).
-            // If frequency and difficulty are both set, shows a "Claim Reward"
-            // button with the price. Otherwise shows a helper message telling
-            // the user what they need to set.
-            if case .change = mode {
                 if canTrade {
-                    Section {
+                    sectionCard {
                         Button {
                             showingTradeModal = true
                         } label: {
@@ -556,116 +465,240 @@ struct HabitFormView: View {
                                 .foregroundStyle(.green)
                             }
                         }
+                        .buttonStyle(.plain)
                     }
                 } else {
-                    Section {
-                        Label {
-                            Text("Set \(missingPropertiesText) to enable rewards")
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                        .font(.footnote)
+                    Label {
+                        Text("Set \(missingPropertiesText) to enable rewards")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+
+                sectionCard {
+                    Button("Delete Habit", role: .destructive) {
+                        onClose()
+                        onDelete?(habitForDelete)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+
+    private var mainFieldCard: some View {
+        VStack(spacing: 0) {
+            fieldSummaryButton(
+                title: "Name",
+                value: trimmedName.isEmpty ? nil : name,
+                lineLimit: 1,
+                field: .name
+            )
+
+            Divider()
+                .padding(.leading, 16)
+
+            fieldSummaryButton(
+                title: "Description",
+                value: trimmedDescription.isEmpty ? nil : description,
+                lineLimit: 3,
+                field: .description
+            )
+        }
+        .background(cardBackground)
+    }
+
+    private var nameDescriptionContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Give the habit a clear name, then add as much description as the user needs.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            fieldCard(title: "Name") {
+                AutoFocusingTextField(
+                    text: $name,
+                    placeholder: "Name",
+                    isFirstResponder: focusBinding(for: .name)
+                )
+                .frame(height: 24)
+            }
+
+            fieldCard(title: "Description") {
+                GrowingTextView(
+                    text: $description,
+                    placeholder: "Description",
+                    measuredHeight: $descriptionHeight,
+                    minHeight: Self.minimumDescriptionHeight,
+                    isFirstResponder: focusBinding(for: .description)
+                )
+                .frame(height: max(Self.minimumDescriptionHeight, descriptionHeight))
+            }
+        }
+    }
+
+    private func fieldSummaryButton(title: String, value: String?, lineLimit: Int, field: EntryField) -> some View {
+        Button {
+            openNameDescriptionEditor(field)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let value, !value.isEmpty {
+                    Text(value)
+                        .foregroundStyle(.primary)
+                        .lineLimit(lineLimit)
+                        .multilineTextAlignment(.leading)
+                } else {
+                    Text(title)
                         .foregroundStyle(.secondary)
-                    }
+                        .lineLimit(lineLimit)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func fieldCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            content()
+        }
+        .padding(14)
+        .background(cardBackground)
+    }
+
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(cardBackground)
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color(uiColor: .secondarySystemBackground))
+    }
+
+    private func openNameDescriptionEditor(_ field: EntryField) {
+        activeEntryField = field
+        focusedEntryField = field
+        withAnimation(.easeInOut(duration: 0.24)) {
+            surface = .nameDescription
         }
     }
 
-    // Scrollable editor for name and description.
-    // Instead of presenting a separate sheet, this view morphs in-place
-    // within the same sheet via the ZStack cross-fade.
-    // The ScrollView handles long content (names/descriptions can be very long).
-    // Because this view is created fresh each time showingNameDescription becomes
-    // true, it always starts scrolled to the top.
-    private var nameDescriptionEditor: some View {
-        // ScrollViewReader lets us programmatically scroll to a specific child
-        // view by ID — like calling element.scrollIntoView() in the DOM.
-        // Used only for initial positioning when the editor opens with
-        // description focused — ongoing cursor tracking is handled by
-        // SwiftUI's built-in keyboard avoidance.
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    TextField("Name", text: $name)
-                        .font(.title2)
-                        // .focused binds this field's keyboard focus to the focusedField
-                        // state. When focusedField == .name, this field gets focus.
-                        // Like managing focus via a ref in React, but declarative.
-                        .focused($focusedField, equals: .name)
-
-                    // axis: .vertical makes this a multiline text field (like <textarea>).
-                    // .lineLimit(5...) means at least 5 lines tall, grows as needed.
-                    // The .id lets ScrollViewReader target this field for initial scroll.
-                    TextField("Description", text: $description, axis: .vertical)
-                        .focused($focusedField, equals: .description)
-                        .lineLimit(5...)
-                        .id("description")
-                }
-                .padding()
-            }
-            .onAppear {
-                // Apply the pending focus when the editor appears.
-                // We read from pendingFocus (a @State that survives the ZStack
-                // cross-fade) rather than focusedField (@FocusState which SwiftUI
-                // resets to nil when the target TextField isn't in the hierarchy).
-                // Like calling ref.current.focus() in useEffect based on a state
-                // variable, not the DOM's current activeElement.
-                focusedField = pendingFocus
-
-                // If focusing description, scroll to show the bottom of the
-                // description field (where the cursor is placed by default).
-                // DispatchQueue.main.async defers to the next run loop tick so
-                // SwiftUI finishes layout first — like setTimeout(fn, 0) in React.
-                if pendingFocus == .description {
-                    DispatchQueue.main.async {
-                        proxy.scrollTo("description", anchor: .bottom)
-                    }
-                }
-            }
-            // No .onChange scroll handler — SwiftUI's built-in keyboard avoidance
-            // tracks the cursor position within the focused TextField and scrolls
-            // the parent ScrollView automatically. Manually scrolling to a fixed
-            // anchor would override this, jumping to the bottom even when the
-            // cursor is in the middle of the text.
+    private func closeNameDescriptionEditor() {
+        focusedEntryField = nil
+        hasShownMainForm = true
+        withAnimation(.easeInOut(duration: 0.24)) {
+            surface = .form
         }
     }
 
-    // Whether this is the very first habit being created (no existing active habits).
-    // When true, difficulty is auto-set to the midpoint since there's nothing to compare.
-    // Like a selector in React: `const isFirstHabit = habits.length === 0 && mode === "new"`
+    private func focusBinding(for field: EntryField) -> Binding<Bool> {
+        Binding(
+            get: { focusedEntryField == field },
+            set: { isFocused in
+                if isFocused {
+                    focusedEntryField = field
+                } else if focusedEntryField == field {
+                    focusedEntryField = nil
+                }
+            }
+        )
+    }
+
+    private func requestClose() {
+        focusedEntryField = nil
+
+        if mode.isNew && !didPersist && hasContent {
+            onDiscard?(HabitFormSnapshot(
+                name: name,
+                description: description,
+                frequency: frequency,
+                difficultyRank: difficultyRank,
+                habitId: habitId
+            ))
+        }
+
+        onClose()
+    }
+
+    static func initialSurface(mode: HabitFormMode, initialFocus: HabitFormFocus?, hasPrefill: Bool) -> HabitFormSurface {
+        if hasPrefill {
+            return .form
+        }
+
+        if mode.isNew {
+            return .nameDescription
+        }
+
+        if initialFocus?.isNameDescription == true {
+            return .nameDescription
+        }
+
+        return .form
+    }
+
+    static func initialEntryFocus(initialFocus: HabitFormFocus?) -> HabitFormFocus {
+        initialFocus == .description ? .description : .name
+    }
+
+    private static func entryField(for focus: HabitFormFocus) -> EntryField {
+        focus == .description ? .description : .name
+    }
+
+    static func hasContent(
+        name: String,
+        description: String,
+        frequency: Double?,
+        difficultyRank: String?,
+        tagCount: Int,
+        isFirstHabit: Bool = false
+    ) -> Bool {
+        let hasDifficulty = isFirstHabit ? false : difficultyRank != nil
+
+        return !name.isEmpty
+            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || frequency != nil
+            || hasDifficulty
+            || tagCount > 0
+    }
+
+    static func nameForAutoSave(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
     static func isFirstHabit(mode: HabitFormMode, activeHabitsCount: Int) -> Bool {
         mode.isNew && activeHabitsCount == 0
     }
 
-    // The default difficulty rank assigned to the first habit ever created.
-    // Delegates to the ranker's empty-session logic to get the midpoint key ("m").
-    // Reuses existing DifficultyRanker logic rather than hardcoding the value.
     static func defaultDifficultyRankForFirstHabit() -> String {
         DifficultyRanker.makeSession(habitName: "", rankedHabits: []).generateRank()
     }
 
-    // Whether there are ranked habits available for comparison, excluding the
-    // current habit (which can't compare against itself). When false, the
-    // ranker would immediately complete with nothing to show.
-    // `rankedHabitCount` is the count of active habits with a difficultyRank,
-    // already excluding the current habit's ID.
     static func hasComparableHabits(rankedHabitCount: Int, excludeHabitId: String?) -> Bool {
         rankedHabitCount > 0
     }
 
-    // Whether tapping the difficulty pill should open the ranker modal.
-    // Returns false when there's nothing to compare against — either because
-    // it's the first habit (auto-set) or because no other ranked habits exist
-    // (e.g. editing the only habit). An alert is shown instead.
     static func shouldOpenDifficultyRanker(isFirstHabit: Bool, hasComparableHabits: Bool) -> Bool {
         !isFirstHabit && hasComparableHabits
     }
 
-    // Pure data for the pill row — actions are nil so it can be unit tested.
-    // In React terms, this is like a selector that derives render data from state,
-    // separated from the event handlers.
     static func buildPillData(
         hasTagsApplied: Bool,
         difficultyRank: String?,
@@ -679,8 +712,6 @@ struct HabitFormView: View {
         ]
     }
 
-    // Build the pill items for the pill row, attaching action closures.
-    // Like adding onClick handlers to stateless component props in React.
     private func buildPills() -> [PillItem] {
         var pills = Self.buildPillData(
             hasTagsApplied: !habitTags.isEmpty,
@@ -690,8 +721,6 @@ struct HabitFormView: View {
 
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
-            // When there's nothing to compare against (first habit or editing
-            // the only habit), show an informational alert instead of the ranker.
             "difficulty": {
                 if Self.shouldOpenDifficultyRanker(isFirstHabit: isFirstHabit, hasComparableHabits: hasComparableHabits) {
                     showingDifficulty = true
@@ -702,31 +731,26 @@ struct HabitFormView: View {
             "frequency": { showingFrequency = true },
         ]
 
-        for i in pills.indices {
-            pills[i].action = actions[pills[i].id]
-            // Pass the animation state to the difficulty pill so it bounces
-            // after the ranker sheet dismisses with a rank set.
-            if pills[i].id == "difficulty" {
-                pills[i].animating = difficultyPillAnimating
+        for index in pills.indices {
+            pills[index].action = actions[pills[index].id]
+            if pills[index].id == "difficulty" {
+                pills[index].animating = difficultyPillAnimating
             }
         }
+
         return pills
     }
 
-    // Initialize form state from the habit (change mode) or defaults (new mode).
-    // Called from .task, which only runs once per view lifecycle (like useEffect
-    // with [] deps). Sets hasAppliedInitialFocus at the end so auto-save
-    // .onChange handlers skip firing during initial population.
-    private func initializeForm() async {
+    private func initializeIfNeeded() {
+        guard !hasInitialized else { return }
+        hasInitialized = true
+
         if let prefill, mode.isNew {
-            // Recovery mode: restore the discarded form state.
-            // habitId was already set in init() to preserve tag associations.
             name = prefill.name
             description = prefill.description
             frequency = prefill.frequency
             difficultyRank = prefill.difficultyRank
         } else if case .change(let habit) = mode {
-            // Populate form from existing habit
             name = habit.name
             description = habit.description
             frequency = habit.frequency
@@ -734,27 +758,23 @@ struct HabitFormView: View {
             habitId = habit.id
         }
 
-        // Auto-set difficulty for the first habit — no comparisons needed since
-        // there are no other habits to compare against. The midpoint key ("m")
-        // is used, leaving room for future habits above and below.
         if isFirstHabit && difficultyRank == nil {
             difficultyRank = Self.defaultDifficultyRankForFirstHabit()
         }
 
-        // Mark initialization complete so auto-save .onChange handlers start firing.
-        hasAppliedInitialFocus = true
+        hasAppliedInitialLoad = true
 
-        // Apply initial focus — open the appropriate sub-modal.
-        // .name/.description are handled in init() (no async delay needed, avoids flash).
-        // Other focus targets still need a short delay for sheet presentation.
-        let focus = initialFocus ?? (mode.isNew ? .name : nil)
+        if surface == .nameDescription {
+            focusedEntryField = activeEntryField
+        }
 
-        // Delay to let the view finish layout before presenting sheets.
-        if let focus = focus, !focus.isNameDescription {
-            try? await Task.sleep(nanoseconds: 300_000_000)
+        let focus = initialFocus
+        guard let focus, !focus.isNameDescription else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             switch focus {
             case .name, .description:
-                break // handled in init()
+                break
             case .frequency:
                 showingFrequency = true
             case .difficulty:
@@ -765,26 +785,13 @@ struct HabitFormView: View {
         }
     }
 
-    // Auto-save for change mode: called by .onChange handlers whenever any
-    // form field changes. Skips save during initial form population (before
-    // hasAppliedInitialFocus is set) and in new mode (which uses explicit "Add").
-    //
-    // Like having a useEffect that runs on every state change and dispatches
-    // to the store — except SwiftUI's .onChange is more targeted (one per field).
     private func autoSave() {
-        guard !mode.isNew, hasAppliedInitialFocus else { return }
+        guard !mode.isNew, hasAppliedInitialLoad else { return }
         persistHabit()
     }
 
-    // Writes the current form state to the store (add or update).
-    // For change mode, always passes the name — updateHabit handles validation
-    // and keeps the existing name if the new one is invalid (empty/too long).
-    // This lets other fields save even while the name is mid-edit.
     private func persistHabit() {
         if case .new = mode {
-            // Pass the pre-generated habitId so the saved habit matches any tag
-            // associations created during the form session. Without this, addHabit
-            // would generate a new UUID and the tags would point to nowhere.
             habitStore.addHabit(
                 id: habitId,
                 name: name,
@@ -803,13 +810,201 @@ struct HabitFormView: View {
         }
     }
 
+    private static var minimumDescriptionHeight: CGFloat {
+        let lineHeight = UIFont.preferredFont(forTextStyle: .body).lineHeight
+        return (lineHeight * 3) + 20
+    }
 }
 
-#Preview("New") {
-    HabitFormView(mode: .new)
+private struct ContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct HeightReader: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
+        }
+    }
+}
+
+// UIKit-backed single-line field so the keyboard can become first responder as
+// soon as the modal enters the hierarchy. That is the closest SwiftUI/iOS
+// equivalent to mounting an <input autoFocus /> inside an animating React modal.
+private struct AutoFocusingTextField: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFirstResponder: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.delegate = context.coordinator
+        textField.placeholder = placeholder
+        textField.font = .preferredFont(forTextStyle: .body)
+        textField.adjustsFontForContentSizeCategory = true
+        textField.borderStyle = .none
+        textField.autocorrectionType = .default
+        textField.returnKeyType = .done
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return textField
+    }
+
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+
+        if isFirstResponder, !uiView.isFirstResponder {
+            uiView.becomeFirstResponder()
+        } else if !isFirstResponder, uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: AutoFocusingTextField
+
+        init(_ parent: AutoFocusingTextField) {
+            self.parent = parent
+        }
+
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            parent.text = textField.text ?? ""
+        }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            parent.isFirstResponder = true
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            parent.isFirstResponder = false
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return true
+        }
+    }
+}
+
+// UIKit-backed multiline field with dynamic height.
+// User behaviour:
+// - starts at roughly 3 lines tall
+// - grows as the user types more description
+// - stops growing once the outer modal hits its max height, after which the
+//   modal scrolls instead of the text view going full screen.
+private struct GrowingTextView: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var measuredHeight: CGFloat
+    let minHeight: CGFloat
+    @Binding var isFirstResponder: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = false
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+
+        if context.coordinator.placeholderLabel.superview == nil {
+            uiView.addSubview(context.coordinator.placeholderLabel)
+        }
+
+        context.coordinator.placeholderLabel.text = placeholder
+        context.coordinator.placeholderLabel.font = uiView.font
+        context.coordinator.placeholderLabel.textColor = .placeholderText
+        context.coordinator.placeholderLabel.isHidden = !text.isEmpty
+        context.coordinator.placeholderLabel.frame = CGRect(
+            x: 0,
+            y: 8,
+            width: uiView.bounds.width,
+            height: 20
+        )
+
+        let fittingSize = CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)
+        let targetHeight = max(minHeight, uiView.sizeThatFits(fittingSize).height)
+
+        if abs(measuredHeight - targetHeight) > 0.5 {
+            DispatchQueue.main.async {
+                measuredHeight = targetHeight
+            }
+        }
+
+        if isFirstResponder, !uiView.isFirstResponder {
+            uiView.becomeFirstResponder()
+        } else if !isFirstResponder, uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: GrowingTextView
+        let placeholderLabel = UILabel()
+
+        init(_ parent: GrowingTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+            placeholderLabel.isHidden = !textView.text.isEmpty
+
+            let fittingSize = CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)
+            parent.measuredHeight = max(parent.minHeight, textView.sizeThatFits(fittingSize).height)
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent.isFirstResponder = true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.isFirstResponder = false
+        }
+    }
+}
+
+#Preview("Habit Form Modal") {
+    ZStack {
+        Color(uiColor: .systemGroupedBackground)
+            .ignoresSafeArea()
+
+        HabitFormModal(
+            mode: .new,
+            initialFocus: .name,
+            prefill: nil,
+            onDiscard: { _ in },
+            onDelete: nil,
+            onClose: {}
+        )
         .environment(HabitStore())
         .environment(TagStore())
         .environment(TradeStore())
         .environment(BalanceStore())
         .environment(UserSettingsStore())
+    }
 }

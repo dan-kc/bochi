@@ -2,19 +2,10 @@ import SwiftUI
 
 struct HabitsView: View {
     @Environment(HabitStore.self) private var habitStore
+    @Environment(HabitFormPresenter.self) private var habitFormPresenter
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
-    @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
-
-    // State for the new habit form (FAB)
-    @State private var showingNewForm = false
-
-    // State for the change form — which habit is being edited and which
-    // sub-modal to auto-open. Using an Identifiable binding with .sheet(item:)
-    // is the idiomatic SwiftUI pattern for "present a sheet for a specific item."
-    @State private var editingHabit: Habit? = nil
-    @State private var editFocus: HabitFormFocus? = nil
 
     // State for the trade modal — which habit's trade modal is open.
     // Set when the user taps a price button on a habit list item.
@@ -73,7 +64,12 @@ struct HabitsView: View {
                     // Clear any lingering recovery state so the FAB always
                     // opens a fresh form, not a recovered one.
                     recoveringPrefill = nil
-                    showingNewForm = true
+                    habitFormPresenter.presentNew(
+                        prefill: nil,
+                        onDiscard: { snapshot in
+                            showDiscardToast(snapshot: snapshot)
+                        }
+                    )
                 } label: {
                     Image(systemName: "plus")
                         .font(.title2)
@@ -84,33 +80,6 @@ struct HabitsView: View {
                         .shadow(radius: 4)
                 }
                 .padding()
-            }
-            // New habit sheet — passes an onDiscard callback so we can show a
-            // recovery toast when the user dismisses a form that had content.
-            // The prefill parameter restores form state when recovering.
-            .sheet(isPresented: $showingNewForm) {
-                HabitFormView(
-                    mode: .new,
-                    prefill: recoveringPrefill,
-                    onDiscard: { snapshot in
-                        showDiscardToast(snapshot: snapshot)
-                    }
-                )
-            }
-            // Change/edit habit sheet — triggered by tapping a row element.
-            // .sheet(item:) automatically sets editingHabit back to nil on dismiss.
-            .sheet(item: $editingHabit) { habit in
-                HabitFormView(
-                    mode: .change(habit),
-                    initialFocus: editFocus,
-                    onDelete: { habitToDelete in
-                        // The form requests deletion — set the state so the
-                        // confirmation alert appears after the sheet dismisses.
-                        // editingHabit is cleared by .sheet(item:) on dismiss,
-                        // then the alert takes over.
-                        self.habitToDelete = habitToDelete
-                    }
-                )
             }
             .sheet(item: $tradingHabit) { habit in
                 TradeModalView(habit: habit)
@@ -171,7 +140,12 @@ struct HabitsView: View {
             // When the user taps "Recover", save the snapshot and re-open
             // the form. The form reads recoveringPrefill to restore state.
             recoveringPrefill = snapshot
-            showingNewForm = true
+            habitFormPresenter.presentNew(
+                prefill: snapshot,
+                onDiscard: { recoveredSnapshot in
+                    showDiscardToast(snapshot: recoveredSnapshot)
+                }
+            )
         }
     }
 
@@ -297,8 +271,13 @@ struct HabitsView: View {
 
     // Opens the change form for a habit, optionally auto-opening a sub-modal.
     private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
-        editFocus = focus
-        editingHabit = habit
+        habitFormPresenter.presentChange(
+            habit: habit,
+            focus: focus,
+            onDelete: { habitForDeletion in
+                habitToDelete = habitForDeletion
+            }
+        )
     }
 }
 
