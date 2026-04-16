@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 import UIKit
 
@@ -68,59 +67,24 @@ struct HabitFormModal: View {
     let onDelete: ((Habit) -> Void)?
     let onClose: () -> Void
 
-    @State private var contentHeight: CGFloat = 0
-    @State private var keyboardOverlap: CGFloat = 0
-    @State private var keyboardAnimation = Animation.easeOut(duration: 0.25)
+    @Environment(HabitStore.self) private var habitStore
+    @Environment(TagStore.self) private var tagStore
+    @Environment(TradeStore.self) private var tradeStore
+    @Environment(BalanceStore.self) private var balanceStore
+    @Environment(UserSettingsStore.self) private var userSettingsStore
 
     var body: some View {
-        GeometryReader { proxy in
-            let sideInset: CGFloat = 12
-            let cardWidth = min(560, proxy.size.width - (sideInset * 2))
-            let bottomInset = keyboardOverlap > 0 ? keyboardOverlap : proxy.safeAreaInsets.bottom
-            let maxCardHeight = max(0, proxy.size.height - proxy.safeAreaInsets.top - bottomInset)
-            let needsScroll = contentHeight > maxCardHeight
-
-            ZStack(alignment: .bottom) {
-                Color.black.opacity(0.18)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        onClose()
-                    }
-
-                if needsScroll {
-                    ScrollView(showsIndicators: false) {
-                        measuredContent
-                    }
-                    .frame(width: cardWidth, height: maxCardHeight, alignment: .top)
+        KeyboardPinnedHabitModalHost(
+            onBackgroundTap: onClose,
+            content: {
+                modalContent
                     .modifier(HabitFormCardChrome())
-                    .padding(.horizontal, sideInset)
-                    .padding(.bottom, bottomInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    measuredContent
-                        .frame(width: cardWidth, alignment: .top)
-                        .modifier(HabitFormCardChrome())
-                        .padding(.horizontal, sideInset)
-                        .padding(.bottom, bottomInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
             }
-            .ignoresSafeArea()
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .onPreferenceChange(ContentHeightPreferenceKey.self) { newHeight in
-                contentHeight = newHeight
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-                updateKeyboard(with: note, in: proxy)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
-                updateKeyboard(with: note, in: proxy)
-            }
-            .animation(.easeInOut(duration: 0.24), value: needsScroll)
-        }
+        )
+        .ignoresSafeArea()
     }
 
-    private var measuredContent: some View {
+    private var modalContent: some View {
         HabitFormView(
             mode: mode,
             initialFocus: initialFocus,
@@ -129,22 +93,11 @@ struct HabitFormModal: View {
             onDiscard: onDiscard,
             onDelete: onDelete
         )
-        // Measure the card from its intrinsic content height, not from a scroll
-        // container or full-screen presentation host.
-        .fixedSize(horizontal: false, vertical: true)
-        .background(HeightReader())
-    }
-
-    private func updateKeyboard(with note: Notification, in proxy: GeometryProxy) {
-        let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        keyboardAnimation = .easeOut(duration: duration)
-
-        let screenEndFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
-        let overlap = max(0, proxy.frame(in: .global).maxY - screenEndFrame.minY)
-
-        withAnimation(keyboardAnimation) {
-            keyboardOverlap = overlap
-        }
+        .environment(habitStore)
+        .environment(tagStore)
+        .environment(tradeStore)
+        .environment(balanceStore)
+        .environment(userSettingsStore)
     }
 }
 
@@ -816,23 +769,6 @@ struct HabitFormView: View {
     }
 }
 
-private struct ContentHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct HeightReader: View {
-    var body: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
-        }
-    }
-}
-
 // UIKit-backed single-line field so the keyboard can become first responder as
 // soon as the modal enters the hierarchy. That is the closest SwiftUI/iOS
 // equivalent to mounting an <input autoFocus /> inside an animating React modal.
@@ -893,6 +829,174 @@ private struct AutoFocusingTextField: UIViewRepresentable {
             textField.resignFirstResponder()
             return true
         }
+    }
+}
+
+// UIKit host for the outer modal shell.
+// This uses the system keyboard layout guide directly so the card can pin to the
+// real keyboard top and become scrollable once its content exceeds the available
+// viewport between the safe area and keyboard.
+private struct KeyboardPinnedHabitModalHost<Content: View>: UIViewControllerRepresentable {
+    let onBackgroundTap: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onBackgroundTap: onBackgroundTap, rootView: AnyView(content()))
+    }
+
+    func makeUIViewController(context: Context) -> HabitModalViewController {
+        context.coordinator.viewController
+    }
+
+    func updateUIViewController(_ uiViewController: HabitModalViewController, context: Context) {
+        context.coordinator.onBackgroundTap = onBackgroundTap
+        context.coordinator.hostingController.rootView = AnyView(content())
+        context.coordinator.viewController.onBackgroundTap = { context.coordinator.handleBackgroundTap() }
+        context.coordinator.viewController.setNeedsLayoutUpdate()
+    }
+
+    final class Coordinator {
+        var onBackgroundTap: () -> Void
+        let hostingController: UIHostingController<AnyView>
+        let viewController: HabitModalViewController
+
+        init(onBackgroundTap: @escaping () -> Void, rootView: AnyView) {
+            self.onBackgroundTap = onBackgroundTap
+            self.hostingController = UIHostingController(rootView: rootView)
+            self.viewController = HabitModalViewController(
+                hostingController: hostingController,
+                onBackgroundTap: { onBackgroundTap() }
+            )
+        }
+
+        @objc func handleBackgroundTap() {
+            onBackgroundTap()
+        }
+    }
+}
+
+private final class HabitModalViewController: UIViewController {
+    private let backgroundView = UIView()
+    private let scrollView = UIScrollView()
+    private let contentContainer = UIView()
+    private let hostingController: UIHostingController<AnyView>
+    var onBackgroundTap: () -> Void
+
+    private var bottomConstraint: NSLayoutConstraint?
+    private var heightConstraint: NSLayoutConstraint?
+
+    init(hostingController: UIHostingController<AnyView>, onBackgroundTap: @escaping () -> Void) {
+        self.hostingController = hostingController
+        self.onBackgroundTap = onBackgroundTap
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        view.backgroundColor = .clear
+
+        backgroundView.backgroundColor = UIColor.black.withAlphaComponent(0.18)
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundView)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
+        backgroundView.addGestureRecognizer(tap)
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.alwaysBounceVertical = false
+        scrollView.backgroundColor = .clear
+        view.addSubview(scrollView)
+
+        contentContainer.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.backgroundColor = .clear
+        scrollView.addSubview(contentContainer)
+
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        hostingController.view.backgroundColor = .clear
+        addChild(hostingController)
+        contentContainer.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+
+        let safeArea = view.safeAreaLayoutGuide
+        let keyboardGuide = view.keyboardLayoutGuide
+        let margin: CGFloat = 12
+        let maxWidth: CGFloat = 560
+
+        NSLayoutConstraint.activate([
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            scrollView.centerXAnchor.constraint(equalTo: safeArea.centerXAnchor),
+            scrollView.leadingAnchor.constraint(greaterThanOrEqualTo: safeArea.leadingAnchor, constant: margin),
+            safeArea.trailingAnchor.constraint(greaterThanOrEqualTo: scrollView.trailingAnchor, constant: margin),
+            scrollView.widthAnchor.constraint(lessThanOrEqualToConstant: maxWidth),
+            scrollView.widthAnchor.constraint(equalTo: safeArea.widthAnchor, constant: -(margin * 2)).withPriority(.defaultHigh),
+            scrollView.topAnchor.constraint(greaterThanOrEqualTo: safeArea.topAnchor, constant: margin),
+
+            contentContainer.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentContainer.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentContainer.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentContainer.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentContainer.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            hostingController.view.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
+        ])
+
+        bottomConstraint = scrollView.bottomAnchor.constraint(equalTo: keyboardGuide.topAnchor, constant: -margin)
+        bottomConstraint?.isActive = true
+
+        heightConstraint = scrollView.heightAnchor.constraint(equalToConstant: 0)
+        heightConstraint?.isActive = true
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateHeight()
+    }
+
+    func setNeedsLayoutUpdate() {
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+    }
+
+    @objc private func backgroundTapped() {
+        onBackgroundTap()
+    }
+
+    private func updateHeight() {
+        let margin: CGFloat = 12
+        let safeTop = view.safeAreaInsets.top + margin
+        let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY - margin
+        let availableHeight = max(0, keyboardTop - safeTop)
+        let targetWidth = scrollView.bounds.width
+
+        guard targetWidth > 0 else { return }
+
+        let contentSize = hostingController.sizeThatFits(in: CGSize(width: targetWidth, height: .greatestFiniteMagnitude))
+        let targetHeight = min(contentSize.height, availableHeight)
+
+        heightConstraint?.constant = targetHeight
+        scrollView.isScrollEnabled = contentSize.height > availableHeight
+        scrollView.alwaysBounceVertical = scrollView.isScrollEnabled
+    }
+}
+
+private extension NSLayoutConstraint {
+    func withPriority(_ priority: UILayoutPriority) -> NSLayoutConstraint {
+        self.priority = priority
+        return self
     }
 }
 

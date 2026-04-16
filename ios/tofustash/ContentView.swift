@@ -42,6 +42,7 @@ struct ContentView: View {
                     .transition(.identity)
             }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeInOut(duration: 0.24), value: habitFormPresenter.route == nil)
         .environment(habitFormPresenter)
     }

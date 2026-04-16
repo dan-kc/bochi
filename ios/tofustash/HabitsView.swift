@@ -59,6 +59,7 @@ struct HabitsView: View {
                 }
             }
             .navigationTitle("Habits")
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     // Clear any lingering recovery state so the FAB always
