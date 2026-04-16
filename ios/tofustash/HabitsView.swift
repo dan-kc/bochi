@@ -1,34 +1,22 @@
 import SwiftUI
 
+private struct HabitFormRoute: Identifiable {
+    let id = UUID()
+    let mode: HabitFormMode
+    let initialFocus: HabitFormFocus?
+    let prefill: HabitFormSnapshot?
+}
+
 struct HabitsView: View {
     @Environment(HabitStore.self) private var habitStore
-    @Environment(HabitFormPresenter.self) private var habitFormPresenter
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
-    // State for the trade modal — which habit's trade modal is open.
-    // Set when the user taps a price button on a habit list item.
+    @State private var formRoute: HabitFormRoute? = nil
     @State private var tradingHabit: Habit? = nil
-
-    // State for the delete confirmation alert — which habit the user is
-    // about to delete. Set by swipe action; the alert reads this to know
-    // which habit to delete on confirmation. Like a useState<Habit | null>
-    // that gates a <ConfirmDialog> in React.
     @State private var habitToDelete: Habit? = nil
-
-    // Toast manager for showing recovery toasts when habits are discarded.
-    // Like a useState + context provider for a toast notification system in React.
     @State private var toastManager = ToastManager()
-
-    // Holds saved form state for recovery. When the user taps "Recover" on
-    // a toast, this is set to re-open the form with the discarded values.
-    // Like a useState<FormSnapshot | null>(null) in React.
-    @State private var recoveringPrefill: HabitFormSnapshot? = nil
-
-    // Current time bucket for price calculations. Sleeps until the next
-    // 30-minute boundary, then updates — so prices refresh exactly when
-    // the bucket rolls over.
     @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
 
     var body: some View {
@@ -43,11 +31,6 @@ struct HabitsView: View {
                 } else {
                     List(habitStore.activeHabits) { habit in
                         habitRow(habit)
-                            // Trailing swipe = swipe left. This is Apple's standard
-                            // delete gesture (like Mail, Notes, Reminders). The
-                            // .trailing edge is idiomatic for destructive actions.
-                            // In React terms, this is like attaching an onSwipeLeft
-                            // handler that renders a red "Delete" button.
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     habitToDelete = habit
@@ -59,17 +42,12 @@ struct HabitsView: View {
                 }
             }
             .navigationTitle("Habits")
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .overlay(alignment: .bottomTrailing) {
                 Button {
-                    // Clear any lingering recovery state so the FAB always
-                    // opens a fresh form, not a recovered one.
-                    recoveringPrefill = nil
-                    habitFormPresenter.presentNew(
-                        prefill: nil,
-                        onDiscard: { snapshot in
-                            showDiscardToast(snapshot: snapshot)
-                        }
+                    formRoute = HabitFormRoute(
+                        mode: .new,
+                        initialFocus: nil,
+                        prefill: nil
                     )
                 } label: {
                     Image(systemName: "plus")
@@ -82,16 +60,22 @@ struct HabitsView: View {
                 }
                 .padding()
             }
+            .sheet(item: $formRoute) { route in
+                HabitFormView(
+                    mode: route.mode,
+                    initialFocus: route.initialFocus,
+                    prefill: route.prefill,
+                    onDiscard: route.mode.isNew ? { snapshot in
+                        showDiscardToast(snapshot: snapshot)
+                    } : nil,
+                    onDelete: { habit in
+                        habitToDelete = habit
+                    }
+                )
+            }
             .sheet(item: $tradingHabit) { habit in
                 TradeModalView(habit: habit)
             }
-            // Delete confirmation alert — triggered by swipe action or the
-            // delete button in the edit form. Uses .alert(item:) which
-            // automatically sets habitToDelete back to nil on dismiss.
-            // Like a <ConfirmDialog open={!!habitToDelete}> in React.
-            //
-            // `role: .destructive` makes the "Delete" button red — the
-            // system standard for irreversible actions.
             .alert(
                 "Delete Habit?",
                 isPresented: Binding(
@@ -111,14 +95,9 @@ struct HabitsView: View {
             } message: {
                 Text("This action cannot be undone.")
             }
-            // Toast overlay sits on top of everything, at the bottom of the screen.
-            // Like a portal-rendered <ToastContainer /> in React.
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
-            // Sleep until the next 30-minute bucket boundary, then update.
-            // More efficient than polling every 60s — wakes exactly once per
-            // bucket change instead of ~29 unnecessary checks.
             .task {
                 while !Task.isCancelled {
                     let nanos = RewardCalculation.nanosUntilNextBucket()
@@ -129,28 +108,21 @@ struct HabitsView: View {
         }
     }
 
-    // Show a toast that lets the user recover a discarded habit form.
-    // The toast has a 5-second countdown, after which it auto-dismisses.
+    // Behaviour: when the user dismisses a new-habit sheet with unsaved content,
+    // show a toast so they can recover the exact draft they just closed.
     private func showDiscardToast(snapshot: HabitFormSnapshot) {
-        // Clear any previous prefill so it doesn't leak into new forms.
-        recoveringPrefill = nil
         toastManager.show(
             message: "Habit Discarded",
             actionLabel: "Recover"
         ) {
-            // When the user taps "Recover", save the snapshot and re-open
-            // the form. The form reads recoveringPrefill to restore state.
-            recoveringPrefill = snapshot
-            habitFormPresenter.presentNew(
-                prefill: snapshot,
-                onDiscard: { recoveredSnapshot in
-                    showDiscardToast(snapshot: recoveredSnapshot)
-                }
+            formRoute = HabitFormRoute(
+                mode: .new,
+                initialFocus: nil,
+                prefill: snapshot
             )
         }
     }
 
-    // Calculate the current reward price for a habit.
     private func priceForHabit(_ habit: Habit) -> Int {
         let completions = tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
         return RewardCalculation.calculateReward(
@@ -162,65 +134,49 @@ struct HabitsView: View {
         )
     }
 
-    // Each habit row in the list. Layout:
-    //   [Habit info (left)]     [Price button OR warning icon (right)]
-    //
-    // Split into two buttons in an HStack: the left side opens the change form,
-    // the right side opens the trade modal (or change form if incomplete).
-    // This replaces the old single-button approach since the row now has two
-    // distinct tap targets.
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
         let canTrade = habit.canTrade
 
-        return HStack(alignment: .center) {
-            // Left side: habit info, taps to open change form.
-            Button {
-                openChangeForm(habit, focus: nil)
-            } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(habit.name)
-                        .font(.body)
-                        .foregroundStyle(.primary)
+        return HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(habit.name)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if !habit.description.isEmpty {
+                    Text(habit.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
-
-                    if !habit.description.isEmpty {
-                        Text(habit.description)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    // Frequency & Difficulty as bordered capsule pills (display only).
-                    if habit.frequency != nil || habit.difficultyRank != nil {
-                        HStack(spacing: 8) {
-                            if let freq = habit.frequency {
-                                borderedPill(text: FrequencyConversion.formatSummary(freq) ?? "")
-                            }
-
-                            if habit.difficultyRank != nil {
-                                borderedPill(text: "Difficulty")
-                            }
-                        }
-                    }
-
-                    if !tags.isEmpty {
-                        TagPillsRow(tags: tags)
-                    }
                 }
-                // .frame(maxWidth:) stretches the VStack to fill the available width.
-                // .contentShape ensures taps register on the gaps between text rows.
-                // Together they make the entire left side a single tap target.
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
 
-            // Right side: price button OR incomplete indicator.
-            // If the habit has both frequency and difficulty set, show the
-            // price button that opens the trade modal. Otherwise show a
-            // small indicator that tapping opens the change form so the
-            // user can set the missing properties.
+                HStack(spacing: 8) {
+                    habitMetaPill(
+                        text: FrequencyConversion.formatSummary(habit.frequency) ?? "Frequency",
+                        isSet: habit.frequency != nil,
+                        animating: habit.frequency == nil
+                    )
+
+                    habitMetaPill(
+                        text: "Difficulty",
+                        isSet: habit.difficultyRank != nil,
+                        animating: habit.difficultyRank == nil
+                    )
+                }
+
+                if !tags.isEmpty {
+                    TagPillsRow(tags: tags)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                openChangeForm(habit, focus: nil)
+            }
+
             if canTrade {
                 let price = priceForHabit(habit)
                 Button {
@@ -241,44 +197,107 @@ struct HabitsView: View {
                 }
                 .buttonStyle(.plain)
                 .animation(.easeInOut(duration: 2.0), value: price)
-            } else {
-                // Incomplete habit — show a hint that opens the change form.
-                // The exclamation mark triangle signals "action needed" without
-                // being alarming. Tapping opens the change form so the user
-                // can set the missing frequency/difficulty.
-                Button {
-                    openChangeForm(habit, focus: habit.frequency == nil ? .frequency : .difficulty)
-                } label: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.body)
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // A pill with a colored border outline and no background fill.
-    // Used for frequency and difficulty indicators in the list row.
-    // Like border + borderRadius: 999 with no backgroundColor in CSS.
-    private func borderedPill(text: String) -> some View {
+    private func habitMetaPill(text: String, isSet: Bool, animating: Bool) -> some View {
+        HabitListMetaPill(text: text, isSet: isSet, animating: animating)
+    }
+
+    private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
+        formRoute = HabitFormRoute(
+            mode: .change(habit),
+            initialFocus: focus,
+            prefill: nil
+        )
+    }
+}
+
+private struct HabitListMetaPill: View {
+    let text: String
+    let isSet: Bool
+    let animating: Bool
+
+    @State private var isHighlighted = false
+
+    private var shouldAnimateAttention: Bool {
+        animating && !isSet
+    }
+
+    private var textColor: Color {
+        guard isSet else {
+            if animating {
+                return isHighlighted ? .gray.opacity(0.72) : .secondary
+            }
+            return .secondary
+        }
+
+        return .orange
+    }
+
+    private var borderColor: Color {
+        guard isSet else {
+            if animating {
+                return isHighlighted ? .gray.opacity(0.72) : .secondary.opacity(0.6)
+            }
+            return .secondary.opacity(0.6)
+        }
+
+        return .orange
+    }
+
+    private var glowColor: Color {
+        animating && !isSet && isHighlighted ? .white.opacity(0.18) : .clear
+    }
+
+    var body: some View {
         Text(text)
             .font(.caption)
-            .foregroundStyle(.orange)
+            .contentTransition(.identity)
+            .foregroundStyle(textColor)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .overlay(Capsule().stroke(.orange, lineWidth: 1))
-    }
+            .overlay(
+                Capsule()
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(color: glowColor, radius: 8)
+            .animation(
+                shouldAnimateAttention
+                    ? .easeInOut(duration: 1.15).repeatForever(autoreverses: true)
+                    : .easeInOut(duration: 0.2),
+                value: isHighlighted
+            )
+            .animation(nil, value: text)
+            .animation(nil, value: isSet)
+            .onAppear {
+                guard shouldAnimateAttention else {
+                    isHighlighted = false
+                    return
+                }
 
-    // Opens the change form for a habit, optionally auto-opening a sub-modal.
-    private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
-        habitFormPresenter.presentChange(
-            habit: habit,
-            focus: focus,
-            onDelete: { habitForDeletion in
-                habitToDelete = habitForDeletion
+                isHighlighted = false
+                DispatchQueue.main.async {
+                    isHighlighted = true
+                }
             }
-        )
+            .onChange(of: animating) { _, newValue in
+                if newValue && !isSet {
+                    isHighlighted = false
+                    DispatchQueue.main.async {
+                        isHighlighted = true
+                    }
+                } else {
+                    isHighlighted = false
+                }
+            }
+            .onChange(of: isSet) { _, newValue in
+                if newValue {
+                    isHighlighted = false
+                }
+            }
     }
 }
 

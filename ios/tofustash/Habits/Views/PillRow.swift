@@ -7,6 +7,7 @@ import SwiftUI
 // Used for the form's action row: Tags, Difficulty, Frequency.
 struct PillRow: View {
     let pills: [PillItem]
+    var leadingInset: CGFloat = 0
 
     var body: some View {
         // ScrollView(.horizontal) is like overflow-x: auto with flex-direction: row.
@@ -15,22 +16,76 @@ struct PillRow: View {
             // HStack is a horizontal flex container — like flexDirection: "row".
             HStack(spacing: 8) {
                 ForEach(pills) { pill in
-                    Button {
-                        pill.action?()
-                    } label: {
-                        Label(pill.label, systemImage: pill.icon)
-                            .font(.subheadline)
-                    }
-                    // .bordered gives a pill/chip-like background shape.
-                    // .tint sets the color — orange when the field is set.
-                    .buttonStyle(.bordered)
-                    .tint(pill.isSet ? .orange : .secondary)
-                    // Scale-bounce animation: when `animating` toggles to true,
-                    // the pill grows 15% then springs back. Like CSS transform:
-                    // scale(1.15) with a spring transition.
-                    .scaleEffect(pill.animating ? 1.15 : 1.0)
-                    .animation(.spring(duration: 0.5, bounce: 0.4), value: pill.animating)
+                    PillButton(pill: pill)
                 }
+            }
+            .padding(.leading, leadingInset)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct PillButton: View {
+    let pill: PillItem
+    @State private var isHighlighted = false
+
+    private var shouldAnimateAttention: Bool {
+        pill.animating && !pill.isSet
+    }
+
+    private var tintColor: Color {
+        guard !pill.isSet else { return .orange }
+        guard pill.animating else { return .secondary }
+        return isHighlighted ? .gray.opacity(0.75) : .secondary
+    }
+
+    private var glowColor: Color {
+        pill.animating && !pill.isSet && isHighlighted ? .white.opacity(0.22) : .clear
+    }
+
+    var body: some View {
+        Button {
+            pill.action?()
+        } label: {
+            Label(pill.label, systemImage: pill.icon)
+                .font(.subheadline)
+                .contentTransition(.identity)
+        }
+        .buttonStyle(.bordered)
+        .tint(tintColor)
+        .shadow(color: glowColor, radius: 8)
+        .animation(
+            shouldAnimateAttention
+                ? .easeInOut(duration: 1.15).repeatForever(autoreverses: true)
+                : .easeInOut(duration: 0.2),
+            value: isHighlighted
+        )
+        .animation(nil, value: pill.label)
+        .animation(nil, value: pill.isSet)
+        .onAppear {
+            guard shouldAnimateAttention else {
+                isHighlighted = false
+                return
+            }
+
+            isHighlighted = false
+            DispatchQueue.main.async {
+                isHighlighted = true
+            }
+        }
+        .onChange(of: pill.animating) { _, newValue in
+            if newValue && !pill.isSet {
+                isHighlighted = false
+                DispatchQueue.main.async {
+                    isHighlighted = true
+                }
+            } else {
+                isHighlighted = false
+            }
+        }
+        .onChange(of: pill.isSet) { _, newValue in
+            if newValue {
+                isHighlighted = false
             }
         }
     }

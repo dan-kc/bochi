@@ -69,7 +69,10 @@ struct DifficultyRankerView: View {
             }
             .navigationTitle(session.isComplete ? "" : "Set Difficulty")
             .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
+            .presentationBackground(.thinMaterial)
+            .presentationContentInteraction(.scrolls)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             // Toolbar only shows during active comparison — the completion
             // screen auto-dismisses, so no navigation buttons are needed.
             .toolbar(session.isComplete ? .hidden : .visible, for: .navigationBar)

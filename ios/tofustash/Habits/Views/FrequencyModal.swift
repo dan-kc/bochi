@@ -61,9 +61,13 @@ struct FrequencyModal: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Frequency")
             .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
+            .presentationBackground(.thinMaterial)
+            .presentationContentInteraction(.scrolls)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -95,4 +99,3 @@ struct FrequencyModal: View {
         dismiss()
     }
 }
-

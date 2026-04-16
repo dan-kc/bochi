@@ -2,8 +2,6 @@ import SwiftUI
 
 // `struct ... : View` — a SwiftUI view. Think of it as a React FC. `View` is a protocol (like a TS interface / Rust trait).
 struct ContentView: View {
-    @State private var habitFormPresenter = HabitFormPresenter()
-
     // `body` — the render method. `some View` is an opaque return type (like Rust's `impl View` — the compiler infers the concrete type)
     var body: some View {
         // SwiftUI uses declarative builder syntax — each nested block is like JSX children
@@ -28,50 +26,11 @@ struct ContentView: View {
             }
             // `.modifier()` chaining — like wrapping a component: <SidebarAdaptable><TabView>...</TabView></SidebarAdaptable>
             .tabViewStyle(.sidebarAdaptable)
-            .environment(habitFormPresenter)
-            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // Balance display — top-right, above all tab content.
             BalanceOverlay()
                 .padding(.trailing, 16)
                 .padding(.top, 2)
-
-            if let route = habitFormPresenter.route {
-                habitFormOverlay(route: route)
-                    .zIndex(10)
-                    .transition(.identity)
-            }
-        }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        .animation(.easeInOut(duration: 0.24), value: habitFormPresenter.route == nil)
-        .environment(habitFormPresenter)
-    }
-
-    @ViewBuilder
-    private func habitFormOverlay(route: HabitFormPresenter.Route) -> some View {
-        switch route {
-        case .new(let prefill, let onDiscard):
-            HabitFormModal(
-                mode: .new,
-                initialFocus: .name,
-                prefill: prefill,
-                onDiscard: onDiscard,
-                onDelete: nil,
-                onClose: {
-                    habitFormPresenter.dismiss()
-                }
-            )
-        case .change(let habit, let focus, let onDelete):
-            HabitFormModal(
-                mode: .change(habit),
-                initialFocus: focus,
-                prefill: nil,
-                onDiscard: nil,
-                onDelete: onDelete,
-                onClose: {
-                    habitFormPresenter.dismiss()
-                }
-            )
         }
     }
 }
@@ -89,5 +48,4 @@ struct ContentView: View {
         .environment(TradeStore())
         .environment(BalanceStore())
         .environment(UserSettingsStore())
-        .environment(HabitFormPresenter())
 }

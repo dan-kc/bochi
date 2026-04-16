@@ -7,6 +7,8 @@ import SwiftUI
 // than putting onClick on each child element.
 struct TagPillsRow: View {
     let tags: [Tag]
+    var leadingInset: CGFloat = 0
+    private let fadeWidth: CGFloat = 24
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -22,6 +24,20 @@ struct TagPillsRow: View {
                         // Capsule shape = fully rounded pill, like borderRadius: 999 in CSS
                         .clipShape(Capsule())
                 }
+            }
+            .padding(.leading, leadingInset)
+            .padding(.trailing, fadeWidth)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .mask {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(
+                    colors: [.white, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: fadeWidth)
             }
         }
     }

@@ -14,6 +14,7 @@ struct TagsView: View {
     @Environment(TagStore.self) private var tagStore
 
     @State private var searchText = ""
+    @State private var isSearchPresented = false
     @State private var isCreatingTag = false
     @State private var editingTag: Tag? = nil
     @State private var editName = ""
@@ -59,10 +60,14 @@ struct TagsView: View {
                     .disabled(isCreatingTag)
                 }
             }
-            .searchable(text: $searchText, prompt: "Search tags...")
+            .scrollContentBackground(.hidden)
+            .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search tags...")
             .navigationTitle("Tags")
             .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
+            .presentationBackground(.thinMaterial)
+            .presentationContentInteraction(.scrolls)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
                 // Single "Done" button — tag changes are applied immediately
                 // (no save/cancel distinction), so only a dismiss is needed.
@@ -113,6 +118,7 @@ struct TagsView: View {
 
             // Edit button — pencil icon like the React version
             Button {
+                isSearchPresented = false
                 editingTag = tag
                 editName = tag.name
                 editColor = tag.colorHex
@@ -178,9 +184,13 @@ struct TagsView: View {
                     .padding(.vertical, 4)
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Edit Tag")
             .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
+            .presentationBackground(.thinMaterial)
+            .presentationContentInteraction(.scrolls)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -226,6 +236,7 @@ struct TagsView: View {
         isCreatingTag = true
         if let tag = tagStore.addTag(name: name) {
             tagStore.addTagToHabit(tagId: tag.id, habitId: habitId)
+            isSearchPresented = false
             searchText = ""
             // Open edit sheet for the new tag
             editingTag = tag
