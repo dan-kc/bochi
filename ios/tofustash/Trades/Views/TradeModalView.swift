@@ -91,6 +91,9 @@ struct TradeModalView: View {
             }
         }
         .presentationDetents([.medium])
+        .presentationBackground(.thinMaterial)
+        .presentationContentInteraction(.scrolls)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .task {
             timeBucket = RewardCalculation.getCurrentTimeBucket()
         }

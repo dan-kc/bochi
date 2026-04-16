@@ -253,10 +253,10 @@ struct HabitFormView: View {
         .sheet(isPresented: $showingTags) {
             TagsView(habitId: habitId)
         }
-        .sheet(item: $tradingHabit, onDismiss: {
-            dismiss()
-        }) { habit in
-            TradeModalView(habit: habit)
+        .sheet(item: $tradingHabit) { habit in
+            TradeModalView(habit: habit) {
+                dismiss()
+            }
         }
         .alert("Difficulty Set", isPresented: $showingFirstHabitAlert) {
             Button("OK", role: .cancel) { }
