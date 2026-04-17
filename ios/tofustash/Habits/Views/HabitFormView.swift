@@ -61,6 +61,7 @@ struct HabitFormView: View {
     @State private var hasInitialized = false
     @State private var hasAppliedInitialLoad = false
     @State private var didPersist = false
+    @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
     @FocusState private var focusedField: FieldFocus?
 
     enum FieldFocus: Hashable {
@@ -139,6 +140,7 @@ struct HabitFormView: View {
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionsInPeriod: completions,
+            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -280,6 +282,15 @@ struct HabitFormView: View {
             // hydrates the form once when the sheet appears.
             initializeIfNeeded()
         }
+        .task {
+            // Behaviour: while the user keeps the edit sheet open, the previewed
+            // reward price refreshes right when the next minute bucket starts.
+            while !Task.isCancelled {
+                let nanos = RewardCalculation.nanosUntilNextBucket()
+                try? await Task.sleep(nanoseconds: nanos)
+                timeBucket = RewardCalculation.getCurrentTimeBucket()
+            }
+        }
         .onChange(of: name) { _, _ in
             autoSaveIfNeeded()
         }
@@ -336,26 +347,11 @@ struct HabitFormView: View {
     }
 
     private var tradeButton: some View {
-        Button {
+        ClaimRewardButton(price: currentPrice, layout: .expanded(title: "Claim Reward")) {
             guard let persistedHabit = persistHabit() else { return }
             didPersist = true
             tradingHabit = persistedHabit
-        } label: {
-            HStack {
-                Text("Claim Reward")
-                Spacer()
-                HStack(spacing: 2) {
-                    Text("\(currentPrice)")
-                        .contentTransition(.numericText())
-                    Image(systemName: "cube.fill")
-                        .font(.caption2)
-                }
-                .fontWeight(.semibold)
-            }
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .clipShape(Capsule())
     }
 
     static func hasContent(
@@ -507,6 +503,128 @@ struct HabitFormView: View {
         )
 
         return draftHabitForTrade
+    }
+}
+
+// A shared claim button keeps the list row and edit form visually aligned while
+// centralizing the "price changed" animation in one place.
+struct ClaimRewardButton: View {
+    enum Layout {
+        case compact
+        case expanded(title: String)
+    }
+
+    let price: Int
+    let layout: Layout
+    let action: () -> Void
+
+    @State private var displayedPrice: Int
+    @State private var tintColor: Color = Self.baseTint
+    @State private var hasAppeared = false
+    @State private var colorResetTask: Task<Void, Never>? = nil
+
+    private static let baseTint: Color = .gray
+
+    init(price: Int, layout: Layout, action: @escaping () -> Void) {
+        self.price = price
+        self.layout = layout
+        self.action = action
+        _displayedPrice = State(initialValue: price)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            labelContent
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(tintColor)
+        .controlSize(controlSize)
+        .clipShape(Capsule())
+        .onAppear {
+            displayedPrice = price
+            tintColor = Self.baseTint
+            hasAppeared = true
+        }
+        .onChange(of: price) { oldPrice, newPrice in
+            guard oldPrice != newPrice else { return }
+
+            // Behaviour: users see whether the minute refresh helped or hurt the
+            // current deal before the button settles back to its neutral state.
+            guard hasAppeared else {
+                displayedPrice = newPrice
+                return
+            }
+
+            animatePriceChange(from: oldPrice, to: newPrice)
+        }
+        .onDisappear {
+            colorResetTask?.cancel()
+        }
+    }
+
+    private var priceValue: some View {
+        Text("\(displayedPrice)")
+            .contentTransition(.numericText())
+    }
+
+    @ViewBuilder
+    private var labelContent: some View {
+        switch layout {
+        case .compact:
+            HStack(spacing: 4) {
+                priceValue
+                Image(systemName: "cube.fill")
+                    .font(.caption2)
+            }
+            .font(.callout)
+            .fontWeight(.semibold)
+        case .expanded(let title):
+            HStack {
+                Text(title)
+                Spacer()
+                HStack(spacing: 4) {
+                    priceValue
+                    Image(systemName: "cube.fill")
+                        .font(.caption2)
+                }
+                .fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var controlSize: ControlSize {
+        switch layout {
+        case .compact:
+            return .regular
+        case .expanded:
+            return .large
+        }
+    }
+
+    private func animatePriceChange(from oldPrice: Int, to newPrice: Int) {
+        colorResetTask?.cancel()
+
+        let flashColor: Color = newPrice < oldPrice ? .red : .green
+
+        withAnimation(.easeIn(duration: 0.2)) {
+            tintColor = flashColor
+        }
+
+        withAnimation(.easeInOut(duration: 0.6)) {
+            displayedPrice = newPrice
+        }
+
+        colorResetTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    tintColor = Self.baseTint
+                }
+            }
+        }
     }
 }
 

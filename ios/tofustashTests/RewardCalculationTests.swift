@@ -210,16 +210,16 @@ struct FrequencyMultiplierTests {
 }
 
 // MARK: - Random Multiplier
-// R = 0.9 + deterministicHash(habitId + "-" + timeBucket) * 0.2
-// Deterministic per (habit, time bucket) pair, changes every 30 minutes.
+// R = 0.995 + deterministicHash(habitId + "-" + timeBucket) * 0.01
+// Deterministic per (habit, time bucket) pair, changes every 20 seconds.
 struct RandomMultiplierTests {
 
     // Behaviour: The dynamic pricing effect stays subtle and never swings beyond the intended small range.
-    @Test("Returns value between 0.9 and 1.1")
+    @Test("Returns value between 0.995 and 1.005")
     func inRange() {
         let r = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
-        #expect(r >= 0.9)
-        #expect(r < 1.1)
+        #expect(r >= 0.995)
+        #expect(r < 1.005)
     }
 
     // Behaviour: Refreshing the UI within the same time bucket should not change the visible price.
@@ -238,7 +238,7 @@ struct RandomMultiplierTests {
         #expect(r1 != r2)
     }
 
-    // Behaviour: The same habit can show a different price after the 30-minute pricing window rolls over.
+    // Behaviour: The same habit can show a different price after the next 20-second pricing window rolls over.
     @Test("Varies by time bucket")
     func variesByTimeBucket() {
         let r1 = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
@@ -264,9 +264,9 @@ struct CalculateRewardTests {
     func unrankedNoFrequency() {
         let habit = makeHabit(frequency: nil, difficultyRank: nil)
         let reward = RewardCalculation.calculateReward(habit: habit, allHabits: [habit], completionsInPeriod: 0, timeBucket: 12345, generalDifficulty: 5)
-        // 100 * 5 * 0.5 * 1 * R, where R ∈ [0.9, 1.1)
-        let low = Int(round(100 * 5 * 0.5 * 0.9))  // 225
-        let high = Int(round(100 * 5 * 0.5 * 1.1))  // 275
+        // 100 * 5 * 0.5 * 1 * R, where R ∈ [0.995, 1.005)
+        let low = Int(round(100 * 5 * 0.5 * 0.995))  // 249
+        let high = Int(round(100 * 5 * 0.5 * 1.005))  // 251
         #expect(reward >= low)
         #expect(reward <= high)
     }
@@ -283,25 +283,34 @@ struct CalculateRewardTests {
 }
 
 // MARK: - Time Bucket
-// Bucket = floor(epoch_ms / 1_800_000). Two dates within the same
-// 30-minute window should share a bucket.
+// Bucket = floor(epoch_ms / 20_000). Two dates within the same
+// 20-second window should share a bucket.
 struct TimeBucketTests {
 
-    // Behaviour: Looking at a reward twice within the same 30-minute window should use the same pricing bucket.
-    @Test("Same bucket for dates within same 30-minute window")
+    // Behaviour: Looking at a reward twice within the same 20-second window should use the same pricing bucket.
+    @Test("Same bucket for dates within same 20-second window")
     func sameBucket() {
-        // 2024-01-01 12:00:00 UTC and 12:29:59 UTC
+        // 2024-01-01 12:00:00 UTC and 12:00:19 UTC
         let date1 = Date(timeIntervalSince1970: 1704110400) // 12:00:00
-        let date2 = Date(timeIntervalSince1970: 1704112199) // 12:29:59
+        let date2 = Date(timeIntervalSince1970: 1704110419) // 12:00:19
         #expect(RewardCalculation.getCurrentTimeBucket(now: date1) == RewardCalculation.getCurrentTimeBucket(now: date2))
     }
 
-    // Behaviour: Prices are allowed to refresh once the next 30-minute window begins.
-    @Test("Different bucket for dates in different 30-minute windows")
+    // Behaviour: Prices are allowed to refresh once the next 20-second window begins.
+    @Test("Different bucket for dates in different 20-second windows")
     func differentBucket() {
         let date1 = Date(timeIntervalSince1970: 1704110400) // 12:00:00
-        let date2 = Date(timeIntervalSince1970: 1704112200) // 12:30:00
+        let date2 = Date(timeIntervalSince1970: 1704110420) // 12:00:20
         #expect(RewardCalculation.getCurrentTimeBucket(now: date1) != RewardCalculation.getCurrentTimeBucket(now: date2))
+    }
+
+    // Behaviour: The UI ticker can sleep until the next 20-second boundary instead of waking up repeatedly.
+    @Test("Wait time reaches the next 20-second boundary")
+    func nanosUntilNextTwentySecondBoundary() {
+        let date = Date(timeIntervalSince1970: 1704110410) // 12:00:10
+        let nanos = RewardCalculation.nanosUntilNextBucket(now: date)
+        let expected = UInt64(10_100_000_000) // 10s plus the small buffer used by production code
+        #expect(nanos == expected)
     }
 }
 

@@ -1,15 +1,20 @@
-I am porting a react-native (./frontend) app to native IOS swift (./ios).
+I am writing a swift IOS app in ./ios. I am losely basing it off of the react-natige project in ./frontend
 Use default SwiftUI styling including icons etc.
 Write comments assuming I am an expert in React but 6 don't know anything about Swift.
 Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 
-Write comments in ./ios assuming I am an expert in React but 6 don't know anything about Swift.
-Write comments documenting user behaviours. Ensure that all tests have a comment about the user behaviour it is testing. If there are any tests that do not reflect any user behaviours, remove them. If you think I should add any then add them.
+Make the reward price calculation re-calculate every minute instead of every half hour. Change the reward claim reward button on the habit list item and in the habit change form to be gray not green or blue. Wheneve the price changes for an item, I want to see the claim button in both the habit list item and the habit change form do the following:
 
-Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
-Ensure the codebase is as DRY as **reasonably** possible.
+If the price goes down:
+
+- Fade the color form gray into red
+- Animate the price number to the new number
+- Fade the color back into gray
+
+If the price goes up, then do the same just use green instead of red
+
 # Rewards
 
 Make the textbox "search tags..." always have focus. The IOS keyboard should always be out when this modal is open. It should only close when one opens the edit tag modal. Ensure that the tick in the top right is always visible. Currently it dissapears While the user is typing until they hit the "X" next to the keyboard.

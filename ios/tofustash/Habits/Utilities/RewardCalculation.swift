@@ -8,7 +8,7 @@ import Foundation
 //   G = general difficulty (user-configurable scalar, default 5.0)
 //   D = difficulty multiplier based on rank position, range (0, 1)
 //   F = frequency multiplier based on completion rate, range (0, 2)
-//   R = deterministic random multiplier, range [0.9, 1.1)
+//   R = deterministic random multiplier, range [0.995, 1.005)
 //
 // Caseless enum = namespace (can't be instantiated). Like a TS module
 // that only exports functions. Matches the FrequencyConversion pattern.
@@ -20,13 +20,18 @@ enum RewardCalculation {
     // target completion rate for a habit.
     private static let alpha = 2.5
 
+    // Keep the market feeling alive without letting short-term randomness
+    // dominate the user's expected reward.
+    private static let randomBaseMultiplier = 0.995
+    private static let randomMultiplierRange = 0.01
+
     // The neutral completion ratio used as a fallback when age blending
     // is in effect. At ratio 1.0, the frequency multiplier F equals 1.0.
     private static let habitNeutralRatio = 1.0
 
-    // Time bucket size in milliseconds (30 minutes). The random multiplier R
-    // changes every 30 minutes, so prices fluctuate slightly throughout the day.
-    private static let timeBucketMs = 30 * 60 * 1000
+    // Time bucket size in milliseconds (20 seconds). The random multiplier R
+    // changes every 20 seconds, so prices fluctuate slightly throughout the day.
+    private static let timeBucketMs = 20 * 1000
 
     // MARK: - Difficulty Multiplier
 
@@ -102,13 +107,13 @@ enum RewardCalculation {
 
     // MARK: - Random Multiplier
 
-    // Random-looking multiplier: stable within one 30-minute bucket so the
+    // Random-looking multiplier: stable within one 20-second bucket so the
     // visible price does not jitter on every re-render, but it changes across
     // buckets to keep the market feeling alive.
     static func calculateRandomMultiplier(habitId: String, timeBucket: Int) -> Double {
         let seed = "\(habitId)-\(timeBucket)"
         let hash = DeterministicHash.hash(seed)
-        return 0.9 + hash * 0.2
+        return randomBaseMultiplier + hash * randomMultiplierRange
     }
 
     // MARK: - Time Bucket
@@ -151,7 +156,7 @@ enum RewardCalculation {
     // MARK: - Time Bucket Helpers
 
     // Used by price observers so the UI can refresh exactly when the next
-    // bucket begins instead of polling constantly.
+    // 20-second bucket begins instead of polling constantly.
     static func nanosUntilNextBucket(now: Date = Date()) -> UInt64 {
         let epochMs = now.timeIntervalSince1970 * 1000
         let bucketMs = Double(timeBucketMs)

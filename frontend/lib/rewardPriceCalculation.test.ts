@@ -182,10 +182,10 @@ describe("rewardPriceCalculation", () => {
   });
 
   describe("calculateRandomMultiplier", () => {
-    test("returns value between 0.9 and 1.1", () => {
+    test("returns value between 0.995 and 1.005", () => {
       const multiplier = calculateRandomMultiplier("reward-1", 12345);
-      expect(multiplier).toBeGreaterThanOrEqual(0.9);
-      expect(multiplier).toBeLessThan(1.1);
+      expect(multiplier).toBeGreaterThanOrEqual(0.995);
+      expect(multiplier).toBeLessThan(1.005);
     });
 
     test("is deterministic for same inputs", () => {
@@ -217,9 +217,9 @@ describe("rewardPriceCalculation", () => {
     test("unranked reward with no frequency: price = 100 * G * 0.5 * 1 * R", () => {
       const reward = createReward({ damage_rank: null, max_daily_frequency: null });
       const price = calculatePrice(reward, [reward], 0, 12345, 5);
-      // 100 * 5 * 0.5 * 1 * R, R in [0.9, 1.1)
-      expect(price).toBeGreaterThanOrEqual(Math.round(100 * 5 * 0.5 * 0.9));
-      expect(price).toBeLessThan(Math.round(100 * 5 * 0.5 * 1.1) + 1);
+      // 100 * 5 * 0.5 * 1 * R, R in [0.995, 1.005)
+      expect(price).toBeGreaterThanOrEqual(Math.round(100 * 5 * 0.5 * 0.995));
+      expect(price).toBeLessThan(Math.round(100 * 5 * 0.5 * 1.005) + 1);
     });
 
     test("returns capped price when r_eff >= 1", () => {

@@ -179,24 +179,9 @@ struct HabitsView: View {
 
             if canTrade {
                 let price = priceForHabit(habit)
-                Button {
+                ClaimRewardButton(price: price, layout: .compact) {
                     tradingHabit = habit
-                } label: {
-                    HStack(spacing: 2) {
-                        Text("\(price)")
-                            .contentTransition(.numericText())
-                        Image(systemName: "cube.fill")
-                            .font(.caption2)
-                    }
-                    .font(.callout)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.green, in: .capsule)
                 }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 2.0), value: price)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
