@@ -9,7 +9,7 @@
  *   F_r = 2 / (1 - r_eff^β) - 1, β=3, asymptotic frequency in [1, ∞), capped at 50
  *     r_eff = w * r + (1 - w) * 0.5, w = min(1, age_days / 30)
  *     Hard block when r_eff >= 1
- *   R = 0.995 + 0.01 * rand(), deterministic random in [0.995, 1.005)
+ *   R = 0.993 + 0.014 * rand(), deterministic random in [0.993, 1.007)
  */
 
 import type { Reward } from "./reward";
@@ -24,8 +24,8 @@ const AGE_BLEND_DAYS = 30;
 const REWARD_NEUTRAL_RATIO = 0.5;
 
 /** Keep dynamic pricing subtle instead of letting randomness dominate costs */
-const RANDOM_BASE_MULTIPLIER = 0.995;
-const RANDOM_MULTIPLIER_RANGE = 0.01;
+const RANDOM_BASE_MULTIPLIER = 0.993;
+const RANDOM_MULTIPLIER_RANGE = 0.014;
 
 /** Maximum frequency multiplier cap */
 const MAX_FREQUENCY_MULTIPLIER = 50;
@@ -138,7 +138,7 @@ export function calculateFrequencyMultiplier(
 
 /**
  * Calculate deterministic "random" multiplier.
- * Range: [0.995, 1.005)
+ * Range: [0.993, 1.007)
  */
 export function calculateRandomMultiplier(
   rewardId: string,

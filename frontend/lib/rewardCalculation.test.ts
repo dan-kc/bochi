@@ -176,10 +176,10 @@ describe("rewardCalculation", () => {
   });
 
   describe("calculateRandomMultiplier", () => {
-    test("returns value between 0.995 and 1.005", () => {
+    test("returns value between 0.993 and 1.007", () => {
       const multiplier = calculateRandomMultiplier("habit-1", 12345);
-      expect(multiplier).toBeGreaterThanOrEqual(0.995);
-      expect(multiplier).toBeLessThan(1.005);
+      expect(multiplier).toBeGreaterThanOrEqual(0.993);
+      expect(multiplier).toBeLessThan(1.007);
     });
 
     test("is deterministic for same inputs", () => {
@@ -211,9 +211,9 @@ describe("rewardCalculation", () => {
     test("unranked habit with no frequency: reward = 100 * G * 0.5 * 1 * R", () => {
       const habit = createHabit({ difficulty_rank: null, min_daily_frequency: null });
       const reward = calculateReward(habit, [habit], 0, 12345, 5);
-      // 100 * 5 * 0.5 * 1 * R, R in [0.995, 1.005)
-      expect(reward).toBeGreaterThanOrEqual(Math.round(100 * 5 * 0.5 * 0.995));
-      expect(reward).toBeLessThan(Math.round(100 * 5 * 0.5 * 1.005) + 1);
+      // 100 * 5 * 0.5 * 1 * R, R in [0.993, 1.007)
+      expect(reward).toBeGreaterThanOrEqual(Math.round(100 * 5 * 0.5 * 0.993));
+      expect(reward).toBeLessThan(Math.round(100 * 5 * 0.5 * 1.007) + 1);
     });
 
     test("generalDifficulty scales reward linearly", () => {

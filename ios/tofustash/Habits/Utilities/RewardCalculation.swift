@@ -8,7 +8,7 @@ import Foundation
 //   G = general difficulty (user-configurable scalar, default 5.0)
 //   D = difficulty multiplier based on rank position, range (0, 1)
 //   F = frequency multiplier based on completion rate, range (0, 2)
-//   R = deterministic random multiplier, range [0.995, 1.005)
+//   R = deterministic random multiplier, range [0.993, 1.007)
 //
 // Caseless enum = namespace (can't be instantiated). Like a TS module
 // that only exports functions. Matches the FrequencyConversion pattern.
@@ -22,8 +22,8 @@ enum RewardCalculation {
 
     // Keep the market feeling alive without letting short-term randomness
     // dominate the user's expected reward.
-    private static let randomBaseMultiplier = 0.995
-    private static let randomMultiplierRange = 0.01
+    private static let randomBaseMultiplier = 0.993
+    private static let randomMultiplierRange = 0.014
 
     // The neutral completion ratio used as a fallback when age blending
     // is in effect. At ratio 1.0, the frequency multiplier F equals 1.0.

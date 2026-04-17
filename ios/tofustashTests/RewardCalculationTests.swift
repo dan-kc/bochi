@@ -210,16 +210,16 @@ struct FrequencyMultiplierTests {
 }
 
 // MARK: - Random Multiplier
-// R = 0.995 + deterministicHash(habitId + "-" + timeBucket) * 0.01
+// R = 0.993 + deterministicHash(habitId + "-" + timeBucket) * 0.014
 // Deterministic per (habit, time bucket) pair, changes every 20 seconds.
 struct RandomMultiplierTests {
 
     // Behaviour: The dynamic pricing effect stays subtle and never swings beyond the intended small range.
-    @Test("Returns value between 0.995 and 1.005")
+    @Test("Returns value between 0.993 and 1.007")
     func inRange() {
         let r = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
-        #expect(r >= 0.995)
-        #expect(r < 1.005)
+        #expect(r >= 0.993)
+        #expect(r < 1.007)
     }
 
     // Behaviour: Refreshing the UI within the same time bucket should not change the visible price.
@@ -264,9 +264,9 @@ struct CalculateRewardTests {
     func unrankedNoFrequency() {
         let habit = makeHabit(frequency: nil, difficultyRank: nil)
         let reward = RewardCalculation.calculateReward(habit: habit, allHabits: [habit], completionsInPeriod: 0, timeBucket: 12345, generalDifficulty: 5)
-        // 100 * 5 * 0.5 * 1 * R, where R ∈ [0.995, 1.005)
-        let low = Int(round(100 * 5 * 0.5 * 0.995))  // 249
-        let high = Int(round(100 * 5 * 0.5 * 1.005))  // 251
+        // 100 * 5 * 0.5 * 1 * R, where R ∈ [0.993, 1.007)
+        let low = Int(round(100 * 5 * 0.5 * 0.993))  // 248
+        let high = Int(round(100 * 5 * 0.5 * 1.007))  // 252
         #expect(reward >= low)
         #expect(reward <= high)
     }

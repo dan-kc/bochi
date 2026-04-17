@@ -8,7 +8,7 @@
  *   D = (N - rank + 1) / (N + 1), relative difficulty in (0, 1)
  *   F = 2 / (1 + r_eff^α), α=2.5, frequency multiplier in (0, 2)
  *     r_eff = w * r + (1 - w) * 1.0, w = min(1, age_days / 30)
- *   R = 0.995 + 0.01 * rand(), deterministic random in [0.995, 1.005)
+ *   R = 0.993 + 0.014 * rand(), deterministic random in [0.993, 1.007)
  */
 
 import type { Habit } from './habit';
@@ -23,8 +23,8 @@ const AGE_BLEND_DAYS = 30;
 const HABIT_NEUTRAL_RATIO = 1.0;
 
 /** Keep dynamic pricing subtle instead of letting randomness dominate rewards */
-const RANDOM_BASE_MULTIPLIER = 0.995;
-const RANDOM_MULTIPLIER_RANGE = 0.01;
+const RANDOM_BASE_MULTIPLIER = 0.993;
+const RANDOM_MULTIPLIER_RANGE = 0.014;
 
 /** Time bucket size in milliseconds (30 minutes) */
 const TIME_BUCKET_MS = 30 * 60 * 1000;
@@ -125,7 +125,7 @@ export function calculateHabitMultiplier(
 
 /**
  * Calculate deterministic "random" multiplier.
- * Range: [0.995, 1.005)
+ * Range: [0.993, 1.007)
  */
 export function calculateRandomMultiplier(
   habitId: string,
