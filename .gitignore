@@ -51,3 +51,4 @@ app-example
 
 # builds
 ios/build/
+ios/.derived/
