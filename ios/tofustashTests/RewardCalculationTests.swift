@@ -30,6 +30,7 @@ private func makeHabit(
 // Easiest habits (lowest rank string) get the highest D.
 struct DifficultyMultiplierTests {
 
+    // Behaviour: A habit without difficulty ranking falls back to a neutral reward adjustment.
     @Test("Returns 0.5 when habit has no difficulty rank")
     func unrankedHabit() {
         let habit = makeHabit(difficultyRank: nil)
@@ -37,6 +38,7 @@ struct DifficultyMultiplierTests {
         #expect(d == 0.5)
     }
 
+    // Behaviour: If the user has not ranked any habits yet, all rewards use the neutral difficulty multiplier.
     @Test("Returns 0.5 when no habits have difficulty ranks")
     func noRankedHabits() {
         let habit = makeHabit(id: "h1", difficultyRank: "a0")
@@ -48,6 +50,7 @@ struct DifficultyMultiplierTests {
         #expect(d == 0.5)
     }
 
+    // Behaviour: The very first ranked habit lands on the neutral midpoint.
     @Test("Single ranked habit gets D = 1/2")
     func singleRanked() {
         let habit = makeHabit(difficultyRank: "m0")
@@ -56,6 +59,7 @@ struct DifficultyMultiplierTests {
         #expect(d == 0.5)
     }
 
+    // Behaviour: The easiest habit in a small list pays more because the user is expected to do it more often.
     @Test("Easiest habit in two-item list gets highest D")
     func easiestOfTwo() {
         let easy = makeHabit(id: "easy", difficultyRank: "a0")
@@ -66,6 +70,7 @@ struct DifficultyMultiplierTests {
         #expect(abs(d - 2.0 / 3.0) < 1e-10)
     }
 
+    // Behaviour: The hardest habit in a small list pays less than the easiest one.
     @Test("Hardest habit in two-item list gets lowest D")
     func hardestOfTwo() {
         let easy = makeHabit(id: "easy", difficultyRank: "a0")
@@ -76,6 +81,7 @@ struct DifficultyMultiplierTests {
         #expect(abs(d - 1.0 / 3.0) < 1e-10)
     }
 
+    // Behaviour: A middle-ranked habit gets the neutral difficulty multiplier.
     @Test("Middle ranked habit in three-item list gets D = 0.5")
     func middleOfThree() {
         let low = makeHabit(id: "low", difficultyRank: "a0")
@@ -87,6 +93,7 @@ struct DifficultyMultiplierTests {
         #expect(d == 0.5)
     }
 
+    // Behaviour: Deleted habits should not keep affecting the reward prices of visible habits.
     @Test("Ignores deleted habits in ranking")
     func ignoresDeleted() {
         let active = makeHabit(id: "active", difficultyRank: "a0")
@@ -97,6 +104,7 @@ struct DifficultyMultiplierTests {
         #expect(d == 0.5)
     }
 
+    // Behaviour: Difficulty scaling always stays in a sensible range and never produces zero or negative rewards.
     @Test("D is always in (0, 1) for any number of habits")
     func alwaysInRange() {
         let habits = (0..<10).map { i in
@@ -116,6 +124,7 @@ struct DifficultyMultiplierTests {
 // based on habit age (new habits default toward 1.0).
 struct FrequencyMultiplierTests {
 
+    // Behaviour: A habit with no frequency target keeps the neutral frequency multiplier.
     @Test("Returns 1 when frequency is nil")
     func nilFrequency() {
         let habit = makeHabit(frequency: nil)
@@ -123,6 +132,7 @@ struct FrequencyMultiplierTests {
         #expect(f == 1)
     }
 
+    // Behaviour: A zero frequency target behaves like "no target set" instead of breaking pricing.
     @Test("Returns 1 when frequency is 0")
     func zeroFrequency() {
         // frequency 0 means "no target set" — neutral multiplier
@@ -131,6 +141,7 @@ struct FrequencyMultiplierTests {
         #expect(f == 1)
     }
 
+    // Behaviour: A user who has not done a mature habit recently sees the maximum encouragement reward.
     @Test("Zero completions for mature habit gives F = 2")
     func zeroCompletionsMature() {
         // frequency=1.0 (once/day), expected=7 over 7 days, r=0, r_eff=0
@@ -140,6 +151,7 @@ struct FrequencyMultiplierTests {
         #expect(f == 2)
     }
 
+    // Behaviour: Hitting the target frequency gives the neutral reward multiplier.
     @Test("Exact target completion gives F = 1")
     func exactTarget() {
         // frequency=1.0, expected=7, actual=7, r=1.0, r_eff=1.0
@@ -149,6 +161,7 @@ struct FrequencyMultiplierTests {
         #expect(f == 1)
     }
 
+    // Behaviour: Doing a habit far more than the target lowers its per-completion reward.
     @Test("Exceeding target lowers F below 1")
     func exceedingTarget() {
         // frequency=1.0, expected=7, actual=14, r=2.0
@@ -159,6 +172,7 @@ struct FrequencyMultiplierTests {
         #expect(f > 0)
     }
 
+    // Behaviour: Frequency scaling stays bounded so rewards do not explode or collapse to zero.
     @Test("F is naturally bounded between 0 and 2")
     func bounded() {
         let habit = makeHabit(frequency: 1.0)
@@ -168,6 +182,7 @@ struct FrequencyMultiplierTests {
         #expect(fHigh > 0)
     }
 
+    // Behaviour: Brand-new habits are still rewarding immediately on iOS instead of being flattened to neutral pricing.
     @Test("New habit still gets full frequency multiplier (age blending disabled)")
     func newHabitNoAgeBlending() {
         // Age blending is disabled in the iOS version (in-memory storage means
@@ -178,6 +193,7 @@ struct FrequencyMultiplierTests {
         #expect(f == 2)
     }
 
+    // Behaviour: The more recently the user has completed a habit, the less the next completion pays.
     @Test("Price decreases as completions increase")
     func priceDecreasesWithCompletions() {
         // With frequency=1.0 (once/day), completing more often should
@@ -198,6 +214,7 @@ struct FrequencyMultiplierTests {
 // Deterministic per (habit, time bucket) pair, changes every 30 minutes.
 struct RandomMultiplierTests {
 
+    // Behaviour: The dynamic pricing effect stays subtle and never swings beyond the intended small range.
     @Test("Returns value between 0.9 and 1.1")
     func inRange() {
         let r = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
@@ -205,6 +222,7 @@ struct RandomMultiplierTests {
         #expect(r < 1.1)
     }
 
+    // Behaviour: Refreshing the UI within the same time bucket should not change the visible price.
     @Test("Is deterministic for same inputs")
     func deterministic() {
         let r1 = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
@@ -212,6 +230,7 @@ struct RandomMultiplierTests {
         #expect(r1 == r2)
     }
 
+    // Behaviour: Two different habits can legitimately show different prices at the same moment.
     @Test("Varies by habit ID")
     func variesByHabit() {
         let r1 = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
@@ -219,6 +238,7 @@ struct RandomMultiplierTests {
         #expect(r1 != r2)
     }
 
+    // Behaviour: The same habit can show a different price after the 30-minute pricing window rolls over.
     @Test("Varies by time bucket")
     func variesByTimeBucket() {
         let r1 = RewardCalculation.calculateRandomMultiplier(habitId: "habit-1", timeBucket: 12345)
@@ -231,14 +251,15 @@ struct RandomMultiplierTests {
 // Reward = round(100 * G * D * F * R)
 struct CalculateRewardTests {
 
+    // Behaviour: The user-facing reward is always shown as a whole tofu amount.
     @Test("Returns a rounded integer")
     func roundedInteger() {
         let habit = makeHabit()
         let reward = RewardCalculation.calculateReward(habit: habit, allHabits: [habit], completionsInPeriod: 0, timeBucket: 12345, generalDifficulty: 5)
-        // Verify it's a whole number by checking Int conversion
         #expect(reward == reward) // Int is always whole
     }
 
+    // Behaviour: An unranked habit with no frequency target still produces a sensible baseline reward.
     @Test("Unranked habit with no frequency: reward = 100 * G * 0.5 * 1 * R")
     func unrankedNoFrequency() {
         let habit = makeHabit(frequency: nil, difficultyRank: nil)
@@ -250,6 +271,7 @@ struct CalculateRewardTests {
         #expect(reward <= high)
     }
 
+    // Behaviour: Raising the global difficulty setting scales the displayed reward proportionally.
     @Test("General difficulty scales reward linearly")
     func difficultyScalesLinearly() {
         let habit = makeHabit(frequency: nil, difficultyRank: nil)
@@ -265,6 +287,7 @@ struct CalculateRewardTests {
 // 30-minute window should share a bucket.
 struct TimeBucketTests {
 
+    // Behaviour: Looking at a reward twice within the same 30-minute window should use the same pricing bucket.
     @Test("Same bucket for dates within same 30-minute window")
     func sameBucket() {
         // 2024-01-01 12:00:00 UTC and 12:29:59 UTC
@@ -273,6 +296,7 @@ struct TimeBucketTests {
         #expect(RewardCalculation.getCurrentTimeBucket(now: date1) == RewardCalculation.getCurrentTimeBucket(now: date2))
     }
 
+    // Behaviour: Prices are allowed to refresh once the next 30-minute window begins.
     @Test("Different bucket for dates in different 30-minute windows")
     func differentBucket() {
         let date1 = Date(timeIntervalSince1970: 1704110400) // 12:00:00
@@ -287,6 +311,7 @@ struct TimeBucketTests {
 // multiplier F, resulting in a different price for each iteration.
 struct MultiPurchaseTotalTests {
 
+    // Behaviour: Buying one completion through the multi-buy path matches the single-completion price.
     @Test("Quantity 1 equals single calculateReward")
     func quantityOne() {
         let habit = makeHabit(frequency: 1.0, difficultyRank: "m0")
@@ -301,6 +326,7 @@ struct MultiPurchaseTotalTests {
         #expect(total == single)
     }
 
+    // Behaviour: Buying two completions sums the first and second prices, including diminishing returns.
     @Test("Quantity 2 equals sum of two individual prices with incremented completions")
     func quantityTwo() {
         let habit = makeHabit(frequency: 1.0, difficultyRank: "m0")
@@ -319,6 +345,7 @@ struct MultiPurchaseTotalTests {
         #expect(total == price0 + price1)
     }
 
+    // Behaviour: Multi-buy should reflect diminishing returns instead of naively multiplying one visible price.
     @Test("Multi-purchase total is NOT simply price * quantity")
     func notSimpleMultiplication() {
         let habit = makeHabit(frequency: 1.0, difficultyRank: "m0")

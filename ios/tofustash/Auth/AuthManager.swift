@@ -1,85 +1,95 @@
 import Foundation
 
-// @Observable — like a Zustand/Jotai store: any SwiftUI view reading its properties auto-rerenders on change
+// AuthManager owns the app's auth session from the user's point of view:
+// app launch decides whether they land in an anonymous session or a restored
+// signed-in session, auth actions swap identities, and token refresh tries to
+// keep that experience uninterrupted.
+//
+// @Observable works like a tiny reactive store. SwiftUI views that read `user`
+// or `isLoading` automatically update when those values change.
 @Observable
-// @MainActor — constrains all methods/property access to the main thread (like ensuring everything runs on the UI thread; Rust analogy: !Send)
+// @MainActor keeps all mutations on the main thread, which is the SwiftUI
+// equivalent of making sure UI-facing state changes happen on React's UI path.
 @MainActor
-// `final` — cannot be subclassed (like a sealed class in Kotlin, or no vtable in Rust)
+// `final` means this is a concrete store, not a base class to extend.
 final class AuthManager {
-    // private(set) — public read, private write (like a getter-only export in TS; Rust: pub field with no pub setter)
+    // Views can observe auth state, but only AuthManager can change it.
     private(set) var user: AuthUser?
     private(set) var isLoading: Bool = true
 
-    // Computed property — like a derived/computed value in a Zustand store (or useMemo that auto-tracks deps)
+    // Swift computed property: similar to a derived selector in a React store.
     var isAnonymous: Bool { user?.isAnonymous ?? true }
 
-    // `let` = immutable binding (like `const` in JS or `let` in Rust — but for classes, the reference is fixed, not contents)
     private let apiClient: AuthAPIClient
     private let tokenStorage: TokenStorage
-    // Task<Void, Never> — like a Promise<void> that can't throw (`Never` = the error type is impossible, like Rust's `!`/`Infallible`)
+
+    // Background refresh work is tracked so it can be cancelled on logout
+    // or replaced when a newer token arrives.
     private var refreshTask: Task<Void, Never>?
     private var currentAccessToken: String?
 
-    // `init` = constructor. `self.x = x` is required to disambiguate (no implicit `this` assignment like TS constructor shorthand)
     init(apiClient: AuthAPIClient, tokenStorage: TokenStorage) {
         self.apiClient = apiClient
         self.tokenStorage = tokenStorage
     }
 
-    // MARK: — section comment convention in Swift (like `// #region` in TS, shows up in Xcode's jump bar)
-
-    // `async` — like TS async. Called with `await` just like JS/Rust.
+    // Called once on app launch. It tries to restore the last session first,
+    // then falls back to an anonymous account so the app stays usable even
+    // before registration.
     func bootstrap() async {
-        // `defer` — runs when scope exits, success or failure (exactly like Go's `defer`, or Rust's Drop).
-        // Like a `finally` block in JS/React — guarantees isLoading becomes false no matter which code path runs.
+        // `defer` behaves like a `finally` block: loading stops regardless of
+        // which branch returns or throws.
         defer { isLoading = false }
 
         let storedTokens = await tokenStorage.getTokens()
         let storedIsAnonymous = await tokenStorage.getIsAnonymous()
 
-        // `if let storedTokens` — unwraps Optional (like Rust's `if let Some(tokens)`). Binds the non-nil value to same name.
         if let storedTokens {
             let isAnonymous = storedIsAnonymous ?? false
             if let parsed = JWTParser.parse(storedTokens.accessToken), let subject = parsed.subject {
+                // The app can render immediately from the cached token payload
+                // while the network refresh happens in the background.
                 user = AuthUser(id: subject, isAnonymous: isAnonymous)
                 currentAccessToken = storedTokens.accessToken
             }
 
-            // Attempt refresh
             do {
                 let newTokens = try await apiClient.refreshTokens(refreshToken: storedTokens.refreshToken)
                 await processAuthResponse(newTokens, isAnonymous: isAnonymous)
             } catch {
-                // `as?` — conditional type cast, returns Optional (like a TS type guard, or Rust's downcast_ref)
                 let apiError = error as? ApiError
                 if apiError?.statusCode == 401 {
+                    // Expired sessions should quietly drop back to anonymous
+                    // instead of leaving the user stranded on launch.
                     await tokenStorage.clear()
                     user = nil
                     currentAccessToken = nil
                     await performAnonymousAuth()
                 }
-                // For non-401 errors, keep the current session and schedule a retry
+                // For transient failures we keep the restored session and let the
+                // scheduled refresh path try again later.
             }
         } else {
             await performAnonymousAuth()
         }
     }
 
-    // MARK: - Auth Actions
-
-    // `throws` — function can throw (like Rust's Result return; callers must `try` or propagate)
+    // User submits the login form. Success replaces any anonymous identity with
+    // the real account while preserving the same in-app store object.
     func login(email: String, password: String) async throws {
         let tokens = try await apiClient.login(email: email, password: password)
         await processAuthResponse(tokens, isAnonymous: false)
     }
 
+    // User registers directly instead of claiming an anonymous session.
     func register(email: String, password: String) async throws {
         let tokens = try await apiClient.register(email: email, password: password)
         await processAuthResponse(tokens, isAnonymous: false)
     }
 
+    // User converts an anonymous account into a permanent one so their current
+    // local progress stays attached to the new credentials.
     func claimAccount(email: String, password: String) async throws {
-        // `guard let ... else` — early return unwrap (like Rust's `let Some(x) = val else { return }`, or Go's if-err-return pattern)
         guard let accessToken = currentAccessToken else {
             throw ApiError(errors: nil, message: "No access token available", statusCode: nil)
         }
@@ -91,11 +101,12 @@ final class AuthManager {
         await processAuthResponse(tokens, isAnonymous: false)
     }
 
+    // Logging out intentionally clears local state first, then immediately
+    // provisions a fresh anonymous session so the app still works afterward.
     func logout() async {
         cancelRefresh()
 
         if let tokens = await tokenStorage.getTokens() {
-            // `try?` — discard the error, convert to nil on failure (like `.ok()` in Rust, or a catch that swallows)
             try? await apiClient.logout(refreshToken: tokens.refreshToken)
         }
 
@@ -106,6 +117,8 @@ final class AuthManager {
         await performAnonymousAuth()
     }
 
+    // Account settings actions reuse the current access token, matching how a
+    // React app would send the session token with a profile mutation request.
     func changePassword(currentPassword: String, newPassword: String) async throws {
         guard let accessToken = currentAccessToken else {
             throw ApiError(errors: nil, message: "No access token available", statusCode: nil)
@@ -128,30 +141,30 @@ final class AuthManager {
         )
     }
 
-    // MARK: - Private
-
+    // Silent bootstrap fallback when no usable saved session exists.
     private func performAnonymousAuth() async {
         let deviceId = await tokenStorage.getOrCreateDeviceId()
         do {
             let tokens = try await apiClient.anonymousAuth(deviceId: deviceId)
             await processAuthResponse(tokens, isAnonymous: true)
         } catch {
-            // Leave user as nil — can retry later
+            // Leave user as nil so the UI can present a retry path later.
         }
     }
 
-    // `_` as first param label — means caller doesn't need a label: processAuthResponse(tokens, ...) instead of processAuthResponse(tokens: tokens, ...)
     private func processAuthResponse(_ tokens: AuthTokens, isAnonymous: Bool) async {
-        // Multi-clause guard — like chaining Rust's `let Some(x) = ... else { return }` checks
         guard let payload = JWTParser.parse(tokens.accessToken),
               let subject = payload.subject
         else { return }
 
+        // Persist first so a crash/relaunch still restores the same identity.
         await tokenStorage.storeTokens(tokens, isAnonymous: isAnonymous)
         user = AuthUser(id: subject, isAnonymous: isAnonymous)
         currentAccessToken = tokens.accessToken
 
         if let expiresAt = payload.expiresAt {
+            // Refresh is scheduled relative to token expiry so the user doesn't
+            // hit a surprise auth interruption mid-session.
             scheduleRefresh(expiresAt: expiresAt, refreshToken: tokens.refreshToken)
         }
     }
@@ -164,21 +177,17 @@ final class AuthManager {
         let delay = refreshAt.timeIntervalSinceNow
 
         guard delay > 0 else {
-            // Already expired or expiring very soon — refresh immediately
+            // If the token is already near expiry, refresh right away rather
+            // than waiting for the user to hit an auth boundary.
             refreshTask = Task { [weak self] in
                 await self?.performRefresh(refreshToken: refreshToken)
             }
             return
         }
 
-        // Task { } — spawns a concurrent task (like goroutine, or tokio::spawn, or launching a Promise)
-        // [weak self] — capture list: prevents retain cycle (prevents the closure from preventing dealloc — no React/TS equivalent, closest is Rust's Weak<T>)
         refreshTask = Task { [weak self] in
-            // Task.sleep — like setTimeout but as an awaitable (non-blocking, cooperative cancellation)
             try? await Task.sleep(for: .seconds(delay))
-            // Task.isCancelled — cooperative cancellation check (like Go's ctx.Done() or AbortSignal)
             guard !Task.isCancelled else { return }
-            // self? — optional chaining since self is weak (no-op if AuthManager was deallocated)
             await self?.performRefresh(refreshToken: refreshToken)
         }
     }
@@ -191,12 +200,14 @@ final class AuthManager {
         } catch {
             let apiError = error as? ApiError
             if apiError?.statusCode == 401 {
+                // If refresh is rejected, the old session is no longer trusted.
                 await tokenStorage.clear()
                 user = nil
                 currentAccessToken = nil
                 await performAnonymousAuth()
             } else {
-                // Retry in 60 seconds on network errors
+                // Network problems shouldn't immediately log the user out.
+                // Retry later and keep the current session visible for now.
                 refreshTask = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }

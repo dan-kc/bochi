@@ -21,12 +21,9 @@ struct JWTParserTests {
 
     // Behaviour: When the app receives an auth token, it correctly identifies which
     // user it belongs to by parsing the subject claim.
-    // @Test = Jest's test() / it(). The func name is the test label.
     @Test func parsesSubjectFromValidJWT() {
         let token = makeJWT(payload: ["sub": "user-123", "exp": 1710000000])
         let result = JWTParser.parse(token)
-        // #expect() = Jest's expect().toBe(). It's a macro (compile-time code transform, like Rust macros).
-        // ?. is optional chaining — same as TS's ?.
         #expect(result?.subject == "user-123")
     }
 

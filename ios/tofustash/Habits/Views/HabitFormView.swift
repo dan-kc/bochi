@@ -22,7 +22,8 @@ enum HabitFormFocus: Equatable {
     case tags
 }
 
-// Captures the draft values from a dismissed new-habit form so the user can recover them.
+// Captures the draft values from a dismissed new-habit form so the user can
+// recover what they typed from a toast or another recovery affordance.
 struct HabitFormSnapshot {
     let name: String
     let description: String
@@ -113,9 +114,9 @@ struct HabitFormView: View {
         )
     }
 
-    // The trade button uses the draft values from the current form.
-    // This means the user sees the reward state for what is on screen right now,
-    // not whatever happened to already be saved before opening the sheet.
+    // The trade preview is based on the draft currently visible in the sheet.
+    // If the user changes frequency or difficulty, the price preview follows the
+    // draft immediately instead of waiting for them to close and reopen.
     private var draftHabitForTrade: Habit? {
         guard case .change(let existingHabit) = mode else { return nil }
 
@@ -275,6 +276,8 @@ struct HabitFormView: View {
             Text("This action cannot be undone.")
         }
         .task {
+            // `.task` is SwiftUI's lifecycle hook for async startup work. Here it
+            // hydrates the form once when the sheet appears.
             initializeIfNeeded()
         }
         .onChange(of: name) { _, _ in
@@ -290,6 +293,8 @@ struct HabitFormView: View {
             autoSaveIfNeeded()
         }
         .onDisappear {
+            // New-habit dismissal is treated as a recoverable discard only when
+            // the user actually entered meaningful content.
             if isNewMode && !didPersist && hasContent {
                 onDiscard?(HabitFormSnapshot(
                     name: name,

@@ -1,7 +1,7 @@
 import Foundation
 
-// Stores user preferences that affect gameplay mechanics.
-// Currently only holds generalDifficulty, which scales all reward amounts.
+// Stores preferences that affect the numbers the user sees in the app.
+// `generalDifficulty` is the global reward scale knob exposed in Settings.
 //
 // Follows the same @Observable pattern as HabitStore — views that read
 // `generalDifficulty` will automatically re-render when it changes.
@@ -9,13 +9,11 @@ import Foundation
 @MainActor
 final class UserSettingsStore {
 
-    // Controls the overall scale of rewards. Higher values = larger rewards.
-    // Default is 5.0, matching the frontend.
-    // Valid range: (0, 1000) — must be strictly greater than 0 and less than 1000.
+    // Higher values raise all reward payouts. The same default is used on web
+    // so users do not see a platform-specific economy shift.
     private(set) var generalDifficulty: Double = 5.0
 
-    // Updates the general difficulty, with validation.
-    // Silently rejects invalid values (like the frontend modal's validation).
+    // Invalid values are ignored so the current reward scale stays stable.
     func setGeneralDifficulty(_ value: Double) {
         guard value > 0, value < 1000 else { return }
         generalDifficulty = value

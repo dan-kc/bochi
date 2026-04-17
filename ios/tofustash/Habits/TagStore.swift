@@ -1,9 +1,11 @@
 import Foundation
 
-// TagStore manages tags and the many-to-many relationship between tags and habits.
+// TagStore manages the user-visible tag system: global tags plus the mapping
+// between tags and individual habits.
+//
 // Follows the same pattern as HabitStore — an @Observable class injected via
-// @Environment. In React terms, it's a second context/store that lives
-// alongside HabitStore.
+// @Environment. In React terms, it's another store/context living alongside
+// the habit store.
 //
 // Tags are global (not per-habit) — a tag like "Health" can be applied to
 // multiple habits. The association is tracked via HabitTag junction records.
@@ -24,8 +26,8 @@ final class TagStore {
 
     // MARK: - Tag CRUD
 
-    // Creates a new tag. Generates a random color if none provided.
-    // Returns nil if name is empty or whitespace-only.
+    // Creating a tag either uses the chosen color or assigns one automatically
+    // so the tag is immediately distinguishable in the UI.
     @discardableResult
     func addTag(name: String, colorHex: String? = nil) -> Tag? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -46,7 +48,8 @@ final class TagStore {
         return tag
     }
 
-    // Updates a tag's name and/or color. Pass nil for fields you don't want to change.
+    // Edits an existing tag. Invalid empty names are rejected because a tag the
+    // user can no longer identify is worse than leaving the old name in place.
     func updateTag(id: String, name: String? = nil, colorHex: String? = nil) {
         guard let index = tags.firstIndex(where: { $0.id == id }) else { return }
 
@@ -71,7 +74,8 @@ final class TagStore {
         )
     }
 
-    // Soft-deletes a tag by setting its deletedAt timestamp
+    // Soft delete keeps old associations around for sync/history while removing
+    // the tag from visible pickers and habit chips.
     func deleteTag(id: String) {
         guard let index = tags.firstIndex(where: { $0.id == id }) else { return }
 
@@ -88,15 +92,13 @@ final class TagStore {
 
     // MARK: - Habit-Tag Associations
 
-    // Adds a tag to a habit. If a soft-deleted association already exists,
-    // restores it instead of creating a duplicate.
+    // Toggling a tag back on should revive the old association instead of
+    // creating duplicate tag records for the same habit.
     func addTagToHabit(tagId: String, habitId: String) {
-        // Check if association already exists (active or deleted)
         if let index = habitTags.firstIndex(where: {
             $0.tagId == tagId && $0.habitId == habitId
         }) {
             let existing = habitTags[index]
-            // If it's active, no-op. If deleted, restore it.
             if existing.deletedAt != nil {
                 habitTags[index] = HabitTag(
                     id: existing.id,
@@ -110,7 +112,6 @@ final class TagStore {
             return
         }
 
-        // Create new association
         let now = Date()
         habitTags.append(HabitTag(
             id: UUID().uuidString,
@@ -122,7 +123,8 @@ final class TagStore {
         ))
     }
 
-    // Removes a tag from a habit via soft-delete on the junction record
+    // Removing a tag only hides it from the habit; the link is soft-deleted so
+    // it can be restored later without inventing a new association.
     func removeTagFromHabit(tagId: String, habitId: String) {
         guard let index = habitTags.firstIndex(where: {
             $0.tagId == tagId && $0.habitId == habitId && $0.deletedAt == nil
@@ -139,17 +141,15 @@ final class TagStore {
         )
     }
 
-    // Returns the active tags applied to a specific habit.
-    // Filters out both soft-deleted associations AND soft-deleted tags.
+    // Resolves the set of tags the user should currently see on a habit.
+    // Both deleted links and deleted tags are filtered out here.
     func tagsForHabit(habitId: String) -> [Tag] {
-        // Get active tag IDs for this habit
         let activeTagIds = Set(
             habitTags
                 .filter { $0.habitId == habitId && $0.deletedAt == nil }
                 .map(\.tagId)
         )
 
-        // Return matching tags that are themselves not deleted
         return activeTags.filter { activeTagIds.contains($0.id) }
     }
 }

@@ -9,12 +9,14 @@ struct BalanceStoreTests {
         BalanceStore()
     }
 
+    // Behaviour: A brand-new user starts with no tofu before completing any habits.
     @Test("Initial balance is 0")
     func initialBalance() {
         let sut = makeSUT()
         #expect(sut.balance == 0)
     }
 
+    // Behaviour: Completing a habit increases the tofu balance by that reward amount.
     @Test("addTofu increases the balance")
     func addTofu() {
         let sut = makeSUT()
@@ -22,6 +24,7 @@ struct BalanceStoreTests {
         #expect(sut.balance == 250)
     }
 
+    // Behaviour: Spending tofu decreases the balance by the purchase cost.
     @Test("subtractTofu decreases the balance")
     func subtractTofu() {
         let sut = makeSUT()
@@ -30,6 +33,7 @@ struct BalanceStoreTests {
         #expect(sut.balance == 300)
     }
 
+    // Behaviour: Multiple earned rewards accumulate into one running balance.
     @Test("Multiple adds accumulate")
     func multipleAdds() {
         let sut = makeSUT()

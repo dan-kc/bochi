@@ -1,8 +1,8 @@
 import Foundation
 
-// FrequencyPeriod represents how the user thinks about frequency — per day,
-// per week, or per month. Internally, frequency is always stored as a daily rate
-// (times per day), but the UI lets users enter "3 times per week" etc.
+// FrequencyPeriod matches the language the user sees in the UI. Internally the
+// app stores one normalized "times per day" value, but forms and summaries use
+// day/week/month because that is easier for people to reason about.
 //
 // This is an enum — like a union type in TypeScript: "day" | "week" | "month",
 // but with attached behavior (computed properties). CaseIterable lets you loop
@@ -21,12 +21,11 @@ enum FrequencyPeriod: String, CaseIterable, Equatable {
         }
     }
 
-    // Human-readable label for display in the UI
+    // Small display label used in pills and summaries.
     var label: String { rawValue }
 }
 
-// Pure functions for converting between daily rates and user-friendly
-// period-based values. Port of frontend/lib/frequency.ts.
+// Converts between stored daily rates and the user-facing values shown in the UI.
 //
 // Caseless enum = namespace (can't be instantiated). Like a TS module
 // that only exports functions.
@@ -39,12 +38,8 @@ enum FrequencyConversion {
         value / period.divisor
     }
 
-    // Converts a daily rate back to the most natural period for display.
-    // Picks the period that gives the cleanest number:
-    //   - If daily rate >= 1 → show as per day
-    //   - If weekly rate >= 1 → show as per week
-    //   - Otherwise → show as per month
-    // Like fromDailyFrequency() in the TS version.
+    // Picks the friendliest period for display so the user sees "1/week"
+    // instead of awkward decimals when possible.
     static func fromDailyRate(_ daily: Double) -> (value: Double, period: FrequencyPeriod) {
         if daily >= 1 {
             return (daily, .day)
@@ -56,29 +51,19 @@ enum FrequencyConversion {
         return (daily * 30, .month)
     }
 
-    // Formats a daily rate as a human-readable summary string.
-    // Returns nil if the input is nil (frequency not set).
-    //   3.0 → "3/day"
-    //   0.4286 → "3/week"
-    //   nil → nil
-    // Like formatFrequencySummary() in the TS version.
+    // Compact summary used in habit pills and list rows.
     static func formatSummary(_ daily: Double?) -> String? {
         guard let daily = daily else { return nil }
 
         let (value, period) = fromDailyRate(daily)
 
-        // Format: remove trailing zeros (e.g. "3.00" → "3", "1.50" → "1.5")
-        // In JS this was `.toFixed(2).replace(/\.?0+$/, "")`.
-        // In Swift, we format to 2 decimal places then strip trailing zeros.
         let formatted = formatNumber(value)
 
         return "\(formatted)/\(period.label)"
     }
 
-    // Formats a Double by removing unnecessary trailing zeros.
-    //   3.0 → "3"
-    //   1.5 → "1.5"
-    //   0.43 → "0.43"
+    // Swift's string formatting returns fixed decimal places, so this helper
+    // trims the UI back to the shortest readable form.
     static func formatNumber(_ value: Double) -> String {
         let formatted = String(format: "%.2f", value)
         // Drop trailing zeros and unnecessary decimal point

@@ -1,18 +1,19 @@
 import Foundation
 
-// `private` at file scope = only visible in this file (like Go's unexported lowercase names).
-// `try!` force-unwraps a throwing call -- crashes if it throws. Like `.unwrap()` in Rust.
-// `#"..."#` is a raw string literal -- like r#"..."# in Rust. No need to escape backslashes.
+// These helpers define what the auth forms treat as acceptable user input.
+// They return explicit validation errors so the UI can show all relevant
+// feedback at once instead of failing one field at a time.
+//
+// `#"..."#` is Swift's raw string literal syntax, which keeps regexes readable.
 private let emailRegex = try! NSRegularExpression(
     pattern: #"^[\w\.\-]+@[a-zA-Z\d\.\-]+\.[a-zA-Z]{2,}$"#
 )
 
-// `_` before param name means callers omit the label: `validateEmail(str)` not `validateEmail(email: str)`.
 func validateEmail(_ email: String) -> [ValidationError] {
-    // `var` = mutable binding (vs `let` = immutable). Like `let mut` in Rust.
     var errors: [ValidationError] = []
 
-    // NSRange bridge needed because NSRegularExpression is Obj-C API, not native Swift.
+    // NSRegularExpression is an older Foundation API, so Swift strings must be
+    // bridged into `NSRange` before matching.
     let range = NSRange(email.startIndex..., in: email)
     if emailRegex.firstMatch(in: email, range: range) == nil {
         errors.append(.invalidEmailAddress)
@@ -27,7 +28,8 @@ func validateEmail(_ email: String) -> [ValidationError] {
 func validatePassword(_ password: String) -> [ValidationError] {
     var errors: [ValidationError] = []
 
-    // Closure syntax: { params in body }. `$0` is shorthand for first arg (like Rust's |c| c).
+    // Passwords are intentionally restricted to ASCII here so backend and client
+    // validation behave the same for every user.
     if !password.allSatisfy({ $0.asciiValue != nil }) {
         errors.append(.passwordNotAscii)
     }
@@ -42,5 +44,7 @@ func validatePassword(_ password: String) -> [ValidationError] {
 }
 
 func validateAuthInput(email: String, password: String) -> [ValidationError] {
+    // Concatenate the two error arrays so the UI can show both field problems
+    // from a single submit attempt.
     return validateEmail(email) + validatePassword(password)
 }

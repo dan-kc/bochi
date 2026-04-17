@@ -11,12 +11,11 @@ import Foundation
 @MainActor
 final class TradeStore {
 
-    // All trades, ordered by creation time (newest last).
-    // `private(set)` means views can read but only this class can write.
+    // Completion history in the order it happened. Other parts of the app read
+    // this to show reward state and derive recent completion counts.
     private(set) var trades: [Trade] = []
 
-    // Creates a trade for completing a habit and appends it to the store.
-    // Like dispatching an "addTrade" action in Redux/Zustand.
+    // Records one user completion at the current time.
     func addTrade(habitId: String, amount: Int) {
         let trade = Trade(
             id: UUID().uuidString,
@@ -27,8 +26,7 @@ final class TradeStore {
         trades.append(trade)
     }
 
-    // Creates a trade with a specific date — used by tests to simulate
-    // trades that happened in the past.
+    // Test-only helper for simulating older completions.
     func addTradeWithDate(habitId: String, amount: Int, createdAt: Date) {
         let trade = Trade(
             id: UUID().uuidString,
@@ -39,12 +37,8 @@ final class TradeStore {
         trades.append(trade)
     }
 
-    // Counts how many times a habit was completed within the last N days.
-    // This count feeds into the reward formula's frequency multiplier (F),
-    // which reduces rewards for habits that are completed too frequently.
-    //
-    // Like tradeStore.getTradesInPeriod(userId, habitId, days) in the
-    // frontend, but without userId since the iOS app is single-user.
+    // This is the count the reward formula uses for "how many times has the
+    // user already done this habit recently?"
     func tradesInPeriod(habitId: String, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {

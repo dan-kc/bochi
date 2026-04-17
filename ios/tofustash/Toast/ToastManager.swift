@@ -16,10 +16,8 @@ struct ToastItem: Identifiable {
     let duration: TimeInterval
 }
 
-// Manages a stack of toast notifications with countdown timers.
-// Like a toast/snackbar manager in React (e.g. react-hot-toast's useToaster
-// hook) — holds the array of active toasts, handles adding, dismissing,
-// and auto-removing them after a timeout.
+// Manages the transient recovery toasts the user sees after actions like
+// discarding a habit draft.
 //
 // @Observable makes this work like a React context provider — any SwiftUI
 // view that reads a property will re-render when that property changes.
@@ -39,9 +37,7 @@ class ToastManager {
     // Like storing setInterval IDs to clear them on dismiss.
     private var timerTasks: [UUID: Task<Void, Never>] = [:]
 
-    // Show a new toast with a message, action button, and countdown timer.
-    // duration: how many seconds before auto-dismiss (default 5).
-    // action: closure to run if the user taps the action button (e.g. recover a habit).
+    // Showing a toast immediately makes it visible and starts its countdown.
     func show(
         message: String,
         actionLabel: String,
@@ -59,8 +55,8 @@ class ToastManager {
         startTimer(for: toast)
     }
 
-    // Remove a toast immediately — called when the user swipes it away,
-    // taps the close button, or the timer expires.
+    // Dismiss is the single exit path so manual dismiss, action taps, and
+    // timer expiry all clean up the same state.
     func dismiss(_ id: UUID) {
         timerTasks[id]?.cancel()
         timerTasks[id] = nil
@@ -68,8 +64,8 @@ class ToastManager {
         toasts.removeAll { $0.id == id }
     }
 
-    // Run the toast's action (e.g. recover a discarded habit) and dismiss it.
-    // Called when the user taps the action button on the toast.
+    // Action-first ordering means the recovery logic still sees the toast's
+    // current payload before cleanup happens.
     func performAction(_ id: UUID) {
         if let toast = toasts.first(where: { $0.id == id }) {
             toast.action()
@@ -77,17 +73,13 @@ class ToastManager {
         dismiss(id)
     }
 
-    // Start a background countdown that decrements remainingSeconds every
-    // second and auto-dismisses when it hits zero. Like setInterval in JS,
-    // but using Swift's structured concurrency (Task + sleep).
+    // Swift concurrency replaces `setInterval` here. Each toast owns one Task
+    // that updates the visible countdown once per second.
     private func startTimer(for toast: ToastItem) {
         timerTasks[toast.id] = Task {
             let totalSeconds = Int(toast.duration)
             for i in 1...totalSeconds {
                 try? await Task.sleep(for: .seconds(1))
-                // Task.isCancelled is checked after each sleep — if dismiss()
-                // was called while sleeping, we bail out. Like checking a
-                // clearInterval flag inside a setInterval callback.
                 if Task.isCancelled { return }
                 let remaining = totalSeconds - i
                 remainingSeconds[toast.id] = remaining

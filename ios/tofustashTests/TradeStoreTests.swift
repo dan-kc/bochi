@@ -11,12 +11,14 @@ struct TradeStoreTests {
         TradeStore()
     }
 
+    // Behaviour: Before the user completes any habits, there is no trade history.
     @Test("Initial store has no trades")
     func initiallyEmpty() {
         let sut = makeSUT()
         #expect(sut.trades.isEmpty)
     }
 
+    // Behaviour: Completing a habit records a trade with the correct habit and reward amount.
     @Test("addTrade appends a trade with the correct habitId and amount")
     func addTradeAppends() {
         let sut = makeSUT()
@@ -26,6 +28,7 @@ struct TradeStoreTests {
         #expect(sut.trades[0].amount == 250)
     }
 
+    // Behaviour: Two completions of the same habit create two distinct history entries.
     @Test("addTrade generates a unique ID for each trade")
     func uniqueIds() {
         let sut = makeSUT()
@@ -34,6 +37,7 @@ struct TradeStoreTests {
         #expect(sut.trades[0].id != sut.trades[1].id)
     }
 
+    // Behaviour: Reward calculations only count this habit's recent completions inside the selected window.
     @Test("tradesInPeriod counts trades for the specified habit within the period")
     func countsCorrectly() {
         let sut = makeSUT()
@@ -42,6 +46,7 @@ struct TradeStoreTests {
         #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 2)
     }
 
+    // Behaviour: Another habit's completions do not lower this habit's reward.
     @Test("tradesInPeriod excludes trades for other habits")
     func excludesOtherHabits() {
         let sut = makeSUT()
@@ -50,6 +55,7 @@ struct TradeStoreTests {
         #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 1)
     }
 
+    // Behaviour: Old completions fall out of the recent window so stale history stops affecting current rewards.
     @Test("tradesInPeriod excludes trades older than the period")
     func excludesOldTrades() {
         let sut = makeSUT()
