@@ -21,6 +21,15 @@ struct FrequencyModal: View {
         NavigationStack {
             Form {
                 Section {
+                    // Behaviour: before the user enters a target, explain that
+                    // this value represents the minimum frequency they want to
+                    // maintain for the habit.
+                    Text("Set the minimum frequency you want for performing this habit.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
                     TextField("Times per period", text: $valueText)
                         .keyboardType(.decimalPad)
 

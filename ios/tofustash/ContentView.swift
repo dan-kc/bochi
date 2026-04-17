@@ -47,5 +47,6 @@ struct ContentView: View {
         .environment(TagStore())
         .environment(TradeStore())
         .environment(BalanceStore())
+        .environment(RewardStore())
         .environment(UserSettingsStore())
 }

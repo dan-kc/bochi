@@ -5,15 +5,13 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 
-Make the reward price calculation re-calculate every minute instead of every half hour. Change the reward claim reward button on the habit list item and in the habit change form to be gray not green or blue. Wheneve the price changes for an item, I want to see the claim button in both the habit list item and the habit change form do the following:
+Flesh out the Rewards section. This works in inverse of the habits section where users can purchase rewards and spend their balance. This has similar fields but has a maximum frequency instead of a minimum frequency, and has "damage" instead of difficulty. The damage should determin which rewards inflict the most damage to the user. The prices of the reward reflects this damage.
 
-If the price goes down:
+You can find the fields / price calculations in ./frontend where I implemented rewards before.
 
-- Fade the color form gray into red
-- Animate the price number to the new number
-- Fade the color back into gray
+When implementing this solution, re-use the tags component. A reward can have the same tags as a habit.
 
-If the price goes up, then do the same just use green instead of red
+There should be a new RewardFormView, it should be more or less identical to Habits. I want you to cleverly abstract where you think is fit. There will not be another similar section, these are the only two. Ask me questions about where you should abstract things. I don't want to have to change in two places all the time but I don't want to go too far. In React I would put lots of the logic in for the habits into hooks but I don't know what to do in Swift. Ask me questions and use your intuition
 
 # Rewards
 

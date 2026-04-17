@@ -188,7 +188,7 @@ struct HabitsView: View {
     }
 
     private func habitMetaPill(text: String, isSet: Bool, animating: Bool) -> some View {
-        HabitListMetaPill(text: text, isSet: isSet, animating: animating)
+        EntityListMetaPill(text: text, isSet: isSet, animating: animating)
     }
 
     private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
@@ -197,92 +197,6 @@ struct HabitsView: View {
             initialFocus: focus,
             prefill: nil
         )
-    }
-}
-
-private struct HabitListMetaPill: View {
-    let text: String
-    let isSet: Bool
-    let animating: Bool
-
-    @State private var isHighlighted = false
-
-    private var shouldAnimateAttention: Bool {
-        animating && !isSet
-    }
-
-    private var textColor: Color {
-        guard isSet else {
-            if animating {
-                return isHighlighted ? .gray.opacity(0.72) : .secondary
-            }
-            return .secondary
-        }
-
-        return .orange
-    }
-
-    private var borderColor: Color {
-        guard isSet else {
-            if animating {
-                return isHighlighted ? .gray.opacity(0.72) : .secondary.opacity(0.6)
-            }
-            return .secondary.opacity(0.6)
-        }
-
-        return .orange
-    }
-
-    private var glowColor: Color {
-        animating && !isSet && isHighlighted ? .white.opacity(0.18) : .clear
-    }
-
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .contentTransition(.identity)
-            .foregroundStyle(textColor)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .overlay(
-                Capsule()
-                    .stroke(borderColor, lineWidth: 1)
-            )
-            .shadow(color: glowColor, radius: 8)
-            .animation(
-                shouldAnimateAttention
-                    ? .easeInOut(duration: 1.15).repeatForever(autoreverses: true)
-                    : .easeInOut(duration: 0.2),
-                value: isHighlighted
-            )
-            .animation(nil, value: text)
-            .animation(nil, value: isSet)
-            .onAppear {
-                guard shouldAnimateAttention else {
-                    isHighlighted = false
-                    return
-                }
-
-                isHighlighted = false
-                DispatchQueue.main.async {
-                    isHighlighted = true
-                }
-            }
-            .onChange(of: animating) { _, newValue in
-                if newValue && !isSet {
-                    isHighlighted = false
-                    DispatchQueue.main.async {
-                        isHighlighted = true
-                    }
-                } else {
-                    isHighlighted = false
-                }
-            }
-            .onChange(of: isSet) { _, newValue in
-                if newValue {
-                    isHighlighted = false
-                }
-            }
     }
 }
 

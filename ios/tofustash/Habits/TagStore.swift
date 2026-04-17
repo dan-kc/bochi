@@ -19,6 +19,9 @@ final class TagStore {
     // All habit-tag junction records
     private(set) var habitTags: [HabitTag] = []
 
+    // All reward-tag junction records
+    private(set) var rewardTags: [RewardTag] = []
+
     // Tags that haven't been soft-deleted — like activeHabits in HabitStore
     var activeTags: [Tag] {
         tags.filter { $0.deletedAt == nil }
@@ -151,5 +154,89 @@ final class TagStore {
         )
 
         return activeTags.filter { activeTagIds.contains($0.id) }
+    }
+
+    // Reward tags mirror the habit-tag flow so a reward can reuse the same
+    // global tag catalog without needing a second tag CRUD system.
+    func addTagToReward(tagId: String, rewardId: String) {
+        if let index = rewardTags.firstIndex(where: {
+            $0.tagId == tagId && $0.rewardId == rewardId
+        }) {
+            let existing = rewardTags[index]
+            if existing.deletedAt != nil {
+                rewardTags[index] = RewardTag(
+                    id: existing.id,
+                    rewardId: existing.rewardId,
+                    tagId: existing.tagId,
+                    createdAt: existing.createdAt,
+                    updatedAt: Date(),
+                    deletedAt: nil
+                )
+            }
+            return
+        }
+
+        let now = Date()
+        rewardTags.append(RewardTag(
+            id: UUID().uuidString,
+            rewardId: rewardId,
+            tagId: tagId,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: nil
+        ))
+    }
+
+    func removeTagFromReward(tagId: String, rewardId: String) {
+        guard let index = rewardTags.firstIndex(where: {
+            $0.tagId == tagId && $0.rewardId == rewardId && $0.deletedAt == nil
+        }) else { return }
+
+        let existing = rewardTags[index]
+        rewardTags[index] = RewardTag(
+            id: existing.id,
+            rewardId: existing.rewardId,
+            tagId: existing.tagId,
+            createdAt: existing.createdAt,
+            updatedAt: Date(),
+            deletedAt: Date()
+        )
+    }
+
+    func tagsForReward(rewardId: String) -> [Tag] {
+        let activeTagIds = Set(
+            rewardTags
+                .filter { $0.rewardId == rewardId && $0.deletedAt == nil }
+                .map(\.tagId)
+        )
+
+        return activeTags.filter { activeTagIds.contains($0.id) }
+    }
+
+    func tags(for target: TagAssignmentTarget) -> [Tag] {
+        switch target {
+        case .habit(let habitId):
+            return tagsForHabit(habitId: habitId)
+        case .reward(let rewardId):
+            return tagsForReward(rewardId: rewardId)
+        }
+    }
+
+    func addTag(tagId: String, to target: TagAssignmentTarget) {
+        switch target {
+        case .habit(let habitId):
+            addTagToHabit(tagId: tagId, habitId: habitId)
+        case .reward(let rewardId):
+            addTagToReward(tagId: tagId, rewardId: rewardId)
+        }
+    }
+
+    func removeTag(tagId: String, from target: TagAssignmentTarget) {
+        switch target {
+        case .habit(let habitId):
+            removeTagFromHabit(tagId: tagId, habitId: habitId)
+        case .reward(let rewardId):
+            removeTagFromReward(tagId: tagId, rewardId: rewardId)
+        }
     }
 }

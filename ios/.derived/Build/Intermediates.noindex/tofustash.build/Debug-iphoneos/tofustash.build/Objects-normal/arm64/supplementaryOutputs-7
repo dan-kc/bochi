@@ -1,0 +1,58 @@
+{
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Shared/Views/TofuActionButton.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TofuActionButton.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TofuActionButton.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TofuActionButton.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TofuActionButton.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TofuActionButton.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Toast/ToastManager.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastManager.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastManager.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastManager.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastManager.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastManager.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Toast/ToastView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ToastView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Trades/BalanceStore.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceStore.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceStore.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceStore.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceStore.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceStore.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Trades/Models/Trade.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Trade.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Trade.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Trade.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Trade.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Trade.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Trades/TradeStore.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeStore.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeStore.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeStore.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeStore.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeStore.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Trades/Views/BalanceToolbarItem.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceToolbarItem.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceToolbarItem.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceToolbarItem.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceToolbarItem.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/BalanceToolbarItem.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Trades/Views/TradeModalView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeModalView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeModalView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeModalView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeModalView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TradeModalView.swiftdeps"
+  }
+}

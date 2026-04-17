@@ -18,20 +18,20 @@ enum RewardCalculation {
 
     // Higher values make rewards fall off faster once the user exceeds the
     // target completion rate for a habit.
-    private static let alpha = 2.5
+    nonisolated private static let alpha = 2.5
 
     // Keep the market feeling alive without letting short-term randomness
     // dominate the user's expected reward.
-    private static let randomBaseMultiplier = 0.993
-    private static let randomMultiplierRange = 0.014
+    nonisolated private static let randomBaseMultiplier = 0.993
+    nonisolated private static let randomMultiplierRange = 0.014
 
     // The neutral completion ratio used as a fallback when age blending
     // is in effect. At ratio 1.0, the frequency multiplier F equals 1.0.
-    private static let habitNeutralRatio = 1.0
+    nonisolated private static let habitNeutralRatio = 1.0
 
     // Time bucket size in milliseconds (20 seconds). The random multiplier R
     // changes every 20 seconds, so prices fluctuate slightly throughout the day.
-    private static let timeBucketMs = 20 * 1000
+    nonisolated private static let timeBucketMs = 20 * 1000
 
     // MARK: - Difficulty Multiplier
 
@@ -44,7 +44,7 @@ enum RewardCalculation {
     // This compensates for the fact that easier habits are done more frequently.
     //
     // Returns 0.5 if the habit is unranked or there are no ranked habits.
-    static func calculateDifficultyMultiplier(habit: Habit, allHabits: [Habit]) -> Double {
+    nonisolated static func calculateDifficultyMultiplier(habit: Habit, allHabits: [Habit]) -> Double {
         let rankedHabits = allHabits
             .filter { $0.difficultyRank != nil && $0.deletedAt == nil }
             .sorted { $0.difficultyRank! < $1.difficultyRank! }
@@ -80,7 +80,7 @@ enum RewardCalculation {
     // The iOS `frequency` field is already in "times per day" units (e.g., 1.0 = daily),
     // unlike the frontend's `min_daily_frequency` which is a percentage (100 = daily).
     // So expectedCompletions = frequency * periodDays (no division by 100 needed).
-    static func calculateFrequencyMultiplier(
+    nonisolated static func calculateFrequencyMultiplier(
         habit: Habit,
         completionsInPeriod: Int,
         periodDays: Int = 7
@@ -110,7 +110,7 @@ enum RewardCalculation {
     // Random-looking multiplier: stable within one 20-second bucket so the
     // visible price does not jitter on every re-render, but it changes across
     // buckets to keep the market feeling alive.
-    static func calculateRandomMultiplier(habitId: String, timeBucket: Int) -> Double {
+    nonisolated static func calculateRandomMultiplier(habitId: String, timeBucket: Int) -> Double {
         let seed = "\(habitId)-\(timeBucket)"
         let hash = DeterministicHash.hash(seed)
         return randomBaseMultiplier + hash * randomMultiplierRange
@@ -120,7 +120,7 @@ enum RewardCalculation {
 
     // Shared time bucket calculation keeps the same habit price in sync across
     // clients at the same moment.
-    static func getCurrentTimeBucket(now: Date = Date()) -> Int {
+    nonisolated static func getCurrentTimeBucket(now: Date = Date()) -> Int {
         let epochMs = Int(now.timeIntervalSince1970 * 1000)
         return epochMs / timeBucketMs
     }
@@ -128,7 +128,7 @@ enum RewardCalculation {
     // MARK: - Full Reward Calculation
 
     // Final user-visible reward for one completion.
-    static func calculateReward(
+    nonisolated static func calculateReward(
         habit: Habit,
         allHabits: [Habit],
         completionsInPeriod: Int = 0,
@@ -144,7 +144,7 @@ enum RewardCalculation {
     }
 
     // Human-readable reason the trade action is blocked.
-    static func missingTradeProperties(frequency: Double?, difficultyRank: String?) -> String? {
+    nonisolated static func missingTradeProperties(frequency: Double?, difficultyRank: String?) -> String? {
         switch (frequency == nil, difficultyRank == nil) {
         case (true, true): return "frequency and difficulty"
         case (true, false): return "frequency"
@@ -157,7 +157,7 @@ enum RewardCalculation {
 
     // Used by price observers so the UI can refresh exactly when the next
     // 20-second bucket begins instead of polling constantly.
-    static func nanosUntilNextBucket(now: Date = Date()) -> UInt64 {
+    nonisolated static func nanosUntilNextBucket(now: Date = Date()) -> UInt64 {
         let epochMs = now.timeIntervalSince1970 * 1000
         let bucketMs = Double(timeBucketMs)
         let msIntoCurrentBucket = epochMs.truncatingRemainder(dividingBy: bucketMs)
@@ -169,7 +169,7 @@ enum RewardCalculation {
 
     // Multi-complete trades are summed one completion at a time because the
     // visible price should fall as the quantity increases.
-    static func calculateMultiPurchaseTotal(
+    nonisolated static func calculateMultiPurchaseTotal(
         habit: Habit,
         allHabits: [Habit],
         currentCompletions: Int,

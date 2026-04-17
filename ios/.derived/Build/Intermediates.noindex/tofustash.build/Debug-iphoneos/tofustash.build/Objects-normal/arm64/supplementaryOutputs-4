@@ -1,0 +1,58 @@
+{
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/HabitStore.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitStore.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitStore.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitStore.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitStore.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitStore.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Utilities/RewardCalculation.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardCalculation.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardCalculation.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardCalculation.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardCalculation.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardCalculation.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/DifficultyRankerView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/DifficultyRankerView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/DifficultyRankerView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/DifficultyRankerView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/DifficultyRankerView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/DifficultyRankerView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/FrequencyModal.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/FrequencyModal.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/FrequencyModal.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/FrequencyModal.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/FrequencyModal.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/FrequencyModal.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/HabitFormView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitFormView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitFormView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitFormView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitFormView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/HabitFormView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/PillRow.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/PillRow.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/PillRow.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/PillRow.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/PillRow.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/PillRow.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/TagPillsRow.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagPillsRow.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagPillsRow.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagPillsRow.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagPillsRow.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagPillsRow.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Views/TagsView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagsView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagsView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagsView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagsView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagsView.swiftdeps"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Rewards/RewardStore.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardStore.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardStore.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardStore.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardStore.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardStore.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Rewards/Views/RewardFrequencyModal.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardFrequencyModal.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardFrequencyModal.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardFrequencyModal.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardFrequencyModal.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardFrequencyModal.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Rewards/Views/RewardPurchaseModalView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardPurchaseModalView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardPurchaseModalView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardPurchaseModalView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardPurchaseModalView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RewardPurchaseModalView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Settings/GeneralDifficultyView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/GeneralDifficultyView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/GeneralDifficultyView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/GeneralDifficultyView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/GeneralDifficultyView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/GeneralDifficultyView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Settings/UserSettingsStore.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/UserSettingsStore.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/UserSettingsStore.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/UserSettingsStore.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/UserSettingsStore.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/UserSettingsStore.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Shared/Models/TagAssignmentTarget.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagAssignmentTarget.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagAssignmentTarget.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagAssignmentTarget.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagAssignmentTarget.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/TagAssignmentTarget.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Shared/Views/EntityFormTextFieldsSection.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityFormTextFieldsSection.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityFormTextFieldsSection.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityFormTextFieldsSection.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityFormTextFieldsSection.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityFormTextFieldsSection.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Shared/Views/EntityListMetaPill.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityListMetaPill.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityListMetaPill.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityListMetaPill.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityListMetaPill.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/EntityListMetaPill.swiftdeps"
+  }
+}

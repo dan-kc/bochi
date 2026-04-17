@@ -254,7 +254,7 @@ struct HabitFormView: View {
             )
         }
         .sheet(isPresented: $showingTags) {
-            TagsView(habitId: habitId)
+            TagsView(target: .habit(habitId))
         }
         .sheet(item: $tradingHabit) { habit in
             TradeModalView(habit: habit) {
@@ -319,22 +319,13 @@ struct HabitFormView: View {
     }
 
     private var textFieldsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TextField("Name", text: $name)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
-                .padding(.vertical, 6)
-                .focused($focusedField, equals: .name)
-
-            Divider()
-
-            TextField("Description", text: $description, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...)
-                .multilineTextAlignment(.leading)
-                .padding(.vertical, 6)
-                .focused($focusedField, equals: .description)
-        }
+        EntityFormTextFieldsSection(
+            name: $name,
+            description: $description,
+            focusedField: $focusedField,
+            nameFocus: .name,
+            descriptionFocus: .description
+        )
     }
 
     private var floatingControls: some View {
@@ -563,7 +554,7 @@ struct ClaimRewardButton: View {
     }
 
     private var priceValue: some View {
-        Text("\(displayedPrice)")
+        Text("+\(displayedPrice)")
             .contentTransition(.numericText())
     }
 

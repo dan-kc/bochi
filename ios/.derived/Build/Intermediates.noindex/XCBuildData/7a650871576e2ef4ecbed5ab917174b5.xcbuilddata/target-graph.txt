@@ -1,0 +1,2 @@
+Target dependency graph (1 target)
+Target 'tofustash' in project 'tofustash' (no dependencies)

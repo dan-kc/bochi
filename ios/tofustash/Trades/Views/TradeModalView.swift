@@ -118,7 +118,7 @@ struct TradeModalView: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(quantity > 1 ? .blue : .gray)
+                        .foregroundStyle(quantity > 1 ? Color.blue : Color.gray)
                 }
                 .disabled(quantity <= 1)
 
@@ -133,7 +133,7 @@ struct TradeModalView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 44))
-                        .foregroundStyle(quantity < Self.maxQuantity ? .blue : .gray)
+                        .foregroundStyle(quantity < Self.maxQuantity ? Color.blue : Color.gray)
                 }
                 .disabled(quantity >= Self.maxQuantity)
             }
@@ -177,7 +177,7 @@ struct TradeModalView: View {
                 timeBucket: timeBucket,
                 generalDifficulty: userSettingsStore.generalDifficulty
             )
-            tradeStore.addTrade(habitId: habit.id, amount: price)
+            tradeStore.addHabitTrade(habitId: habit.id, amount: price)
             completions += 1
         }
 

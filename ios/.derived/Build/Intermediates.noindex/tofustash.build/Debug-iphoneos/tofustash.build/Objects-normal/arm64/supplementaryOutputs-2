@@ -1,0 +1,58 @@
+{
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/AuthManager.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/AuthManager.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/AuthManager.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/AuthManager.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/AuthManager.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/AuthManager.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Validation.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Validation.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Validation.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Validation.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Validation.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Validation.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Views/ChangeEmailView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangeEmailView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangeEmailView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangeEmailView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangeEmailView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangeEmailView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Views/ChangePasswordView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangePasswordView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangePasswordView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangePasswordView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangePasswordView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ChangePasswordView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Views/ClaimAccountView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ClaimAccountView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ClaimAccountView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ClaimAccountView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ClaimAccountView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/ClaimAccountView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Views/LoginView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/LoginView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/LoginView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/LoginView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/LoginView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/LoginView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Auth/Views/RegisterView.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RegisterView.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RegisterView.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RegisterView.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RegisterView.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/RegisterView.swiftdeps"
+  },
+  "/Users/danielcox/projects/tofustash/ios/tofustash/Habits/Models/Habit.swift" : {
+    "const-values" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Habit.swiftconstvalues",
+    "dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Habit.d",
+    "diagnostics" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Habit.dia",
+    "object" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Habit.o",
+    "swift-dependencies" : "/Users/danielcox/projects/tofustash/ios/.derived/Build/Intermediates.noindex/tofustash.build/Debug-iphoneos/tofustash.build/Objects-normal/arm64/Habit.swiftdeps"
+  }
+}

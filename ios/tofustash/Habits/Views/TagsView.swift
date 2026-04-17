@@ -9,7 +9,7 @@ import SwiftUI
 // a NavigationStack (presented as a .sheet) which gives us free scrolling,
 // swipe-to-delete, and native iOS styling.
 struct TagsView: View {
-    let habitId: String
+    let target: TagAssignmentTarget
     @Environment(\.dismiss) private var dismiss
     @Environment(TagStore.self) private var tagStore
 
@@ -22,7 +22,7 @@ struct TagsView: View {
 
     // Tags currently applied to this habit
     private var appliedTagIds: Set<String> {
-        Set(tagStore.tagsForHabit(habitId: habitId).map(\.id))
+        Set(tagStore.tags(for: target).map(\.id))
     }
 
     // Filtered tags based on search
@@ -101,7 +101,7 @@ struct TagsView: View {
                 HStack(spacing: 12) {
                     // Checkmark indicator
                     Image(systemName: isApplied ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isApplied ? .blue : .secondary)
+                        .foregroundStyle(isApplied ? Color.blue : Color.secondary)
 
                     // Color dot
                     Circle()
@@ -223,9 +223,9 @@ struct TagsView: View {
 
     private func toggleTag(_ tag: Tag) {
         if appliedTagIds.contains(tag.id) {
-            tagStore.removeTagFromHabit(tagId: tag.id, habitId: habitId)
+            tagStore.removeTag(tagId: tag.id, from: target)
         } else {
-            tagStore.addTagToHabit(tagId: tag.id, habitId: habitId)
+            tagStore.addTag(tagId: tag.id, to: target)
         }
     }
 
@@ -235,7 +235,7 @@ struct TagsView: View {
 
         isCreatingTag = true
         if let tag = tagStore.addTag(name: name) {
-            tagStore.addTagToHabit(tagId: tag.id, habitId: habitId)
+            tagStore.addTag(tagId: tag.id, to: target)
             isSearchPresented = false
             searchText = ""
             // Open edit sheet for the new tag

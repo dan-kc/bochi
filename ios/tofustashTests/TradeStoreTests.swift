@@ -22,9 +22,10 @@ struct TradeStoreTests {
     @Test("addTrade appends a trade with the correct habitId and amount")
     func addTradeAppends() {
         let sut = makeSUT()
-        sut.addTrade(habitId: "habit-1", amount: 250)
+        sut.addHabitTrade(habitId: "habit-1", amount: 250)
         #expect(sut.trades.count == 1)
         #expect(sut.trades[0].habitId == "habit-1")
+        #expect(sut.trades[0].rewardId == nil)
         #expect(sut.trades[0].amount == 250)
     }
 
@@ -32,8 +33,8 @@ struct TradeStoreTests {
     @Test("addTrade generates a unique ID for each trade")
     func uniqueIds() {
         let sut = makeSUT()
-        sut.addTrade(habitId: "h1", amount: 100)
-        sut.addTrade(habitId: "h1", amount: 200)
+        sut.addHabitTrade(habitId: "h1", amount: 100)
+        sut.addHabitTrade(habitId: "h1", amount: 200)
         #expect(sut.trades[0].id != sut.trades[1].id)
     }
 
@@ -41,8 +42,8 @@ struct TradeStoreTests {
     @Test("tradesInPeriod counts trades for the specified habit within the period")
     func countsCorrectly() {
         let sut = makeSUT()
-        sut.addTrade(habitId: "h1", amount: 100)
-        sut.addTrade(habitId: "h1", amount: 200)
+        sut.addHabitTrade(habitId: "h1", amount: 100)
+        sut.addHabitTrade(habitId: "h1", amount: 200)
         #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 2)
     }
 
@@ -50,8 +51,8 @@ struct TradeStoreTests {
     @Test("tradesInPeriod excludes trades for other habits")
     func excludesOtherHabits() {
         let sut = makeSUT()
-        sut.addTrade(habitId: "h1", amount: 100)
-        sut.addTrade(habitId: "h2", amount: 200)
+        sut.addHabitTrade(habitId: "h1", amount: 100)
+        sut.addHabitTrade(habitId: "h2", amount: 200)
         #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 1)
     }
 
@@ -60,10 +61,23 @@ struct TradeStoreTests {
     func excludesOldTrades() {
         let sut = makeSUT()
         // Add a trade that's 10 days old
-        sut.addTradeWithDate(habitId: "h1", amount: 100, createdAt: Date(timeIntervalSinceNow: -10 * 86400))
+        sut.addHabitTradeWithDate(habitId: "h1", amount: 100, createdAt: Date(timeIntervalSinceNow: -10 * 86400))
         // Add a fresh trade
-        sut.addTrade(habitId: "h1", amount: 200)
+        sut.addHabitTrade(habitId: "h1", amount: 200)
         // 7-day window should only include the fresh trade
         #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 1)
+    }
+
+    // Behaviour: Reward pricing only counts past purchases of that same reward,
+    // not habit completions or purchases of other rewards.
+    @Test("rewardPurchasesInPeriod counts only matching reward purchases")
+    func rewardPurchasesAreScopedToReward() {
+        let sut = makeSUT()
+        sut.addRewardPurchase(rewardId: "reward-1", amount: -250)
+        sut.addRewardPurchase(rewardId: "reward-1", amount: -300)
+        sut.addRewardPurchase(rewardId: "reward-2", amount: -150)
+        sut.addHabitTrade(habitId: "habit-1", amount: 100)
+
+        #expect(sut.rewardPurchasesInPeriod(rewardId: "reward-1", days: 60) == 2)
     }
 }

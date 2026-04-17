@@ -29,6 +29,9 @@ struct tofustashApp: App {
     // BalanceStore tracks the user's tofu currency balance.
     @State private var balanceStore = BalanceStore()
 
+    // RewardStore holds the spendable reward catalog.
+    @State private var rewardStore = RewardStore()
+
     // UserSettingsStore holds gameplay settings like general difficulty.
     @State private var userSettingsStore = UserSettingsStore()
 
@@ -45,6 +48,7 @@ struct tofustashApp: App {
                 .environment(tagStore)
                 .environment(tradeStore)
                 .environment(balanceStore)
+                .environment(rewardStore)
                 .environment(userSettingsStore)
                 // .task is useEffect with an empty dep array — runs once on mount.
                 // `await` is native here; no need for the async-function-inside-useEffect pattern.

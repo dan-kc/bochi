@@ -17,6 +17,7 @@ struct TagStoreTests {
         #expect(sut.tags.isEmpty)
         #expect(sut.activeTags.isEmpty)
         #expect(sut.habitTags.isEmpty)
+        #expect(sut.rewardTags.isEmpty)
     }
 
     // MARK: - Adding Tags
@@ -222,5 +223,46 @@ struct TagStoreTests {
         // Tag itself is deleted — should not appear even though association exists
         let tags = sut.tagsForHabit(habitId: "habit-1")
         #expect(tags.isEmpty)
+    }
+
+    // Behaviour: When a user assigns a shared tag to a reward, the reward gets
+    // the same tag chip style and catalog entry as habits.
+    @Test func addTagToRewardCreatesRewardTag() {
+        let sut = makeSUT()
+
+        sut.addTagToReward(tagId: "tag-1", rewardId: "reward-1")
+
+        #expect(sut.rewardTags.count == 1)
+        #expect(sut.rewardTags.first?.tagId == "tag-1")
+        #expect(sut.rewardTags.first?.rewardId == "reward-1")
+    }
+
+    // Behaviour: When a user re-adds a previously removed reward tag, the old
+    // association is restored instead of creating duplicates.
+    @Test func addTagToRewardRestoresSoftDeletedAssociation() {
+        let sut = makeSUT()
+
+        sut.addTagToReward(tagId: "tag-1", rewardId: "reward-1")
+        sut.removeTagFromReward(tagId: "tag-1", rewardId: "reward-1")
+        sut.addTagToReward(tagId: "tag-1", rewardId: "reward-1")
+
+        let active = sut.rewardTags.filter { $0.deletedAt == nil }
+        #expect(active.count == 1)
+    }
+
+    // Behaviour: When the reward screen renders a reward, it only shows tags
+    // actively assigned to that reward.
+    @Test func tagsForRewardReturnsCorrectTags() {
+        let sut = makeSUT()
+        let focus = sut.addTag(name: "Focus")!
+        let comfort = sut.addTag(name: "Comfort")!
+
+        sut.addTagToReward(tagId: focus.id, rewardId: "reward-1")
+        sut.addTagToReward(tagId: comfort.id, rewardId: "reward-1")
+
+        let tags = sut.tagsForReward(rewardId: "reward-1")
+        #expect(tags.count == 2)
+        #expect(tags.contains(where: { $0.id == focus.id }))
+        #expect(tags.contains(where: { $0.id == comfort.id }))
     }
 }
