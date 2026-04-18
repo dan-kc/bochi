@@ -1,8 +1,8 @@
-# Price Calculation
+# Pricing
 
 ## Purpose
 
-This document states the current iOS price/reward equations used in `./ios`.
+This document states the current iOS pricing equations used in `./ios`.
 
 There are two related calculations:
 
@@ -21,6 +21,13 @@ where:
 - \(D\) is the rank-based multiplier
 - \(F\) is the frequency multiplier
 - \(R\) is a deterministic pseudo-random multiplier
+
+## Design Goals
+
+- The displayed reward price should react quickly enough to match the cap the user entered.
+- The buy modal should use the same rising-price logic as repeated single purchases.
+- Multi-buy totals should reflect each incremental purchase, not `currentPrice * quantity`.
+- The same pricing rule should be reused everywhere the iOS app shows or spends a reward price.
 
 ## 1. Habit Completion Reward
 
@@ -175,6 +182,21 @@ Some useful values:
 - \(r_r = \frac{2}{3} \Rightarrow F_r \approx 1.842\)
 - \(r_r \to 1^{-} \Rightarrow F_r \to +\infty\), but the implementation clamps to \(50\)
 
+### Reward Pricing Behaviour
+
+Reward pricing uses a rolling 24-hour purchase window.
+
+This is deliberate.
+
+If the user sets a reward to `3/day`, they expect:
+
+1. the first purchase today to use the base price
+2. the second purchase today to cost more
+3. the third purchase today to cost even more
+4. later purchases today to become very expensive
+
+Using a long window like 60 days makes early same-day purchases look flat because the ratio barely moves. A 24-hour window keeps the app aligned with the way the cap is expressed in the UI.
+
 ### Random Multiplier
 
 For time bucket \(t_r\):
@@ -223,7 +245,20 @@ q \cdot \mathrm{Cost}(c_r)
 
 because \(F_r\) changes after each increment.
 
-## 4. Notes On Current Semantics
+The total intentionally matches what would happen if the user tapped Buy repeatedly inside the same pricing bucket.
+
+## 4. Where This Rule Is Used
+
+The iOS app uses the same reward pricing window and calculation path in:
+
+- `RewardsView` for the list price
+- `RewardFormView` for the edit-sheet price preview
+- `RewardPurchaseModalView` for the multi-buy total
+- `RewardPurchaseService` for the actual trade records and balance deduction
+
+This keeps the visible price, the modal total, and the persisted trades in sync.
+
+## 5. Notes On Current Semantics
 
 - Habit `frequency` is stored on iOS as times/day.
 - Reward `maxFrequency` is stored on iOS as times/day.
