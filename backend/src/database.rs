@@ -541,27 +541,26 @@ impl Database {
              ON CONFLICT (id) DO UPDATE SET
                 user_id = CASE
                     WHEN habits.user_id = $2 THEN habits.user_id
-                    WHEN EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN $2
                     ELSE habits.user_id
                 END,
                 name = CASE
-                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.name
+                    WHEN habits.user_id = $2 THEN EXCLUDED.name
                     ELSE habits.name
                 END,
                 description = CASE
-                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.description
+                    WHEN habits.user_id = $2 THEN EXCLUDED.description
                     ELSE habits.description
                 END,
                 deleted_at = CASE
-                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.deleted_at
+                    WHEN habits.user_id = $2 THEN EXCLUDED.deleted_at
                     ELSE habits.deleted_at
                 END,
                 min_daily_frequency = CASE
-                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.min_daily_frequency
+                    WHEN habits.user_id = $2 THEN EXCLUDED.min_daily_frequency
                     ELSE habits.min_daily_frequency
                 END,
                 difficulty_rank = CASE
-                    WHEN habits.user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true) THEN EXCLUDED.difficulty_rank
+                    WHEN habits.user_id = $2 THEN EXCLUDED.difficulty_rank
                     ELSE habits.difficulty_rank
                 END
              RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_rank",
@@ -588,7 +587,7 @@ impl Database {
         if let Some(habit_id) = trade.habit_id {
             let habit_valid: Option<(Uuid,)> = sqlx::query_as(
                 "SELECT id FROM habits
-                 WHERE id = $1 AND (user_id = $2 OR EXISTS (SELECT 1 FROM users WHERE id = habits.user_id AND is_anonymous = true))",
+                 WHERE id = $1 AND user_id = $2",
             )
             .bind(habit_id)
             .bind(user_id)

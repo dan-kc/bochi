@@ -7,6 +7,8 @@ Ensure the codebase is as DRY as **reasonably** possible.
 
 Implement the sync layer from ./frontend. You can see the sync endpoints in ./backend. I forgot how the implementation works. Remind me, ask loads of quesions if things can be implemented differently.
 
+I have already fleshed out 
+
 I need this to work cross platform, in future I will have an android app and a web app so i cannot rely on icloud store (I think).
 
 - The user needs to be able to use the app on their platform without an account. In this case there will be no sync.
