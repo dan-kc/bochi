@@ -11,16 +11,14 @@ There are two related calculations:
 
 Both share the same outer form:
 
-\[
-\mathrm{value} = \operatorname{round}(100 \cdot G \cdot D \cdot F \cdot R)
-\]
+`value = round(100 * G * D * F * R)`
 
 where:
 
-- \(G\) is the user-configurable general difficulty
-- \(D\) is the rank-based multiplier
-- \(F\) is the frequency multiplier
-- \(R\) is a deterministic pseudo-random multiplier
+- `G` is the user-configurable general difficulty
+- `D` is the rank-based multiplier
+- `F` is the frequency multiplier
+- `R` is a deterministic pseudo-random multiplier
 
 ## Design Goals
 
@@ -33,82 +31,64 @@ where:
 
 Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
 
-\[
-\mathrm{Reward} = \operatorname{round}(100 \cdot G \cdot D_h \cdot F_h \cdot R_h)
-\]
+`Reward = round(100 * G * D_h * F_h * R_h)`
 
 ### Difficulty Multiplier
 
 Let:
 
-- \(N_h\) = number of ranked, non-deleted habits
-- \(\operatorname{rank}(h)\in\{1,\dots,N_h\}\) = lexicographic position of `difficultyRank`
+- `N_h` = number of ranked, non-deleted habits
+- `rank(h)` in `{1, ..., N_h}` = lexicographic position of `difficultyRank`
 
 Then:
 
-\[
-D_h = \frac{N_h - \operatorname{rank}(h) + 1}{N_h + 1}
-\]
+`D_h = (N_h - rank(h) + 1) / (N_h + 1)`
 
 If the habit is unranked, or no ranked habits exist, the fallback is:
 
-\[
-D_h = 0.5
-\]
+`D_h = 0.5`
 
 ### Frequency Multiplier
 
 Let:
 
-- \(f_h\) = target frequency in times/day
-- \(c_h\) = completions in the last 7 days
-- \(\alpha = 2.5\)
+- `f_h` = target frequency in times/day
+- `c_h` = completions in the last 7 days
+- `alpha = 2.5`
 
 Then expected completions are:
 
-\[
-E_h = 7 f_h
-\]
+`E_h = 7 * f_h`
 
 and the completion ratio is:
 
-\[
-r_h = \frac{c_h}{E_h}
-\]
+`r_h = c_h / E_h`
 
 The current iOS implementation does not use age blending for habits, so:
 
-\[
-r_h^{\mathrm{eff}} = r_h
-\]
+`r_h_eff = r_h`
 
 and:
 
-\[
-F_h = \frac{2}{1 + \left(r_h^{\mathrm{eff}}\right)^\alpha}
-\]
+`F_h = 2 / (1 + (r_h_eff ^ alpha))`
 
 If no frequency is set, the fallback is:
 
-\[
-F_h = 1
-\]
+`F_h = 1`
 
 Behaviourally:
 
-- \(r_h = 0 \Rightarrow F_h = 2\)
-- \(r_h = 1 \Rightarrow F_h = 1\)
-- \(r_h > 1 \Rightarrow F_h < 1\)
+- `r_h = 0  =>  F_h = 2`
+- `r_h = 1  =>  F_h = 1`
+- `r_h > 1  =>  F_h < 1`
 
 ### Random Multiplier
 
 For time bucket \(t_h\):
 
-\[
-R_h = 0.993 + 0.014 \cdot H(\text{habitId}, t_h)
-\]
+`R_h = 0.993 + 0.014 * H(habitId, t_h)`
 
-where \(H\in[0,1)\) is the deterministic hash output.
+where `H` is the deterministic hash output in `[0, 1)`.
 
 The habit bucket changes every 20 seconds.
 
@@ -116,71 +96,59 @@ The habit bucket changes every 20 seconds.
 
 Implemented in `ios/tofustash/Rewards/Utilities/RewardPriceCalculation.swift`.
 
-\[
-\mathrm{Cost} = \operatorname{round}(100 \cdot G \cdot D_r \cdot F_r \cdot R_r)
-\]
+`Cost = round(100 * G * D_r * F_r * R_r)`
 
 ### Damage Multiplier
 
 Let:
 
-- \(N_r\) = number of ranked, non-deleted rewards
-- \(\operatorname{rank}(r)\in\{1,\dots,N_r\}\) = lexicographic position of `damageRank`
+- `N_r` = number of ranked, non-deleted rewards
+- `rank(r)` in `{1, ..., N_r}` = lexicographic position of `damageRank`
 
 Then:
 
-\[
-D_r = \frac{N_r - \operatorname{rank}(r) + 1}{N_r + 1}
-\]
+`D_r = (N_r - rank(r) + 1) / (N_r + 1)`
 
 If the reward is unranked, or no ranked rewards exist, the fallback is:
 
-\[
-D_r = 0.5
-\]
+`D_r = 0.5`
 
 ### Frequency Multiplier
 
 Let:
 
-- \(f_r\) = max healthy purchase rate in times/day
-- \(c_r\) = purchases in the last 1 day
-- \(\beta = 3\)
+- `f_r` = max healthy purchase rate in times/day
+- `c_r` = purchases in the last 1 day
+- `beta = 3`
 
 Then expected purchases are:
 
-\[
-E_r = f_r
-\]
+`E_r = f_r`
 
 and the purchase ratio is:
 
-\[
-r_r = \frac{c_r}{E_r}
-\]
+`r_r = c_r / E_r`
 
 The multiplier is:
 
-\[
-F_r =
-\begin{cases}
-50, & r_r \ge 1 \\
-\min\left(50,\; \frac{2}{1-r_r^\beta} - 1\right), & r_r < 1
-\end{cases}
-\]
+If `r_r >= 1`:
+
+`F_r = 50`
+
+If `r_r < 1`:
+
+`F_r = min(50, (2 / (1 - (r_r ^ beta))) - 1)`
 
 If no max frequency is set, the fallback is:
 
-\[
-F_r = 1
-\]
+`F_r = 1`
 
 Some useful values:
 
-- \(r_r = 0 \Rightarrow F_r = 1\)
-- \(r_r = \frac{1}{3} \Rightarrow F_r \approx 1.077\)
-- \(r_r = \frac{2}{3} \Rightarrow F_r \approx 1.842\)
-- \(r_r \to 1^{-} \Rightarrow F_r \to +\infty\), but the implementation clamps to \(50\)
+- `r_r = 0  =>  F_r = 1`
+- `r_r = 1/3  =>  F_r ~= 1.077`
+- `r_r = 2/3  =>  F_r ~= 1.842`
+- `r_r -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `50`
 
 ### Reward Pricing Behaviour
 
@@ -199,13 +167,11 @@ Using a long window like 60 days makes early same-day purchases look flat becaus
 
 ### Random Multiplier
 
-For time bucket \(t_r\):
+For time bucket `t_r`:
 
-\[
-R_r = 0.993 + 0.014 \cdot H(\text{rewardId}, t_r)
-\]
+`R_r = 0.993 + 0.014 * H(rewardId, t_r)`
 
-where \(H\in[0,1)\) is the deterministic hash output.
+where `H` is the deterministic hash output in `[0, 1)`.
 
 The reward bucket changes every 30 minutes.
 
@@ -213,35 +179,25 @@ The reward bucket changes every 30 minutes.
 
 ### Habit Claim Modal
 
-For claiming \(q\) times from a habit with current completion count \(c_h\):
+For claiming `q` times from a habit with current completion count `c_h`:
 
-\[
-\mathrm{TotalHabitReward}(q) = \sum_{i=0}^{q-1}
-\mathrm{Reward}(c_h + i)
-\]
+`TotalHabitReward(q) = sum from i = 0 to q - 1 of Reward(c_h + i)`
 
 So the total is generally not:
 
-\[
-q \cdot \mathrm{Reward}(c_h)
-\]
+`q * Reward(c_h)`
 
 because \(F_h\) changes after each increment.
 
 ### Reward Buy Modal
 
-For buying \(q\) times from a reward with current purchase count \(c_r\):
+For buying `q` times from a reward with current purchase count `c_r`:
 
-\[
-\mathrm{TotalRewardCost}(q) = \sum_{i=0}^{q-1}
-\mathrm{Cost}(c_r + i)
-\]
+`TotalRewardCost(q) = sum from i = 0 to q - 1 of Cost(c_r + i)`
 
 So the total is generally not:
 
-\[
-q \cdot \mathrm{Cost}(c_r)
-\]
+`q * Cost(c_r)`
 
 because \(F_r\) changes after each increment.
 
