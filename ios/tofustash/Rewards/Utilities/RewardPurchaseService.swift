@@ -26,7 +26,10 @@ enum RewardPurchaseService {
         timeBucket: Int? = nil
     ) throws -> Int {
         let resolvedTimeBucket = timeBucket ?? RewardPriceCalculation.getCurrentTimeBucket()
-        let purchasesInPeriod = tradeStore.rewardPurchasesInPeriod(rewardId: reward.id, days: 60)
+        let purchasesInPeriod = tradeStore.rewardPurchasesInPeriod(
+            rewardId: reward.id,
+            days: RewardPriceCalculation.pricingWindowDays
+        )
         let totalPrice = RewardPriceCalculation.calculateMultiPurchaseTotal(
             reward: reward,
             allRewards: rewardStore.activeRewards,

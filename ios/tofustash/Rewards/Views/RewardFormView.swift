@@ -136,7 +136,10 @@ struct RewardFormView: View {
     private var currentPrice: Int {
         guard let reward = draftRewardForPurchase else { return 0 }
         guard reward.canPurchase else { return 0 }
-        let purchases = tradeStore.rewardPurchasesInPeriod(rewardId: reward.id, days: 60)
+        let purchases = tradeStore.rewardPurchasesInPeriod(
+            rewardId: reward.id,
+            days: RewardPriceCalculation.pricingWindowDays
+        )
         let allRewards = rewardStore.activeRewards.map { existing in
             existing.id == reward.id ? reward : existing
         }

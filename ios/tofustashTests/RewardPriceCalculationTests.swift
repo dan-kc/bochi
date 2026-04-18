@@ -65,17 +65,17 @@ struct RewardFrequencyMultiplierTests {
     // Behaviour: Buying a reward near its personal cap makes the next purchase much more expensive.
     @Test("Approaching the cap raises the multiplier")
     func approachingCapRaisesPrice() {
-        let reward = makeReward(maxFrequency: 1.0)
-        let calm = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 5, periodDays: 60)
-        let nearCap = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 59, periodDays: 60)
+        let reward = makeReward(maxFrequency: 3.0)
+        let calm = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 1, periodDays: 1)
+        let nearCap = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 2, periodDays: 1)
         #expect(nearCap > calm)
     }
 
     // Behaviour: Once the reward has already hit its cap, the multiplier clamps instead of exploding to infinity.
     @Test("Hitting the cap clamps to the max multiplier")
     func clampsAtCap() {
-        let reward = makeReward(maxFrequency: 1.0)
-        let multiplier = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 60, periodDays: 60)
+        let reward = makeReward(maxFrequency: 3.0)
+        let multiplier = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 3, periodDays: 1)
         #expect(multiplier == 50)
     }
 
@@ -83,7 +83,7 @@ struct RewardFrequencyMultiplierTests {
     // user increases quantity in the buy modal instead of staying artificially flat.
     @Test("New reward uses the live purchase ratio immediately")
     func newRewardStillAdaptsImmediately() {
-        let reward = makeReward(maxFrequency: 1.0 / 30.0, createdAt: Date())
+        let reward = makeReward(maxFrequency: 3.0, createdAt: Date())
         let first = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
@@ -148,7 +148,7 @@ struct RewardPriceTests {
     // naively multiplying one visible price.
     @Test("Multi-purchase total is not flat multiplication")
     func multiPurchaseTotalReflectsRisingPrices() {
-        let reward = makeReward(maxFrequency: 1.0, damageRank: "m0")
+        let reward = makeReward(maxFrequency: 3.0, damageRank: "m0")
         let single = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
@@ -166,5 +166,36 @@ struct RewardPriceTests {
         )
 
         #expect(total >= single * 3)
+    }
+
+    // Behaviour: A reward capped at 3/day should get more expensive after each
+    // same-day purchase, so the list price does not appear stuck.
+    @Test("3 per day reward price rises with each same-day purchase")
+    func priceRisesForRepeatedSameDayPurchases() {
+        let reward = makeReward(maxFrequency: 3.0, damageRank: "m0")
+        let first = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchasesInPeriod: 0,
+            timeBucket: 12345,
+            generalDifficulty: 5
+        )
+        let second = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchasesInPeriod: 1,
+            timeBucket: 12345,
+            generalDifficulty: 5
+        )
+        let third = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchasesInPeriod: 2,
+            timeBucket: 12345,
+            generalDifficulty: 5
+        )
+
+        #expect(second > first)
+        #expect(third > second)
     }
 }

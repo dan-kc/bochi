@@ -8,7 +8,10 @@ enum RewardPriceCalculation {
     nonisolated private static let randomBaseMultiplier = 0.993
     nonisolated private static let randomMultiplierRange = 0.014
     nonisolated private static let maxFrequencyMultiplier = 50.0
-    nonisolated private static let defaultPeriodDays = 60.0
+    // Rewards now price against a rolling 24-hour window. This matches what the
+    // user means when they set a cap like "3/day": the 4th purchase today
+    // should already cost more, instead of waiting for a 60-day average to move.
+    nonisolated static let pricingWindowDays = 1
     nonisolated private static let timeBucketMs = 30 * 60 * 1000
 
     nonisolated static func calculateDamageMultiplier(reward: Reward, allRewards: [Reward]) -> Double {
@@ -32,7 +35,7 @@ enum RewardPriceCalculation {
     nonisolated static func calculateFrequencyMultiplier(
         reward: Reward,
         purchasesInPeriod: Int,
-        periodDays: Double = defaultPeriodDays
+        periodDays: Double = Double(pricingWindowDays)
     ) -> Double {
         guard let maxFrequency = reward.maxFrequency, maxFrequency != 0 else {
             return 1

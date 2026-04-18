@@ -61,6 +61,38 @@ struct RewardPurchaseServiceTests {
         #expect(balanceStore.balance == 10_000 - spent)
     }
 
+    // Behaviour: After the user buys a reward capped at 3/day, the next
+    // purchase on the same day should cost more instead of staying flat.
+    @Test("second same-day purchase costs more for a 3 per day reward")
+    func secondPurchaseCostsMoreAfterFirst() throws {
+        let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
+        _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageRank: "m")
+
+        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
+        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
+        balanceStore.addTofu(10_000)
+
+        let reward = try #require(rewardStore.activeRewards.first)
+        let firstSpent = try RewardPurchaseService.purchase(
+            reward: reward,
+            rewardStore: rewardStore,
+            tradeStore: tradeStore,
+            balanceStore: balanceStore,
+            generalDifficulty: 5,
+            timeBucket: 12345
+        )
+        let secondSpent = try RewardPurchaseService.purchase(
+            reward: reward,
+            rewardStore: rewardStore,
+            tradeStore: tradeStore,
+            balanceStore: balanceStore,
+            generalDifficulty: 5,
+            timeBucket: 12345
+        )
+
+        #expect(secondSpent > firstSpent)
+    }
+
     // Behaviour: Trying to buy a reward without enough tofu leaves both balance and history unchanged.
     @Test("purchase blocks when balance is insufficient")
     func purchaseBlocksOnLowBalance() throws {

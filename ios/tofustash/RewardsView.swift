@@ -120,7 +120,10 @@ struct RewardsView: View {
 
     private func priceForReward(_ reward: Reward) -> Int {
         guard reward.canPurchase else { return 0 }
-        let purchases = tradeStore.rewardPurchasesInPeriod(rewardId: reward.id, days: 60)
+        let purchases = tradeStore.rewardPurchasesInPeriod(
+            rewardId: reward.id,
+            days: RewardPriceCalculation.pricingWindowDays
+        )
         return RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: rewardStore.activeRewards,

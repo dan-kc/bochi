@@ -5,6 +5,8 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
+ 
+The logic for the reward price calculation seems to be incorrect. I have a reward with max freq 3/day. I have purchased it several times. it should increase in price every time. it seems to be stuck at 250. Also, if use the buy reward modal it seems to just multiply the current price. In the claim Habit reward it correctly changes the price according to how many you pick. If i claim rewards for 2x habits, the amount wont be 2 times the current price, it adjusts. Make sure this works in rewards too.
 
 # Filters
 
