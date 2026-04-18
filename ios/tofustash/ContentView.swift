@@ -17,9 +17,6 @@ struct ContentView: View {
                 Tab("Rewards", systemImage: "gift") {
                     RewardsView()
                 }
-                Tab("Trades", systemImage: "arrow.left.arrow.right") {
-                    TradesView()
-                }
                 Tab("Settings", systemImage: "gear") {
                     SettingsView()
                 }

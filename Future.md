@@ -5,9 +5,7 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 
-In the auth flow inside ./ios, ensure that the error handling is fleshed out and the user is given correct errors for every case. See all the cases in ./backend.
-
-Currently I get an error "Invalid email or password" when the user can't connect to the server which is misinformed. Make sure it's ALL fleshed out.
+Remove the trades page. Make the balance in the top right be a liquid glass button that opens a new modal from the bottom .large that lists all trades. See the implementation of the trades page in ./frontend to see the information i want to display on the list of trades. 
 
 # Filters
 

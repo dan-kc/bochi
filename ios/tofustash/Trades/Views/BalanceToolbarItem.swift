@@ -14,16 +14,28 @@ import SwiftUI
 // not on navigation events.
 struct BalanceOverlay: View {
     @Environment(BalanceStore.self) private var balanceStore
+    @State private var showingTradeHistory = false
 
     var body: some View {
-        HStack(spacing: 2) {
-            Text("\(balanceStore.balance)")
-                .contentTransition(.numericText())
-                .font(.title2)
-                .fontWeight(.bold)
-            Image(systemName: "cube.fill")
-                .font(.subheadline)
+        Button {
+            // Behaviour: tapping the balance opens the full trade history from
+            // the bottom, so the user can inspect every tofu gain/spend event
+            // without switching to a dedicated tab.
+            showingTradeHistory = true
+        } label: {
+            HStack(spacing: 6) {
+                Text("\(balanceStore.balance)")
+                    .contentTransition(.numericText())
+
+                Image(systemName: "cube.fill")
+            }
+            .font(.headline.weight(.semibold))
         }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
         .animation(.easeInOut(duration: 2.0), value: balanceStore.balance)
+        .sheet(isPresented: $showingTradeHistory) {
+            TradeHistorySheetView()
+        }
     }
 }
