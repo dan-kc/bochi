@@ -73,9 +73,9 @@ struct ChangePasswordView: View {
             dismiss()
         } catch {
             if let apiError = error as? ApiError { // conditional downcast (TS: instanceof check)
-                errorMessage = apiError.displayMessage
+                errorMessage = apiError.userFacingMessage
             } else {
-                errorMessage = "Failed to change password"
+                errorMessage = ApiError.networkFailure(error).userFacingMessage
             }
         }
 

@@ -54,13 +54,19 @@ struct LiveAuthAPIClient: AuthAPIClient {
             request.httpBody = try JSONEncoder().encode(body)
         }
 
-        // Tuple destructuring, like JS `const [data, response] = ...` or Rust `let (data, response) = ...`
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            // Tuple destructuring, like JS `const [data, response] = ...` or Rust `let (data, response) = ...`
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw ApiError.networkFailure(error)
+        }
 
         // as? = conditional downcast (returns nil if it fails). URLResponse is a supertype; HTTPURLResponse is a subtype.
         guard let httpResponse = response as? HTTPURLResponse else {
             // throw = like JS throw or Rust panic, but caught by try/catch (not actually a panic — more like Rust's ? + Error).
-            throw ApiError(errors: nil, message: "Invalid response", statusCode: nil)
+            throw ApiError.genericFailure(message: "The server returned an invalid response.")
         }
 
         guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
@@ -73,8 +79,12 @@ struct LiveAuthAPIClient: AuthAPIClient {
             )
         }
 
-        // The return type T is inferred from the call site. Swift's type inference picks T based on what the caller expects.
-        return try decoder.decode(T.self, from: data)
+        do {
+            // The return type T is inferred from the call site. Swift's type inference picks T based on what the caller expects.
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw ApiError.genericFailure(message: "The app could not read the server response.")
+        }
     }
 
     // Implicit return: single-expression function bodies don't need `return` (like Rust closures).

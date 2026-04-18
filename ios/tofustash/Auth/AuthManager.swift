@@ -91,7 +91,9 @@ final class AuthManager {
     // local progress stays attached to the new credentials.
     func claimAccount(email: String, password: String) async throws {
         guard let accessToken = currentAccessToken else {
-            throw ApiError(errors: nil, message: "No access token available", statusCode: nil)
+            throw ApiError.genericFailure(
+                message: "You need an active session before you can create an account."
+            )
         }
         let tokens = try await apiClient.claimAccount(
             email: email,
@@ -121,7 +123,9 @@ final class AuthManager {
     // React app would send the session token with a profile mutation request.
     func changePassword(currentPassword: String, newPassword: String) async throws {
         guard let accessToken = currentAccessToken else {
-            throw ApiError(errors: nil, message: "No access token available", statusCode: nil)
+            throw ApiError.genericFailure(
+                message: "You need to be signed in before you can change your password."
+            )
         }
         try await apiClient.changePassword(
             currentPassword: currentPassword,
@@ -132,7 +136,9 @@ final class AuthManager {
 
     func changeEmail(newEmail: String, password: String) async throws {
         guard let accessToken = currentAccessToken else {
-            throw ApiError(errors: nil, message: "No access token available", statusCode: nil)
+            throw ApiError.genericFailure(
+                message: "You need to be signed in before you can change your email."
+            )
         }
         try await apiClient.changeEmail(
             newEmail: newEmail,

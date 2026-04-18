@@ -96,9 +96,9 @@ struct ClaimAccountView: View {
             dismiss()
         } catch {
             if let apiError = error as? ApiError {
-                errorMessage = apiError.displayMessage
+                errorMessage = apiError.userFacingMessage
             } else {
-                errorMessage = "Failed to create account"
+                errorMessage = ApiError.networkFailure(error).userFacingMessage
             }
         }
 

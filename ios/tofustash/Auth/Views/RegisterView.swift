@@ -99,9 +99,9 @@ struct RegisterView: View {
             // `as?` is a conditional downcast — like a type guard in TS: `if (error instanceof ApiError)`.
             // Returns nil if the cast fails, hence `if let` to unwrap.
             if let apiError = error as? ApiError {
-                errorMessage = apiError.displayMessage
+                errorMessage = apiError.userFacingMessage
             } else {
-                errorMessage = "Registration failed"
+                errorMessage = ApiError.networkFailure(error).userFacingMessage
             }
         }
 

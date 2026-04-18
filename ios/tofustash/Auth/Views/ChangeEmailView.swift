@@ -81,9 +81,9 @@ struct ChangeEmailView: View {
             dismiss()
         } catch {
             if let apiError = error as? ApiError {
-                errorMessage = apiError.displayMessage
+                errorMessage = apiError.userFacingMessage
             } else {
-                errorMessage = "Failed to change email"
+                errorMessage = ApiError.networkFailure(error).userFacingMessage
             }
         }
 

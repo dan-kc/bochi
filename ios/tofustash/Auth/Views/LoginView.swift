@@ -76,9 +76,9 @@ struct LoginView: View {
             dismiss()
         } catch {
             if let apiError = error as? ApiError {
-                errorMessage = apiError.displayMessage
+                errorMessage = apiError.userFacingMessage
             } else {
-                errorMessage = "Invalid email or password"
+                errorMessage = ApiError.networkFailure(error).userFacingMessage
             }
         }
 
