@@ -6,7 +6,7 @@ import Testing
 struct BalanceStoreTests {
 
     private func makeSUT() -> BalanceStore {
-        BalanceStore()
+        BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
     }
 
     // Behaviour: A brand-new user starts with no tofu before completing any habits.

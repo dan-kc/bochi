@@ -13,7 +13,7 @@ struct HabitStoreTests {
     // Same pattern as AuthManagerTests.makeSUT() — keeps tests isolated from each other
     // (like creating a new component instance in each React test).
     private func makeSUT() -> HabitStore {
-        return HabitStore()
+        return HabitStore(storageURL: TestHelpers.makeTemporaryFileURL("habits"))
     }
 
     // MARK: - Initial State
@@ -252,6 +252,20 @@ struct HabitStoreTests {
 
         #expect(habit != nil)
         #expect(habit?.id == preGeneratedId)
+    }
+
+    // Behaviour: A signed-out user's local habits survive relaunch because the
+    // iOS app now persists the local-only store to disk.
+    @Test func localHabitPersistsAcrossStoreRelaunch() {
+        let fileURL = TestHelpers.makeTemporaryFileURL("persisted-habits")
+        let firstStore = HabitStore(storageURL: fileURL)
+
+        _ = firstStore.addHabit(name: "Persist Me")
+
+        let relaunchedStore = HabitStore(storageURL: fileURL)
+
+        #expect(relaunchedStore.activeHabits.count == 1)
+        #expect(relaunchedStore.activeHabits.first?.name == "Persist Me")
     }
 
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(SyncManager.self) private var syncManager
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
     @State private var showingDifficulty = false
@@ -11,6 +12,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 gameplaySection
+                syncSection
 
                 if authManager.isLoading {
                     Section {
@@ -47,6 +49,59 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var syncSection: some View {
+        Section {
+            LabeledContent {
+                Label(syncManager.statusText, systemImage: syncManager.statusIconName)
+                    .foregroundStyle(syncStatusColor)
+            } label: {
+                Text("Status")
+            }
+
+            if let lastSyncTime = syncManager.lastSyncTime {
+                LabeledContent("Last Sync") {
+                    Text(lastSyncTime.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let lastErrorMessage = syncManager.lastErrorMessage {
+                Text(lastErrorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                Task { await syncManager.syncNow() }
+            } label: {
+                Label("Sync Now", systemImage: "arrow.clockwise")
+            }
+            .disabled(!authManager.canSync || syncManager.status == .syncing)
+        } header: {
+            Label("Sync", systemImage: syncManager.statusIconName)
+        } footer: {
+            if !authManager.canSync {
+                Text("Create an account or sign in before sync can back up this device.")
+            } else {
+                Text("Changes are pushed after a short pause, remote updates are polled in the background, and a manual sync is available here.")
+            }
+        }
+    }
+
+    private var syncStatusColor: Color {
+        switch syncManager.status {
+        case .idle:
+            return .secondary
+        case .syncing:
+            return .blue
+        case .synced:
+            return .green
+        case .error:
+            return .red
         }
     }
 
@@ -236,11 +291,28 @@ struct SettingsView: View {
 }
 
 #Preview {
+    let previewAuthManager = AuthManager(
+        apiClient: AppConfiguration.makeAuthAPIClient(),
+        tokenStorage: KeychainTokenStorage()
+    )
+    let previewSettingsStore = UserSettingsStore()
+    let previewBalanceStore = BalanceStore()
+
     SettingsView()
-        .environment(AuthManager(
-            apiClient: AppConfiguration.makeAuthAPIClient(),
-            tokenStorage: KeychainTokenStorage()
-        ))
-        .environment(UserSettingsStore())
-        .environment(BalanceStore())
+        .environment(previewAuthManager)
+        .environment(previewSettingsStore)
+        .environment(previewBalanceStore)
+        .environment(
+            SyncManager(
+                apiClient: AppConfiguration.makeSyncAPIClient(),
+                authManager: previewAuthManager,
+                syncStateStore: SyncStateStore(),
+                habitStore: HabitStore(),
+                rewardStore: RewardStore(),
+                tradeStore: TradeStore(),
+                tagStore: TagStore(),
+                balanceStore: previewBalanceStore,
+                userSettingsStore: previewSettingsStore
+            )
+        )
 }

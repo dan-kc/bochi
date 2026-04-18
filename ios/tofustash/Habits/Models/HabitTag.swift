@@ -8,11 +8,15 @@ import Foundation
 // - Independent soft-delete (remove a tag from a habit without deleting the tag)
 // - Timestamps for when the association was created/modified
 // - Sync with the backend's `habit_tags` junction table
-struct HabitTag: Identifiable, Equatable, Sendable {
-    let id: String              // UUID string — unique per association
+struct HabitTag: Identifiable, Equatable, Sendable, Codable {
     let habitId: String         // FK → Habit.id
     let tagId: String           // FK → Tag.id
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?        // nil = active, non-nil = soft-deleted
+
+    // The backend identifies habit-tag rows by the `(habitId, tagId)` pair.
+    // Using a computed ID keeps SwiftUI's `Identifiable` support without adding
+    // a second local-only identifier that sync would need to ignore.
+    var id: String { "\(habitId):\(tagId)" }
 }

@@ -4,15 +4,17 @@ Write comments assuming I am an expert in React but 6 don't know anything about 
 Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
+For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Implement the sync layer from ./frontend. You can see the sync endpoints in ./backend. I forgot how the implementation works. Remind me, ask loads of quesions if things can be implemented differently.
+Implement the sync layer from ./frontend. You can see the sync endpoints in ./backend. You can read logic surrounding the current implementation here: ./frontend/lib/sync/README.md.
 
-I have already fleshed out 
+If you see any improvements that could be made, on the frontend or backend then ask me.
 
-I need this to work cross platform, in future I will have an android app and a web app so i cannot rely on icloud store (I think).
+Ask me lots of questions for anything remotely questionable as I need this implementation to be solid.
 
-- The user needs to be able to use the app on their platform without an account. In this case there will be no sync.
-- If they have an account, then all of their data must be synced.
+This app has not launched yet so you do not need to maintain compatibility.
+
+After you are done, add a new thorough document to ./docs
 
 # Filters
 

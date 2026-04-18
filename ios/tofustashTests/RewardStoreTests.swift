@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct RewardStoreTests {
     private func makeSUT() -> RewardStore {
-        RewardStore()
+        RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
     }
 
     // Behaviour: Creating a reward trims accidental whitespace so duplicate-looking names are avoided.

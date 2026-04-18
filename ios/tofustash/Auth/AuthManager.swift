@@ -38,6 +38,10 @@ final class AuthManager {
     private var refreshTask: Task<Void, Never>?
     private var currentAccessToken: String?
 
+    func currentAccessTokenForSync() -> String? {
+        currentAccessToken
+    }
+
     init(
         apiClient: AuthAPIClient,
         tokenStorage: TokenStorage,

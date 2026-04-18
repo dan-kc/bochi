@@ -25,6 +25,7 @@ enum TradeHistoryBuilder {
         let rewardNames = Dictionary(uniqueKeysWithValues: rewards.map { ($0.id, $0.name) })
 
         return trades
+            .filter { $0.deletedAt == nil }
             .sorted { $0.createdAt > $1.createdAt }
             .map { trade in
                 let isHabitTrade = trade.habitId != nil

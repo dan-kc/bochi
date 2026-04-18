@@ -8,7 +8,7 @@ import Testing
 struct TradeStoreTests {
 
     private func makeSUT() -> TradeStore {
-        TradeStore()
+        TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
     }
 
     // Behaviour: Before the user completes any habits, there is no trade history.

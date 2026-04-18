@@ -6,6 +6,12 @@ import Foundation
 // Same trick as Rust's `enum Void {}` — the compiler enforces it, unlike a class where
 // you'd need `private init()`.
 enum TestHelpers {
+    static func makeTemporaryFileURL(_ name: String = UUID().uuidString) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("\(name).json")
+    }
+
     /// Creates a fake JWT token with the given subject and expiration.
     /// The token is not cryptographically signed but has valid structure for parsing.
     // `static func` = like a static method in a TS class, or a standalone function in Go/Rust

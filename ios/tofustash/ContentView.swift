@@ -34,16 +34,37 @@ struct ContentView: View {
 
 // #Preview — Xcode live preview macro (like Storybook stories for components)
 #Preview {
+    let previewAuthManager = AuthManager(
+        apiClient: AppConfiguration.makeAuthAPIClient(),
+        tokenStorage: KeychainTokenStorage()
+    )
+    let previewHabitStore = HabitStore()
+    let previewTagStore = TagStore()
+    let previewTradeStore = TradeStore()
+    let previewBalanceStore = BalanceStore()
+    let previewRewardStore = RewardStore()
+    let previewSettingsStore = UserSettingsStore()
+
     ContentView()
         // .environment() — injects into SwiftUI's environment (exactly like React Context Provider)
-        .environment(AuthManager(
-            apiClient: AppConfiguration.makeAuthAPIClient(),
-            tokenStorage: KeychainTokenStorage()
-        ))
-        .environment(HabitStore())
-        .environment(TagStore())
-        .environment(TradeStore())
-        .environment(BalanceStore())
-        .environment(RewardStore())
-        .environment(UserSettingsStore())
+        .environment(previewAuthManager)
+        .environment(previewHabitStore)
+        .environment(previewTagStore)
+        .environment(previewTradeStore)
+        .environment(previewBalanceStore)
+        .environment(previewRewardStore)
+        .environment(previewSettingsStore)
+        .environment(
+            SyncManager(
+                apiClient: AppConfiguration.makeSyncAPIClient(),
+                authManager: previewAuthManager,
+                syncStateStore: SyncStateStore(),
+                habitStore: previewHabitStore,
+                rewardStore: previewRewardStore,
+                tradeStore: previewTradeStore,
+                tagStore: previewTagStore,
+                balanceStore: previewBalanceStore,
+                userSettingsStore: previewSettingsStore
+            )
+        )
 }

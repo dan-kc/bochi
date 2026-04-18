@@ -1,82 +1,179 @@
 import Foundation
 
-// Tracks every tofu-changing event in the app: habit completions add tofu and
-// reward purchases subtract tofu. The same store therefore feeds both the
-// habit frequency curve and the reward max-frequency curve.
-//
-// Follows the same pattern as HabitStore: @Observable for automatic SwiftUI
-// reactivity, @MainActor for thread safety, in-memory storage.
 @Observable
 @MainActor
 final class TradeStore {
+    private struct PersistedState: Codable {
+        var tradesByOwner: [String: [Trade]] = [:]
+    }
 
-    // Completion history in the order it happened. Other parts of the app read
-    // this to show reward state and derive recent completion counts.
+    private let storageURL: URL
+    private(set) var currentOwnerID: String
+    private var tradesByOwner: [String: [Trade]]
+
     private(set) var trades: [Trade] = []
 
-    // Records one user completion at the current time.
-    func addHabitTrade(habitId: String, amount: Int) {
+    init(
+        storageURL: URL? = nil,
+        initialOwnerID: String = "local-device"
+    ) {
+        self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "trades")
+        self.currentOwnerID = initialOwnerID
+        let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
+        self.tradesByOwner = persisted.tradesByOwner
+        self.trades = persisted.tradesByOwner[initialOwnerID] ?? []
+    }
+
+    func setCurrentOwner(_ ownerID: String) {
+        currentOwnerID = ownerID
+        trades = tradesByOwner[ownerID] ?? []
+    }
+
+    func migrateTrades(from sourceOwnerID: String, to destinationOwnerID: String) -> [String] {
+        guard sourceOwnerID != destinationOwnerID else { return [] }
+
+        let source = tradesByOwner[sourceOwnerID] ?? []
+        let destination = tradesByOwner[destinationOwnerID] ?? []
+        let merged = mergeRecords(local: destination, remote: source)
+        let migratedIDs = source.map(\.id)
+
+        tradesByOwner[destinationOwnerID] = merged
+        tradesByOwner[sourceOwnerID] = []
+        persist()
+        refreshCurrentTrades()
+        return migratedIDs
+    }
+
+    func addHabitTrade(
+        id: String? = nil,
+        habitId: String,
+        amount: Int,
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        shouldNotifySync: Bool = true
+    ) {
         let trade = Trade(
-            id: UUID().uuidString,
+            id: id ?? UUID().uuidString,
             habitId: habitId,
             rewardId: nil,
             amount: amount,
-            createdAt: Date()
+            createdAt: createdAt,
+            updatedAt: updatedAt ?? createdAt,
+            deletedAt: deletedAt
         )
-        trades.append(trade)
+
+        appendOrReplace(trade, shouldNotifySync: shouldNotifySync)
     }
 
-    // Records one reward purchase. Amount should be negative because the user
-    // is spending tofu rather than earning it.
-    func addRewardPurchase(rewardId: String, amount: Int) {
+    func addRewardPurchase(
+        id: String? = nil,
+        rewardId: String,
+        amount: Int,
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        shouldNotifySync: Bool = true
+    ) {
         let trade = Trade(
-            id: UUID().uuidString,
+            id: id ?? UUID().uuidString,
             habitId: nil,
             rewardId: rewardId,
             amount: amount,
-            createdAt: Date()
+            createdAt: createdAt,
+            updatedAt: updatedAt ?? createdAt,
+            deletedAt: deletedAt
         )
-        trades.append(trade)
+
+        appendOrReplace(trade, shouldNotifySync: shouldNotifySync)
     }
 
-    // Test-only helper for simulating older completions.
     func addHabitTradeWithDate(habitId: String, amount: Int, createdAt: Date) {
-        let trade = Trade(
-            id: UUID().uuidString,
-            habitId: habitId,
-            rewardId: nil,
-            amount: amount,
-            createdAt: createdAt
-        )
-        trades.append(trade)
+        addHabitTrade(habitId: habitId, amount: amount, createdAt: createdAt)
     }
 
-    // Test-only helper for simulating older purchases.
     func addRewardPurchaseWithDate(rewardId: String, amount: Int, createdAt: Date) {
-        let trade = Trade(
-            id: UUID().uuidString,
-            habitId: nil,
-            rewardId: rewardId,
-            amount: amount,
-            createdAt: createdAt
-        )
-        trades.append(trade)
+        addRewardPurchase(rewardId: rewardId, amount: amount, createdAt: createdAt)
     }
 
-    // This is the count the reward formula uses for "how many times has the
-    // user already done this habit recently?"
     func tradesInPeriod(habitId: String, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.habitId == habitId && $0.createdAt >= cutoff
+            $0.habitId == habitId && $0.deletedAt == nil && $0.createdAt >= cutoff
         }.count
     }
 
-    // Reward prices look back over recent purchases of that same reward only.
     func rewardPurchasesInPeriod(rewardId: String, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.rewardId == rewardId && $0.createdAt >= cutoff
+            $0.rewardId == rewardId && $0.deletedAt == nil && $0.createdAt >= cutoff
         }.count
+    }
+
+    func mergeTrades(_ remoteTrades: [Trade]) {
+        guard !remoteTrades.isEmpty else { return }
+        mutateTrades {
+            $0 = mergeRecords(local: $0, remote: remoteTrades)
+        }
+    }
+
+    func getDirtyTrades(ids: Set<String>) -> [Trade] {
+        trades.filter { ids.contains($0.id) }
+    }
+
+    func purgeDeletedTrades() {
+        mutateTrades {
+            $0.removeAll { $0.deletedAt != nil }
+        }
+    }
+
+    func allTradeIDs() -> [String] {
+        trades.map(\.id)
+    }
+
+    private func appendOrReplace(_ trade: Trade, shouldNotifySync: Bool) {
+        mutateTrades {
+            $0.removeAll { $0.id == trade.id }
+            $0.append(trade)
+        }
+
+        if shouldNotifySync {
+            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [trade.id]))
+        }
+    }
+
+    private func mutateTrades(_ mutate: (inout [Trade]) -> Void) {
+        var next = trades
+        mutate(&next)
+        next.sort { $0.createdAt < $1.createdAt }
+        trades = next
+        tradesByOwner[currentOwnerID] = next
+        persist()
+    }
+
+    private func refreshCurrentTrades() {
+        trades = tradesByOwner[currentOwnerID] ?? []
+    }
+
+    private func persist() {
+        JSONFileStore.save(PersistedState(tradesByOwner: tradesByOwner), to: storageURL)
+    }
+
+    private func mergeRecords(local: [Trade], remote: [Trade]) -> [Trade] {
+        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
+
+        for incoming in remote {
+            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
+                continue
+            }
+            mergedByID[incoming.id] = incoming
+        }
+
+        return mergedByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
     }
 }

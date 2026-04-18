@@ -10,7 +10,7 @@ import Foundation
 //   to diff items efficiently (like React's `key` prop, but automatic).
 // - Equatable: lets you use `==` to compare two Habits (auto-synthesized for structs).
 // - Sendable: marks this type as safe to pass across threads (like Rust's Send trait).
-struct Habit: Identifiable, Equatable, Sendable {
+struct Habit: Identifiable, Equatable, Sendable, Codable {
     let id: String              // UUID string — unique identifier
     let name: String            // 1-100 chars, required
     let description: String     // optional text — empty string means "not set"

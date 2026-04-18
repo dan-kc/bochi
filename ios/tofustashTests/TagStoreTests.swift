@@ -6,7 +6,7 @@ import Testing
 struct TagStoreTests {
 
     private func makeSUT() -> TagStore {
-        return TagStore()
+        return TagStore(storageURL: TestHelpers.makeTemporaryFileURL("tags"))
     }
 
     // MARK: - Initial State

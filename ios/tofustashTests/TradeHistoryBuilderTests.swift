@@ -35,8 +35,8 @@ struct TradeHistoryBuilderTests {
         )
 
         let trades = [
-            Trade(id: "older", habitId: "habit-1", rewardId: nil, amount: 50, createdAt: oldDate),
-            Trade(id: "newer", habitId: nil, rewardId: "reward-1", amount: -120, createdAt: newDate)
+            Trade(id: "older", habitId: "habit-1", rewardId: nil, amount: 50, createdAt: oldDate, updatedAt: oldDate, deletedAt: nil),
+            Trade(id: "newer", habitId: nil, rewardId: "reward-1", amount: -120, createdAt: newDate, updatedAt: newDate, deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
@@ -59,8 +59,8 @@ struct TradeHistoryBuilderTests {
     func buildsDeletedFallbackLabels() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trades = [
-            Trade(id: "habit-trade", habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now),
-            Trade(id: "reward-trade", habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now.addingTimeInterval(-1))
+            Trade(id: "habit-trade", habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
+            Trade(id: "reward-trade", habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now.addingTimeInterval(-1), updatedAt: now.addingTimeInterval(-1), deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(

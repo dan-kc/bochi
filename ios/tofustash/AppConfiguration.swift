@@ -19,6 +19,10 @@ enum AppConfiguration {
         LiveAuthAPIClient(baseURL: apiBaseURL, session: session)
     }
 
+    static func makeSyncAPIClient(session: URLSession = .shared) -> LiveSyncAPIClient {
+        LiveSyncAPIClient(baseURL: apiBaseURL, session: session)
+    }
+
     static func resolvedAPIHost(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
         // `trimmingCharacters` is roughly like JS `.trim()`.
         let override = environment[apiHostOverrideEnvironmentKey]?

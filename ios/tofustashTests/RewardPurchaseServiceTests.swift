@@ -4,7 +4,7 @@ import Testing
 @MainActor
 struct RewardPurchaseServiceTests {
     private func makeRewardStore() -> RewardStore {
-        let store = RewardStore()
+        let store = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
         _ = store.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 1.0, damageRank: "m")
         return store
     }
@@ -13,8 +13,8 @@ struct RewardPurchaseServiceTests {
     @Test("purchase records a reward trade and subtracts balance")
     func purchaseMutatesTradeHistoryAndBalance() throws {
         let rewardStore = makeRewardStore()
-        let tradeStore = TradeStore()
-        let balanceStore = BalanceStore()
+        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
+        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
         balanceStore.addTofu(2_000)
 
         let reward = try #require(rewardStore.activeRewards.first)
@@ -40,8 +40,8 @@ struct RewardPurchaseServiceTests {
     @Test("purchase with quantity records multiple reward trades")
     func purchaseQuantityCreatesMultipleTrades() throws {
         let rewardStore = makeRewardStore()
-        let tradeStore = TradeStore()
-        let balanceStore = BalanceStore()
+        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
+        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
         balanceStore.addTofu(10_000)
 
         let reward = try #require(rewardStore.activeRewards.first)
@@ -65,8 +65,8 @@ struct RewardPurchaseServiceTests {
     @Test("purchase blocks when balance is insufficient")
     func purchaseBlocksOnLowBalance() throws {
         let rewardStore = makeRewardStore()
-        let tradeStore = TradeStore()
-        let balanceStore = BalanceStore()
+        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
+        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
         let reward = try #require(rewardStore.activeRewards.first)
 
         do {

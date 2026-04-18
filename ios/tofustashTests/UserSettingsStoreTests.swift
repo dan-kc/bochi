@@ -6,7 +6,7 @@ import Testing
 struct UserSettingsStoreTests {
 
     private func makeSUT() -> UserSettingsStore {
-        UserSettingsStore()
+        UserSettingsStore(storageURL: TestHelpers.makeTemporaryFileURL("settings"))
     }
 
     // Behaviour: New users see the default reward scale until they change it in Settings.
