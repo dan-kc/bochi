@@ -17,7 +17,6 @@ struct HabitsView: View {
     @State private var tradingHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
-    @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
 
     var body: some View {
         NavigationStack {
@@ -98,13 +97,6 @@ struct HabitsView: View {
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
-            .task {
-                while !Task.isCancelled {
-                    let nanos = RewardCalculation.nanosUntilNextBucket()
-                    try? await Task.sleep(nanoseconds: nanos)
-                    timeBucket = RewardCalculation.getCurrentTimeBucket()
-                }
-            }
         }
     }
 
@@ -129,7 +121,6 @@ struct HabitsView: View {
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionsInPeriod: completions,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -160,9 +151,9 @@ struct HabitsView: View {
                     )
 
                     habitMetaPill(
-                        text: "Difficulty",
-                        isSet: habit.difficultyRank != nil,
-                        animating: habit.difficultyRank == nil
+                        text: habit.difficultyTier?.displayName ?? "Difficulty",
+                        isSet: habit.difficultyTier != nil,
+                        animating: habit.difficultyTier == nil
                     )
                 }
 

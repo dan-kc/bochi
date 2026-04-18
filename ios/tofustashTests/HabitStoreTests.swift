@@ -177,7 +177,7 @@ struct HabitStoreTests {
     // (description, frequency, difficulty, createdAt) remain untouched.
     @Test func updateHabitPreservesUnchangedFields() {
         let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise", description: "Daily", frequency: 1.0, difficultyRank: "m")!
+        let habit = sut.addHabit(name: "Exercise", description: "Daily", frequency: 1.0, difficultyTier: .medium)!
 
         // Only update the name — all other fields should stay the same
         sut.updateHabit(id: habit.id, name: "Workout")
@@ -186,7 +186,7 @@ struct HabitStoreTests {
         #expect(updated.name == "Workout")
         #expect(updated.description == "Daily")
         #expect(updated.frequency == 1.0)
-        #expect(updated.difficultyRank == "m")
+        #expect(updated.difficultyTier == .medium)
         #expect(updated.createdAt == habit.createdAt)
     }
 

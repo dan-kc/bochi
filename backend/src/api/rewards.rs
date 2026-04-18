@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    database::CreateRewardOptions,
+    database::{CreateRewardOptions, RewardDamageTier},
     router::{App, AuthenticatedUser},
 };
 
@@ -16,7 +16,7 @@ pub struct CreateRewardRequest {
     pub name: String,
     pub description: String,
     pub max_daily_frequency: Option<f32>,
-    pub damage_rank: Option<String>,
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 #[derive(Serialize)]
@@ -29,7 +29,7 @@ pub struct RewardResponse {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
-    pub damage_rank: Option<String>,
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 pub async fn create_reward(
@@ -73,7 +73,7 @@ pub async fn create_reward(
         name: input.name,
         description: input.description,
         max_daily_frequency: input.max_daily_frequency,
-        damage_rank: input.damage_rank,
+        damage_tier: input.damage_tier,
     };
 
     let reward_row = app.database.create_reward(opts).await.map_err(|e| {
@@ -91,7 +91,7 @@ pub async fn create_reward(
             updated_at: reward_row.updated_at,
             deleted_at: reward_row.deleted_at,
             max_daily_frequency: reward_row.max_daily_frequency,
-            damage_rank: reward_row.damage_rank,
+            damage_tier: reward_row.damage_tier,
         }),
     ))
 }

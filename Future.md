@@ -5,8 +5,18 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
- 
-The logic for the reward price calculation seems to be incorrect. I have a reward with max freq 3/day. I have purchased it several times. it should increase in price every time. it seems to be stuck at 250. Also, if use the buy reward modal it seems to just multiply the current price. In the claim Habit reward it correctly changes the price according to how many you pick. If i claim rewards for 2x habits, the amount wont be 2 times the current price, it adjusts. Make sure this works in rewards too.
+
+Review the pricing calculation for habits and rewards in ./docs/pricing.md.
+
+This is a habit tracking app where you have habits and rewards. You do habits to earn in-game currency, you spend them on rewards. An example habit is "10 pushups" or "Cold message a friend". An example reward is "Eat 1 chocolate bar" or "Spend 15 minutes on TikTok".
+
+Having maintained a similar system for myself, I noticed that it was too time consuming setting the price of things myself because when things change I need to keep updating it. I don't want to be able to just do 100 pushups and get what I want. There needs to be limits.
+
+Instead we derive the price of a habit from it's "difficulty", it's "minimum desired frequency" and the number of times you've completed the habit recently. The difficulty is just how difficult it is relative to other habits, whereas the minimum desired frequency is a set number. Rewards are priced similarly, except with "damage" and "maximum desired frequency" instead.
+
+Obviously the difficulty only really works if all habits are of reasonably similar difficulty, if one is MUCH harder than others then just having a relative ranking breaks down. But I don't want to have to rank them out of 10 instead, because what if something was a 10 and then you add a new habit that is harder, now that is the 10 and I'd have to re-calculate the rest. It's more upkeep.
+
+Review what I have in ./docs/pricing.md and suggest improvements.
 
 # Filters
 

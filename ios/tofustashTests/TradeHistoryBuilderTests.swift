@@ -20,7 +20,7 @@ struct TradeHistoryBuilderTests {
             updatedAt: oldDate,
             deletedAt: nil,
             frequency: 1,
-            difficultyRank: "m"
+            difficultyTier: .medium
         )
 
         let reward = Reward(
@@ -31,7 +31,7 @@ struct TradeHistoryBuilderTests {
             updatedAt: oldDate,
             deletedAt: nil,
             maxFrequency: 1,
-            damageRank: "m"
+            damageTier: .medium
         )
 
         let trades = [

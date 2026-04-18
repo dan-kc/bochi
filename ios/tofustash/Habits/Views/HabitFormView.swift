@@ -28,7 +28,7 @@ struct HabitFormSnapshot {
     let name: String
     let description: String
     let frequency: Double?
-    let difficultyRank: String?
+    let difficultyTier: HabitDifficultyTier?
     let habitId: String
 }
 
@@ -48,7 +48,7 @@ struct HabitFormView: View {
     @State private var name = ""
     @State private var description = ""
     @State private var frequency: Double? = nil
-    @State private var difficultyRank: String? = nil
+    @State private var difficultyTier: HabitDifficultyTier? = nil
     @State private var habitId: String = UUID().uuidString
 
     @State private var showingFrequency = false
@@ -60,7 +60,6 @@ struct HabitFormView: View {
     @State private var hasInitialized = false
     @State private var hasAppliedInitialLoad = false
     @State private var didPersist = false
-    @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
     @FocusState private var focusedField: FieldFocus?
 
     enum FieldFocus: Hashable {
@@ -84,19 +83,8 @@ struct HabitFormView: View {
         mode.isNew
     }
 
-    private var isFirstHabit: Bool {
-        Self.isFirstHabit(mode: mode, activeHabitsCount: habitStore.activeHabits.count)
-    }
-
-    private var hasComparableHabits: Bool {
-        let rankedCount = habitStore.activeHabits
-            .filter { $0.difficultyRank != nil && $0.id != habitId }
-            .count
-        return Self.hasComparableHabits(rankedHabitCount: rankedCount, excludeHabitId: mode.isNew ? nil : habitId)
-    }
-
     private var canTrade: Bool {
-        frequency != nil && difficultyRank != nil
+        frequency != nil && difficultyTier != nil
     }
 
     private var showsTradeButton: Bool {
@@ -108,9 +96,9 @@ struct HabitFormView: View {
             name: trimmedName,
             description: description,
             frequency: frequency,
-            difficultyRank: difficultyRank,
+            difficultyTier: difficultyTier,
             tagCount: habitTags.count,
-            isFirstHabit: isFirstHabit
+            isFirstHabit: false
         )
     }
 
@@ -128,7 +116,7 @@ struct HabitFormView: View {
             updatedAt: existingHabit.updatedAt,
             deletedAt: existingHabit.deletedAt,
             frequency: frequency,
-            difficultyRank: difficultyRank
+            difficultyTier: difficultyTier
         )
     }
 
@@ -139,7 +127,6 @@ struct HabitFormView: View {
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionsInPeriod: completions,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -245,11 +232,11 @@ struct HabitFormView: View {
             FrequencyModal(frequency: $frequency)
         }
         .sheet(isPresented: $showingDifficulty) {
-            DifficultyRankerView(
-                habitName: trimmedName.isEmpty ? "New Habit" : trimmedName,
-                difficultyRank: $difficultyRank,
-                currentDifficultyRank: difficultyRank,
-                excludeHabitId: mode.isNew ? nil : habitId
+            TierSelectionSheet(
+                title: "Set Difficulty",
+                currentSelection: difficultyTier,
+                onSave: { difficultyTier = $0 },
+                onUnset: difficultyTier != nil ? { difficultyTier = nil } : nil
             )
         }
         .sheet(isPresented: $showingTags) {
@@ -276,15 +263,6 @@ struct HabitFormView: View {
             // hydrates the form once when the sheet appears.
             initializeIfNeeded()
         }
-        .task {
-            // Behaviour: while the user keeps the edit sheet open, the previewed
-            // reward price refreshes right when the next minute bucket starts.
-            while !Task.isCancelled {
-                let nanos = RewardCalculation.nanosUntilNextBucket()
-                try? await Task.sleep(nanoseconds: nanos)
-                timeBucket = RewardCalculation.getCurrentTimeBucket()
-            }
-        }
         .onChange(of: name) { _, _ in
             autoSaveIfNeeded()
         }
@@ -294,7 +272,7 @@ struct HabitFormView: View {
         .onChange(of: frequency) { _, _ in
             autoSaveIfNeeded()
         }
-        .onChange(of: difficultyRank) { _, _ in
+        .onChange(of: difficultyTier) { _, _ in
             autoSaveIfNeeded()
         }
         .onDisappear {
@@ -305,7 +283,7 @@ struct HabitFormView: View {
                     name: name,
                     description: description,
                     frequency: frequency,
-                    difficultyRank: difficultyRank,
+                    difficultyTier: difficultyTier,
                     habitId: habitId
                 ))
             }
@@ -343,11 +321,11 @@ struct HabitFormView: View {
         name: String,
         description: String,
         frequency: Double?,
-        difficultyRank: String?,
+        difficultyTier: HabitDifficultyTier?,
         tagCount: Int,
         isFirstHabit: Bool = false
     ) -> Bool {
-        let hasDifficulty = isFirstHabit ? false : difficultyRank != nil
+        let hasDifficulty = isFirstHabit ? false : difficultyTier != nil
 
         return !name.isEmpty
             || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -360,42 +338,15 @@ struct HabitFormView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    static func isFirstHabit(mode: HabitFormMode, activeHabitsCount: Int) -> Bool {
-        mode.isNew && activeHabitsCount == 0
-    }
-
-    static func defaultDifficultyRankForFirstHabit() -> String {
-        DifficultyRanker.makeSession(habitName: "", rankedHabits: []).generateRank()
-    }
-
-    static func hasComparableHabits(rankedHabitCount: Int, excludeHabitId: String?) -> Bool {
-        rankedHabitCount > 0
-    }
-
-    static func shouldOpenDifficultyRanker(hasComparableHabits: Bool) -> Bool {
-        hasComparableHabits
-    }
-
-    static func difficultyRankAfterSelection(
-        currentDifficultyRank: String?,
-        hasComparableHabits: Bool
-    ) -> String? {
-        guard !hasComparableHabits, currentDifficultyRank == nil else {
-            return currentDifficultyRank
-        }
-
-        return defaultDifficultyRankForFirstHabit()
-    }
-
     static func buildPillData(
         hasTagsApplied: Bool,
-        difficultyRank: String?,
+        difficultyTier: HabitDifficultyTier?,
         frequency: Double?
     ) -> [PillItem] {
         let frequencyLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
         return [
             PillItem(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
-            PillItem(id: "difficulty", label: "Difficulty", icon: "chart.bar", isSet: difficultyRank != nil),
+            PillItem(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
             PillItem(id: "frequency", label: frequencyLabel, icon: "clock", isSet: frequency != nil),
         ]
     }
@@ -403,22 +354,13 @@ struct HabitFormView: View {
     private func buildPills() -> [PillItem] {
         var pills = Self.buildPillData(
             hasTagsApplied: !habitTags.isEmpty,
-            difficultyRank: difficultyRank,
+            difficultyTier: difficultyTier,
             frequency: frequency
         )
 
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
-            "difficulty": {
-                if Self.shouldOpenDifficultyRanker(hasComparableHabits: hasComparableHabits) {
-                    showingDifficulty = true
-                } else {
-                    difficultyRank = Self.difficultyRankAfterSelection(
-                        currentDifficultyRank: difficultyRank,
-                        hasComparableHabits: hasComparableHabits
-                    )
-                }
-            },
+            "difficulty": { showingDifficulty = true },
             "frequency": { showingFrequency = true },
         ]
 
@@ -428,7 +370,7 @@ struct HabitFormView: View {
             if !canTrade {
                 let shouldPulse =
                     (pills[index].id == "frequency" && frequency == nil) ||
-                    (pills[index].id == "difficulty" && difficultyRank == nil)
+                    (pills[index].id == "difficulty" && difficultyTier == nil)
                 pills[index].animating = shouldPulse
             }
         }
@@ -444,20 +386,14 @@ struct HabitFormView: View {
             name = prefill.name
             description = prefill.description
             frequency = prefill.frequency
-            difficultyRank = prefill.difficultyRank
+            difficultyTier = prefill.difficultyTier
             habitId = prefill.habitId
         } else if case .change(let habit) = mode {
             name = habit.name
             description = habit.description
             frequency = habit.frequency
-            difficultyRank = habit.difficultyRank
+            difficultyTier = habit.difficultyTier
             habitId = habit.id
-        }
-
-        // Behaviour: the very first habit gets a midpoint difficulty automatically
-        // because there is nothing else to compare it against yet.
-        if isFirstHabit && difficultyRank == nil {
-            difficultyRank = Self.defaultDifficultyRankForFirstHabit()
         }
 
         hasAppliedInitialLoad = true
@@ -469,14 +405,7 @@ struct HabitFormView: View {
             case .frequency:
                 showingFrequency = true
             case .difficulty:
-                if Self.shouldOpenDifficultyRanker(hasComparableHabits: hasComparableHabits) {
-                    showingDifficulty = true
-                } else {
-                    difficultyRank = Self.difficultyRankAfterSelection(
-                        currentDifficultyRank: difficultyRank,
-                        hasComparableHabits: hasComparableHabits
-                    )
-                }
+                showingDifficulty = true
             case .tags:
                 showingTags = true
             }
@@ -496,7 +425,7 @@ struct HabitFormView: View {
                 name: name,
                 description: description,
                 frequency: frequency,
-                difficultyRank: difficultyRank
+                difficultyTier: difficultyTier
             )
         }
 
@@ -505,7 +434,7 @@ struct HabitFormView: View {
             name: Self.nameForAutoSave(name),
             description: description,
             frequency: .some(frequency),
-            difficultyRank: .some(difficultyRank)
+            difficultyTier: .some(difficultyTier)
         )
 
         return draftHabitForTrade

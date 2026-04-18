@@ -54,6 +54,26 @@ async fn test_create_habit_with_optional_fields() {
 }
 
 #[tokio::test]
+async fn test_create_habit_with_difficulty_tier() {
+    let email = generate_email_from_fn!(test_create_habit_with_difficulty_tier);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "name": "Cold Shower",
+        "description": "A harder habit",
+        "difficultyTier": "hard"
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
+
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(json.get("difficultyTier").unwrap(), "hard");
+}
+
+#[tokio::test]
 async fn test_create_habit_validation_name_too_long() {
     let email = generate_email_from_fn!(test_create_habit_validation_name_too_long);
     let password = "password123";

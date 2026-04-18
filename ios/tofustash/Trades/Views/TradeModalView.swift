@@ -8,8 +8,8 @@ import SwiftUI
 // Each successive claim changes the price because the frequency multiplier F
 // adjusts based on completionsInPeriod, so the total is NOT simply price * qty.
 //
-// After claiming, the UI is replaced with a celebration animation (like the
-// checkmark in DifficultyRankerView), then the modal dismisses.
+// After claiming, the UI is replaced with a celebration animation, then the
+// modal dismisses.
 struct TradeModalView: View {
     let habit: Habit
 
@@ -33,9 +33,6 @@ struct TradeModalView: View {
     @State private var claimed = false
     @State private var claimedAmount = 0
 
-    // The current time bucket for price calculations.
-    @State private var timeBucket = RewardCalculation.getCurrentTimeBucket()
-
     // How many times this habit was completed in the last 7 days.
     // Used as the base for multi-purchase price calculation.
     private var currentCompletions: Int {
@@ -51,7 +48,6 @@ struct TradeModalView: View {
             allHabits: habitStore.activeHabits,
             currentCompletions: currentCompletions,
             quantity: quantity,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -67,8 +63,8 @@ struct TradeModalView: View {
 
                 if claimed {
                     // Celebration — replaces all form UI, centered in the modal.
-                    // Uses the same spring pop-in pattern as DifficultyRankerView's
-                    // checkmark animation.
+                    // The amount springs in so the user gets clear feedback that
+                    // the claim succeeded before the sheet dismisses itself.
                     ClaimCelebrationView(amount: claimedAmount) {
                         dismiss()
                         onClaim?()
@@ -94,9 +90,6 @@ struct TradeModalView: View {
         .presentationBackground(.thinMaterial)
         .presentationContentInteraction(.scrolls)
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .task {
-            timeBucket = RewardCalculation.getCurrentTimeBucket()
-        }
     }
 
     private var formContent: some View {
@@ -174,7 +167,6 @@ struct TradeModalView: View {
                 habit: habit,
                 allHabits: habitStore.activeHabits,
                 completionsInPeriod: completions,
-                timeBucket: timeBucket,
                 generalDifficulty: userSettingsStore.generalDifficulty
             )
             tradeStore.addHabitTrade(habitId: habit.id, amount: price)
@@ -192,8 +184,7 @@ struct TradeModalView: View {
 }
 
 // Celebration view shown after claiming — replaces all modal content.
-// Mimics the DifficultyRankerView's checkmark pattern: a centered icon
-// that pops in with a spring animation, then auto-dismisses.
+// A centered amount springs in, then auto-dismisses.
 struct ClaimCelebrationView: View {
     let amount: Int
     let onComplete: () -> Void
@@ -204,7 +195,6 @@ struct ClaimCelebrationView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // The amount text — pops in like the difficulty ranker checkmark
             HStack(spacing: 4) {
                 Text("+\(amount)")
                     .font(.system(size: 48, weight: .bold, design: .rounded))
@@ -212,18 +202,12 @@ struct ClaimCelebrationView: View {
                     .font(.title)
             }
             .foregroundStyle(.green)
-            // Starts at scale 0 and springs to full size — like the
-            // checkmark.circle.fill in DifficultyRankerView.
             .scaleEffect(showAnimation ? 1.0 : 0.0)
             .animation(.spring(duration: 0.4, bounce: 0.5), value: showAnimation)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             showAnimation = true
-            // Auto-dismiss after a short delay — matches DifficultyRankerView's
-            // 1-second auto-dismiss pattern. The dismiss starts while the
-            // celebration is still visible, so the modal slides away with the
-            // celebration showing (concurrent animations).
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 onComplete()
             }

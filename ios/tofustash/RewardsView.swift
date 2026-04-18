@@ -18,7 +18,6 @@ struct RewardsView: View {
     @State private var purchasingReward: Reward? = nil
     @State private var rewardToDelete: Reward? = nil
     @State private var toastManager = ToastManager()
-    @State private var timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
 
     var body: some View {
         NavigationStack {
@@ -95,13 +94,6 @@ struct RewardsView: View {
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
-            .task {
-                while !Task.isCancelled {
-                    let nanos = RewardPriceCalculation.nanosUntilNextBucket()
-                    try? await Task.sleep(nanoseconds: nanos)
-                    timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
-                }
-            }
         }
     }
 
@@ -128,7 +120,6 @@ struct RewardsView: View {
             reward: reward,
             allRewards: rewardStore.activeRewards,
             purchasesInPeriod: purchases,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -161,9 +152,9 @@ struct RewardsView: View {
                     )
 
                     EntityListMetaPill(
-                        text: "Damage",
-                        isSet: reward.damageRank != nil,
-                        animating: reward.damageRank == nil
+                        text: reward.damageTier?.displayName ?? "Damage",
+                        isSet: reward.damageTier != nil,
+                        animating: reward.damageTier == nil
                     )
                 }
 

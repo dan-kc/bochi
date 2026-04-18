@@ -19,9 +19,9 @@ final class RewardStore {
 
     var rewardsSortedByDamage: [Reward] {
         activeRewards.sorted { lhs, rhs in
-            switch (lhs.damageRank, rhs.damageRank) {
+            switch (lhs.damageTier, rhs.damageTier) {
             case let (l?, r?):
-                return l > r
+                return l.sortOrder > r.sortOrder
             case (_?, nil):
                 return true
             case (nil, _?):
@@ -69,7 +69,7 @@ final class RewardStore {
         name: String,
         description: String = "",
         maxFrequency: Double? = nil,
-        damageRank: String? = nil,
+        damageTier: RewardDamageTier? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -89,7 +89,7 @@ final class RewardStore {
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt,
             maxFrequency: maxFrequency,
-            damageRank: damageRank
+            damageTier: damageTier
         )
 
         mutateRewards {
@@ -109,7 +109,7 @@ final class RewardStore {
         name: String? = nil,
         description: String? = nil,
         maxFrequency: Double?? = nil,
-        damageRank: String?? = nil,
+        damageTier: RewardDamageTier?? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
@@ -140,7 +140,7 @@ final class RewardStore {
             updatedAt: updatedAt,
             deletedAt: deletedAt ?? existing.deletedAt,
             maxFrequency: maxFrequency ?? existing.maxFrequency,
-            damageRank: damageRank ?? existing.damageRank
+            damageTier: damageTier ?? existing.damageTier
         )
 
         mutateRewards { $0[index] = updated }
@@ -164,7 +164,7 @@ final class RewardStore {
             updatedAt: deletedAt,
             deletedAt: deletedAt,
             maxFrequency: existing.maxFrequency,
-            damageRank: existing.damageRank
+            damageTier: existing.damageTier
         )
 
         mutateRewards { $0[index] = deleted }

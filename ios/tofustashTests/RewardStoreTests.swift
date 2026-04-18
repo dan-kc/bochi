@@ -12,7 +12,7 @@ struct RewardStoreTests {
     @Test("addReward trims the saved name")
     func addRewardTrimsName() {
         let sut = makeSUT()
-        let reward = sut.addReward(name: "  Soda  ", maxFrequency: 1.0, damageRank: "m")
+        let reward = sut.addReward(name: "  Soda  ", maxFrequency: 1.0, damageTier: .medium)
 
         #expect(reward?.name == "Soda")
         #expect(sut.activeRewards.count == 1)
@@ -22,17 +22,17 @@ struct RewardStoreTests {
     @Test("updateReward can clear optional fields")
     func updateRewardCanClearFields() {
         let sut = makeSUT()
-        let reward = sut.addReward(name: "Dessert", maxFrequency: 1.0, damageRank: "m")!
+        let reward = sut.addReward(name: "Dessert", maxFrequency: 1.0, damageTier: .medium)!
 
         sut.updateReward(
             id: reward.id,
             maxFrequency: .some(nil),
-            damageRank: .some(nil)
+            damageTier: .some(nil)
         )
 
         let updated = sut.activeRewards[0]
         #expect(updated.maxFrequency == nil)
-        #expect(updated.damageRank == nil)
+        #expect(updated.damageTier == nil)
     }
 
     // Behaviour: Deleting a reward removes it from the active list and from future damage comparisons.

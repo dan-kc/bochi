@@ -33,7 +33,7 @@ struct SyncHabitRecord: Codable {
     let updatedAt: String
     let deletedAt: String?
     let minDailyFrequency: Double?
-    let difficultyRank: String?
+    let difficultyTier: HabitDifficultyTier?
 
     func toModel() -> Habit? {
         guard
@@ -51,7 +51,7 @@ struct SyncHabitRecord: Codable {
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
             frequency: minDailyFrequency,
-            difficultyRank: difficultyRank
+            difficultyTier: difficultyTier
         )
     }
 
@@ -64,7 +64,7 @@ struct SyncHabitRecord: Codable {
             updatedAt: AppDateCoding.backendTimestamp(from: habit.updatedAt),
             deletedAt: habit.deletedAt.map(AppDateCoding.backendTimestamp),
             minDailyFrequency: habit.frequency,
-            difficultyRank: habit.difficultyRank
+            difficultyTier: habit.difficultyTier
         )
     }
 }
@@ -188,7 +188,7 @@ struct SyncRewardRecord: Codable {
     let updatedAt: String
     let deletedAt: String?
     let maxDailyFrequency: Double?
-    let damageRank: String?
+    let damageTier: RewardDamageTier?
 
     func toModel() -> Reward? {
         guard
@@ -206,7 +206,7 @@ struct SyncRewardRecord: Codable {
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
             maxFrequency: maxDailyFrequency,
-            damageRank: damageRank
+            damageTier: damageTier
         )
     }
 
@@ -219,7 +219,7 @@ struct SyncRewardRecord: Codable {
             updatedAt: AppDateCoding.backendTimestamp(from: reward.updatedAt),
             deletedAt: reward.deletedAt.map(AppDateCoding.backendTimestamp),
             maxDailyFrequency: reward.maxFrequency,
-            damageRank: reward.damageRank
+            damageTier: reward.damageTier
         )
     }
 }

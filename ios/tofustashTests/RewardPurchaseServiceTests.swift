@@ -5,7 +5,7 @@ import Testing
 struct RewardPurchaseServiceTests {
     private func makeRewardStore() -> RewardStore {
         let store = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
-        _ = store.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 1.0, damageRank: "m")
+        _ = store.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 1.0, damageTier: .medium)
         return store
     }
 
@@ -24,7 +24,6 @@ struct RewardPurchaseServiceTests {
             tradeStore: tradeStore,
             balanceStore: balanceStore,
             generalDifficulty: 5,
-            timeBucket: 12345
         )
 
         #expect(spent > 0)
@@ -39,7 +38,8 @@ struct RewardPurchaseServiceTests {
     // so future prices still reflect each individual buy.
     @Test("purchase with quantity records multiple reward trades")
     func purchaseQuantityCreatesMultipleTrades() throws {
-        let rewardStore = makeRewardStore()
+        let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
+        _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageTier: .medium)
         let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
         let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
         balanceStore.addTofu(10_000)
@@ -51,8 +51,7 @@ struct RewardPurchaseServiceTests {
             tradeStore: tradeStore,
             balanceStore: balanceStore,
             generalDifficulty: 5,
-            quantity: 3,
-            timeBucket: 12345
+            quantity: 3
         )
 
         #expect(spent > 0)
@@ -66,7 +65,7 @@ struct RewardPurchaseServiceTests {
     @Test("second same-day purchase costs more for a 3 per day reward")
     func secondPurchaseCostsMoreAfterFirst() throws {
         let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
-        _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageRank: "m")
+        _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageTier: .medium)
 
         let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
         let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
@@ -79,7 +78,6 @@ struct RewardPurchaseServiceTests {
             tradeStore: tradeStore,
             balanceStore: balanceStore,
             generalDifficulty: 5,
-            timeBucket: 12345
         )
         let secondSpent = try RewardPurchaseService.purchase(
             reward: reward,
@@ -87,7 +85,6 @@ struct RewardPurchaseServiceTests {
             tradeStore: tradeStore,
             balanceStore: balanceStore,
             generalDifficulty: 5,
-            timeBucket: 12345
         )
 
         #expect(secondSpent > firstSpent)
@@ -107,8 +104,7 @@ struct RewardPurchaseServiceTests {
                 rewardStore: rewardStore,
                 tradeStore: tradeStore,
                 balanceStore: balanceStore,
-                generalDifficulty: 5,
-                timeBucket: 12345
+                generalDifficulty: 5
             )
             Issue.record("Expected insufficient balance error")
         } catch let error as RewardPurchaseError {

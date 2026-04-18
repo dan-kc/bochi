@@ -20,7 +20,7 @@ struct RewardFormSnapshot {
     let name: String
     let description: String
     let maxFrequency: Double?
-    let damageRank: String?
+    let damageTier: RewardDamageTier?
     let rewardId: String
 }
 
@@ -40,7 +40,7 @@ struct RewardFormView: View {
     @State private var name = ""
     @State private var description = ""
     @State private var maxFrequency: Double? = nil
-    @State private var damageRank: String? = nil
+    @State private var damageTier: RewardDamageTier? = nil
     @State private var rewardId: String = UUID().uuidString
 
     @State private var showingFrequency = false
@@ -52,7 +52,6 @@ struct RewardFormView: View {
     @State private var hasInitialized = false
     @State private var hasAppliedInitialLoad = false
     @State private var didPersist = false
-    @State private var timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
     @FocusState private var focusedField: FieldFocus?
 
     enum FieldFocus: Hashable {
@@ -86,19 +85,8 @@ struct RewardFormView: View {
         mode.isNew
     }
 
-    private var isFirstReward: Bool {
-        Self.isFirstReward(mode: mode, activeRewardsCount: rewardStore.activeRewards.count)
-    }
-
-    private var hasComparableRewards: Bool {
-        let rankedCount = rewardStore.activeRewards
-            .filter { $0.damageRank != nil && $0.id != rewardId }
-            .count
-        return rankedCount > 0
-    }
-
     private var canPurchase: Bool {
-        maxFrequency != nil && damageRank != nil
+        maxFrequency != nil && damageTier != nil
     }
 
     private var hasContent: Bool {
@@ -106,9 +94,9 @@ struct RewardFormView: View {
             name: trimmedName,
             description: description,
             maxFrequency: maxFrequency,
-            damageRank: damageRank,
+            damageTier: damageTier,
             tagCount: rewardTags.count,
-            isFirstReward: isFirstReward
+            isFirstReward: false
         )
     }
 
@@ -129,7 +117,7 @@ struct RewardFormView: View {
             updatedAt: existingReward.updatedAt,
             deletedAt: existingReward.deletedAt,
             maxFrequency: maxFrequency,
-            damageRank: damageRank
+            damageTier: damageTier
         )
     }
 
@@ -147,7 +135,6 @@ struct RewardFormView: View {
             reward: reward,
             allRewards: allRewards,
             purchasesInPeriod: purchases,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -235,11 +222,11 @@ struct RewardFormView: View {
             RewardFrequencyModal(maxFrequency: $maxFrequency)
         }
         .sheet(isPresented: $showingDamage) {
-            DamageRankerView(
-                rewardName: trimmedName.isEmpty ? "New Reward" : trimmedName,
-                damageRank: $damageRank,
-                currentDamageRank: damageRank,
-                excludeRewardId: mode.isNew ? nil : rewardId
+            TierSelectionSheet(
+                title: "Set Damage",
+                currentSelection: damageTier,
+                onSave: { damageTier = $0 },
+                onUnset: damageTier != nil ? { damageTier = nil } : nil
             )
         }
         .sheet(isPresented: $showingTags) {
@@ -264,13 +251,6 @@ struct RewardFormView: View {
         .task {
             initializeIfNeeded()
         }
-        .task {
-            while !Task.isCancelled {
-                let nanos = RewardPriceCalculation.nanosUntilNextBucket()
-                try? await Task.sleep(nanoseconds: nanos)
-                timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
-            }
-        }
         .onChange(of: name) { _, _ in
             autoSaveIfNeeded()
         }
@@ -280,7 +260,7 @@ struct RewardFormView: View {
         .onChange(of: maxFrequency) { _, _ in
             autoSaveIfNeeded()
         }
-        .onChange(of: damageRank) { _, _ in
+        .onChange(of: damageTier) { _, _ in
             autoSaveIfNeeded()
         }
         .onDisappear {
@@ -289,7 +269,7 @@ struct RewardFormView: View {
                     name: name,
                     description: description,
                     maxFrequency: maxFrequency,
-                    damageRank: damageRank,
+                    damageTier: damageTier,
                     rewardId: rewardId
                 ))
             }
@@ -323,11 +303,11 @@ struct RewardFormView: View {
         name: String,
         description: String,
         maxFrequency: Double?,
-        damageRank: String?,
+        damageTier: RewardDamageTier?,
         tagCount: Int,
         isFirstReward: Bool = false
     ) -> Bool {
-        let hasDamage = isFirstReward ? false : damageRank != nil
+        let hasDamage = isFirstReward ? false : damageTier != nil
 
         return !name.isEmpty
             || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -340,38 +320,15 @@ struct RewardFormView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    static func isFirstReward(mode: RewardFormMode, activeRewardsCount: Int) -> Bool {
-        mode.isNew && activeRewardsCount == 0
-    }
-
-    static func defaultDamageRankForFirstReward() -> String {
-        DamageRanker.makeSession(rewardName: "", rankedRewards: []).generateRank()
-    }
-
-    static func shouldOpenDamageRanker(hasComparableRewards: Bool) -> Bool {
-        hasComparableRewards
-    }
-
-    static func damageRankAfterSelection(
-        currentDamageRank: String?,
-        hasComparableRewards: Bool
-    ) -> String? {
-        guard !hasComparableRewards, currentDamageRank == nil else {
-            return currentDamageRank
-        }
-
-        return defaultDamageRankForFirstReward()
-    }
-
     static func buildPillData(
         hasTagsApplied: Bool,
-        damageRank: String?,
+        damageTier: RewardDamageTier?,
         maxFrequency: Double?
     ) -> [PillItem] {
         let frequencyLabel = FrequencyConversion.formatSummary(maxFrequency).map { "Max \($0)" } ?? "Max Frequency"
         return [
             PillItem(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
-            PillItem(id: "damage", label: "Damage", icon: "flame", isSet: damageRank != nil),
+            PillItem(id: "damage", label: damageTier?.displayName ?? "Damage", icon: "flame", isSet: damageTier != nil),
             PillItem(id: "frequency", label: frequencyLabel, icon: "clock", isSet: maxFrequency != nil),
         ]
     }
@@ -379,22 +336,13 @@ struct RewardFormView: View {
     private func buildPills() -> [PillItem] {
         var pills = Self.buildPillData(
             hasTagsApplied: !rewardTags.isEmpty,
-            damageRank: damageRank,
+            damageTier: damageTier,
             maxFrequency: maxFrequency
         )
 
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
-            "damage": {
-                if Self.shouldOpenDamageRanker(hasComparableRewards: hasComparableRewards) {
-                    showingDamage = true
-                } else {
-                    damageRank = Self.damageRankAfterSelection(
-                        currentDamageRank: damageRank,
-                        hasComparableRewards: hasComparableRewards
-                    )
-                }
-            },
+            "damage": { showingDamage = true },
             "frequency": { showingFrequency = true },
         ]
 
@@ -402,7 +350,7 @@ struct RewardFormView: View {
             pills[index].action = actions[pills[index].id]
             let shouldPulse =
                 (pills[index].id == "frequency" && maxFrequency == nil) ||
-                (pills[index].id == "damage" && damageRank == nil)
+                (pills[index].id == "damage" && damageTier == nil)
             pills[index].animating = shouldPulse
         }
 
@@ -417,20 +365,14 @@ struct RewardFormView: View {
             name = prefill.name
             description = prefill.description
             maxFrequency = prefill.maxFrequency
-            damageRank = prefill.damageRank
+            damageTier = prefill.damageTier
             rewardId = prefill.rewardId
         } else if case .change(let reward) = mode {
             name = reward.name
             description = reward.description
             maxFrequency = reward.maxFrequency
-            damageRank = reward.damageRank
+            damageTier = reward.damageTier
             rewardId = reward.id
-        }
-
-        // Behaviour: the very first reward gets the midpoint damage rank because
-        // there is nothing else to compare it against yet.
-        if isFirstReward && damageRank == nil {
-            damageRank = Self.defaultDamageRankForFirstReward()
         }
 
         hasAppliedInitialLoad = true
@@ -442,14 +384,7 @@ struct RewardFormView: View {
             case .maxFrequency:
                 showingFrequency = true
             case .damage:
-                if Self.shouldOpenDamageRanker(hasComparableRewards: hasComparableRewards) {
-                    showingDamage = true
-                } else {
-                    damageRank = Self.damageRankAfterSelection(
-                        currentDamageRank: damageRank,
-                        hasComparableRewards: hasComparableRewards
-                    )
-                }
+                showingDamage = true
             case .tags:
                 showingTags = true
             }
@@ -469,7 +404,7 @@ struct RewardFormView: View {
                 name: name,
                 description: description,
                 maxFrequency: maxFrequency,
-                damageRank: damageRank
+                damageTier: damageTier
             )
         }
 
@@ -478,7 +413,7 @@ struct RewardFormView: View {
             name: Self.nameForAutoSave(name),
             description: description,
             maxFrequency: .some(maxFrequency),
-            damageRank: .some(damageRank)
+            damageTier: .some(damageTier)
         )
 
         return draftRewardForPurchase

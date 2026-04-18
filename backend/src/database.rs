@@ -1,7 +1,34 @@
 use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres, Transaction};
 use url::form_urlencoded;
 use uuid::Uuid;
+
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type,
+)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "habit_difficulty_tier", rename_all = "snake_case")]
+pub enum HabitDifficultyTier {
+    Trivial,
+    Light,
+    Medium,
+    Hard,
+    Extreme,
+}
+
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type,
+)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "reward_damage_tier", rename_all = "snake_case")]
+pub enum RewardDamageTier {
+    Harmless,
+    Light,
+    Medium,
+    Heavy,
+    Extreme,
+}
 
 #[derive(Clone)]
 pub struct Database {
@@ -58,13 +85,13 @@ impl Database {
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO habits
-            (user_id, name, description, min_daily_frequency, difficulty_rank) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_rank",
+            (user_id, name, description, min_daily_frequency, difficulty_tier) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier",
         )
         .bind(create_habit_options.user_id)
         .bind(create_habit_options.name)
         .bind(create_habit_options.description)
         .bind(create_habit_options.min_daily_frequency)
-        .bind(create_habit_options.difficulty_rank)
+        .bind(create_habit_options.difficulty_tier)
         .fetch_one(&self.pool)
         .await
     }
@@ -75,13 +102,13 @@ impl Database {
     ) -> Result<RewardRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO rewards
-            (user_id, name, description, max_daily_frequency, damage_rank) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_rank",
+            (user_id, name, description, max_daily_frequency, damage_tier) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier",
         )
         .bind(create_reward_options.user_id)
         .bind(create_reward_options.name)
         .bind(create_reward_options.description)
         .bind(create_reward_options.max_daily_frequency)
-        .bind(create_reward_options.damage_rank)
+        .bind(create_reward_options.damage_tier)
         .fetch_one(&self.pool)
         .await
     }
@@ -105,7 +132,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_rank AS habit_difficulty_rank
+                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_tier AS habit_difficulty_tier
             FROM new_trade nt
             JOIN habits h ON nt.habit_id = h.id",
         )
@@ -130,7 +157,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                r.name AS reward_name, r.created_at AS reward_created_at, r.updated_at AS reward_updated_at, r.deleted_at AS reward_deleted_at, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency
+                r.name AS reward_name, r.created_at AS reward_created_at, r.updated_at AS reward_updated_at, r.deleted_at AS reward_deleted_at, r.description AS reward_description, r.max_daily_frequency as reward_max_daily_frequency, r.damage_tier AS reward_damage_tier
             FROM new_trade nt
             JOIN rewards r ON nt.reward_id = r.id",
         )
@@ -288,7 +315,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_rank
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier
                      FROM habits
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -300,7 +327,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_rank
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier
                      FROM habits
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -536,7 +563,7 @@ impl Database {
         habit: &UpsertHabitOptions,
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_rank)
+            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_tier)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
                 user_id = CASE
@@ -559,11 +586,11 @@ impl Database {
                     WHEN habits.user_id = $2 THEN EXCLUDED.min_daily_frequency
                     ELSE habits.min_daily_frequency
                 END,
-                difficulty_rank = CASE
-                    WHEN habits.user_id = $2 THEN EXCLUDED.difficulty_rank
-                    ELSE habits.difficulty_rank
+                difficulty_tier = CASE
+                    WHEN habits.user_id = $2 THEN EXCLUDED.difficulty_tier
+                    ELSE habits.difficulty_tier
                 END
-             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_rank",
+             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier",
         )
         .bind(habit.id)
         .bind(user_id)
@@ -572,7 +599,7 @@ impl Database {
         .bind(habit.created_at)
         .bind(habit.deleted_at)
         .bind(habit.min_daily_frequency)
-        .bind(&habit.difficulty_rank)
+        .bind(habit.difficulty_tier)
         .fetch_one(&mut **tx)
         .await
     }
@@ -742,7 +769,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_rank
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier
                      FROM rewards
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -754,7 +781,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_rank
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier
                      FROM rewards
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -808,15 +835,15 @@ impl Database {
         reward: &UpsertRewardOptions,
     ) -> Result<RewardRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO rewards (id, user_id, name, description, created_at, deleted_at, max_daily_frequency, damage_rank)
+            "INSERT INTO rewards (id, user_id, name, description, created_at, deleted_at, max_daily_frequency, damage_tier)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
                 name = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.name ELSE rewards.name END,
                 description = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.description ELSE rewards.description END,
                 deleted_at = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.deleted_at ELSE rewards.deleted_at END,
                 max_daily_frequency = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.max_daily_frequency ELSE rewards.max_daily_frequency END,
-                damage_rank = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.damage_rank ELSE rewards.damage_rank END
-             RETURNING id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_rank",
+                damage_tier = CASE WHEN rewards.user_id = $2 THEN EXCLUDED.damage_tier ELSE rewards.damage_tier END
+             RETURNING id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier",
         )
         .bind(reward.id)
         .bind(user_id)
@@ -825,7 +852,7 @@ impl Database {
         .bind(reward.created_at)
         .bind(reward.deleted_at)
         .bind(reward.max_daily_frequency.map(|f| f as f32))
-        .bind(&reward.damage_rank)
+        .bind(reward.damage_tier)
         .fetch_one(&mut **tx)
         .await
     }
@@ -883,7 +910,7 @@ pub struct CreateHabitOptions {
     pub name: String,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 pub struct CreateTradeWithHabitOptions {
@@ -921,7 +948,7 @@ pub struct CreateRewardOptions {
     pub name: String,
     pub description: String,
     pub max_daily_frequency: Option<f32>,
-    pub damage_rank: Option<String>,
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 pub struct UpsertHabitOptions {
@@ -931,7 +958,7 @@ pub struct UpsertHabitOptions {
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 pub struct UpsertTradeOptions {
@@ -965,7 +992,7 @@ pub struct UpsertRewardOptions {
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f64>,
-    pub damage_rank: Option<String>,
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 pub struct UpsertRewardTagOptions {
@@ -1030,7 +1057,7 @@ pub struct HabitRow {
     pub deleted_at: Option<NaiveDateTime>,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1042,7 +1069,7 @@ pub struct RewardRow {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f32>,
-    pub damage_rank: Option<String>,
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1068,7 +1095,7 @@ pub struct TradeWithHabitRow {
     pub habit_deleted_at: Option<NaiveDateTime>,
     pub habit_description: String,
     pub habit_min_daily_frequency: Option<f64>,
-    pub habit_difficulty_rank: Option<String>,
+    pub habit_difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1085,6 +1112,7 @@ pub struct TradeWithRewardRow {
     pub reward_deleted_at: Option<NaiveDateTime>,
     pub reward_description: String,
     pub reward_max_daily_frequency: Option<f32>,
+    pub reward_damage_tier: Option<RewardDamageTier>,
 }
 
 #[derive(sqlx::FromRow)]

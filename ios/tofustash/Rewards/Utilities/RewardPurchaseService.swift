@@ -22,10 +22,8 @@ enum RewardPurchaseService {
         tradeStore: TradeStore,
         balanceStore: BalanceStore,
         generalDifficulty: Double,
-        quantity: Int = 1,
-        timeBucket: Int? = nil
+        quantity: Int = 1
     ) throws -> Int {
-        let resolvedTimeBucket = timeBucket ?? RewardPriceCalculation.getCurrentTimeBucket()
         let purchasesInPeriod = tradeStore.rewardPurchasesInPeriod(
             rewardId: reward.id,
             days: RewardPriceCalculation.pricingWindowDays
@@ -35,7 +33,6 @@ enum RewardPurchaseService {
             allRewards: rewardStore.activeRewards,
             currentPurchases: purchasesInPeriod,
             quantity: quantity,
-            timeBucket: resolvedTimeBucket,
             generalDifficulty: generalDifficulty
         )
 
@@ -48,7 +45,6 @@ enum RewardPurchaseService {
                 reward: reward,
                 allRewards: rewardStore.activeRewards,
                 purchasesInPeriod: purchasesInPeriod + index,
-                timeBucket: resolvedTimeBucket,
                 generalDifficulty: generalDifficulty
             )
             tradeStore.addRewardPurchase(rewardId: reward.id, amount: -price)

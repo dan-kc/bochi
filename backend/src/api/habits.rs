@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    database::CreateHabitOptions,
+    database::{CreateHabitOptions, HabitDifficultyTier},
     router::{App, AuthenticatedUser},
 };
 
@@ -16,7 +16,7 @@ pub struct CreateHabitRequest {
     pub name: String,
     pub description: String,
     pub min_daily_frequency: Option<f64>,
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 #[derive(Serialize)]
@@ -29,7 +29,7 @@ pub struct HabitResponse {
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
 }
 
 pub async fn create_habit(
@@ -73,7 +73,7 @@ pub async fn create_habit(
         name: input.name,
         description: input.description,
         min_daily_frequency: input.min_daily_frequency,
-        difficulty_rank: input.difficulty_rank,
+        difficulty_tier: input.difficulty_tier,
     };
 
     let habit_row = app.database.create_habit(opts).await.map_err(|e| {
@@ -91,7 +91,7 @@ pub async fn create_habit(
             updated_at: habit_row.updated_at,
             deleted_at: habit_row.deleted_at,
             min_daily_frequency: habit_row.min_daily_frequency,
-            difficulty_rank: habit_row.difficulty_rank,
+            difficulty_tier: habit_row.difficulty_tier,
         }),
     ))
 }

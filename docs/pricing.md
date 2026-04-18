@@ -11,42 +11,76 @@ There are two related calculations:
 
 Both share the same outer form:
 
-`value = round(100 * G * D * F * R)`
+`value = round(100 * G * T * F)`
 
 where:
 
 - `G` is the user-configurable general difficulty
-- `D` is the rank-based multiplier
+- `T` is the fixed tier multiplier
 - `F` is the frequency multiplier
-- `R` is a deterministic pseudo-random multiplier
+
+There is no random pricing component anymore.
 
 ## Design Goals
 
+- The user should pick from a small stable set of tiers instead of maintaining relative rankings.
+- Harder habits should always pay more than easier ones when frequency is equal.
+- More damaging rewards should always cost more than less damaging ones when frequency is equal.
 - The displayed reward price should react quickly enough to match the cap the user entered.
-- The buy modal should use the same rising-price logic as repeated single purchases.
-- Multi-buy totals should reflect each incremental purchase, not `currentPrice * quantity`.
-- The same pricing rule should be reused everywhere the iOS app shows or spends a reward price.
+- Multi-claim and multi-buy totals should reflect each incremental action, not `currentPrice * quantity`.
+- The same pricing rule should be reused everywhere the iOS app previews, displays, and persists prices.
+
+## Tier Model
+
+Habit difficulty is stored as:
+
+- `trivial`
+- `light`
+- `medium`
+- `hard`
+- `extreme`
+
+Reward damage is stored as:
+
+- `harmless`
+- `light`
+- `medium`
+- `heavy`
+- `extreme`
+
+These are absolute categories, not relative positions. Adding a new habit or
+reward does not force the user to re-rank existing items.
+
+### Habit Difficulty Multipliers
+
+- `trivial = 0.8`
+- `light = 0.9`
+- `medium = 1.0`
+- `hard = 1.1`
+- `extreme = 1.25`
+
+### Reward Damage Multipliers
+
+- `harmless = 0.8`
+- `light = 0.9`
+- `medium = 1.0`
+- `heavy = 1.1`
+- `extreme = 1.25`
 
 ## 1. Habit Completion Reward
 
 Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
 
-`Reward = round(100 * G * D_h * F_h * R_h)`
+`Reward = round(100 * G * T_h * F_h)`
 
-### Difficulty Multiplier
+### Tier Multiplier
 
-Let:
+`T_h` comes directly from the selected habit difficulty tier.
 
-- `N_h` = number of ranked, non-deleted habits
-- `rank(h)` in `{1, ..., N_h}` = lexicographic position of `difficultyRank`
+If the habit has no tier yet, iOS calculation code falls back to `medium = 1.0`.
 
-Then:
-
-`D_h = (N_h - rank(h) + 1) / (N_h + 1)`
-
-If the habit is unranked, or no ranked habits exist, the fallback is:
-
-`D_h = 0.5`
+This fallback exists so helper functions remain deterministic, but the app
+still blocks trading until the user has set both frequency and difficulty.
 
 ### Frequency Multiplier
 
@@ -82,36 +116,29 @@ Behaviourally:
 - `r_h = 1  =>  F_h = 1`
 - `r_h > 1  =>  F_h < 1`
 
-### Random Multiplier
+### Habit Setup Gating
 
-For time bucket \(t_h\):
+The habit claim flow is blocked until both of these are set:
 
-`R_h = 0.993 + 0.014 * H(habitId, t_h)`
+- `frequency`
+- `difficultyTier`
 
-where `H` is the deterministic hash output in `[0, 1)`.
-
-The habit bucket changes every 20 seconds.
+The UI explains what is missing using `RewardCalculation.missingTradeProperties`.
 
 ## 2. Reward Purchase Cost
 
 Implemented in `ios/tofustash/Rewards/Utilities/RewardPriceCalculation.swift`.
 
-`Cost = round(100 * G * D_r * F_r * R_r)`
+`Cost = round(100 * G * T_r * F_r)`
 
-### Damage Multiplier
+### Tier Multiplier
 
-Let:
+`T_r` comes directly from the selected reward damage tier.
 
-- `N_r` = number of ranked, non-deleted rewards
-- `rank(r)` in `{1, ..., N_r}` = lexicographic position of `damageRank`
+If the reward has no tier yet, iOS calculation code falls back to `medium = 1.0`.
 
-Then:
-
-`D_r = (N_r - rank(r) + 1) / (N_r + 1)`
-
-If the reward is unranked, or no ranked rewards exist, the fallback is:
-
-`D_r = 0.5`
+As with habits, the helper stays deterministic but the UI still blocks buying
+until the user has set both max frequency and damage tier.
 
 ### Frequency Multiplier
 
@@ -165,16 +192,6 @@ If the user sets a reward to `3/day`, they expect:
 
 Using a long window like 60 days makes early same-day purchases look flat because the ratio barely moves. A 24-hour window keeps the app aligned with the way the cap is expressed in the UI.
 
-### Random Multiplier
-
-For time bucket `t_r`:
-
-`R_r = 0.993 + 0.014 * H(rewardId, t_r)`
-
-where `H` is the deterministic hash output in `[0, 1)`.
-
-The reward bucket changes every 30 minutes.
-
 ## 3. Multi-Quantity Behaviour
 
 ### Habit Claim Modal
@@ -201,25 +218,41 @@ So the total is generally not:
 
 because \(F_r\) changes after each increment.
 
-The total intentionally matches what would happen if the user tapped Buy repeatedly inside the same pricing bucket.
-
 ## 4. Where This Rule Is Used
 
-The iOS app uses the same reward pricing window and calculation path in:
+The iOS app uses the same habit reward and reward pricing calculation paths in:
 
-- `RewardsView` for the list price
+- `HabitsView` for habit reward previews
+- `HabitFormView` for the edit-sheet reward preview
+- `TradeModalView` for multi-claim totals
+- `RewardsView` for reward price previews
 - `RewardFormView` for the edit-sheet price preview
-- `RewardPurchaseModalView` for the multi-buy total
+- `RewardPurchaseModalView` for multi-buy totals
 - `RewardPurchaseService` for the actual trade records and balance deduction
 
 This keeps the visible price, the modal total, and the persisted trades in sync.
 
-## 5. Notes On Current Semantics
+## 5. User-Facing Behaviour
+
+- A harder habit tier always pays more than an easier habit tier when the two
+  habits have the same frequency and completion count.
+- A more damaging reward tier always costs more than a less damaging reward
+  tier when the two rewards have the same cap and purchase count.
+- Habit rewards fall as the user keeps completing the same habit above its
+  desired rate.
+- Reward prices rise as the user keeps buying the same reward toward or past
+  its desired cap.
+- Rewards remain purchasable after the cap, but they become extremely
+  expensive because the frequency multiplier clamps at `50`.
+- The same inputs always produce the same price. There is no time-bucket or
+  pseudo-random drift in the current system.
+
+## 6. Notes On Current Semantics
 
 - Habit `frequency` is stored on iOS as times/day.
 - Reward `maxFrequency` is stored on iOS as times/day.
 - Habit frequency response is measured over a rolling 7-day window.
 - Reward price response is measured over a rolling 24-hour window.
-- Rank ordering is lexicographic on the stored rank string.
-- Deleted entities are excluded from rank calculations.
-- The random multiplier is deterministic within a bucket, so repeated renders inside one bucket are stable.
+- Habit difficulty is stored as `difficultyTier`.
+- Reward damage is stored as `damageTier`.
+- There is no relative ranking and no random multiplier.

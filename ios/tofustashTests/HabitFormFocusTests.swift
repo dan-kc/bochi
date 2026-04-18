@@ -1,105 +1,64 @@
-import Foundation
 import Testing
 @testable import tofustash
 
 struct HabitFormFocusTests {
-
-    // Behaviour: A dismissed new-habit sheet only offers recovery when the
-    // user actually entered something into the form.
-    @Test func emptyFormHasNoContent() {
+    // Behaviour: Closing a brand-new habit form should only offer recovery when
+    // the user actually entered something meaningful.
+    @Test func blankDraftHasNoRecoverableContent() {
         #expect(HabitFormView.hasContent(
-            name: "", description: "", frequency: nil, difficultyRank: nil, tagCount: 0
+            name: "",
+            description: "",
+            frequency: nil,
+            difficultyTier: nil,
+            tagCount: 0
         ) == false)
     }
 
-    // Behaviour: Typing only a name still counts as meaningful draft content.
-    @Test func nameOnlyHasContent() {
+    // Behaviour: Auto-filled defaults for the very first habit should not count
+    // as intentional user input by themselves.
+    @Test func firstHabitDifficultyAloneDoesNotCountAsDraftContent() {
         #expect(HabitFormView.hasContent(
-            name: "Run", description: "", frequency: nil, difficultyRank: nil, tagCount: 0
-        ) == true)
-    }
-
-    // Behaviour: Typing only a description still counts as meaningful draft content.
-    @Test func descriptionOnlyHasContent() {
-        #expect(HabitFormView.hasContent(
-            name: "", description: "Some desc", frequency: nil, difficultyRank: nil, tagCount: 0
-        ) == true)
-    }
-
-    // Behaviour: The first habit's auto-assigned difficulty should not by itself
-    // trigger the discard-recovery flow.
-    @Test func autoSetDifficultyAloneHasNoContent() {
-        #expect(HabitFormView.hasContent(
-            name: "", description: "", frequency: nil, difficultyRank: "m",
-            tagCount: 0, isFirstHabit: true
+            name: "",
+            description: "",
+            frequency: nil,
+            difficultyTier: .medium,
+            tagCount: 0,
+            isFirstHabit: true
         ) == false)
     }
 
-    // Behaviour: Name auto-save trims whitespace before sending the value to the store.
-    @Test func nameForAutoSaveReturnsTrimmedName() {
-        #expect(HabitFormView.nameForAutoSave("  Exercise  ") == "Exercise")
-    }
-
-    // Behaviour: A whitespace-only name is passed as empty so the store can keep
-    // the existing name while still saving the other fields.
-    @Test func nameForAutoSaveReturnsEmptyForWhitespaceOnly() {
-        #expect(HabitFormView.nameForAutoSave("   ") == "")
-    }
-
-    // Behaviour: The Tags pill is always present so the user can discover tag editing
-    // even before any tags have been applied.
-    @Test func tagsPillAlwaysPresent() {
+    // Behaviour: The difficulty pill shows the selected tier so the user can
+    // confirm what they picked without reopening the modal.
+    @Test func difficultyPillUsesTierDisplayName() {
         let pills = HabitFormView.buildPillData(
             hasTagsApplied: false,
-            difficultyRank: nil,
-            frequency: nil
-        )
-
-        #expect(pills.count == 3)
-        #expect(pills[0].id == "tags")
-        #expect(pills[0].label == "Tags")
-    }
-
-    // Behaviour: When frequency is set, the frequency pill shows a formatted summary
-    // rather than the default placeholder label.
-    @Test func frequencyPillShowsSummaryWhenSet() {
-        let pills = HabitFormView.buildPillData(
-            hasTagsApplied: false,
-            difficultyRank: nil,
+            difficultyTier: .hard,
             frequency: 1.0
         )
 
+        #expect(pills.count == 3)
+        #expect(pills[1].id == "difficulty")
+        #expect(pills[1].label == "Hard")
+        #expect(pills[1].isSet == true)
+    }
+
+    // Behaviour: Frequency pills switch from the placeholder copy to a summary
+    // once the user sets a target.
+    @Test func frequencyPillShowsSummaryWhenSet() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyTier: nil,
+            frequency: 1.0
+        )
+
+        #expect(pills[2].id == "frequency")
         #expect(pills[2].isSet == true)
         #expect(pills[2].label != "Frequency")
     }
 
-    // Behaviour: The very first habit gets the midpoint difficulty rank.
-    @Test func defaultDifficultyRankForFirstHabitReturnsMidpointKey() {
-        #expect(HabitFormView.defaultDifficultyRankForFirstHabit() == "m")
-    }
-
-    // Behaviour: When there are no ranked comparison habits, tapping the difficulty
-    // pill should initialize a default rank instead of erroring.
-    @Test func difficultySelectionAssignsDefaultRankWithoutComparableHabits() {
-        #expect(HabitFormView.difficultyRankAfterSelection(
-            currentDifficultyRank: nil,
-            hasComparableHabits: false
-        ) == "m")
-    }
-
-    // Behaviour: When comparison habits exist, tapping difficulty opens the ranker.
-    @Test func shouldOpenDifficultyRankerReturnsTrueWithComparableHabits() {
-        #expect(HabitFormView.shouldOpenDifficultyRanker(
-            hasComparableHabits: true
-        ) == true)
-    }
-
-    // Behaviour: If a habit already has a rank and there are no comparisons left,
-    // selecting difficulty should keep the existing rank unchanged.
-    @Test func difficultySelectionPreservesExistingRankWithoutComparableHabits() {
-        #expect(HabitFormView.difficultyRankAfterSelection(
-            currentDifficultyRank: "a0",
-            hasComparableHabits: false
-        ) == "a0")
+    // Behaviour: Auto-save trims accidental whitespace before the store sees
+    // the habit name.
+    @Test func autoSaveNameIsTrimmed() {
+        #expect(HabitFormView.nameForAutoSave("  Exercise  ") == "Exercise")
     }
 }

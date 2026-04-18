@@ -74,6 +74,26 @@ async fn test_create_reward_with_optional_fields() {
 }
 
 #[tokio::test]
+async fn test_create_reward_with_damage_tier() {
+    let email = generate_email_from_fn!(test_create_reward_with_damage_tier);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "name": "Doomscrolling",
+        "description": "A disruptive reward",
+        "damageTier": "heavy"
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(json.get("damageTier").unwrap(), "heavy");
+}
+
+#[tokio::test]
 async fn test_create_reward_validation_name_too_long() {
     let email = generate_email_from_fn!(test_create_reward_validation_name_too_long);
     let password = "password123";

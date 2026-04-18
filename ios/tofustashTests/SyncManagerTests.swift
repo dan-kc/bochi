@@ -155,7 +155,7 @@ struct SyncManagerTests {
             updatedAt: "2026-04-18T10:00:00.000000",
             deletedAt: nil,
             minDailyFrequency: nil,
-            difficultyRank: nil
+            difficultyTier: nil
         )
 
         let context = try await makeContext(
@@ -163,19 +163,19 @@ struct SyncManagerTests {
             pushResponse: makeResponse(habits: [staleServerHabit])
         )
 
-        context.syncManager.updateSession(userID: "user-123")
         _ = context.habitStore.addHabit(
             id: habitID,
             name: "Habit",
-            difficultyRank: "a0",
+            difficultyTier: .trivial,
             createdAt: Date(timeIntervalSince1970: 1_713_433_200),
             updatedAt: Date(timeIntervalSince1970: 1_713_433_200)
         )
 
+        context.syncManager.updateSession(userID: "user-123")
         await context.syncManager.syncNow()
 
-        let pushedHabit = try #require(context.syncAPIClient.pushCalls.last?.0.habits?.first)
-        #expect(pushedHabit.difficultyRank == "a0")
+        let pushedHabits = context.syncAPIClient.pushCalls.compactMap(\.0.habits).flatMap { $0 }
+        #expect(pushedHabits.contains { $0.id == habitID && $0.difficultyTier == .trivial })
 
         context.syncManager.updateSession(userID: nil)
     }

@@ -9,7 +9,7 @@ struct ApiErrorTests {
     @Test func networkFailureExplainsServerIsUnreachable() {
         let error = ApiError.networkFailure(URLError(.cannotConnectToHost))
 
-        #expect(error.userFacingMessage == "The app could not reach the server. Check the server address and try again.")
+        #expect(error.userFacingMessage == "We couldn't connect to the server. Please try again.")
     }
 
     // Behaviour: When the backend returns multiple validation problems for one

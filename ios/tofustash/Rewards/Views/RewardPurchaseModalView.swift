@@ -16,7 +16,6 @@ struct RewardPurchaseModalView: View {
     @State private var quantity = 1
     @State private var purchased = false
     @State private var spentAmount = 0
-    @State private var timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
     @State private var purchaseErrorMessage: String? = nil
 
     private var purchasesInPeriod: Int {
@@ -29,7 +28,6 @@ struct RewardPurchaseModalView: View {
             allRewards: rewardStore.activeRewards,
             currentPurchases: purchasesInPeriod,
             quantity: quantity,
-            timeBucket: timeBucket,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }
@@ -73,13 +71,6 @@ struct RewardPurchaseModalView: View {
         .presentationBackground(.thinMaterial)
         .presentationContentInteraction(.scrolls)
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .task {
-            while !Task.isCancelled {
-                let nanos = RewardPriceCalculation.nanosUntilNextBucket()
-                try? await Task.sleep(nanoseconds: nanos)
-                timeBucket = RewardPriceCalculation.getCurrentTimeBucket()
-            }
-        }
         .alert("Cannot Purchase", isPresented: Binding(
             get: { purchaseErrorMessage != nil },
             set: { if !$0 { purchaseErrorMessage = nil } }
@@ -172,8 +163,7 @@ struct RewardPurchaseModalView: View {
                 tradeStore: tradeStore,
                 balanceStore: balanceStore,
                 generalDifficulty: userSettingsStore.generalDifficulty,
-                quantity: quantity,
-                timeBucket: timeBucket
+                quantity: quantity
             )
             purchased = true
         } catch let error as RewardPurchaseError {

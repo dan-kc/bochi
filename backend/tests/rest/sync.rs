@@ -1335,7 +1335,7 @@ async fn test_sync_pull_includes_rewards() {
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T10:00:00",
             "maxDailyFrequency": 50.0,
-            "damageRank": "aaa"
+            "damageTier": "light"
         }]
     });
     make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
@@ -1351,7 +1351,7 @@ async fn test_sync_pull_includes_rewards() {
     assert_eq!(rewards[0].get("id").unwrap(), &reward_id);
     assert_eq!(rewards[0].get("name").unwrap(), "Chocolate Bar");
     assert_eq!(rewards[0].get("maxDailyFrequency").unwrap(), 50.0);
-    assert_eq!(rewards[0].get("damageRank").unwrap(), "aaa");
+    assert_eq!(rewards[0].get("damageTier").unwrap(), "light");
 }
 
 #[tokio::test]
@@ -1470,7 +1470,7 @@ async fn test_sync_push_creates_reward() {
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T10:00:00",
             "maxDailyFrequency": 25.0,
-            "damageRank": "bbb"
+            "damageTier": "heavy"
         }]
     });
 
@@ -1484,7 +1484,7 @@ async fn test_sync_push_creates_reward() {
     assert_eq!(rewards[0].get("name").unwrap(), "Chocolate Bar");
     assert_eq!(rewards[0].get("description").unwrap(), "A sweet treat");
     assert_eq!(rewards[0].get("maxDailyFrequency").unwrap(), 25.0);
-    assert_eq!(rewards[0].get("damageRank").unwrap(), "bbb");
+    assert_eq!(rewards[0].get("damageTier").unwrap(), "heavy");
 }
 
 #[tokio::test]
@@ -1517,7 +1517,7 @@ async fn test_sync_push_updates_reward() {
             "description": "Updated description",
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T11:00:00",
-            "damageRank": "ccc"
+            "damageTier": "extreme"
         }]
     });
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
@@ -1528,7 +1528,7 @@ async fn test_sync_push_updates_reward() {
     assert_eq!(rewards.len(), 1);
     assert_eq!(rewards[0].get("name").unwrap(), "Updated");
     assert_eq!(rewards[0].get("description").unwrap(), "Updated description");
-    assert_eq!(rewards[0].get("damageRank").unwrap(), "ccc");
+    assert_eq!(rewards[0].get("damageTier").unwrap(), "extreme");
 }
 
 #[tokio::test]

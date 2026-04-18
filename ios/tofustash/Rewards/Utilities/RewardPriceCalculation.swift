@@ -5,31 +5,14 @@ import Foundation
 // reward near or above its cap should get more expensive, not cheaper.
 enum RewardPriceCalculation {
     nonisolated private static let beta = 3.0
-    nonisolated private static let randomBaseMultiplier = 0.993
-    nonisolated private static let randomMultiplierRange = 0.014
     nonisolated private static let maxFrequencyMultiplier = 50.0
-    // Rewards now price against a rolling 24-hour window. This matches what the
-    // user means when they set a cap like "3/day": the 4th purchase today
-    // should already cost more, instead of waiting for a 60-day average to move.
+
+    // Rewards price against a rolling 24-hour window so caps like "3/day"
+    // react on the same day the user exceeds them.
     nonisolated static let pricingWindowDays = 1
-    nonisolated private static let timeBucketMs = 30 * 60 * 1000
 
     nonisolated static func calculateDamageMultiplier(reward: Reward, allRewards: [Reward]) -> Double {
-        let rankedRewards = allRewards
-            .filter { $0.damageRank != nil && $0.deletedAt == nil }
-            .sorted { $0.damageRank! < $1.damageRank! }
-
-        guard !rankedRewards.isEmpty, reward.damageRank != nil else {
-            return 0.5
-        }
-
-        guard let position = rankedRewards.firstIndex(where: { $0.id == reward.id }) else {
-            return 0.5
-        }
-
-        let n = Double(rankedRewards.count)
-        let rank = Double(position + 1)
-        return (n - rank + 1) / (n + 1)
+        reward.damageTier?.multiplier ?? RewardDamageTier.medium.multiplier
     }
 
     nonisolated static func calculateFrequencyMultiplier(
@@ -56,47 +39,24 @@ enum RewardPriceCalculation {
         return min(multiplier, maxFrequencyMultiplier)
     }
 
-    nonisolated static func calculateRandomMultiplier(rewardId: String, timeBucket: Int) -> Double {
-        let hash = DeterministicHash.hash("\(rewardId)-\(timeBucket)")
-        return randomBaseMultiplier + hash * randomMultiplierRange
-    }
-
-    nonisolated static func getCurrentTimeBucket(now: Date = Date()) -> Int {
-        let epochMs = Int(now.timeIntervalSince1970 * 1000)
-        return epochMs / timeBucketMs
-    }
-
-    nonisolated static func nanosUntilNextBucket(now: Date = Date()) -> UInt64 {
-        let epochMs = now.timeIntervalSince1970 * 1000
-        let bucketMs = Double(timeBucketMs)
-        let msIntoCurrentBucket = epochMs.truncatingRemainder(dividingBy: bucketMs)
-        let msUntilNext = bucketMs - msIntoCurrentBucket
-        return UInt64((msUntilNext + 100) * 1_000_000)
-    }
-
     nonisolated static func calculatePrice(
         reward: Reward,
         allRewards: [Reward],
         purchasesInPeriod: Int = 0,
-        timeBucket: Int = getCurrentTimeBucket(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         let damageMultiplier = calculateDamageMultiplier(reward: reward, allRewards: allRewards)
         let frequencyMultiplier = calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: purchasesInPeriod)
-        let randomMultiplier = calculateRandomMultiplier(rewardId: reward.id, timeBucket: timeBucket)
 
-        let price = 100.0 * generalDifficulty * damageMultiplier * frequencyMultiplier * randomMultiplier
+        let price = 100.0 * generalDifficulty * damageMultiplier * frequencyMultiplier
         return Int(price.rounded())
     }
 
-    // Buying multiple rewards is summed one purchase at a time because the
-    // max-frequency multiplier gets steeper after each purchase.
     nonisolated static func calculateMultiPurchaseTotal(
         reward: Reward,
         allRewards: [Reward],
         currentPurchases: Int,
         quantity: Int,
-        timeBucket: Int = getCurrentTimeBucket(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         var total = 0
@@ -105,7 +65,6 @@ enum RewardPriceCalculation {
                 reward: reward,
                 allRewards: allRewards,
                 purchasesInPeriod: currentPurchases + index,
-                timeBucket: timeBucket,
                 generalDifficulty: generalDifficulty
             )
         }

@@ -5,7 +5,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    database::{CreateTradeWithHabitOptions, CreateTradeWithRewardOptions},
+    database::{CreateTradeWithHabitOptions, CreateTradeWithRewardOptions, HabitDifficultyTier, RewardDamageTier},
     router::{App, AuthenticatedUser},
 };
 
@@ -42,10 +42,12 @@ pub struct TradableItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_daily_frequency: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub difficulty_rank: Option<String>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
     // Reward fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_daily_frequency: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_tier: Option<RewardDamageTier>,
 }
 
 pub async fn create_trade(
@@ -91,8 +93,9 @@ pub async fn create_trade(
                     updated_at: trade_row.habit_updated_at,
                     deleted_at: trade_row.habit_deleted_at,
                     min_daily_frequency: trade_row.habit_min_daily_frequency,
-                    difficulty_rank: trade_row.habit_difficulty_rank,
+                    difficulty_tier: trade_row.habit_difficulty_tier,
                     max_daily_frequency: None,
+                    damage_tier: None,
                 },
             }),
         ))
@@ -127,8 +130,9 @@ pub async fn create_trade(
                     updated_at: trade_row.reward_updated_at,
                     deleted_at: trade_row.reward_deleted_at,
                     min_daily_frequency: None,
-                    difficulty_rank: None,
+                    difficulty_tier: None,
                     max_daily_frequency: trade_row.reward_max_daily_frequency,
+                    damage_tier: trade_row.reward_damage_tier,
                 },
             }),
         ))

@@ -54,7 +54,7 @@ final class HabitStore {
         name: String,
         description: String = "",
         frequency: Double? = nil,
-        difficultyRank: String? = nil,
+        difficultyTier: HabitDifficultyTier? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -74,7 +74,7 @@ final class HabitStore {
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt,
             frequency: frequency,
-            difficultyRank: difficultyRank
+            difficultyTier: difficultyTier
         )
 
         mutateHabits {
@@ -103,7 +103,7 @@ final class HabitStore {
             updatedAt: deletedAt,
             deletedAt: deletedAt,
             frequency: existing.frequency,
-            difficultyRank: existing.difficultyRank
+            difficultyTier: existing.difficultyTier
         )
 
         mutateHabits { $0[index] = deleted }
@@ -118,7 +118,7 @@ final class HabitStore {
         name: String? = nil,
         description: String? = nil,
         frequency: Double?? = nil,
-        difficultyRank: String?? = nil,
+        difficultyTier: HabitDifficultyTier?? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
@@ -149,7 +149,7 @@ final class HabitStore {
             updatedAt: updatedAt,
             deletedAt: deletedAt ?? existing.deletedAt,
             frequency: frequency ?? existing.frequency,
-            difficultyRank: difficultyRank ?? existing.difficultyRank
+            difficultyTier: difficultyTier ?? existing.difficultyTier
         )
 
         mutateHabits { $0[index] = updated }
