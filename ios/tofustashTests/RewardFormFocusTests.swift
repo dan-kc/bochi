@@ -39,4 +39,28 @@ struct RewardFormFocusTests {
         #expect(pills[2].isSet == true)
         #expect(pills[2].label != "Max Frequency")
     }
+
+    // Behaviour: When there are no ranked comparison rewards, tapping damage
+    // should initialize a default rank instead of showing an error.
+    @Test func damageSelectionAssignsDefaultRankWithoutComparableRewards() {
+        #expect(RewardFormView.damageRankAfterSelection(
+            currentDamageRank: nil,
+            hasComparableRewards: false
+        ) == "m")
+    }
+
+    // Behaviour: Existing damage stays intact when no comparisons remain.
+    @Test func damageSelectionPreservesExistingRankWithoutComparableRewards() {
+        #expect(RewardFormView.damageRankAfterSelection(
+            currentDamageRank: "a0",
+            hasComparableRewards: false
+        ) == "a0")
+    }
+
+    // Behaviour: A ranked peer still means the damage ranker should open.
+    @Test func shouldOpenDamageRankerReturnsTrueWithComparableRewards() {
+        #expect(RewardFormView.shouldOpenDamageRanker(
+            hasComparableRewards: true
+        ) == true)
+    }
 }

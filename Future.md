@@ -6,16 +6,6 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Implement the sync layer from ./frontend. You can see the sync endpoints in ./backend. You can read logic surrounding the current implementation here: ./frontend/lib/sync/README.md.
-
-If you see any improvements that could be made, on the frontend or backend then ask me.
-
-Ask me lots of questions for anything remotely questionable as I need this implementation to be solid.
-
-This app has not launched yet so you do not need to maintain compatibility.
-
-After you are done, add a new thorough document to ./docs
-
 # Filters
 
 Filters

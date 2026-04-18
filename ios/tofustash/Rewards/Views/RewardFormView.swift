@@ -47,7 +47,6 @@ struct RewardFormView: View {
     @State private var showingDamage = false
     @State private var showingTags = false
     @State private var purchasingReward: Reward? = nil
-    @State private var showingFirstRewardAlert = false
     @State private var showingDeleteConfirmation = false
 
     @State private var hasInitialized = false
@@ -248,11 +247,6 @@ struct RewardFormView: View {
                 dismiss()
             }
         }
-        .alert("Damage Set", isPresented: $showingFirstRewardAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("There are no other rewards to compare against. Add more rewards to adjust damage ranking.")
-        }
         .alert("Delete Reward?", isPresented: $showingDeleteConfirmation) {
             if case .change(let reward) = mode {
                 Button("Delete", role: .destructive) {
@@ -351,6 +345,21 @@ struct RewardFormView: View {
         DamageRanker.makeSession(rewardName: "", rankedRewards: []).generateRank()
     }
 
+    static func shouldOpenDamageRanker(hasComparableRewards: Bool) -> Bool {
+        hasComparableRewards
+    }
+
+    static func damageRankAfterSelection(
+        currentDamageRank: String?,
+        hasComparableRewards: Bool
+    ) -> String? {
+        guard !hasComparableRewards, currentDamageRank == nil else {
+            return currentDamageRank
+        }
+
+        return defaultDamageRankForFirstReward()
+    }
+
     static func buildPillData(
         hasTagsApplied: Bool,
         damageRank: String?,
@@ -374,10 +383,13 @@ struct RewardFormView: View {
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "damage": {
-                if hasComparableRewards {
+                if Self.shouldOpenDamageRanker(hasComparableRewards: hasComparableRewards) {
                     showingDamage = true
                 } else {
-                    showingFirstRewardAlert = true
+                    damageRank = Self.damageRankAfterSelection(
+                        currentDamageRank: damageRank,
+                        hasComparableRewards: hasComparableRewards
+                    )
                 }
             },
             "frequency": { showingFrequency = true },
@@ -427,7 +439,14 @@ struct RewardFormView: View {
             case .maxFrequency:
                 showingFrequency = true
             case .damage:
-                showingDamage = true
+                if Self.shouldOpenDamageRanker(hasComparableRewards: hasComparableRewards) {
+                    showingDamage = true
+                } else {
+                    damageRank = Self.damageRankAfterSelection(
+                        currentDamageRank: damageRank,
+                        hasComparableRewards: hasComparableRewards
+                    )
+                }
             case .tags:
                 showingTags = true
             }

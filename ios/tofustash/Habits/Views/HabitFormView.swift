@@ -55,7 +55,6 @@ struct HabitFormView: View {
     @State private var showingDifficulty = false
     @State private var showingTags = false
     @State private var tradingHabit: Habit? = nil
-    @State private var showingFirstHabitAlert = false
     @State private var showingDeleteConfirmation = false
 
     @State private var hasInitialized = false
@@ -261,11 +260,6 @@ struct HabitFormView: View {
                 dismiss()
             }
         }
-        .alert("Difficulty Set", isPresented: $showingFirstHabitAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("There are no other habits to compare against. Add more habits to adjust difficulty ranking.")
-        }
         .alert("Delete Habit?", isPresented: $showingDeleteConfirmation) {
             if case .change(let habit) = mode {
                 Button("Delete", role: .destructive) {
@@ -378,8 +372,19 @@ struct HabitFormView: View {
         rankedHabitCount > 0
     }
 
-    static func shouldOpenDifficultyRanker(isFirstHabit: Bool, hasComparableHabits: Bool) -> Bool {
-        !isFirstHabit && hasComparableHabits
+    static func shouldOpenDifficultyRanker(hasComparableHabits: Bool) -> Bool {
+        hasComparableHabits
+    }
+
+    static func difficultyRankAfterSelection(
+        currentDifficultyRank: String?,
+        hasComparableHabits: Bool
+    ) -> String? {
+        guard !hasComparableHabits, currentDifficultyRank == nil else {
+            return currentDifficultyRank
+        }
+
+        return defaultDifficultyRankForFirstHabit()
     }
 
     static func buildPillData(
@@ -405,10 +410,13 @@ struct HabitFormView: View {
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "difficulty": {
-                if Self.shouldOpenDifficultyRanker(isFirstHabit: isFirstHabit, hasComparableHabits: hasComparableHabits) {
+                if Self.shouldOpenDifficultyRanker(hasComparableHabits: hasComparableHabits) {
                     showingDifficulty = true
                 } else {
-                    showingFirstHabitAlert = true
+                    difficultyRank = Self.difficultyRankAfterSelection(
+                        currentDifficultyRank: difficultyRank,
+                        hasComparableHabits: hasComparableHabits
+                    )
                 }
             },
             "frequency": { showingFrequency = true },
@@ -461,7 +469,14 @@ struct HabitFormView: View {
             case .frequency:
                 showingFrequency = true
             case .difficulty:
-                showingDifficulty = true
+                if Self.shouldOpenDifficultyRanker(hasComparableHabits: hasComparableHabits) {
+                    showingDifficulty = true
+                } else {
+                    difficultyRank = Self.difficultyRankAfterSelection(
+                        currentDifficultyRank: difficultyRank,
+                        hasComparableHabits: hasComparableHabits
+                    )
+                }
             case .tags:
                 showingTags = true
             }

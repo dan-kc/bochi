@@ -79,19 +79,27 @@ struct HabitFormFocusTests {
     }
 
     // Behaviour: When there are no ranked comparison habits, tapping the difficulty
-    // pill should not open the ranker.
-    @Test func shouldOpenDifficultyRankerReturnsFalseWithoutComparableHabits() {
-        #expect(HabitFormView.shouldOpenDifficultyRanker(
-            isFirstHabit: false,
+    // pill should initialize a default rank instead of erroring.
+    @Test func difficultySelectionAssignsDefaultRankWithoutComparableHabits() {
+        #expect(HabitFormView.difficultyRankAfterSelection(
+            currentDifficultyRank: nil,
             hasComparableHabits: false
-        ) == false)
+        ) == "m")
     }
 
     // Behaviour: When comparison habits exist, tapping difficulty opens the ranker.
     @Test func shouldOpenDifficultyRankerReturnsTrueWithComparableHabits() {
         #expect(HabitFormView.shouldOpenDifficultyRanker(
-            isFirstHabit: false,
             hasComparableHabits: true
         ) == true)
+    }
+
+    // Behaviour: If a habit already has a rank and there are no comparisons left,
+    // selecting difficulty should keep the existing rank unchanged.
+    @Test func difficultySelectionPreservesExistingRankWithoutComparableHabits() {
+        #expect(HabitFormView.difficultyRankAfterSelection(
+            currentDifficultyRank: "a0",
+            hasComparableHabits: false
+        ) == "a0")
     }
 }
