@@ -1,8 +1,9 @@
-mod anonymous;
 mod change_email;
 mod change_password;
 mod cookies;
+mod link_apple_subscription;
 mod login;
 mod logout;
+mod me;
 mod refresh_tokens;
 mod register;

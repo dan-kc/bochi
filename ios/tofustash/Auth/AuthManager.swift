@@ -1,110 +1,101 @@
 import Foundation
 
-// AuthManager owns the app's auth session from the user's point of view:
-// app launch decides whether they land in an anonymous session or a restored
-// signed-in session, auth actions swap identities, and token refresh tries to
-// keep that experience uninterrupted.
+// AuthManager owns two separate truths:
+// 1. which backend account, if any, is signed in
+// 2. whether this device currently has a local Apple premium entitlement
 //
-// @Observable works like a tiny reactive store. SwiftUI views that read `user`
-// or `isLoading` automatically update when those values change.
+// The state machine derived from those facts is what SwiftUI renders.
 @Observable
-// @MainActor keeps all mutations on the main thread, which is the SwiftUI
-// equivalent of making sure UI-facing state changes happen on React's UI path.
 @MainActor
-// `final` means this is a concrete store, not a base class to extend.
 final class AuthManager {
-    // Views can observe auth state, but only AuthManager can change it.
     private(set) var user: AuthUser?
-    private(set) var isLoading: Bool = true
+    private(set) var sessionState: AuthSessionState = .signedOutFree
+    private(set) var isLoading = true
+    private(set) var isRestoringPurchases = false
+    private(set) var localAppleEntitlement = AppleEntitlementStatus.inactive
 
-    // Swift computed property: similar to a derived selector in a React store.
-    var isAnonymous: Bool { user?.isAnonymous ?? true }
+    var isSignedIn: Bool { user != nil }
+    var isPremiumEntitled: Bool { sessionState.isPremiumEntitled }
+    var canSync: Bool { isSignedIn }
+
+    // Behaviour: after restoring an Apple purchase while signed out, the app
+    // should clearly prompt the user to create or log into an account instead
+    // of silently inventing one on their behalf.
+    var needsAccountToLinkPurchase: Bool {
+        sessionState == .signedOutPremiumRestored
+    }
+
+    // Behaviour: a device-level Apple entitlement can exist before the backend
+    // account is linked. The app should surface that mismatch instead of hiding it.
+    var hasUnlinkedAppleEntitlement: Bool {
+        isSignedIn && localAppleEntitlement.isActive && !(user?.isEntitled ?? false)
+    }
 
     private let apiClient: AuthAPIClient
     private let tokenStorage: TokenStorage
+    private let appleEntitlementClient: AppleEntitlementClient
 
-    // Background refresh work is tracked so it can be cancelled on logout
-    // or replaced when a newer token arrives.
     private var refreshTask: Task<Void, Never>?
     private var currentAccessToken: String?
 
-    init(apiClient: AuthAPIClient, tokenStorage: TokenStorage) {
+    init(
+        apiClient: AuthAPIClient,
+        tokenStorage: TokenStorage,
+        appleEntitlementClient: AppleEntitlementClient = StoreKitAppleEntitlementClient()
+    ) {
         self.apiClient = apiClient
         self.tokenStorage = tokenStorage
+        self.appleEntitlementClient = appleEntitlementClient
     }
 
-    // Called once on app launch. It tries to restore the last session first,
-    // then falls back to an anonymous account so the app stays usable even
-    // before registration.
+    // Called once on app launch. It restores local Apple entitlement first so
+    // signed-out premium users still land in the correct state before network work.
     func bootstrap() async {
-        // `defer` behaves like a `finally` block: loading stops regardless of
-        // which branch returns or throws.
         defer { isLoading = false }
 
-        let storedTokens = await tokenStorage.getTokens()
-        let storedIsAnonymous = await tokenStorage.getIsAnonymous()
+        localAppleEntitlement = await appleEntitlementClient.currentEntitlement()
 
-        if let storedTokens {
-            let isAnonymous = storedIsAnonymous ?? false
-            if let parsed = JWTParser.parse(storedTokens.accessToken), let subject = parsed.subject {
-                // The app can render immediately from the cached token payload
-                // while the network refresh happens in the background.
-                user = AuthUser(id: subject, isAnonymous: isAnonymous)
-                currentAccessToken = storedTokens.accessToken
-            }
+        guard let storedTokens = await tokenStorage.getTokens() else {
+            transitionToSignedOutState()
+            return
+        }
 
-            do {
-                let newTokens = try await apiClient.refreshTokens(refreshToken: storedTokens.refreshToken)
-                await processAuthResponse(newTokens, isAnonymous: isAnonymous)
-            } catch {
-                let apiError = error as? ApiError
-                if apiError?.statusCode == 401 {
-                    // Expired sessions should quietly drop back to anonymous
-                    // instead of leaving the user stranded on launch.
-                    await tokenStorage.clear()
-                    user = nil
-                    currentAccessToken = nil
-                    await performAnonymousAuth()
-                }
-                // For transient failures we keep the restored session and let the
-                // scheduled refresh path try again later.
+        if let provisionalUser = provisionalUser(from: storedTokens.accessToken) {
+            user = provisionalUser
+            currentAccessToken = storedTokens.accessToken
+            recomputeSessionState()
+        }
+
+        do {
+            let refreshedTokens = try await apiClient.refreshTokens(refreshToken: storedTokens.refreshToken)
+            await applyAuthenticatedTokens(refreshedTokens)
+        } catch {
+            let apiError = error as? ApiError
+            if apiError?.statusCode == 401 {
+                await tokenStorage.clear()
+                currentAccessToken = nil
+                transitionToSignedOutState()
             }
-        } else {
-            await performAnonymousAuth()
+            // Behaviour: network failures during bootstrap should keep any
+            // provisional signed-in state visible instead of forcing a logout.
         }
     }
 
-    // User submits the login form. Success replaces any anonymous identity with
-    // the real account while preserving the same in-app store object.
+    // User signs into an existing backend account. The app then asks `/auth/me`
+    // which premium state belongs to that account.
     func login(email: String, password: String) async throws {
         let tokens = try await apiClient.login(email: email, password: password)
-        await processAuthResponse(tokens, isAnonymous: false)
+        await applyAuthenticatedTokens(tokens)
     }
 
-    // User registers directly instead of claiming an anonymous session.
+    // User creates a new backend account from signed-out local mode.
     func register(email: String, password: String) async throws {
         let tokens = try await apiClient.register(email: email, password: password)
-        await processAuthResponse(tokens, isAnonymous: false)
+        await applyAuthenticatedTokens(tokens)
     }
 
-    // User converts an anonymous account into a permanent one so their current
-    // local progress stays attached to the new credentials.
-    func claimAccount(email: String, password: String) async throws {
-        guard let accessToken = currentAccessToken else {
-            throw ApiError.genericFailure(
-                message: "You need an active session before you can create an account."
-            )
-        }
-        let tokens = try await apiClient.claimAccount(
-            email: email,
-            password: password,
-            accessToken: accessToken
-        )
-        await processAuthResponse(tokens, isAnonymous: false)
-    }
-
-    // Logging out intentionally clears local state first, then immediately
-    // provisions a fresh anonymous session so the app still works afterward.
+    // Logging out should only clear the backend session. If this device still
+    // owns an Apple premium entitlement, that local premium state stays visible.
     func logout() async {
         cancelRefresh()
 
@@ -113,20 +104,19 @@ final class AuthManager {
         }
 
         await tokenStorage.clear()
-        user = nil
         currentAccessToken = nil
-
-        await performAnonymousAuth()
+        user = nil
+        localAppleEntitlement = await appleEntitlementClient.currentEntitlement()
+        recomputeSessionState()
     }
 
-    // Account settings actions reuse the current access token, matching how a
-    // React app would send the session token with a profile mutation request.
     func changePassword(currentPassword: String, newPassword: String) async throws {
-        guard let accessToken = currentAccessToken else {
+        guard let accessToken = currentAccessToken, isSignedIn else {
             throw ApiError.genericFailure(
                 message: "You need to be signed in before you can change your password."
             )
         }
+
         try await apiClient.changePassword(
             currentPassword: currentPassword,
             newPassword: newPassword,
@@ -135,11 +125,12 @@ final class AuthManager {
     }
 
     func changeEmail(newEmail: String, password: String) async throws {
-        guard let accessToken = currentAccessToken else {
+        guard let accessToken = currentAccessToken, isSignedIn else {
             throw ApiError.genericFailure(
                 message: "You need to be signed in before you can change your email."
             )
         }
+
         try await apiClient.changeEmail(
             newEmail: newEmail,
             password: password,
@@ -147,44 +138,128 @@ final class AuthManager {
         )
     }
 
-    // Silent bootstrap fallback when no usable saved session exists.
-    private func performAnonymousAuth() async {
-        let deviceId = await tokenStorage.getOrCreateDeviceId()
+    // Behaviour: Restore Purchases may grant premium locally on this device
+    // even when there is no signed-in account yet. That is intentional.
+    func restorePurchases() async throws {
+        isRestoringPurchases = true
+        defer { isRestoringPurchases = false }
+
+        localAppleEntitlement = try await appleEntitlementClient.restorePurchases()
         do {
-            let tokens = try await apiClient.anonymousAuth(deviceId: deviceId)
-            await processAuthResponse(tokens, isAnonymous: true)
+            try await linkLocalAppleEntitlementIfPossible()
         } catch {
-            // Leave user as nil so the UI can present a retry path later.
+            recomputeSessionState()
+            throw error
         }
+        recomputeSessionState()
     }
 
-    private func processAuthResponse(_ tokens: AuthTokens, isAnonymous: Bool) async {
+    private func applyAuthenticatedTokens(_ tokens: AuthTokens) async {
         guard let payload = JWTParser.parse(tokens.accessToken),
               let subject = payload.subject
         else { return }
 
-        // Persist first so a crash/relaunch still restores the same identity.
-        await tokenStorage.storeTokens(tokens, isAnonymous: isAnonymous)
-        user = AuthUser(id: subject, isAnonymous: isAnonymous)
         currentAccessToken = tokens.accessToken
+        await tokenStorage.storeTokens(tokens)
+
+        if let account = try? await apiClient.getCurrentAccount(accessToken: tokens.accessToken) {
+            user = account.makeUser(id: subject)
+        } else if user?.id != subject {
+            // Behaviour: if `/auth/me` is temporarily unavailable right after a
+            // successful auth response, the user should still stay signed in.
+            user = AuthUser(
+                id: subject,
+                email: nil,
+                subscriptionSource: nil,
+                subscriptionStatus: .none,
+                isEntitled: false,
+                subscriptionExpiresAt: nil
+            )
+        }
+
+        do {
+            try await linkLocalAppleEntitlementIfPossible()
+        } catch {
+            // Behaviour: login/register should still succeed even if the
+            // follow-up purchase-link step fails. The UI can continue showing
+            // the device-level entitlement as unlinked until the user retries.
+        }
+
+        recomputeSessionState()
 
         if let expiresAt = payload.expiresAt {
-            // Refresh is scheduled relative to token expiry so the user doesn't
-            // hit a surprise auth interruption mid-session.
             scheduleRefresh(expiresAt: expiresAt, refreshToken: tokens.refreshToken)
         }
+    }
+
+    private func provisionalUser(from accessToken: String) -> AuthUser? {
+        guard let payload = JWTParser.parse(accessToken),
+              let subject = payload.subject
+        else { return nil }
+
+        return AuthUser(
+            id: subject,
+            email: nil,
+            subscriptionSource: nil,
+            subscriptionStatus: .none,
+            isEntitled: false,
+            subscriptionExpiresAt: nil
+        )
+    }
+
+    private func transitionToSignedOutState() {
+        user = nil
+        recomputeSessionState()
+    }
+
+    private func linkLocalAppleEntitlementIfPossible() async throws {
+        guard
+            let user,
+            let accessToken = currentAccessToken,
+            localAppleEntitlement.isActive,
+            !(user.isEntitled),
+            let originalTransactionID = localAppleEntitlement.originalTransactionID
+        else {
+            return
+        }
+
+        let linkedAccount = try await apiClient.linkAppleSubscription(
+            originalTransactionID: originalTransactionID,
+            subscriptionExpiresAt: localAppleEntitlement.expirationDate,
+            accessToken: accessToken
+        )
+        self.user = linkedAccount.makeUser(id: user.id)
+    }
+
+    private func recomputeSessionState() {
+        guard let user else {
+            sessionState = localAppleEntitlement.isActive ? .signedOutPremiumRestored : .signedOutFree
+            return
+        }
+
+        if user.isEntitled {
+            switch user.subscriptionSource {
+            case .apple:
+                sessionState = .signedInPremiumApple
+            case .web:
+                sessionState = .signedInPremiumWeb
+            case .none:
+                sessionState = .signedInFree
+            }
+            return
+        }
+
+        sessionState = user.subscriptionStatus.isLapsed ? .signedInLapsed : .signedInFree
     }
 
     private func scheduleRefresh(expiresAt: Int, refreshToken: String) {
         cancelRefresh()
 
         let expiresAtDate = Date(timeIntervalSince1970: TimeInterval(expiresAt))
-        let refreshAt = expiresAtDate.addingTimeInterval(-60) // 1 minute before expiry
+        let refreshAt = expiresAtDate.addingTimeInterval(-60)
         let delay = refreshAt.timeIntervalSinceNow
 
         guard delay > 0 else {
-            // If the token is already near expiry, refresh right away rather
-            // than waiting for the user to hit an auth boundary.
             refreshTask = Task { [weak self] in
                 await self?.performRefresh(refreshToken: refreshToken)
             }
@@ -199,21 +274,16 @@ final class AuthManager {
     }
 
     private func performRefresh(refreshToken: String) async {
-        let isAnonymous = user?.isAnonymous ?? false
         do {
-            let newTokens = try await apiClient.refreshTokens(refreshToken: refreshToken)
-            await processAuthResponse(newTokens, isAnonymous: isAnonymous)
+            let refreshedTokens = try await apiClient.refreshTokens(refreshToken: refreshToken)
+            await applyAuthenticatedTokens(refreshedTokens)
         } catch {
             let apiError = error as? ApiError
             if apiError?.statusCode == 401 {
-                // If refresh is rejected, the old session is no longer trusted.
                 await tokenStorage.clear()
-                user = nil
                 currentAccessToken = nil
-                await performAnonymousAuth()
+                transitionToSignedOutState()
             } else {
-                // Network problems shouldn't immediately log the user out.
-                // Retry later and keep the current session visible for now.
                 refreshTask = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(60))
                     guard !Task.isCancelled else { return }

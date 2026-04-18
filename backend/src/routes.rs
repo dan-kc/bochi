@@ -72,6 +72,31 @@ fn extract_refresh_token_from_cookies(headers: &HeaderMap) -> Option<String> {
         })
 }
 
+fn extract_access_token_from_headers(headers: &HeaderMap) -> Option<&str> {
+    let jwt_from_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
+
+    let jwt_from_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|header_value| header_value.to_str().ok())
+        .and_then(|cookie_header| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with("access_token="))
+                .and_then(|s| s.strip_prefix("access_token="))
+        });
+
+    jwt_from_header.or(jwt_from_cookie)
+}
+
+fn authenticated_user_id_from_headers(app: &App, headers: &HeaderMap) -> Result<uuid::Uuid, Error> {
+    let jwt = extract_access_token_from_headers(headers).ok_or(Error::Unauthorized)?;
+    app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)
+}
+
 fn email_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(r"^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$").unwrap())
@@ -93,32 +118,26 @@ pub enum Error {
     FailedToCreateUser,
     InvalidRefreshToken,
     InvalidLoginCredentials,
-    InvalidDeviceId,
-    FailedToCreateAnonymousUser,
-    FailedToClaim,
-    AccountAlreadyClaimed,
     Unauthorized,
     IncorrectPassword,
     FailedToChangePassword,
     FailedToChangeEmail,
-    AccountIsAnonymous,
+    FailedToLinkAppleSubscription,
+    SubscriptionAlreadyLinked,
 }
 impl Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::ValidationErrorList(_) => StatusCode::BAD_REQUEST, // The outer match arm dissalows this
             Self::FailedToRegister => StatusCode::BAD_REQUEST,
-            Self::InvalidDeviceId => StatusCode::BAD_REQUEST,
-            Self::FailedToClaim => StatusCode::BAD_REQUEST,
-            Self::AccountAlreadyClaimed => StatusCode::BAD_REQUEST,
             Self::FailedToChangePassword => StatusCode::BAD_REQUEST,
             Self::FailedToChangeEmail => StatusCode::BAD_REQUEST,
-            Self::AccountIsAnonymous => StatusCode::BAD_REQUEST,
+            Self::SubscriptionAlreadyLinked => StatusCode::CONFLICT,
 
             Self::FailedToCreateUser => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToLogin => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedToCreateRefreshToken => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::FailedToCreateAnonymousUser => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::FailedToLinkAppleSubscription => StatusCode::INTERNAL_SERVER_ERROR,
 
             Self::InvalidRefreshToken => StatusCode::UNAUTHORIZED,
             Self::InvalidLoginCredentials => StatusCode::UNAUTHORIZED,
@@ -144,12 +163,6 @@ impl Display for Error {
                 write!(f, "Incorrect email or password.")
             }
 
-            Self::InvalidDeviceId => write!(f, "Invalid device ID. Must be a valid UUID."),
-            Self::FailedToCreateAnonymousUser => write!(f, "Failed to create anonymous user."),
-            Self::FailedToClaim => write!(f, "Failed to claim account. Please try again."),
-            Self::AccountAlreadyClaimed => {
-                write!(f, "Account has already been claimed.")
-            }
             Self::Unauthorized => write!(f, "Unauthorized."),
             Self::IncorrectPassword => write!(f, "Incorrect password."),
             Self::FailedToChangePassword => {
@@ -158,8 +171,11 @@ impl Display for Error {
             Self::FailedToChangeEmail => {
                 write!(f, "Failed to change email. Please try again.")
             }
-            Self::AccountIsAnonymous => {
-                write!(f, "This action requires a registered account.")
+            Self::FailedToLinkAppleSubscription => {
+                write!(f, "Failed to link Apple subscription. Please try again.")
+            }
+            Self::SubscriptionAlreadyLinked => {
+                write!(f, "This Apple subscription is already linked to another account.")
             }
         }
     }
@@ -229,6 +245,9 @@ pub enum ValidationError {
     PasswordTooShort,
     NewPasswordSameAsOld,
     NewEmailSameAsOld,
+    OriginalTransactionIdMissing,
+    OriginalTransactionIdTooLong,
+    InvalidSubscriptionExpiresAt,
 }
 impl Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -251,6 +270,15 @@ impl Display for ValidationError {
             ),
             Self::NewEmailSameAsOld => write!(f,
                  "New email must be different from current email."
+            ),
+            Self::OriginalTransactionIdMissing => write!(f,
+                 "Original transaction ID is required."
+            ),
+            Self::OriginalTransactionIdTooLong => write!(f,
+                 "Original transaction ID too long."
+            ),
+            Self::InvalidSubscriptionExpiresAt => write!(f,
+                 "Subscription expiry timestamp is invalid."
             ),
         }
     }
@@ -398,6 +426,132 @@ pub async fn health() -> Response {
     (StatusCode::OK, Json(health)).into_response()
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MeResponse {
+    email: Option<String>,
+    subscription_source: Option<String>,
+    subscription_status: String,
+    is_entitled: bool,
+    subscription_expires_at: Option<chrono::NaiveDateTime>,
+}
+
+fn me_response_from_account_state(account_state: crate::database::UserAccountStateRow) -> MeResponse {
+    MeResponse {
+        email: account_state.email,
+        subscription_source: account_state.subscription_source,
+        subscription_status: account_state.subscription_status.clone(),
+        is_entitled: subscription_is_entitled(
+            account_state.subscription_status.as_str(),
+            account_state.subscription_expires_at,
+        ),
+        subscription_expires_at: account_state.subscription_expires_at,
+    }
+}
+
+fn parse_client_subscription_timestamp(value: &str) -> Option<chrono::NaiveDateTime> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|date_time| date_time.naive_utc())
+        .ok()
+        .or_else(|| chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f").ok())
+        .or_else(|| chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok())
+}
+
+fn subscription_is_entitled(
+    subscription_status: &str,
+    subscription_expires_at: Option<chrono::NaiveDateTime>,
+) -> bool {
+    matches!(subscription_status, "active" | "grace_period")
+        || matches!(
+            (subscription_status, subscription_expires_at),
+            ("active", Some(_)) | ("grace_period", Some(_))
+        )
+}
+
+#[debug_handler]
+pub async fn me(State(app): State<App>, headers: HeaderMap) -> Result<Response, Error> {
+    let user_id = authenticated_user_id_from_headers(&app, &headers)?;
+
+    let account_state = app
+        .database
+        .get_user_account_state(user_id)
+        .await
+        .map_err(|_| Error::Unauthorized)?;
+
+    Ok(Json(me_response_from_account_state(account_state)).into_response())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkAppleSubscriptionInput {
+    original_transaction_id: String,
+    subscription_expires_at: Option<String>,
+}
+
+#[debug_handler]
+pub async fn link_apple_subscription(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(input): Json<LinkAppleSubscriptionInput>,
+) -> Result<Response, Error> {
+    let user_id = authenticated_user_id_from_headers(&app, &headers)?;
+
+    let mut errors = vec![];
+    if input.original_transaction_id.trim().is_empty() {
+        errors.push(ValidationError::OriginalTransactionIdMissing);
+    }
+    if input.original_transaction_id.len() > 255 {
+        errors.push(ValidationError::OriginalTransactionIdTooLong);
+    }
+    let subscription_expires_at = match input.subscription_expires_at.as_deref() {
+        Some(value) => match parse_client_subscription_timestamp(value) {
+            Some(parsed) => Some(parsed),
+            None => {
+                errors.push(ValidationError::InvalidSubscriptionExpiresAt);
+                None
+            }
+        },
+        None => None,
+    };
+
+    if !errors.is_empty() {
+        return Err(Error::ValidationErrorList(errors));
+    }
+
+    if let Some(existing_user_id) = app
+        .database
+        .get_user_id_from_app_store_original_transaction_id(input.original_transaction_id.as_str())
+        .await
+        .map_err(|_| Error::FailedToLinkAppleSubscription)?
+    {
+        if existing_user_id != user_id {
+            return Err(Error::SubscriptionAlreadyLinked);
+        }
+    }
+
+    let subscription_status = if subscription_expires_at
+        .map(|expires_at| expires_at > chrono::Utc::now().naive_utc())
+        .unwrap_or(true)
+    {
+        "active"
+    } else {
+        "expired"
+    };
+
+    let account_state = app
+        .database
+        .link_apple_subscription(
+            user_id,
+            input.original_transaction_id.as_str(),
+            subscription_status,
+            subscription_expires_at,
+        )
+        .await
+        .map_err(|_| Error::FailedToLinkAppleSubscription)?;
+
+    Ok(Json(me_response_from_account_state(account_state)).into_response())
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginInput {
@@ -504,152 +658,6 @@ pub async fn logout(
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnonymousInput {
-    device_id: String,
-}
-#[debug_handler]
-pub async fn anonymous(
-    State(app): State<App>,
-    Json(input): Json<AnonymousInput>,
-) -> Result<Response, Error> {
-    // Validate device_id is a valid UUID
-    let device_id = uuid::Uuid::parse_str(&input.device_id).map_err(|_| Error::InvalidDeviceId)?;
-
-    // Check if user with this device_id already exists
-    let user_id = if let Ok(user) = app.database.get_user_from_device_id(device_id).await {
-        // User already exists, return their tokens
-        user.id
-    } else {
-        // Create new anonymous user
-        app.database
-            .create_anonymous_user(device_id)
-            .await
-            .map_err(|_| Error::FailedToCreateAnonymousUser)?
-    };
-
-    // Create tokens for the user
-    let name = create_random_string();
-    let (access_token, refresh_token, hashed_uuid_part) =
-        app.jwt_manager.create(user_id, name.as_str());
-
-    app.database
-        .create_or_overwrite_refresh_token(hashed_uuid_part.as_str(), user_id, name.as_str(), false)
-        .await
-        .map_err(|_| Error::FailedToCreateRefreshToken)?;
-
-    let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
-    Ok((
-        cookie_headers,
-        Json(AuthResponse {
-            refresh_token,
-            access_token,
-        }),
-    )
-        .into_response())
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClaimInput {
-    email: String,
-    password: String,
-}
-#[debug_handler]
-pub async fn claim(
-    State(app): State<App>,
-    headers: HeaderMap,
-    Json(input): Json<ClaimInput>,
-) -> Result<Response, Error> {
-    // Extract user_id from access token (from header or cookie)
-    let jwt_from_header = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "));
-
-    let jwt_from_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|cookie_header| {
-            cookie_header
-                .split(';')
-                .map(|s| s.trim())
-                .find(|s| s.starts_with("access_token="))
-                .and_then(|s| s.strip_prefix("access_token="))
-        });
-
-    let jwt = jwt_from_header
-        .or(jwt_from_cookie)
-        .ok_or(Error::Unauthorized)?;
-    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
-
-    // Validate email and password
-    let mut errors = vec![];
-    let is_valid_email = email_regex().is_match(input.email.as_str());
-    if !is_valid_email {
-        errors.push(ValidationError::InvalidEmailAddress);
-    }
-    if input.email.len() > 254 {
-        errors.push(ValidationError::EmailTooLong);
-    }
-    if !input.password.is_ascii() {
-        errors.push(ValidationError::PasswordNotAscii);
-    }
-    if input.password.len() > 64 {
-        errors.push(ValidationError::PasswordTooLong);
-    }
-    if input.password.len() < 8 {
-        errors.push(ValidationError::PasswordTooShort);
-    }
-    if !errors.is_empty() {
-        return Err(Error::ValidationErrorList(errors));
-    }
-
-    // Check if user is anonymous
-    let is_anonymous = app
-        .database
-        .is_user_anonymous(user_id)
-        .await
-        .map_err(|_| Error::Unauthorized)?;
-
-    if !is_anonymous {
-        return Err(Error::AccountAlreadyClaimed);
-    }
-
-    // Check if email already exists (return generic error to prevent enumeration)
-    if app.database.get_user_from_email(&input.email).await.is_ok() {
-        return Err(Error::FailedToClaim);
-    }
-
-    // Claim the account
-    let hashed_password = security::hash_password(input.password.as_str());
-    app.database
-        .claim_account(user_id, &input.email, &hashed_password)
-        .await
-        .map_err(|_| Error::FailedToClaim)?;
-
-    // Create new tokens for the claimed account
-    let name = create_random_string();
-    let (access_token, refresh_token, hashed_uuid_part) =
-        app.jwt_manager.create(user_id, name.as_str());
-
-    app.database
-        .create_or_overwrite_refresh_token(hashed_uuid_part.as_str(), user_id, name.as_str(), false)
-        .await
-        .map_err(|_| Error::FailedToCreateRefreshToken)?;
-
-    let cookie_headers = auth_cookie_headers(&access_token, &refresh_token);
-    Ok((
-        cookie_headers,
-        Json(AuthResponse {
-            refresh_token,
-            access_token,
-        }),
-    )
-        .into_response())
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ChangePasswordInput {
     current_password: String,
     new_password: String,
@@ -666,27 +674,7 @@ pub async fn change_password(
     headers: HeaderMap,
     Json(input): Json<ChangePasswordInput>,
 ) -> Result<Response, Error> {
-    // Extract user_id from access token (from header or cookie)
-    let jwt_from_header = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "));
-
-    let jwt_from_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|cookie_header| {
-            cookie_header
-                .split(';')
-                .map(|s| s.trim())
-                .find(|s| s.starts_with("access_token="))
-                .and_then(|s| s.strip_prefix("access_token="))
-        });
-
-    let jwt = jwt_from_header
-        .or(jwt_from_cookie)
-        .ok_or(Error::Unauthorized)?;
-    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
+    let user_id = authenticated_user_id_from_headers(&app, &headers)?;
 
     // Validate new password
     let mut errors = vec![];
@@ -712,11 +700,6 @@ pub async fn change_password(
         .get_user_by_id(user_id)
         .await
         .map_err(|_| Error::Unauthorized)?;
-
-    // Check if user is anonymous
-    if user.is_anonymous {
-        return Err(Error::AccountIsAnonymous);
-    }
 
     // Verify current password
     let stored_password = user.password.ok_or(Error::FailedToChangePassword)?;
@@ -752,27 +735,7 @@ pub async fn change_email(
     headers: HeaderMap,
     Json(input): Json<ChangeEmailInput>,
 ) -> Result<Response, Error> {
-    // Extract user_id from access token (from header or cookie)
-    let jwt_from_header = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "));
-
-    let jwt_from_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|header_value| header_value.to_str().ok())
-        .and_then(|cookie_header| {
-            cookie_header
-                .split(';')
-                .map(|s| s.trim())
-                .find(|s| s.starts_with("access_token="))
-                .and_then(|s| s.strip_prefix("access_token="))
-        });
-
-    let jwt = jwt_from_header
-        .or(jwt_from_cookie)
-        .ok_or(Error::Unauthorized)?;
-    let user_id = app.jwt_manager.validate(jwt).ok_or(Error::Unauthorized)?;
+    let user_id = authenticated_user_id_from_headers(&app, &headers)?;
 
     // Validate new email
     let mut errors = vec![];
@@ -793,11 +756,6 @@ pub async fn change_email(
         .get_user_by_id(user_id)
         .await
         .map_err(|_| Error::Unauthorized)?;
-
-    // Check if user is anonymous
-    if user.is_anonymous {
-        return Err(Error::AccountIsAnonymous);
-    }
 
     // Check if new email is same as current
     if user.email.as_deref() == Some(input.new_email.as_str()) {

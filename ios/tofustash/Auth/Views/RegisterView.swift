@@ -16,6 +16,7 @@ struct RegisterView: View {
     // String? = Option<String> in Rust, or `string | undefined` in TS. The ? makes it an Optional.
     @State private var errorMessage: String?
     @State private var isLoading = false
+    @State private var showLogin = false
 
     // `body` is the required property from the View protocol — think of it as the render() method.
     // `some View` = an opaque return type (like Rust's `impl View`). The compiler knows the concrete type, callers don't.
@@ -23,6 +24,12 @@ struct RegisterView: View {
         // Form, Section, TextField etc. are SwiftUI components — like JSX elements. No return keyword needed
         // because Swift has implicit returns for single-expression computed properties.
         Form {
+            Section {
+                Text("Create an account to sync your habits, rewards, and purchases across devices.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 // $email is a Binding — a two-way ref to the @State var. Like passing [value, setValue] as a single object.
                 // Think: <input value={email} onChange={e => setEmail(e.target.value)} /> but $email bundles both.
@@ -55,15 +62,27 @@ struct RegisterView: View {
 
             Section {
                 // Trailing closure syntax: Button("Register") { ... } is sugar for Button("Register", action: { ... })
-                Button("Register") {
+                Button("Create Account") {
                     // Task { } spawns an async context — like wrapping in an immediately-invoked async IIFE in JS.
                     // Needed because SwiftUI closures aren't async by default.
                     Task { await performRegister() }
                 }
                 .disabled(isLoading || email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
             }
+
+            Section {
+                Button("Already have an account? Log in") {
+                    email = ""
+                    password = ""
+                    confirmPassword = ""
+                    showLogin = true
+                }
+            }
         }
-        .navigationTitle("Register")
+        .navigationTitle("Create Account")
+        .navigationDestination(isPresented: $showLogin) {
+            LoginView()
+        }
         // .overlay adds a layer on top, like a positioned absolute div over the form.
         .overlay {
             if isLoading {

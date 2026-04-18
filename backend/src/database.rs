@@ -211,74 +211,29 @@ impl Database {
 
     /// Returns the user from email.
     pub async fn get_user_from_email(&self, email: &str) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as("SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE email = $1")
+        sqlx::query_as(
+            "SELECT
+                id,
+                email,
+                password
+             FROM users
+             WHERE email = $1",
+        )
             .bind(email)
             .fetch_optional(&self.pool)
             .await?
             .ok_or(sqlx::Error::RowNotFound)
     }
 
-    /// Creates an anonymous user, returning the user id.
-    pub async fn create_anonymous_user(&self, device_id: Uuid) -> Result<Uuid, sqlx::Error> {
-        let (user_id,): (Uuid,) = sqlx::query_as(
-            "INSERT INTO users (is_anonymous, device_id) VALUES (true, $1) RETURNING id",
-        )
-        .bind(device_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(user_id)
-    }
-
-    /// Returns the user from device_id.
-    pub async fn get_user_from_device_id(&self, device_id: Uuid) -> Result<UserRow, sqlx::Error> {
-        sqlx::query_as(
-            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE device_id = $1",
-        )
-        .bind(device_id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(sqlx::Error::RowNotFound)
-    }
-
-    /// Claims an anonymous account by setting email and password.
-    pub async fn claim_account(
-        &self,
-        user_id: Uuid,
-        email: &str,
-        hashed_password: &str,
-    ) -> Result<(), sqlx::Error> {
-        let result = sqlx::query(
-            "UPDATE users SET email = $2, password = $3, is_anonymous = false WHERE id = $1 AND is_anonymous = true",
-        )
-        .bind(user_id)
-        .bind(email)
-        .bind(hashed_password)
-        .execute(&self.pool)
-        .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(sqlx::Error::RowNotFound);
-        }
-
-        Ok(())
-    }
-
-    /// Checks if a user is anonymous.
-    pub async fn is_user_anonymous(&self, user_id: Uuid) -> Result<bool, sqlx::Error> {
-        let (is_anonymous,): (bool,) =
-            sqlx::query_as("SELECT is_anonymous FROM users WHERE id = $1")
-                .bind(user_id)
-                .fetch_one(&self.pool)
-                .await?;
-
-        Ok(is_anonymous)
-    }
-
     /// Returns the user by ID.
     pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<UserRow, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, email, password, is_anonymous, device_id, premium FROM users WHERE id = $1",
+            "SELECT
+                id,
+                email,
+                password
+             FROM users
+             WHERE id = $1",
         )
         .bind(user_id)
         .fetch_optional(&self.pool)
@@ -292,12 +247,11 @@ impl Database {
         user_id: Uuid,
         hashed_password: &str,
     ) -> Result<(), sqlx::Error> {
-        let result =
-            sqlx::query("UPDATE users SET password = $2 WHERE id = $1 AND is_anonymous = false")
-                .bind(user_id)
-                .bind(hashed_password)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query("UPDATE users SET password = $2 WHERE id = $1")
+            .bind(user_id)
+            .bind(hashed_password)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(sqlx::Error::RowNotFound);
@@ -308,12 +262,11 @@ impl Database {
 
     /// Updates a user's email.
     pub async fn update_user_email(&self, user_id: Uuid, email: &str) -> Result<(), sqlx::Error> {
-        let result =
-            sqlx::query("UPDATE users SET email = $2 WHERE id = $1 AND is_anonymous = false")
-                .bind(user_id)
-                .bind(email)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query("UPDATE users SET email = $2 WHERE id = $1")
+            .bind(user_id)
+            .bind(email)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(sqlx::Error::RowNotFound);
@@ -404,12 +357,81 @@ impl Database {
             .await
     }
 
-    /// Get user profile (email, premium status, and general difficulty)
+    /// Get user profile (email, entitlement state, and general difficulty)
     pub async fn get_user_profile(&self, user_id: Uuid) -> Result<UserProfileRow, sqlx::Error> {
-        sqlx::query_as("SELECT email, premium, general_difficulty FROM users WHERE id = $1")
+        sqlx::query_as(
+            "SELECT
+                email,
+                general_difficulty,
+                subscription_status
+             FROM users
+             WHERE id = $1",
+        )
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
+    }
+
+    /// Get the account-level auth and subscription state needed by the client.
+    pub async fn get_user_account_state(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserAccountStateRow, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT
+                email,
+                subscription_source,
+                subscription_status,
+                subscription_expires_at
+             FROM users
+             WHERE id = $1",
+        )
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// Returns the user who already owns a given Apple original transaction, if any.
+    pub async fn get_user_id_from_app_store_original_transaction_id(
+        &self,
+        original_transaction_id: &str,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        let row: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id
+             FROM users
+             WHERE app_store_original_transaction_id = $1",
+        )
+        .bind(original_transaction_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|(id,)| id))
+    }
+
+    /// Attaches an Apple subscription to the given user account and returns
+    /// the client-facing account state after linking.
+    pub async fn link_apple_subscription(
+        &self,
+        user_id: Uuid,
+        original_transaction_id: &str,
+        subscription_status: &str,
+        subscription_expires_at: Option<NaiveDateTime>,
+    ) -> Result<UserAccountStateRow, sqlx::Error> {
+        sqlx::query_as(
+            "UPDATE users
+             SET subscription_source = 'apple',
+                 subscription_status = $2,
+                 subscription_expires_at = $3,
+                 app_store_original_transaction_id = $4
+             WHERE id = $1
+             RETURNING email, subscription_source, subscription_status, subscription_expires_at",
+        )
+        .bind(user_id)
+        .bind(subscription_status)
+        .bind(subscription_expires_at)
+        .bind(original_transaction_id)
+        .fetch_one(&self.pool)
+        .await
     }
 
     /// Update general_difficulty within a transaction
@@ -973,8 +995,8 @@ pub struct UserBalanceRow {
 #[derive(sqlx::FromRow)]
 pub struct UserProfileRow {
     pub email: Option<String>,
-    pub premium: bool,
     pub general_difficulty: f64,
+    pub subscription_status: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -982,10 +1004,14 @@ pub struct UserRow {
     pub id: Uuid,
     pub email: Option<String>,
     pub password: Option<String>,
-    pub is_anonymous: bool,
-    #[allow(dead_code)]
-    pub device_id: Option<Uuid>,
-    pub premium: bool,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct UserAccountStateRow {
+    pub email: Option<String>,
+    pub subscription_source: Option<String>,
+    pub subscription_status: String,
+    pub subscription_expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow)]

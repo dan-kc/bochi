@@ -5,10 +5,8 @@ import Security
 // Protocol with Sendable = thread-safe interface. Think of it as a TS interface + Rust's Send bound.
 protocol TokenStorage: Sendable {
     func getTokens() async -> AuthTokens?
-    func storeTokens(_ tokens: AuthTokens, isAnonymous: Bool) async
-    func getIsAnonymous() async -> Bool?
+    func storeTokens(_ tokens: AuthTokens) async
     func clear() async
-    func getOrCreateDeviceId() async -> String
 }
 
 // final class = reference type that can't be subclassed (like a sealed class in Kotlin, or Rust's non-dyn struct).
@@ -17,45 +15,21 @@ protocol TokenStorage: Sendable {
 final class KeychainTokenStorage: TokenStorage {
     private let service = "com.tofustash.auth"
     private let tokensKey = "auth_tokens"
-    private let anonymousKey = "auth_is_anonymous"
-    private let deviceIdKey = "device_id"
 
     func getTokens() async -> AuthTokens? {
         guard let data = readKeychain(key: tokensKey) else { return nil }
         return try? JSONDecoder().decode(AuthTokens.self, from: data)
     }
 
-    // _ before param name = caller omits the label. `isAnonymous:` has a label so callers write storeTokens(tokens, isAnonymous: true).
-    func storeTokens(_ tokens: AuthTokens, isAnonymous: Bool) async {
+    // Behaviour: once a user signs in successfully, only the backend tokens
+    // need to persist locally. Signed-out mode is now fully local-only.
+    func storeTokens(_ tokens: AuthTokens) async {
         guard let data = try? JSONEncoder().encode(tokens) else { return }
         writeKeychain(key: tokensKey, data: data)
-        // Data(...utf8) = convert string to raw bytes. Like Go's []byte("string") or Rust's .as_bytes().
-        writeKeychain(key: anonymousKey, data: Data(isAnonymous ? "true".utf8 : "false".utf8))
-    }
-
-    func getIsAnonymous() async -> Bool? {
-        // Multi-clause guard: unwraps two optionals or bails. Each `let` introduces a new non-optional binding.
-        guard let data = readKeychain(key: anonymousKey),
-              let value = String(data: data, encoding: .utf8)
-        else { return nil }
-        return value == "true"
     }
 
     func clear() async {
         deleteKeychain(key: tokensKey)
-        deleteKeychain(key: anonymousKey)
-    }
-
-    func getOrCreateDeviceId() async -> String {
-        // `if let` with multiple bindings = like chaining Rust's .and_then(). Both must succeed to enter the block.
-        if let data = readKeychain(key: deviceIdKey),
-           let id = String(data: data, encoding: .utf8) {
-            return id
-        }
-        // UUID().uuidString = generates a v4 UUID string. Like Go's uuid.New().String() or crypto.randomUUID() in JS.
-        let id = UUID().uuidString
-        writeKeychain(key: deviceIdKey, data: Data(id.utf8))
-        return id
     }
 
     // MARK: - Keychain helpers

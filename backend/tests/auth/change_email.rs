@@ -6,7 +6,6 @@ use crate::generate_email_from_fn;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http::Method;
-use http_body_util::BodyExt;
 use serde_json::json;
 use tofustash_backend::router;
 use tower::ServiceExt;
@@ -262,60 +261,4 @@ async fn test_change_email_unauthorized() {
     .await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED, "Response: {:?}", json);
-}
-
-#[tokio::test]
-async fn test_change_email_anonymous_user() {
-    // Create anonymous user and get token
-    let router = router::router().await;
-    let device_id = uuid::Uuid::new_v4().to_string();
-
-    let response = router
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/auth/anonymous")
-                .header(http::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(json!({ "deviceId": device_id }).to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let response_body_bytes = response
-        .into_body()
-        .collect()
-        .await
-        .expect("Failed to read response body")
-        .to_bytes();
-    let json: serde_json::Value =
-        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
-
-    let access_token = json
-        .get("accessToken")
-        .and_then(|v| v.as_str())
-        .expect("Should have accessToken");
-
-    // Try to change email as anonymous user
-    let (status, response_json) = make_authenticated_post_request(
-        access_token,
-        "/auth/change-email",
-        json!({
-            "newEmail": "new@test.com",
-            "password": "anything"
-        }),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::BAD_REQUEST, "Response: {:?}", response_json);
-
-    let errors = response_json
-        .get("errors")
-        .and_then(|v| v.as_array())
-        .expect("Should have errors array");
-    assert_eq!(errors.len(), 1);
-    assert_eq!(
-        errors[0].get("code").and_then(|v| v.as_str()),
-        Some("ACCOUNT_IS_ANONYMOUS")
-    );
 }

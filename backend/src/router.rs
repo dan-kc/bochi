@@ -36,9 +36,9 @@ pub async fn router() -> axum::Router {
         .route("/register", post(routes::register))
         .route("/login", post(routes::login))
         .route("/logout", post(routes::logout))
+        .route("/me", get(routes::me))
+        .route("/link-apple-subscription", post(routes::link_apple_subscription))
         .route("/refresh-tokens", post(routes::refresh_tokens))
-        .route("/anonymous", post(routes::anonymous))
-        .route("/claim", post(routes::claim))
         .route("/change-password", post(routes::change_password))
         .route("/change-email", post(routes::change_email));
 

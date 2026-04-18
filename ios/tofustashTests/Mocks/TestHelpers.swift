@@ -24,7 +24,6 @@ enum TestHelpers {
     // Default parameter values — same as TS/Go defaults. Callers can omit any of these.
     static func makeTokens(
         userId: String = "user-123",
-        isAnonymous: Bool = false,
         expiresIn: Int = 3600
     ) -> AuthTokens {
         // Date() = new Date() in JS. timeIntervalSince1970 = Date.now()/1000 (seconds, not ms)
@@ -32,6 +31,22 @@ enum TestHelpers {
         return AuthTokens(
             accessToken: makeJWT(subject: userId, expiresAt: exp),
             refreshToken: "refresh-token-\(userId)"
+        )
+    }
+
+    static func makeCurrentAccount(
+        email: String? = "user@example.com",
+        subscriptionSource: SubscriptionSource? = nil,
+        subscriptionStatus: SubscriptionStatus = .none,
+        isEntitled: Bool = false,
+        subscriptionExpiresAt: String? = nil
+    ) -> CurrentAccountResponse {
+        CurrentAccountResponse(
+            email: email,
+            subscriptionSource: subscriptionSource,
+            subscriptionStatus: subscriptionStatus,
+            isEntitled: isEntitled,
+            subscriptionExpiresAt: subscriptionExpiresAt
         )
     }
 }

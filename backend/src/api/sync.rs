@@ -43,6 +43,7 @@ pub struct SyncHabitInput {
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
@@ -67,6 +68,7 @@ pub struct SyncTagInput {
     pub name: String,
     pub color_hex: String,
     pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
 }
@@ -77,6 +79,7 @@ pub struct SyncHabitTagInput {
     pub habit_id: String,
     pub tag_id: String,
     pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
 }
@@ -88,6 +91,7 @@ pub struct SyncRewardInput {
     pub name: String,
     pub description: String,
     pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
     pub max_daily_frequency: Option<f64>,
@@ -100,6 +104,7 @@ pub struct SyncRewardTagInput {
     pub reward_id: String,
     pub tag_id: String,
     pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
 }
@@ -193,6 +198,14 @@ pub struct RewardTagOutput {
 #[serde(rename_all = "camelCase")]
 pub struct BalanceOutput {
     pub tofu_balance: f64,
+}
+
+fn profile_is_entitled(profile_row: &database::UserProfileRow) -> bool {
+    match profile_row.subscription_status.as_str() {
+        "active" | "grace_period" => true,
+        "billing_retry" | "expired" | "revoked" | "none" => false,
+        _ => false,
+    }
 }
 
 // ============================================================================
@@ -353,6 +366,7 @@ pub async fn get_sync(
         .collect();
 
     let server_time = Utc::now().naive_utc();
+    let is_premium = profile_is_entitled(&profile_row);
 
     Ok(Json(SyncResponse {
         habits,
@@ -366,7 +380,7 @@ pub async fn get_sync(
         },
         server_time,
         email: profile_row.email,
-        is_premium: profile_row.premium,
+        is_premium,
         general_difficulty: profile_row.general_difficulty,
     }))
 }
@@ -778,6 +792,7 @@ pub async fn post_sync(
         })?;
 
     let server_time = Utc::now().naive_utc();
+    let is_premium = profile_is_entitled(&profile_row);
 
     Ok(Json(SyncResponse {
         habits: result_habits,
@@ -791,7 +806,7 @@ pub async fn post_sync(
         },
         server_time,
         email: profile_row.email,
-        is_premium: profile_row.premium,
+        is_premium,
         general_difficulty: profile_row.general_difficulty,
     }))
 }

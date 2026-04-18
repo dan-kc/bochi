@@ -10,11 +10,6 @@ import Foundation
 // like `unsafe impl Send` in Rust. Needed because mutable state in a class isn't
 // normally safe to share across threads, but in tests we control access.
 final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
-    // Result<T, E> is exactly like Rust's Result<T, E>. .success(val) / .failure(err).
-    var anonymousAuthResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
-    var anonymousAuthCallCount = 0
-    var lastAnonymousAuthDeviceId: String? // Optional — like T | undefined in TS, Option<T> in Rust
-
     var registerResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
     var registerCallCount = 0
 
@@ -22,9 +17,14 @@ final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
     var loginCallCount = 0
     var lastLoginEmail: String?
 
-    var claimAccountResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
-    var claimAccountCallCount = 0
-    var lastClaimAccessToken: String?
+    var currentAccountResult: Result<CurrentAccountResponse, Error> = .failure(MockError.notConfigured)
+    var currentAccountCallCount = 0
+    var lastCurrentAccountAccessToken: String?
+
+    var linkAppleSubscriptionResult: Result<CurrentAccountResponse, Error> = .failure(MockError.notConfigured)
+    var linkAppleSubscriptionCallCount = 0
+    var lastLinkAppleSubscriptionAccessToken: String?
+    var lastLinkedOriginalTransactionID: String?
 
     var refreshTokensResult: Result<AuthTokens, Error> = .failure(MockError.notConfigured)
     var refreshTokensCallCount = 0
@@ -42,15 +42,6 @@ final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
     var changeEmailCallCount = 0
     var lastChangeEmailAccessToken: String?
 
-    // Each method fulfills a protocol requirement — like implementing an interface method.
-    // `async throws` = can await + can throw (combines Go's error return with JS async).
-    func anonymousAuth(deviceId: String) async throws -> AuthTokens {
-        anonymousAuthCallCount += 1
-        lastAnonymousAuthDeviceId = deviceId
-        // .get() extracts the success value or throws the error — like Rust's `?` operator
-        return try anonymousAuthResult.get()
-    }
-
     func register(email: String, password: String) async throws -> AuthTokens {
         registerCallCount += 1
         return try registerResult.get()
@@ -62,10 +53,21 @@ final class MockAuthAPIClient: AuthAPIClient, @unchecked Sendable {
         return try loginResult.get()
     }
 
-    func claimAccount(email: String, password: String, accessToken: String) async throws -> AuthTokens {
-        claimAccountCallCount += 1
-        lastClaimAccessToken = accessToken
-        return try claimAccountResult.get()
+    func getCurrentAccount(accessToken: String) async throws -> CurrentAccountResponse {
+        currentAccountCallCount += 1
+        lastCurrentAccountAccessToken = accessToken
+        return try currentAccountResult.get()
+    }
+
+    func linkAppleSubscription(
+        originalTransactionID: String,
+        subscriptionExpiresAt: Date?,
+        accessToken: String
+    ) async throws -> CurrentAccountResponse {
+        linkAppleSubscriptionCallCount += 1
+        lastLinkAppleSubscriptionAccessToken = accessToken
+        lastLinkedOriginalTransactionID = originalTransactionID
+        return try linkAppleSubscriptionResult.get()
     }
 
     func refreshTokens(refreshToken: String) async throws -> AuthTokens {

@@ -2,269 +2,389 @@ import Foundation
 import Testing
 @testable import tofustash
 
-// @MainActor pins this entire struct to the main thread — like ensuring all code runs
-// in React's render thread. Needed because AuthManager likely uses @Published/@Observable
-// properties that must be accessed from the main actor (Swift's concurrency safety).
 @MainActor
 struct AuthManagerTests {
 
-    // SUT = "System Under Test". Returns a tuple (like a Go multi-return).
-    // Default param values (= MockAuthAPIClient()) work like TS default params.
     private func makeSUT(
         apiClient: MockAuthAPIClient = MockAuthAPIClient(),
-        storage: MockTokenStorage = MockTokenStorage()
-    ) -> (AuthManager, MockAuthAPIClient, MockTokenStorage) {
-        // Dependency injection via constructor — same pattern as passing mock props in React tests
-        let manager = AuthManager(apiClient: apiClient, tokenStorage: storage)
-        return (manager, apiClient, storage)
+        storage: MockTokenStorage = MockTokenStorage(),
+        entitlementClient: MockAppleEntitlementClient = MockAppleEntitlementClient()
+    ) -> (AuthManager, MockAuthAPIClient, MockTokenStorage, MockAppleEntitlementClient) {
+        let manager = AuthManager(
+            apiClient: apiClient,
+            tokenStorage: storage,
+            appleEntitlementClient: entitlementClient
+        )
+        return (manager, apiClient, storage, entitlementClient)
     }
 
     // MARK: - Bootstrap
 
-    // Behaviour: When the app launches with no saved session, it creates an anonymous account
-    // so the user can start using the app immediately without signing up.
-    // async test — like an async Jest test. Swift Testing handles the await natively.
-    @Test func bootstrapWithNoStoredTokensPerformsAnonymousAuth() async {
-        let (manager, api, storage) = makeSUT()
-        let tokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(tokens)
+    // Behaviour: when the app launches with no saved backend session and no
+    // local Apple entitlement, the user stays signed out in free local mode.
+    @Test func bootstrapWithNoStoredTokensEntersSignedOutFree() async {
+        let (manager, api, _, entitlementClient) = makeSUT()
+        entitlementClient.currentEntitlementResult = .inactive
 
         await manager.bootstrap()
 
-        #expect(api.anonymousAuthCallCount == 1)
-        #expect(api.lastAnonymousAuthDeviceId == "test-device-id")
-        #expect(manager.user?.id == "anon-1")
-        #expect(manager.user?.isAnonymous == true)
+        #expect(api.refreshTokensCallCount == 0)
+        #expect(manager.user == nil)
+        #expect(manager.sessionState == .signedOutFree)
+        #expect(manager.canSync == false)
         #expect(manager.isLoading == false)
     }
 
-    // Behaviour: When the app launches with a previously saved session, the user is
-    // restored to their logged-in state and tokens are refreshed for continued access.
-    @Test func bootstrapWithStoredTokensRestoresUserAndRefreshes() async {
+    // Behaviour: when the app launches signed out but the device already owns
+    // an Apple subscription, premium unlocks locally without creating an account.
+    @Test func bootstrapWithLocalAppleEntitlementEntersSignedOutPremiumRestored() async {
+        let entitlement = AppleEntitlementStatus(
+            isActive: true,
+            productID: "premium.monthly",
+            originalTransactionID: "1000001234567889",
+            expirationDate: nil
+        )
+        let entitlementClient = MockAppleEntitlementClient()
+        entitlementClient.currentEntitlementResult = entitlement
+
+        let (manager, _, _, _) = makeSUT(entitlementClient: entitlementClient)
+        await manager.bootstrap()
+
+        #expect(manager.user == nil)
+        #expect(manager.sessionState == .signedOutPremiumRestored)
+        #expect(manager.isPremiumEntitled == true)
+        #expect(manager.needsAccountToLinkPurchase == true)
+    }
+
+    // Behaviour: when a saved session exists, launch refreshes tokens and asks
+    // `/auth/me` which account and subscription state should be shown.
+    @Test func bootstrapWithStoredTokensRestoresSignedInAccountState() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
         let tokens = TestHelpers.makeTokens(userId: "user-456")
         storage.storedTokens = tokens
-        storage.storedIsAnonymous = false
         api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "user@example.com")
+        )
 
-        let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
         await manager.bootstrap()
 
-        #expect(manager.user?.id == "user-456")
-        #expect(manager.user?.isAnonymous == false)
-        #expect(api.anonymousAuthCallCount == 0)
-        #expect(manager.isLoading == false)
-        // Verifies refresh was attempted with the stored token
         #expect(api.refreshTokensCallCount == 1)
-        #expect(api.lastRefreshToken == tokens.refreshToken)
+        #expect(api.currentAccountCallCount == 1)
+        #expect(manager.user?.id == "user-456")
+        #expect(manager.user?.email == "user@example.com")
+        #expect(manager.sessionState == .signedInFree)
+        #expect(manager.canSync == true)
     }
 
-    // Behaviour: When the app launches with a saved anonymous session, the user
-    // remains anonymous (they haven't signed up yet but had data from a prior session).
-    @Test func bootstrapWithStoredAnonymousTokensRestoresAnonymousUser() async {
+    // Behaviour: when refresh says the saved backend session is invalid, the
+    // app clears it and returns to signed-out local mode.
+    @Test func bootstrapWithExpiredSessionFallsBackToSignedOutFree() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
-        let tokens = TestHelpers.makeTokens(userId: "anon-789", isAnonymous: true)
-        storage.storedTokens = tokens
-        storage.storedIsAnonymous = true
-        api.refreshTokensResult = .success(tokens)
+        storage.storedTokens = TestHelpers.makeTokens(userId: "user-1")
+        api.refreshTokensResult = .failure(
+            ApiError(errors: nil, message: "Unauthorized", statusCode: 401)
+        )
 
-        let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
         await manager.bootstrap()
 
-        #expect(manager.user?.isAnonymous == true)
+        #expect(storage.clearCallCount == 1)
+        #expect(manager.user == nil)
+        #expect(manager.sessionState == .signedOutFree)
     }
 
-    // MARK: - Login
+    // MARK: - Login / Register
 
-    // Behaviour: When a user logs in with valid credentials, they become the authenticated user.
-    // `async throws` = this test can both await and throw errors. `throws` is like
-    // Rust's Result — but the test runner catches thrown errors as failures automatically.
-    @Test func loginCallsAPIAndSetsUser() async throws {
-        let (manager, api, storage) = makeSUT()
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
+    // Behaviour: when a user logs into an Apple-backed premium account, the
+    // app uses `/auth/me` to render premium as account-owned rather than local-only.
+    @Test func loginLoadsAccountAndApplePremiumState() async throws {
+        let (manager, api, storage, entitlementClient) = makeSUT()
+        entitlementClient.currentEntitlementResult = .inactive
         await manager.bootstrap()
 
-        let loginTokens = TestHelpers.makeTokens(userId: "logged-in-user")
-        api.loginResult = .success(loginTokens)
+        let tokens = TestHelpers.makeTokens(userId: "apple-user")
+        api.loginResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "apple@example.com",
+                subscriptionSource: .apple,
+                subscriptionStatus: .active,
+                isEntitled: true
+            )
+        )
 
-        try await manager.login(email: "test@example.com", password: "password123")
+        try await manager.login(email: "apple@example.com", password: "password123")
 
         #expect(api.loginCallCount == 1)
-        #expect(api.lastLoginEmail == "test@example.com")
-        #expect(manager.user?.id == "logged-in-user")
-        #expect(manager.user?.isAnonymous == false)
-        #expect(storage.storedIsAnonymous == false)
+        #expect(api.currentAccountCallCount == 1)
+        #expect(storage.storedTokens == tokens)
+        #expect(manager.sessionState == .signedInPremiumApple)
+        #expect(manager.user?.email == "apple@example.com")
     }
 
-    // Behaviour: When a user logs in with wrong credentials, login fails and
-    // they remain on their current (anonymous) account.
-    @Test func loginWithInvalidCredentialsThrows() async {
-        let (manager, api, _) = makeSUT()
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
+    // Behaviour: when a new user registers and the backend reports no linked
+    // subscription yet, the app should land in the normal signed-in free state.
+    @Test func registerLoadsSignedInFreeState() async throws {
+        let (manager, api, storage, entitlementClient) = makeSUT()
+        entitlementClient.currentEntitlementResult = .inactive
         await manager.bootstrap()
 
-        api.loginResult = .failure(ApiError(errors: nil, message: "Invalid credentials", statusCode: 401))
-
-        // do/catch = try/catch in TS. `try` keyword before throwing calls is mandatory in Swift.
-        do {
-            try await manager.login(email: "test@example.com", password: "wrong")
-            Issue.record("Expected login to throw") // Like Jest's fail() — marks test as failed
-        } catch {
-            // `error` is implicitly available in catch blocks (like Go's err)
-            #expect(manager.user?.id == "anon-1") // User unchanged
-        }
-    }
-
-    // MARK: - Register
-
-    // Behaviour: When a user registers a new account, they become the authenticated user.
-    @Test func registerCallsAPIAndSetsUser() async throws {
-        let (manager, api, storage) = makeSUT()
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
-        await manager.bootstrap()
-
-        let registerTokens = TestHelpers.makeTokens(userId: "new-user")
-        api.registerResult = .success(registerTokens)
+        let tokens = TestHelpers.makeTokens(userId: "new-user")
+        api.registerResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "new@example.com")
+        )
 
         try await manager.register(email: "new@example.com", password: "password123")
 
         #expect(api.registerCallCount == 1)
-        #expect(manager.user?.id == "new-user")
-        #expect(manager.user?.isAnonymous == false)
-        #expect(storage.storedIsAnonymous == false)
+        #expect(storage.storedTokens == tokens)
+        #expect(manager.sessionState == .signedInFree)
+        #expect(manager.user?.email == "new@example.com")
     }
 
-    // MARK: - Claim Account
-
-    // Behaviour: When an anonymous user claims their account (signs up), their data
-    // is preserved and they become a fully authenticated user.
-    @Test func claimAccountConvertsToNonAnonymous() async throws {
+    // Behaviour: when a user signs up after restoring on-device, the app should
+    // explicitly link that Apple purchase to the new account instead of keeping
+    // premium stranded as device-only state.
+    @Test func registerAfterLocalRestoreLinksAccountToApplePremium() async throws {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-1", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
+        let entitlementClient = MockAppleEntitlementClient()
+        entitlementClient.currentEntitlementResult = AppleEntitlementStatus(
+            isActive: true,
+            productID: "premium.monthly",
+            originalTransactionID: "1000001234567890",
+            expirationDate: nil
+        )
 
-        let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
+        let (manager, _, _, _) = makeSUT(
+            apiClient: api,
+            storage: storage,
+            entitlementClient: entitlementClient
+        )
         await manager.bootstrap()
 
-        #expect(manager.isAnonymous == true)
+        api.registerResult = .success(TestHelpers.makeTokens(userId: "linked-user"))
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "linked@example.com")
+        )
+        api.linkAppleSubscriptionResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "linked@example.com",
+                subscriptionSource: .apple,
+                subscriptionStatus: .active,
+                isEntitled: true
+            )
+        )
 
-        let claimTokens = TestHelpers.makeTokens(userId: "claimed-user")
-        api.claimAccountResult = .success(claimTokens)
+        try await manager.register(email: "linked@example.com", password: "password123")
 
-        try await manager.claimAccount(email: "claim@example.com", password: "password123")
+        #expect(api.linkAppleSubscriptionCallCount == 1)
+        #expect(api.lastLinkedOriginalTransactionID == "1000001234567890")
+        #expect(manager.sessionState == .signedInPremiumApple)
+        #expect(manager.hasUnlinkedAppleEntitlement == false)
+        #expect(manager.user?.email == "linked@example.com")
+    }
 
-        // Verifies the current access token was sent for claiming
-        #expect(api.claimAccountCallCount == 1)
-        #expect(api.lastClaimAccessToken == anonTokens.accessToken)
-        #expect(manager.user?.id == "claimed-user")
-        #expect(manager.isAnonymous == false)
-        #expect(storage.storedIsAnonymous == false)
+    // MARK: - Restore Purchases
+
+    // Behaviour: restoring while signed out should unlock local premium on the
+    // device without silently creating or signing into a backend account.
+    @Test func restorePurchasesWhileSignedOutUnlocksLocalPremiumOnly() async throws {
+        let entitlementClient = MockAppleEntitlementClient()
+        entitlementClient.currentEntitlementResult = .inactive
+        entitlementClient.restoreResult = .success(
+            AppleEntitlementStatus(
+                isActive: true,
+                productID: "premium.yearly",
+                originalTransactionID: "1000001234567891",
+                expirationDate: nil
+            )
+        )
+
+        let (manager, _, _, _) = makeSUT(entitlementClient: entitlementClient)
+        await manager.bootstrap()
+        try await manager.restorePurchases()
+
+        #expect(entitlementClient.restoreCallCount == 1)
+        #expect(manager.user == nil)
+        #expect(manager.sessionState == .signedOutPremiumRestored)
+        #expect(manager.needsAccountToLinkPurchase == true)
+    }
+
+    // Behaviour: when a signed-in user restores a valid Apple purchase, the
+    // app should attach that purchase to the current account and immediately
+    // move from free account state to Apple-backed premium account state.
+    @Test func restorePurchasesWhileSignedInLinksApplePremiumToAccount() async throws {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let entitlementClient = MockAppleEntitlementClient()
+        let tokens = TestHelpers.makeTokens(userId: "restore-user")
+        storage.storedTokens = tokens
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "restore@example.com")
+        )
+        entitlementClient.currentEntitlementResult = .inactive
+        entitlementClient.restoreResult = .success(
+            AppleEntitlementStatus(
+                isActive: true,
+                productID: "premium.yearly",
+                originalTransactionID: "1000001234567892",
+                expirationDate: nil
+            )
+        )
+        api.linkAppleSubscriptionResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "restore@example.com",
+                subscriptionSource: .apple,
+                subscriptionStatus: .active,
+                isEntitled: true
+            )
+        )
+
+        let (manager, _, _, _) = makeSUT(
+            apiClient: api,
+            storage: storage,
+            entitlementClient: entitlementClient
+        )
+        await manager.bootstrap()
+        try await manager.restorePurchases()
+
+        #expect(api.linkAppleSubscriptionCallCount == 1)
+        #expect(manager.sessionState == .signedInPremiumApple)
+        #expect(manager.hasUnlinkedAppleEntitlement == false)
     }
 
     // MARK: - Logout
 
-    // Behaviour: When a user logs out, their session is cleared and a fresh
-    // anonymous session is created so the app remains usable.
-    @Test func logoutCallsAPIAndCreatesNewAnonymousSession() async throws {
-        let (manager, api, storage) = makeSUT()
-        let loginTokens = TestHelpers.makeTokens(userId: "user-1")
-        storage.storedTokens = loginTokens
-        storage.storedIsAnonymous = false
-        api.refreshTokensResult = .success(loginTokens)
-        await manager.bootstrap()
-
-        let newAnonTokens = TestHelpers.makeTokens(userId: "anon-new", isAnonymous: true)
-        api.anonymousAuthResult = .success(newAnonTokens)
-
-        await manager.logout()
-
-        #expect(api.logoutCallCount == 1)
-        #expect(storage.clearCallCount == 1)
-        #expect(manager.user?.id == "anon-new")
-        #expect(manager.user?.isAnonymous == true)
-    }
-
-    // Behaviour: When a user logs out but the server is unreachable, the local
-    // session is still cleared so the user isn't stuck in a broken state.
-    @Test func logoutStillClearsLocallyIfAPIFails() async throws {
-        let (manager, api, storage) = makeSUT()
-        let loginTokens = TestHelpers.makeTokens(userId: "user-1")
-        storage.storedTokens = loginTokens
-        storage.storedIsAnonymous = false
-        api.refreshTokensResult = .success(loginTokens)
-        await manager.bootstrap()
-
-        api.logoutResult = .failure(ApiError(errors: nil, message: "Server error", statusCode: 500))
-        let newAnonTokens = TestHelpers.makeTokens(userId: "anon-new", isAnonymous: true)
-        api.anonymousAuthResult = .success(newAnonTokens)
-
-        await manager.logout()
-
-        #expect(storage.clearCallCount == 1)
-        #expect(manager.user?.id == "anon-new")
-        #expect(manager.user?.isAnonymous == true)
-    }
-
-    // MARK: - Change Password
-
-    // Behaviour: When a user changes their password, the request is sent with their current session.
-    @Test func changePasswordCallsAPIWithAccessToken() async throws {
-        let (manager, api, storage) = makeSUT()
+    // Behaviour: logging out should clear the backend session but keep any
+    // active Apple entitlement visible as device-level premium.
+    @Test func logoutPreservesLocalPremiumRestoreState() async throws {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let entitlementClient = MockAppleEntitlementClient()
         let tokens = TestHelpers.makeTokens(userId: "user-1")
         storage.storedTokens = tokens
-        storage.storedIsAnonymous = false
         api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "user@example.com")
+        )
+        entitlementClient.currentEntitlementResult = AppleEntitlementStatus(
+            isActive: true,
+            productID: "premium.monthly",
+            originalTransactionID: "1000001234567893",
+            expirationDate: nil
+        )
+
+        let (manager, _, _, _) = makeSUT(
+            apiClient: api,
+            storage: storage,
+            entitlementClient: entitlementClient
+        )
         await manager.bootstrap()
 
+        await manager.logout()
+
+        #expect(storage.clearCallCount == 1)
+        #expect(manager.user == nil)
+        #expect(manager.sessionState == .signedOutPremiumRestored)
+    }
+
+    // MARK: - Account States
+
+    // Behaviour: a web subscription should unlock premium through account state
+    // alone, even if the device has no local Apple restore on it.
+    @Test func bootstrapLoadsWebPremiumAccountState() async {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let tokens = TestHelpers.makeTokens(userId: "web-user")
+        storage.storedTokens = tokens
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "web@example.com",
+                subscriptionSource: .web,
+                subscriptionStatus: .active,
+                isEntitled: true
+            )
+        )
+
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
+        await manager.bootstrap()
+
+        #expect(manager.sessionState == .signedInPremiumWeb)
+        #expect(manager.isPremiumEntitled == true)
+    }
+
+    // Behaviour: expired or billing-issue accounts should keep sync/account
+    // ownership while clearly dropping premium entitlement.
+    @Test func bootstrapLoadsLapsedAccountState() async {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let tokens = TestHelpers.makeTokens(userId: "lapsed-user")
+        storage.storedTokens = tokens
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "lapsed@example.com",
+                subscriptionSource: .apple,
+                subscriptionStatus: .expired,
+                isEntitled: false,
+                subscriptionExpiresAt: "2026-04-18T09:00:00"
+            )
+        )
+
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
+        await manager.bootstrap()
+
+        #expect(manager.sessionState == .signedInLapsed)
+        #expect(manager.canSync == true)
+        #expect(manager.isPremiumEntitled == false)
+        #expect(manager.user?.subscriptionExpiresAt != nil)
+    }
+
+    // MARK: - Account Settings Actions
+
+    // Behaviour: changing password uses the current signed-in backend session.
+    @Test func changePasswordCallsAPIWithAccessToken() async throws {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let tokens = TestHelpers.makeTokens(userId: "user-1")
+        storage.storedTokens = tokens
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "user@example.com")
+        )
+
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
+        await manager.bootstrap()
         try await manager.changePassword(currentPassword: "old", newPassword: "newpass123")
 
         #expect(api.changePasswordCallCount == 1)
         #expect(api.lastChangePasswordAccessToken != nil)
     }
 
-    // MARK: - Change Email
-
-    // Behaviour: When a user changes their email, the request is sent with their current session.
+    // Behaviour: changing email uses the current signed-in backend session.
     @Test func changeEmailCallsAPIWithAccessToken() async throws {
-        let (manager, api, storage) = makeSUT()
-        let tokens = TestHelpers.makeTokens(userId: "user-1")
-        storage.storedTokens = tokens
-        storage.storedIsAnonymous = false
-        api.refreshTokensResult = .success(tokens)
-        await manager.bootstrap()
-
-        try await manager.changeEmail(newEmail: "new@example.com", password: "password123")
-
-        #expect(api.changeEmailCallCount == 1)
-        #expect(api.lastChangeEmailAccessToken != nil)
-    }
-
-    // MARK: - Token Refresh Failure
-
-    // Behaviour: When a returning user's session has expired (server rejects refresh),
-    // they are logged out and given a fresh anonymous session instead of seeing an error.
-    @Test func refreshFailsWith401FallsBackToAnonymous() async {
         let api = MockAuthAPIClient()
         let storage = MockTokenStorage()
         let tokens = TestHelpers.makeTokens(userId: "user-1")
         storage.storedTokens = tokens
-        storage.storedIsAnonymous = false
-        api.refreshTokensResult = .failure(ApiError(errors: nil, message: "Unauthorized", statusCode: 401))
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "user@example.com")
+        )
 
-        let anonTokens = TestHelpers.makeTokens(userId: "anon-fallback", isAnonymous: true)
-        api.anonymousAuthResult = .success(anonTokens)
-
-        let (manager, _, _) = makeSUT(apiClient: api, storage: storage)
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
         await manager.bootstrap()
+        try await manager.changeEmail(newEmail: "new@example.com", password: "password123")
 
-        #expect(manager.user?.id == "anon-fallback")
-        #expect(manager.user?.isAnonymous == true)
-        #expect(storage.clearCallCount == 1)
+        #expect(api.changeEmailCallCount == 1)
+        #expect(api.lastChangeEmailAccessToken != nil)
     }
 }

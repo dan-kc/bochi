@@ -5,10 +5,14 @@ import Foundation
 protocol AuthAPIClient: Sendable {
     // async throws = like a TS async function that can throw OR a Rust async fn returning Result.
     // Swift's async/await is similar to JS but built into the language with structured concurrency (closer to Rust's tokio).
-    func anonymousAuth(deviceId: String) async throws -> AuthTokens
     func register(email: String, password: String) async throws -> AuthTokens
     func login(email: String, password: String) async throws -> AuthTokens
-    func claimAccount(email: String, password: String, accessToken: String) async throws -> AuthTokens
+    func getCurrentAccount(accessToken: String) async throws -> CurrentAccountResponse
+    func linkAppleSubscription(
+        originalTransactionID: String,
+        subscriptionExpiresAt: Date?,
+        accessToken: String
+    ) async throws -> CurrentAccountResponse
     func refreshTokens(refreshToken: String) async throws -> AuthTokens
     func logout(refreshToken: String) async throws
     func changePassword(currentPassword: String, newPassword: String, accessToken: String) async throws
@@ -87,11 +91,6 @@ struct LiveAuthAPIClient: AuthAPIClient {
         }
     }
 
-    // Implicit return: single-expression function bodies don't need `return` (like Rust closures).
-    func anonymousAuth(deviceId: String) async throws -> AuthTokens {
-        try await request(endpoint: "/auth/anonymous", body: ["deviceId": deviceId])
-    }
-
     func register(email: String, password: String) async throws -> AuthTokens {
         try await request(endpoint: "/auth/register", body: ["email": email, "password": password])
     }
@@ -100,10 +99,30 @@ struct LiveAuthAPIClient: AuthAPIClient {
         try await request(endpoint: "/auth/login", body: ["email": email, "password": password])
     }
 
-    func claimAccount(email: String, password: String, accessToken: String) async throws -> AuthTokens {
+    // Behaviour: after sign-in or refresh, the app asks the backend which
+    // account owns this session and what premium state is linked to it.
+    func getCurrentAccount(accessToken: String) async throws -> CurrentAccountResponse {
         try await request(
-            endpoint: "/auth/claim",
-            body: ["email": email, "password": password],
+            endpoint: "/auth/me",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    // Behaviour: once the user has both a signed-in account and a restored Apple
+    // purchase on this device, the app explicitly links that purchase to the
+    // account so sync and premium unlock together.
+    func linkAppleSubscription(
+        originalTransactionID: String,
+        subscriptionExpiresAt: Date?,
+        accessToken: String
+    ) async throws -> CurrentAccountResponse {
+        try await request(
+            endpoint: "/auth/link-apple-subscription",
+            body: LinkAppleSubscriptionRequest(
+                originalTransactionID: originalTransactionID,
+                subscriptionExpiresAt: subscriptionExpiresAt.map(BackendTimestampFormatter.string)
+            ),
             accessToken: accessToken
         )
     }
@@ -142,4 +161,21 @@ struct LiveAuthAPIClient: AuthAPIClient {
 // Decodable = can be deserialized from JSON (like serde::Deserialize in Rust or a Zod schema in TS).
 private struct SuccessResponse: Decodable {
     let success: Bool
+}
+
+private struct LinkAppleSubscriptionRequest: Encodable {
+    let originalTransactionID: String
+    let subscriptionExpiresAt: String?
+}
+
+private enum BackendTimestampFormatter {
+    private static let formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static func string(from date: Date) -> String {
+        formatter.string(from: date)
+    }
 }

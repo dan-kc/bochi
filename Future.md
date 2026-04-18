@@ -5,19 +5,6 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 
-I plan to montise this app. How should I do so?
-
-Currently my idea is:
-
-- A user can use the app freely with no account (with limitations on the number of habits/rewards).
-- They can make an account to sync/persist their data.
-- They can sign up for premium to unlick restrictions/limitations
-
-What other suggestions do you have?
-
-
-
-
 Implement the sync layer from ./frontend. You can see the sync endpoints in ./backend. I forgot how the implementation works. Remind me, ask loads of quesions if things can be implemented differently.
 
 I need this to work cross platform, in future I will have an android app and a web app so i cannot rely on icloud store (I think).

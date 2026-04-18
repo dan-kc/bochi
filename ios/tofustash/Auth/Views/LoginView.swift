@@ -14,6 +14,12 @@ struct LoginView: View {
     var body: some View {
         Form {
             Section {
+                Text("Sign in to sync your data and attach any premium account benefits to this device.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 TextField("Email", text: $email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
