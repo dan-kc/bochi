@@ -37,7 +37,7 @@ struct ContentView: View {
     ContentView()
         // .environment() — injects into SwiftUI's environment (exactly like React Context Provider)
         .environment(AuthManager(
-            apiClient: LiveAuthAPIClient(baseURL: URL(string: "http://localhost:8501")!),
+            apiClient: AppConfiguration.makeAuthAPIClient(),
             tokenStorage: KeychainTokenStorage()
         ))
         .environment(HabitStore())

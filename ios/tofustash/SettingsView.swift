@@ -106,7 +106,7 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environment(AuthManager(
-            apiClient: LiveAuthAPIClient(baseURL: URL(string: "http://localhost:8501")!),
+            apiClient: AppConfiguration.makeAuthAPIClient(),
             tokenStorage: KeychainTokenStorage()
         ))
         .environment(UserSettingsStore())

@@ -9,7 +9,7 @@ struct tofustashApp: App {
     // and only re-renders views that depend on the specific property that changed.
     // Unlike React, there's no need for selectors or memo — it's automatic.
     @State private var authManager = AuthManager(
-        apiClient: LiveAuthAPIClient(baseURL: AppConfiguration.apiBaseURL),
+        apiClient: AppConfiguration.makeAuthAPIClient(),
         tokenStorage: KeychainTokenStorage()
     )
 
