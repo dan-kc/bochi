@@ -55,15 +55,18 @@ struct SettingsView: View {
     @ViewBuilder
     private var syncSection: some View {
         Section {
-            LabeledContent {
-                Label(syncManager.statusText, systemImage: syncManager.statusIconName)
-                    .foregroundStyle(syncStatusColor)
-            } label: {
+            HStack {
                 Text("Status")
+                Spacer()
+                Label(syncManager.statusText, systemImage: syncManager.statusIconName)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(syncStatusColor)
             }
 
             if let lastSyncTime = syncManager.lastSyncTime {
-                LabeledContent("Last Sync") {
+                HStack {
+                    Text("Last Sync")
+                    Spacer()
                     Text(lastSyncTime.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
                         .foregroundStyle(.secondary)
                 }
@@ -82,7 +85,7 @@ struct SettingsView: View {
             }
             .disabled(!authManager.canSync || syncManager.status == .syncing)
         } header: {
-            Label("Sync", systemImage: syncManager.statusIconName)
+            Text("Sync")
         } footer: {
             if !authManager.canSync {
                 Text("Create an account or sign in before sync can back up this device.")
