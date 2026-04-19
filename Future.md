@@ -7,10 +7,12 @@ Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 This is a habit tracking app where you have habits and rewards. You do habits to earn in-game currency, you spend them on rewards. An example habit is "10 pushups" or "Cold message a friend". An example reward is "Eat 1 chocolate bar" or "Spend 15 minutes on TikTok".
 
-------
+---
 
-When I swipe to delete an entry from a list, it brings up an alert to delete the entry. There is a bug, when the alert pops up, the entry seems to already be deleted from the list, then it comes back after a second. So it dissapears for a bit then comes back, then i can tap delete on the alert and it will correctly delete. This does not hapen when I delete from the habit change modal. Fix this visual glitch 
-
+The set difficulty modal UI is ugly. I like the title bar with unset, cancel and save.
+Underneath that have a horizontal list of difficulties that is horizontally scrollable. IT should be quite large and should center on the currently selected one. Also the currently selected one should be orange. They should all be pill shaped, gray unless it is currently selected in which case it is orange.
+Underneath that have the explaination text, underneath that have the example test.
+This should all fit in a .medium modal.
 
 # Filters
 

@@ -27,54 +27,18 @@ struct TierSelectionSheet<Tier: PricingTierOption>: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(options, id: \.self) { option in
-                        Button {
-                            draftSelection = option
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(option.displayName)
-                                        .font(.headline)
-                                    Text(option.shortDescription)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                }
+            VStack(spacing: 20) {
+                selectedTierTitle
 
-                                Spacer()
+                tierSelector
 
-                                if draftSelection == option {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.blue)
-                                }
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.fill.tertiary)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                selectedTierDetails
 
-                    if let selected = draftSelection {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(selected.displayName)
-                                .font(.title3.weight(.semibold))
-                            Text(selected.shortDescription)
-                                .foregroundStyle(.secondary)
-                            Text("Example: \(selected.example)")
-                                .font(.subheadline)
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.fill.tertiary)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-                .padding()
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 0)
+            .padding(.bottom, 20)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,8 +61,60 @@ struct TierSelectionSheet<Tier: PricingTierOption>: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium])
         .presentationBackground(.thinMaterial)
         .presentationContentInteraction(.scrolls)
+    }
+
+    private var selectedTierTitle: some View {
+        Group {
+            if let selected = draftSelection {
+                Text(selected.displayName)
+                    .font(.title3.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 14)
+            }
+        }
+    }
+
+    private var tierSelector: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(options.enumerated()), id: \.element) { index, option in
+                Button {
+                    draftSelection = option
+                } label: {
+                    Text("\(index + 1)")
+                        .font(.headline.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(draftSelection == option ? .white : .primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(draftSelection == option ? Color.orange : Color(uiColor: .systemGray5))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .scaleEffect(draftSelection == option ? 1.05 : 1.0)
+            }
+        }
+    }
+
+    private var selectedTierDetails: some View {
+        Group {
+            if let selected = draftSelection {
+                VStack(spacing: 12) {
+                    Text(selected.shortDescription)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Example: \(selected.example)")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
     }
 }
