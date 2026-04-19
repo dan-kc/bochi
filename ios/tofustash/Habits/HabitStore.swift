@@ -25,24 +25,20 @@ final class HabitStore {
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
         self.habitsByOwner = Self.normalizePersistedHabits(persisted.habitsByOwner)
-        self.habits = self.habitsByOwner[initialOwnerID] ?? []
+        self.habits = OwnerScopedRecordSupport.recordsForOwner(self.habitsByOwner, ownerID: initialOwnerID)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        habits = habitsByOwner[ownerID] ?? []
+        habits = OwnerScopedRecordSupport.recordsForOwner(habitsByOwner, ownerID: ownerID)
     }
 
     func migrateHabits(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
-        guard sourceOwnerID != destinationOwnerID else { return [] }
-
-        let source = habitsByOwner[sourceOwnerID] ?? []
-        let destination = habitsByOwner[destinationOwnerID] ?? []
-        let merged = mergeRecords(local: destination, remote: source)
-        let migratedIDs = source.map(\.id)
-
-        habitsByOwner[destinationOwnerID] = merged
-        habitsByOwner[sourceOwnerID] = []
+        let migratedIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &habitsByOwner
+        )
         persist()
         refreshCurrentHabits()
         return migratedIDs
@@ -165,7 +161,7 @@ final class HabitStore {
     func mergeHabits(_ remoteHabits: [Habit]) {
         guard !remoteHabits.isEmpty else { return }
         mutateHabits {
-            $0 = mergeRecords(local: $0, remote: remoteHabits)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteHabits)
         }
     }
 
@@ -184,51 +180,26 @@ final class HabitStore {
     }
 
     private func mutateHabits(_ mutate: (inout [Habit]) -> Void) {
-        var next = habits
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        habits = next
-        habitsByOwner[currentOwnerID] = next
+        habits = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: habits,
+            ownerID: currentOwnerID,
+            recordsByOwner: &habitsByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
     private func refreshCurrentHabits() {
-        habits = habitsByOwner[currentOwnerID] ?? []
+        habits = OwnerScopedRecordSupport.recordsForOwner(habitsByOwner, ownerID: currentOwnerID)
     }
 
     private func persist() {
         JSONFileStore.save(PersistedState(habitsByOwner: habitsByOwner), to: storageURL)
     }
 
-    private func mergeRecords(local: [Habit], remote: [Habit]) -> [Habit] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
     private static func normalizePersistedHabits(_ habitsByOwner: [String: [Habit]]) -> [String: [Habit]] {
-        Dictionary(uniqueKeysWithValues: habitsByOwner.map { ownerID, habits in
-            (ownerID, normalizeHabits(habits))
-        })
-    }
-
-    private static func normalizeHabits(_ habits: [Habit]) -> [Habit] {
-        var newestByID: [RecordID: Habit] = [:]
-
-        for habit in habits {
-            let normalized = Habit(
+        OwnerScopedRecordSupport.normalizePersistedRecords(habitsByOwner) { habit in
+            Habit(
                 id: RecordID(rawValue: habit.id.rawValue),
                 name: habit.name,
                 description: habit.description,
@@ -238,19 +209,6 @@ final class HabitStore {
                 frequency: habit.frequency,
                 difficultyTier: habit.difficultyTier
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 

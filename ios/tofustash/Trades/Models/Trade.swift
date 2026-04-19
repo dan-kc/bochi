@@ -9,7 +9,7 @@ import Foundation
 // - Identifiable: has an `id` property, used by SwiftUI List/ForEach for diffing
 // - Equatable: supports `==` comparison (auto-synthesized for structs)
 // - Sendable: safe to pass across threads
-struct Trade: Identifiable, Equatable, Sendable, Codable {
+struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let id: RecordID
     let habitId: RecordID?
     let rewardId: RecordID?

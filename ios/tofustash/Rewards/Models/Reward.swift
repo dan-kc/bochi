@@ -5,7 +5,7 @@ import Foundation
 // parallel to Habit, but the semantics are inverted:
 // - `maxFrequency` is the maximum healthy purchase rate the user wants
 // - `damageTier` expresses how harmful/derailing the reward is
-struct Reward: Identifiable, Equatable, Sendable, Codable {
+struct Reward: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let id: RecordID
     let name: String
     let description: String

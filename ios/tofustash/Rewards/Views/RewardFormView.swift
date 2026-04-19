@@ -123,17 +123,18 @@ struct RewardFormView: View {
 
     private var currentPrice: Int {
         guard let reward = draftRewardForPurchase else { return 0 }
-        guard reward.canPurchase else { return 0 }
-        let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
-        let allRewards = rewardStore.activeRewards.map { existing in
-            existing.id == reward.id ? reward : existing
+        return EntityActionSupport.visibleAmount(isActionable: reward.canPurchase) {
+            let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
+            let allRewards = rewardStore.activeRewards.map { existing in
+                existing.id == reward.id ? reward : existing
+            }
+            return RewardPriceCalculation.calculatePrice(
+                reward: reward,
+                allRewards: allRewards,
+                purchaseDates: purchaseDates,
+                generalDifficulty: userSettingsStore.generalDifficulty
+            )
         }
-        return RewardPriceCalculation.calculatePrice(
-            reward: reward,
-            allRewards: allRewards,
-            purchaseDates: purchaseDates,
-            generalDifficulty: userSettingsStore.generalDifficulty
-        )
     }
 
     var body: some View {
@@ -304,54 +305,54 @@ struct RewardFormView: View {
         tagCount: Int,
         isFirstReward: Bool = false
     ) -> Bool {
-        let hasDamage = isFirstReward ? false : damageTier != nil
-
-        return !name.isEmpty
-            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || maxFrequency != nil
-            || hasDamage
-            || tagCount > 0
+        EntityFormSupport.hasRecoverableContent(
+            name: name,
+            description: description,
+            primaryValueIsSet: maxFrequency != nil,
+            secondaryValueIsSet: damageTier != nil,
+            tagCount: tagCount,
+            ignoreSecondaryValue: isFirstReward
+        )
     }
 
     static func nameForAutoSave(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespaces)
+        EntityFormSupport.trimmedName(name)
     }
 
     static func buildPillData(
         hasTagsApplied: Bool,
         damageTier: RewardDamageTier?,
         maxFrequency: Double?
-    ) -> [PillItem] {
+    ) -> [EntityFormPillConfig] {
         let frequencyLabel = FrequencyConversion.formatSummary(maxFrequency).map { "Max \($0)" } ?? "Max Frequency"
         return [
-            PillItem(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
-            PillItem(id: "damage", label: damageTier?.displayName ?? "Damage", icon: "flame", isSet: damageTier != nil),
-            PillItem(id: "frequency", label: frequencyLabel, icon: "clock", isSet: maxFrequency != nil),
+            EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
+            EntityFormPillConfig(id: "damage", label: damageTier?.displayName ?? "Damage", icon: "flame", isSet: damageTier != nil),
+            EntityFormPillConfig(id: "frequency", label: frequencyLabel, icon: "clock", isSet: maxFrequency != nil),
         ]
     }
 
     private func buildPills() -> [PillItem] {
-        var pills = Self.buildPillData(
+        let configs = Self.buildPillData(
             hasTagsApplied: !rewardTags.isEmpty,
             damageTier: damageTier,
             maxFrequency: maxFrequency
         )
-
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "damage": { showingDamage = true },
             "frequency": { showingFrequency = true },
         ]
+        let animatedIDs = Set([
+            maxFrequency == nil ? "frequency" : nil,
+            damageTier == nil ? "damage" : nil,
+        ].compactMap { $0 })
 
-        for index in pills.indices {
-            pills[index].action = actions[pills[index].id]
-            let shouldPulse =
-                (pills[index].id == "frequency" && maxFrequency == nil) ||
-                (pills[index].id == "damage" && damageTier == nil)
-            pills[index].animating = shouldPulse
-        }
-
-        return pills
+        return EntityFormSupport.buildPills(
+            configs: configs,
+            animatedIDs: animatedIDs,
+            actions: actions
+        )
     }
 
     private func initializeIfNeeded() {

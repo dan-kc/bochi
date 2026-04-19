@@ -21,24 +21,20 @@ final class TradeStore {
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
         self.tradesByOwner = Self.normalizePersistedTrades(persisted.tradesByOwner)
-        self.trades = self.tradesByOwner[initialOwnerID] ?? []
+        self.trades = OwnerScopedRecordSupport.recordsForOwner(self.tradesByOwner, ownerID: initialOwnerID)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        trades = tradesByOwner[ownerID] ?? []
+        trades = OwnerScopedRecordSupport.recordsForOwner(tradesByOwner, ownerID: ownerID)
     }
 
     func migrateTrades(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
-        guard sourceOwnerID != destinationOwnerID else { return [] }
-
-        let source = tradesByOwner[sourceOwnerID] ?? []
-        let destination = tradesByOwner[destinationOwnerID] ?? []
-        let merged = mergeRecords(local: destination, remote: source)
-        let migratedIDs = source.map(\.id)
-
-        tradesByOwner[destinationOwnerID] = merged
-        tradesByOwner[sourceOwnerID] = []
+        let migratedIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &tradesByOwner
+        )
         persist()
         refreshCurrentTrades()
         return migratedIDs
@@ -136,7 +132,7 @@ final class TradeStore {
     func mergeTrades(_ remoteTrades: [Trade]) {
         guard !remoteTrades.isEmpty else { return }
         mutateTrades {
-            $0 = mergeRecords(local: $0, remote: remoteTrades)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteTrades)
         }
     }
 
@@ -166,51 +162,26 @@ final class TradeStore {
     }
 
     private func mutateTrades(_ mutate: (inout [Trade]) -> Void) {
-        var next = trades
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        trades = next
-        tradesByOwner[currentOwnerID] = next
+        trades = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: trades,
+            ownerID: currentOwnerID,
+            recordsByOwner: &tradesByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
     private func refreshCurrentTrades() {
-        trades = tradesByOwner[currentOwnerID] ?? []
+        trades = OwnerScopedRecordSupport.recordsForOwner(tradesByOwner, ownerID: currentOwnerID)
     }
 
     private func persist() {
         JSONFileStore.save(PersistedState(tradesByOwner: tradesByOwner), to: storageURL)
     }
 
-    private func mergeRecords(local: [Trade], remote: [Trade]) -> [Trade] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
     private static func normalizePersistedTrades(_ tradesByOwner: [String: [Trade]]) -> [String: [Trade]] {
-        Dictionary(uniqueKeysWithValues: tradesByOwner.map { ownerID, trades in
-            (ownerID, normalizeTrades(trades))
-        })
-    }
-
-    private static func normalizeTrades(_ trades: [Trade]) -> [Trade] {
-        var newestByID: [RecordID: Trade] = [:]
-
-        for trade in trades {
-            let normalized = Trade(
+        OwnerScopedRecordSupport.normalizePersistedRecords(tradesByOwner) { trade in
+            Trade(
                 id: RecordID(rawValue: trade.id.rawValue),
                 habitId: trade.habitId.map { RecordID(rawValue: $0.rawValue) },
                 rewardId: trade.rewardId.map { RecordID(rawValue: $0.rawValue) },
@@ -219,19 +190,6 @@ final class TradeStore {
                 updatedAt: trade.updatedAt,
                 deletedAt: trade.deletedAt
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 }

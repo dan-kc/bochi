@@ -3,7 +3,7 @@ import Foundation
 // Junction model for the many-to-many Reward ↔ Tag relationship.
 // Keeping reward links separate from habit links means the global tag catalog
 // stays shared while each feature owns its own association history.
-struct RewardTag: Identifiable, Equatable, Sendable, Codable {
+struct RewardTag: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let rewardId: RecordID
     let tagId: RecordID
     let createdAt: Date

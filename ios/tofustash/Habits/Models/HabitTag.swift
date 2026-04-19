@@ -8,7 +8,7 @@ import Foundation
 // - Independent soft-delete (remove a tag from a habit without deleting the tag)
 // - Timestamps for when the association was created/modified
 // - Sync with the backend's `habit_tags` junction table
-struct HabitTag: Identifiable, Equatable, Sendable, Codable {
+struct HabitTag: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let habitId: RecordID       // FK → Habit.id
     let tagId: RecordID         // FK → Tag.id
     let createdAt: Date

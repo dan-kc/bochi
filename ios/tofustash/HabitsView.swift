@@ -77,22 +77,13 @@ struct HabitsView: View {
             }
             .navigationTitle("Habits")
             .overlay(alignment: .bottomTrailing) {
-                Button {
+                EntityFloatingAddButton {
                     formRoute = HabitFormRoute(
                         mode: .new,
                         initialFocus: nil,
                         prefill: nil
                     )
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(.blue, in: .circle)
-                        .shadow(radius: 4)
                 }
-                .padding()
             }
             .sheet(item: $formRoute) { route in
                 HabitFormView(
@@ -161,8 +152,9 @@ struct HabitsView: View {
     }
 
     private func priceSortValue(for habit: Habit) -> Int? {
-        guard habit.canTrade else { return nil }
-        return priceForHabit(habit)
+        EntityActionSupport.sortableAmount(isActionable: habit.canTrade) {
+            priceForHabit(habit)
+        }
     }
 
     private func habitRow(_ habit: Habit) -> some View {

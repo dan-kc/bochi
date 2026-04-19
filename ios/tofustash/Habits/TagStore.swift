@@ -38,16 +38,16 @@ final class TagStore {
         self.tagsByOwner = Self.normalizePersistedTags(persisted.tagsByOwner)
         self.habitTagsByOwner = Self.normalizePersistedHabitTags(persisted.habitTagsByOwner)
         self.rewardTagsByOwner = Self.normalizePersistedRewardTags(persisted.rewardTagsByOwner)
-        self.tags = self.tagsByOwner[initialOwnerID] ?? []
-        self.habitTags = self.habitTagsByOwner[initialOwnerID] ?? []
-        self.rewardTags = self.rewardTagsByOwner[initialOwnerID] ?? []
+        self.tags = OwnerScopedRecordSupport.recordsForOwner(self.tagsByOwner, ownerID: initialOwnerID)
+        self.habitTags = OwnerScopedRecordSupport.recordsForOwner(self.habitTagsByOwner, ownerID: initialOwnerID)
+        self.rewardTags = OwnerScopedRecordSupport.recordsForOwner(self.rewardTagsByOwner, ownerID: initialOwnerID)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        tags = tagsByOwner[ownerID] ?? []
-        habitTags = habitTagsByOwner[ownerID] ?? []
-        rewardTags = rewardTagsByOwner[ownerID] ?? []
+        tags = OwnerScopedRecordSupport.recordsForOwner(tagsByOwner, ownerID: ownerID)
+        habitTags = OwnerScopedRecordSupport.recordsForOwner(habitTagsByOwner, ownerID: ownerID)
+        rewardTags = OwnerScopedRecordSupport.recordsForOwner(rewardTagsByOwner, ownerID: ownerID)
     }
 
     func migrateData(from sourceOwnerID: String, to destinationOwnerID: String) -> (tagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
@@ -55,25 +55,29 @@ final class TagStore {
             return ([], [], [])
         }
 
-        let sourceTags = tagsByOwner[sourceOwnerID] ?? []
-        let sourceHabitTags = habitTagsByOwner[sourceOwnerID] ?? []
-        let sourceRewardTags = rewardTagsByOwner[sourceOwnerID] ?? []
-
-        tagsByOwner[destinationOwnerID] = mergeTags(local: tagsByOwner[destinationOwnerID] ?? [], remote: sourceTags)
-        habitTagsByOwner[destinationOwnerID] = mergeHabitTags(local: habitTagsByOwner[destinationOwnerID] ?? [], remote: sourceHabitTags)
-        rewardTagsByOwner[destinationOwnerID] = mergeRewardTags(local: rewardTagsByOwner[destinationOwnerID] ?? [], remote: sourceRewardTags)
-
-        tagsByOwner[sourceOwnerID] = []
-        habitTagsByOwner[sourceOwnerID] = []
-        rewardTagsByOwner[sourceOwnerID] = []
+        let migratedTagIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &tagsByOwner
+        )
+        let migratedHabitTagIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &habitTagsByOwner
+        )
+        let migratedRewardTagIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &rewardTagsByOwner
+        )
 
         persist()
         setCurrentOwner(currentOwnerID)
 
         return (
-            sourceTags.map(\.id),
-            sourceHabitTags.map(\.id),
-            sourceRewardTags.map(\.id)
+            migratedTagIDs,
+            migratedHabitTagIDs,
+            migratedRewardTagIDs
         )
     }
 
@@ -338,21 +342,21 @@ final class TagStore {
     func mergeTags(_ remoteTags: [Tag]) {
         guard !remoteTags.isEmpty else { return }
         mutateTags {
-            $0 = mergeTags(local: $0, remote: remoteTags)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteTags)
         }
     }
 
     func mergeHabitTags(_ remoteHabitTags: [HabitTag]) {
         guard !remoteHabitTags.isEmpty else { return }
         mutateHabitTags {
-            $0 = mergeHabitTags(local: $0, remote: remoteHabitTags)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteHabitTags)
         }
     }
 
     func mergeRewardTags(_ remoteRewardTags: [RewardTag]) {
         guard !remoteRewardTags.isEmpty else { return }
         mutateRewardTags {
-            $0 = mergeRewardTags(local: $0, remote: remoteRewardTags)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteRewardTags)
         }
     }
 
@@ -387,29 +391,32 @@ final class TagStore {
     }
 
     private func mutateTags(_ mutate: (inout [Tag]) -> Void) {
-        var next = tags
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        tags = next
-        tagsByOwner[currentOwnerID] = next
+        tags = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: tags,
+            ownerID: currentOwnerID,
+            recordsByOwner: &tagsByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
     private func mutateHabitTags(_ mutate: (inout [HabitTag]) -> Void) {
-        var next = habitTags
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        habitTags = next
-        habitTagsByOwner[currentOwnerID] = next
+        habitTags = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: habitTags,
+            ownerID: currentOwnerID,
+            recordsByOwner: &habitTagsByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
     private func mutateRewardTags(_ mutate: (inout [RewardTag]) -> Void) {
-        var next = rewardTags
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        rewardTags = next
-        rewardTagsByOwner[currentOwnerID] = next
+        rewardTags = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: rewardTags,
+            ownerID: currentOwnerID,
+            recordsByOwner: &rewardTagsByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
@@ -424,87 +431,13 @@ final class TagStore {
         )
     }
 
-    private func mergeTags(local: [Tag], remote: [Tag]) -> [Tag] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
-    private func mergeHabitTags(local: [HabitTag], remote: [HabitTag]) -> [HabitTag] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
-    private func mergeRewardTags(local: [RewardTag], remote: [RewardTag]) -> [RewardTag] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
     private func notifySync(kind: SyncEntityKind, ids: [RecordID]) {
         SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: kind, recordIDs: ids))
     }
 
     private static func normalizePersistedTags(_ tagsByOwner: [String: [Tag]]) -> [String: [Tag]] {
-        Dictionary(uniqueKeysWithValues: tagsByOwner.map { ownerID, tags in
-            (ownerID, normalizeTags(tags))
-        })
-    }
-
-    private static func normalizePersistedHabitTags(_ habitTagsByOwner: [String: [HabitTag]]) -> [String: [HabitTag]] {
-        Dictionary(uniqueKeysWithValues: habitTagsByOwner.map { ownerID, habitTags in
-            (ownerID, normalizeHabitTags(habitTags))
-        })
-    }
-
-    private static func normalizePersistedRewardTags(_ rewardTagsByOwner: [String: [RewardTag]]) -> [String: [RewardTag]] {
-        Dictionary(uniqueKeysWithValues: rewardTagsByOwner.map { ownerID, rewardTags in
-            (ownerID, normalizeRewardTags(rewardTags))
-        })
-    }
-
-    private static func normalizeTags(_ tags: [Tag]) -> [Tag] {
-        var newestByID: [RecordID: Tag] = [:]
-
-        for tag in tags {
-            let normalized = Tag(
+        OwnerScopedRecordSupport.normalizePersistedRecords(tagsByOwner) { tag in
+            Tag(
                 id: RecordID(rawValue: tag.id.rawValue),
                 name: tag.name,
                 colorHex: tag.colorHex,
@@ -512,73 +445,30 @@ final class TagStore {
                 updatedAt: tag.updatedAt,
                 deletedAt: tag.deletedAt
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 
-    private static func normalizeHabitTags(_ habitTags: [HabitTag]) -> [HabitTag] {
-        var newestByID: [RecordID: HabitTag] = [:]
-
-        for habitTag in habitTags {
-            let normalized = HabitTag(
+    private static func normalizePersistedHabitTags(_ habitTagsByOwner: [String: [HabitTag]]) -> [String: [HabitTag]] {
+        OwnerScopedRecordSupport.normalizePersistedRecords(habitTagsByOwner) { habitTag in
+            HabitTag(
                 habitId: RecordID(rawValue: habitTag.habitId.rawValue),
                 tagId: RecordID(rawValue: habitTag.tagId.rawValue),
                 createdAt: habitTag.createdAt,
                 updatedAt: habitTag.updatedAt,
                 deletedAt: habitTag.deletedAt
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 
-    private static func normalizeRewardTags(_ rewardTags: [RewardTag]) -> [RewardTag] {
-        var newestByID: [RecordID: RewardTag] = [:]
-
-        for rewardTag in rewardTags {
-            let normalized = RewardTag(
+    private static func normalizePersistedRewardTags(_ rewardTagsByOwner: [String: [RewardTag]]) -> [String: [RewardTag]] {
+        OwnerScopedRecordSupport.normalizePersistedRecords(rewardTagsByOwner) { rewardTag in
+            RewardTag(
                 rewardId: RecordID(rawValue: rewardTag.rewardId.rawValue),
                 tagId: RecordID(rawValue: rewardTag.tagId.rawValue),
                 createdAt: rewardTag.createdAt,
                 updatedAt: rewardTag.updatedAt,
                 deletedAt: rewardTag.deletedAt
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 }

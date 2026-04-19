@@ -325,57 +325,54 @@ struct HabitFormView: View {
         tagCount: Int,
         isFirstHabit: Bool = false
     ) -> Bool {
-        let hasDifficulty = isFirstHabit ? false : difficultyTier != nil
-
-        return !name.isEmpty
-            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || frequency != nil
-            || hasDifficulty
-            || tagCount > 0
+        EntityFormSupport.hasRecoverableContent(
+            name: name,
+            description: description,
+            primaryValueIsSet: frequency != nil,
+            secondaryValueIsSet: difficultyTier != nil,
+            tagCount: tagCount,
+            ignoreSecondaryValue: isFirstHabit
+        )
     }
 
     static func nameForAutoSave(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespaces)
+        EntityFormSupport.trimmedName(name)
     }
 
     static func buildPillData(
         hasTagsApplied: Bool,
         difficultyTier: HabitDifficultyTier?,
         frequency: Double?
-    ) -> [PillItem] {
+    ) -> [EntityFormPillConfig] {
         let frequencyLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
         return [
-            PillItem(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
-            PillItem(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
-            PillItem(id: "frequency", label: frequencyLabel, icon: "clock", isSet: frequency != nil),
+            EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
+            EntityFormPillConfig(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
+            EntityFormPillConfig(id: "frequency", label: frequencyLabel, icon: "clock", isSet: frequency != nil),
         ]
     }
 
     private func buildPills() -> [PillItem] {
-        var pills = Self.buildPillData(
+        let configs = Self.buildPillData(
             hasTagsApplied: !habitTags.isEmpty,
             difficultyTier: difficultyTier,
             frequency: frequency
         )
-
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "difficulty": { showingDifficulty = true },
             "frequency": { showingFrequency = true },
         ]
+        let animatedIDs = canTrade ? Set<String>() : Set([
+            frequency == nil ? "frequency" : nil,
+            difficultyTier == nil ? "difficulty" : nil,
+        ].compactMap { $0 })
 
-        for index in pills.indices {
-            pills[index].action = actions[pills[index].id]
-
-            if !canTrade {
-                let shouldPulse =
-                    (pills[index].id == "frequency" && frequency == nil) ||
-                    (pills[index].id == "difficulty" && difficultyTier == nil)
-                pills[index].animating = shouldPulse
-            }
-        }
-
-        return pills
+        return EntityFormSupport.buildPills(
+            configs: configs,
+            animatedIDs: animatedIDs,
+            actions: actions
+        )
     }
 
     private func initializeIfNeeded() {

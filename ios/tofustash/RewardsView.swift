@@ -78,18 +78,9 @@ struct RewardsView: View {
             }
             .navigationTitle("Rewards")
             .overlay(alignment: .bottomTrailing) {
-                Button {
+                EntityFloatingAddButton {
                     formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(.blue, in: .circle)
-                        .shadow(radius: 4)
                 }
-                .padding()
             }
             .sheet(item: $formRoute) { route in
                 RewardFormView(
@@ -146,25 +137,29 @@ struct RewardsView: View {
     }
 
     private func priceForReward(_ reward: Reward) -> Int {
-        guard reward.canPurchase else { return 0 }
-        let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
-        return RewardPriceCalculation.calculatePrice(
-            reward: reward,
-            allRewards: rewardStore.activeRewards,
-            purchaseDates: purchaseDates,
-            generalDifficulty: userSettingsStore.generalDifficulty
-        )
+        EntityActionSupport.visibleAmount(isActionable: reward.canPurchase) {
+            let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
+            return RewardPriceCalculation.calculatePrice(
+                reward: reward,
+                allRewards: rewardStore.activeRewards,
+                purchaseDates: purchaseDates,
+                generalDifficulty: userSettingsStore.generalDifficulty
+            )
+        }
     }
 
     private func priceSortValue(for reward: Reward) -> Int? {
-        guard reward.canPurchase else { return nil }
-        return priceForReward(reward)
+        EntityActionSupport.sortableAmount(isActionable: reward.canPurchase) {
+            priceForReward(reward)
+        }
     }
 
     private func rewardRow(_ reward: Reward) -> some View {
         let tags = tagStore.tagsForReward(rewardId: reward.id)
         let canPurchase = reward.canPurchase
-        let price = canPurchase ? priceForReward(reward) : 0
+        let price = EntityActionSupport.visibleAmount(isActionable: canPurchase) {
+            priceForReward(reward)
+        }
         let canAfford = canPurchase && balanceStore.balance >= price
 
         return HStack(alignment: .bottom) {

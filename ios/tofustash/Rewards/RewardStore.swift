@@ -40,24 +40,20 @@ final class RewardStore {
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
         self.rewardsByOwner = Self.normalizePersistedRewards(persisted.rewardsByOwner)
-        self.rewards = self.rewardsByOwner[initialOwnerID] ?? []
+        self.rewards = OwnerScopedRecordSupport.recordsForOwner(self.rewardsByOwner, ownerID: initialOwnerID)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        rewards = rewardsByOwner[ownerID] ?? []
+        rewards = OwnerScopedRecordSupport.recordsForOwner(rewardsByOwner, ownerID: ownerID)
     }
 
     func migrateRewards(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
-        guard sourceOwnerID != destinationOwnerID else { return [] }
-
-        let source = rewardsByOwner[sourceOwnerID] ?? []
-        let destination = rewardsByOwner[destinationOwnerID] ?? []
-        let merged = mergeRecords(local: destination, remote: source)
-        let migratedIDs = source.map(\.id)
-
-        rewardsByOwner[destinationOwnerID] = merged
-        rewardsByOwner[sourceOwnerID] = []
+        let migratedIDs = OwnerScopedRecordSupport.migrateRecords(
+            from: sourceOwnerID,
+            to: destinationOwnerID,
+            recordsByOwner: &rewardsByOwner
+        )
         persist()
         refreshCurrentRewards()
         return migratedIDs
@@ -180,7 +176,7 @@ final class RewardStore {
     func mergeRewards(_ remoteRewards: [Reward]) {
         guard !remoteRewards.isEmpty else { return }
         mutateRewards {
-            $0 = mergeRecords(local: $0, remote: remoteRewards)
+            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteRewards)
         }
     }
 
@@ -199,51 +195,26 @@ final class RewardStore {
     }
 
     private func mutateRewards(_ mutate: (inout [Reward]) -> Void) {
-        var next = rewards
-        mutate(&next)
-        next.sort { $0.createdAt < $1.createdAt }
-        rewards = next
-        rewardsByOwner[currentOwnerID] = next
+        rewards = OwnerScopedRecordSupport.mutateRecords(
+            currentRecords: rewards,
+            ownerID: currentOwnerID,
+            recordsByOwner: &rewardsByOwner,
+            mutate: mutate
+        )
         persist()
     }
 
     private func refreshCurrentRewards() {
-        rewards = rewardsByOwner[currentOwnerID] ?? []
+        rewards = OwnerScopedRecordSupport.recordsForOwner(rewardsByOwner, ownerID: currentOwnerID)
     }
 
     private func persist() {
         JSONFileStore.save(PersistedState(rewardsByOwner: rewardsByOwner), to: storageURL)
     }
 
-    private func mergeRecords(local: [Reward], remote: [Reward]) -> [Reward] {
-        var mergedByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
-
-        for incoming in remote {
-            if let existing = mergedByID[incoming.id], existing.updatedAt > incoming.updatedAt {
-                continue
-            }
-            mergedByID[incoming.id] = incoming
-        }
-
-        return mergedByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
     private static func normalizePersistedRewards(_ rewardsByOwner: [String: [Reward]]) -> [String: [Reward]] {
-        Dictionary(uniqueKeysWithValues: rewardsByOwner.map { ownerID, rewards in
-            (ownerID, normalizeRewards(rewards))
-        })
-    }
-
-    private static func normalizeRewards(_ rewards: [Reward]) -> [Reward] {
-        var newestByID: [RecordID: Reward] = [:]
-
-        for reward in rewards {
-            let normalized = Reward(
+        OwnerScopedRecordSupport.normalizePersistedRecords(rewardsByOwner) { reward in
+            Reward(
                 id: RecordID(rawValue: reward.id.rawValue),
                 name: reward.name,
                 description: reward.description,
@@ -253,19 +224,6 @@ final class RewardStore {
                 maxFrequency: reward.maxFrequency,
                 damageTier: reward.damageTier
             )
-
-            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
-                continue
-            }
-
-            newestByID[normalized.id] = normalized
-        }
-
-        return newestByID.values.sorted { lhs, rhs in
-            if lhs.createdAt == rhs.createdAt {
-                return lhs.id.rawValue < rhs.id.rawValue
-            }
-            return lhs.createdAt < rhs.createdAt
         }
     }
 
