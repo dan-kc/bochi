@@ -296,7 +296,8 @@ struct SettingsView: View {
 #Preview {
     let previewAuthManager = AuthManager(
         apiClient: AppConfiguration.makeAuthAPIClient(),
-        tokenStorage: KeychainTokenStorage()
+        tokenStorage: KeychainTokenStorage(),
+        appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()

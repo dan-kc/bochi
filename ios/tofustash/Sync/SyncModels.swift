@@ -62,7 +62,7 @@ struct SyncHabitRecord: Codable {
             description: habit.description,
             createdAt: AppDateCoding.backendTimestamp(from: habit.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: habit.updatedAt),
-            deletedAt: habit.deletedAt.map(AppDateCoding.backendTimestamp),
+            deletedAt: habit.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
             minDailyFrequency: habit.frequency,
             difficultyTier: habit.difficultyTier
         )
@@ -102,7 +102,7 @@ struct SyncTradeRecord: Codable {
             amount: trade.amount,
             createdAt: AppDateCoding.backendTimestamp(from: trade.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: trade.updatedAt),
-            deletedAt: trade.deletedAt.map(AppDateCoding.backendTimestamp)
+            deletedAt: trade.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }
@@ -140,7 +140,7 @@ struct SyncTagRecord: Codable {
             colorHex: tag.colorHex,
             createdAt: AppDateCoding.backendTimestamp(from: tag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: tag.updatedAt),
-            deletedAt: tag.deletedAt.map(AppDateCoding.backendTimestamp)
+            deletedAt: tag.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }
@@ -175,7 +175,7 @@ struct SyncHabitTagRecord: Codable {
             tagId: habitTag.tagId.rawValue,
             createdAt: AppDateCoding.backendTimestamp(from: habitTag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: habitTag.updatedAt),
-            deletedAt: habitTag.deletedAt.map(AppDateCoding.backendTimestamp)
+            deletedAt: habitTag.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }
@@ -217,7 +217,7 @@ struct SyncRewardRecord: Codable {
             description: reward.description,
             createdAt: AppDateCoding.backendTimestamp(from: reward.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: reward.updatedAt),
-            deletedAt: reward.deletedAt.map(AppDateCoding.backendTimestamp),
+            deletedAt: reward.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
             maxDailyFrequency: reward.maxFrequency,
             damageTier: reward.damageTier
         )
@@ -254,7 +254,7 @@ struct SyncRewardTagRecord: Codable {
             tagId: rewardTag.tagId.rawValue,
             createdAt: AppDateCoding.backendTimestamp(from: rewardTag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: rewardTag.updatedAt),
-            deletedAt: rewardTag.deletedAt.map(AppDateCoding.backendTimestamp)
+            deletedAt: rewardTag.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }

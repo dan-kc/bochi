@@ -36,7 +36,8 @@ struct ContentView: View {
 #Preview {
     let previewAuthManager = AuthManager(
         apiClient: AppConfiguration.makeAuthAPIClient(),
-        tokenStorage: KeychainTokenStorage()
+        tokenStorage: KeychainTokenStorage(),
+        appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
     let previewHabitStore = HabitStore()
     let previewTagStore = TagStore()

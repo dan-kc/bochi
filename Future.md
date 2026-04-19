@@ -7,8 +7,6 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Run ios-test and fix any compile errors, also check any tests that are failing and investigate
-
 # NEXT
 
 

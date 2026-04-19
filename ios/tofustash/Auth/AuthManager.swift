@@ -45,7 +45,7 @@ final class AuthManager {
     init(
         apiClient: AuthAPIClient,
         tokenStorage: TokenStorage,
-        appleEntitlementClient: AppleEntitlementClient = StoreKitAppleEntitlementClient()
+        appleEntitlementClient: AppleEntitlementClient
     ) {
         self.apiClient = apiClient
         self.tokenStorage = tokenStorage

@@ -70,8 +70,6 @@ struct StoreKitAppleEntitlementClient: AppleEntitlementClient {
             return candidateDate > currentDate
         case (.some, .none):
             return false
-        case (.none, .none):
-            return false
         }
     }
 }

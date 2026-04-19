@@ -53,7 +53,7 @@ enum TradeHistoryBuilder {
             }
     }
 
-    static func formatDate(_ date: Date) -> String {
+    nonisolated static func formatDate(_ date: Date) -> String {
         date.formatted(.dateTime.month(.abbreviated).day().year())
     }
 }

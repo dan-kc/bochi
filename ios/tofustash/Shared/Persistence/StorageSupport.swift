@@ -1,7 +1,7 @@
 import Foundation
 
 enum StorageOwner {
-    static let local = "local-device"
+    nonisolated static let local = "local-device"
 }
 
 enum AppDateCoding {

@@ -39,7 +39,8 @@ struct tofustashApp: App {
     init() {
         let authManager = AuthManager(
             apiClient: AppConfiguration.makeAuthAPIClient(),
-            tokenStorage: KeychainTokenStorage()
+            tokenStorage: KeychainTokenStorage(),
+            appleEntitlementClient: StoreKitAppleEntitlementClient()
         )
         let habitStore = HabitStore()
         let tagStore = TagStore()
