@@ -458,12 +458,12 @@ final class SyncManager {
     }
 
     private struct DirtyIDSnapshot {
-        var habits = Set<String>()
-        var trades = Set<String>()
-        var tags = Set<String>()
-        var habitTags = Set<String>()
-        var rewards = Set<String>()
-        var rewardTags = Set<String>()
+        var habits = Set<RecordID>()
+        var trades = Set<RecordID>()
+        var tags = Set<RecordID>()
+        var habitTags = Set<RecordID>()
+        var rewards = Set<RecordID>()
+        var rewardTags = Set<RecordID>()
     }
 
     private func makeDirtyIDSnapshot(from state: SyncStateStore.UserSyncState) -> DirtyIDSnapshot {

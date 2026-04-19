@@ -3,7 +3,7 @@ import Testing
 @testable import tofustash
 
 private func makeHabit(
-    id: String = "habit-1",
+    id: RecordID = "habit-1",
     frequency: Double? = nil,
     difficultyTier: HabitDifficultyTier? = nil,
     createdAt: Date = Date(timeIntervalSince1970: 1_577_836_800),

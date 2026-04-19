@@ -45,7 +45,7 @@ final class TagStore {
         rewardTags = rewardTagsByOwner[ownerID] ?? []
     }
 
-    func migrateData(from sourceOwnerID: String, to destinationOwnerID: String) -> (tagIDs: [String], habitTagIDs: [String], rewardTagIDs: [String]) {
+    func migrateData(from sourceOwnerID: String, to destinationOwnerID: String) -> (tagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
         guard sourceOwnerID != destinationOwnerID else {
             return ([], [], [])
         }
@@ -74,7 +74,7 @@ final class TagStore {
 
     @discardableResult
     func addTag(
-        id: String? = nil,
+        id: RecordID? = nil,
         name: String,
         colorHex: String? = nil,
         createdAt: Date? = nil,
@@ -87,7 +87,7 @@ final class TagStore {
 
         let now = Date()
         let tag = Tag(
-            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
+            id: id ?? RecordID(),
             name: trimmed,
             colorHex: colorHex ?? ColorGeneration.randomHexColor(),
             createdAt: createdAt ?? now,
@@ -108,14 +108,14 @@ final class TagStore {
     }
 
     func updateTag(
-        id: String,
+        id: RecordID,
         name: String? = nil,
         colorHex: String? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        let canonicalID = CanonicalRecordID.normalize(id)
+        let canonicalID = id
         guard let index = tags.firstIndex(where: { $0.id == canonicalID }) else { return }
 
         let existing = tags[index]
@@ -144,13 +144,13 @@ final class TagStore {
         }
     }
 
-    func deleteTag(id: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+    func deleteTag(id: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
         updateTag(id: id, updatedAt: deletedAt, deletedAt: .some(deletedAt), shouldNotifySync: shouldNotifySync)
     }
 
     func addTagToHabit(
-        tagId: String,
-        habitId: String,
+        tagId: RecordID,
+        habitId: RecordID,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -158,8 +158,8 @@ final class TagStore {
     ) {
         let now = Date()
         let association = HabitTag(
-            habitId: CanonicalRecordID.normalize(habitId),
-            tagId: CanonicalRecordID.normalize(tagId),
+            habitId: habitId,
+            tagId: tagId,
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt
@@ -178,9 +178,9 @@ final class TagStore {
         }
     }
 
-    func removeTagFromHabit(tagId: String, habitId: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        let canonicalTagID = CanonicalRecordID.normalize(tagId)
-        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
+    func removeTagFromHabit(tagId: RecordID, habitId: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalTagID = tagId
+        let canonicalHabitID = habitId
         guard let index = habitTags.firstIndex(where: {
             $0.tagId == canonicalTagID && $0.habitId == canonicalHabitID && $0.deletedAt == nil
         }) else { return }
@@ -201,8 +201,8 @@ final class TagStore {
         }
     }
 
-    func tagsForHabit(habitId: String) -> [Tag] {
-        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
+    func tagsForHabit(habitId: RecordID) -> [Tag] {
+        let canonicalHabitID = habitId
         let activeTagIDs = Set(
             habitTags
                 .filter { $0.habitId == canonicalHabitID && $0.deletedAt == nil }
@@ -213,8 +213,8 @@ final class TagStore {
     }
 
     func addTagToReward(
-        tagId: String,
-        rewardId: String,
+        tagId: RecordID,
+        rewardId: RecordID,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -222,8 +222,8 @@ final class TagStore {
     ) {
         let now = Date()
         let association = RewardTag(
-            rewardId: CanonicalRecordID.normalize(rewardId),
-            tagId: CanonicalRecordID.normalize(tagId),
+            rewardId: rewardId,
+            tagId: tagId,
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt
@@ -242,9 +242,9 @@ final class TagStore {
         }
     }
 
-    func removeTagFromReward(tagId: String, rewardId: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        let canonicalTagID = CanonicalRecordID.normalize(tagId)
-        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
+    func removeTagFromReward(tagId: RecordID, rewardId: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalTagID = tagId
+        let canonicalRewardID = rewardId
         guard let index = rewardTags.firstIndex(where: {
             $0.tagId == canonicalTagID && $0.rewardId == canonicalRewardID && $0.deletedAt == nil
         }) else { return }
@@ -265,8 +265,8 @@ final class TagStore {
         }
     }
 
-    func tagsForReward(rewardId: String) -> [Tag] {
-        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
+    func tagsForReward(rewardId: RecordID) -> [Tag] {
+        let canonicalRewardID = rewardId
         let activeTagIDs = Set(
             rewardTags
                 .filter { $0.rewardId == canonicalRewardID && $0.deletedAt == nil }
@@ -285,7 +285,7 @@ final class TagStore {
         }
     }
 
-    func addTag(tagId: String, to target: TagAssignmentTarget) {
+    func addTag(tagId: RecordID, to target: TagAssignmentTarget) {
         switch target {
         case .habit(let habitId):
             addTagToHabit(tagId: tagId, habitId: habitId)
@@ -294,7 +294,7 @@ final class TagStore {
         }
     }
 
-    func removeTag(tagId: String, from target: TagAssignmentTarget) {
+    func removeTag(tagId: RecordID, from target: TagAssignmentTarget) {
         switch target {
         case .habit(let habitId):
             removeTagFromHabit(tagId: tagId, habitId: habitId)
@@ -324,15 +324,15 @@ final class TagStore {
         }
     }
 
-    func getDirtyTags(ids: Set<String>) -> [Tag] {
+    func getDirtyTags(ids: Set<RecordID>) -> [Tag] {
         tags.filter { ids.contains($0.id) }
     }
 
-    func getDirtyHabitTags(ids: Set<String>) -> [HabitTag] {
+    func getDirtyHabitTags(ids: Set<RecordID>) -> [HabitTag] {
         habitTags.filter { ids.contains($0.id) }
     }
 
-    func getDirtyRewardTags(ids: Set<String>) -> [RewardTag] {
+    func getDirtyRewardTags(ids: Set<RecordID>) -> [RewardTag] {
         rewardTags.filter { ids.contains($0.id) }
     }
 
@@ -342,15 +342,15 @@ final class TagStore {
         mutateRewardTags { $0.removeAll { $0.deletedAt != nil } }
     }
 
-    func allTagIDs() -> [String] {
+    func allTagIDs() -> [RecordID] {
         tags.map(\.id)
     }
 
-    func allHabitTagIDs() -> [String] {
+    func allHabitTagIDs() -> [RecordID] {
         habitTags.map(\.id)
     }
 
-    func allRewardTagIDs() -> [String] {
+    func allRewardTagIDs() -> [RecordID] {
         rewardTags.map(\.id)
     }
 
@@ -404,7 +404,7 @@ final class TagStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
@@ -422,7 +422,7 @@ final class TagStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
@@ -440,13 +440,13 @@ final class TagStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
     }
 
-    private func notifySync(kind: SyncEntityKind, ids: [String]) {
+    private func notifySync(kind: SyncEntityKind, ids: [RecordID]) {
         SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: kind, recordIDs: ids))
     }
 
@@ -469,11 +469,11 @@ final class TagStore {
     }
 
     private static func normalizeTags(_ tags: [Tag]) -> [Tag] {
-        var newestByID: [String: Tag] = [:]
+        var newestByID: [RecordID: Tag] = [:]
 
         for tag in tags {
             let normalized = Tag(
-                id: CanonicalRecordID.normalize(tag.id),
+                id: RecordID(rawValue: tag.id.rawValue),
                 name: tag.name,
                 colorHex: tag.colorHex,
                 createdAt: tag.createdAt,
@@ -490,19 +490,19 @@ final class TagStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
     }
 
     private static func normalizeHabitTags(_ habitTags: [HabitTag]) -> [HabitTag] {
-        var newestByID: [String: HabitTag] = [:]
+        var newestByID: [RecordID: HabitTag] = [:]
 
         for habitTag in habitTags {
             let normalized = HabitTag(
-                habitId: CanonicalRecordID.normalize(habitTag.habitId),
-                tagId: CanonicalRecordID.normalize(habitTag.tagId),
+                habitId: RecordID(rawValue: habitTag.habitId.rawValue),
+                tagId: RecordID(rawValue: habitTag.tagId.rawValue),
                 createdAt: habitTag.createdAt,
                 updatedAt: habitTag.updatedAt,
                 deletedAt: habitTag.deletedAt
@@ -517,19 +517,19 @@ final class TagStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
     }
 
     private static func normalizeRewardTags(_ rewardTags: [RewardTag]) -> [RewardTag] {
-        var newestByID: [String: RewardTag] = [:]
+        var newestByID: [RecordID: RewardTag] = [:]
 
         for rewardTag in rewardTags {
             let normalized = RewardTag(
-                rewardId: CanonicalRecordID.normalize(rewardTag.rewardId),
-                tagId: CanonicalRecordID.normalize(rewardTag.tagId),
+                rewardId: RecordID(rawValue: rewardTag.rewardId.rawValue),
+                tagId: RecordID(rawValue: rewardTag.tagId.rawValue),
                 createdAt: rewardTag.createdAt,
                 updatedAt: rewardTag.updatedAt,
                 deletedAt: rewardTag.deletedAt
@@ -544,7 +544,7 @@ final class TagStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }

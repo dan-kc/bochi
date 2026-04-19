@@ -21,7 +21,7 @@ struct TagsView: View {
     @State private var editColor = ""
 
     // Tags currently applied to this habit
-    private var appliedTagIds: Set<String> {
+    private var appliedTagIds: Set<RecordID> {
         Set(tagStore.tags(for: target).map(\.id))
     }
 

@@ -46,7 +46,7 @@ struct TradeHistoryBuilderTests {
             formatDate: { date in date == newDate ? "new" : "old" }
         )
 
-        #expect(entries.map(\.id) == ["newer", "older"])
+        #expect(entries.map(\.id) == [RecordID("newer"), RecordID("older")])
         #expect(entries[0].title == "Bought Ice Cream")
         #expect(entries[0].amountText == "-120")
         #expect(entries[1].title == "Sold Morning Run")

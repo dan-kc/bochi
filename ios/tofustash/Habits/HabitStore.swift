@@ -33,7 +33,7 @@ final class HabitStore {
         habits = habitsByOwner[ownerID] ?? []
     }
 
-    func migrateHabits(from sourceOwnerID: String, to destinationOwnerID: String) -> [String] {
+    func migrateHabits(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
 
         let source = habitsByOwner[sourceOwnerID] ?? []
@@ -50,7 +50,7 @@ final class HabitStore {
 
     @discardableResult
     func addHabit(
-        id: String? = nil,
+        id: RecordID? = nil,
         name: String,
         description: String = "",
         frequency: Double? = nil,
@@ -64,7 +64,7 @@ final class HabitStore {
         guard !trimmedName.isEmpty, trimmedName.count <= 100 else {
             return nil
         }
-        let canonicalID = CanonicalRecordID.normalize(id ?? UUID().uuidString)
+        let canonicalID = id ?? RecordID()
 
         let now = Date()
         let habit = Habit(
@@ -90,8 +90,8 @@ final class HabitStore {
         return habit
     }
 
-    func deleteHabit(id: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        let canonicalID = CanonicalRecordID.normalize(id)
+    func deleteHabit(id: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalID = id
         guard let index = habits.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
@@ -116,7 +116,7 @@ final class HabitStore {
     }
 
     func updateHabit(
-        id: String,
+        id: RecordID,
         name: String? = nil,
         description: String? = nil,
         frequency: Double?? = nil,
@@ -125,7 +125,7 @@ final class HabitStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        let canonicalID = CanonicalRecordID.normalize(id)
+        let canonicalID = id
         guard let index = habits.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
@@ -169,7 +169,7 @@ final class HabitStore {
         }
     }
 
-    func getDirtyHabits(ids: Set<String>) -> [Habit] {
+    func getDirtyHabits(ids: Set<RecordID>) -> [Habit] {
         habits.filter { ids.contains($0.id) }
     }
 
@@ -179,7 +179,7 @@ final class HabitStore {
         }
     }
 
-    func allHabitIDs() -> [String] {
+    func allHabitIDs() -> [RecordID] {
         habits.map(\.id)
     }
 
@@ -212,7 +212,7 @@ final class HabitStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
@@ -225,11 +225,11 @@ final class HabitStore {
     }
 
     private static func normalizeHabits(_ habits: [Habit]) -> [Habit] {
-        var newestByID: [String: Habit] = [:]
+        var newestByID: [RecordID: Habit] = [:]
 
         for habit in habits {
             let normalized = Habit(
-                id: CanonicalRecordID.normalize(habit.id),
+                id: RecordID(rawValue: habit.id.rawValue),
                 name: habit.name,
                 description: habit.description,
                 createdAt: habit.createdAt,
@@ -248,13 +248,13 @@ final class HabitStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
     }
 
-    private func notifySync(ids: [String]) {
+    private func notifySync(ids: [RecordID]) {
         SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .habits, recordIDs: ids))
     }
 }

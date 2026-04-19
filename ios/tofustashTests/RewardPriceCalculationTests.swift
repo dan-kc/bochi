@@ -3,7 +3,7 @@ import Testing
 @testable import tofustash
 
 private func makeReward(
-    id: String = "reward-1",
+    id: RecordID = "reward-1",
     maxFrequency: Double? = nil,
     damageTier: RewardDamageTier? = nil,
     createdAt: Date = Date(timeIntervalSince1970: 1_577_836_800),

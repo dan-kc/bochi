@@ -29,7 +29,7 @@ final class TradeStore {
         trades = tradesByOwner[ownerID] ?? []
     }
 
-    func migrateTrades(from sourceOwnerID: String, to destinationOwnerID: String) -> [String] {
+    func migrateTrades(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
 
         let source = tradesByOwner[sourceOwnerID] ?? []
@@ -45,8 +45,8 @@ final class TradeStore {
     }
 
     func addHabitTrade(
-        id: String? = nil,
-        habitId: String,
+        id: RecordID? = nil,
+        habitId: RecordID,
         amount: Int,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
@@ -54,8 +54,8 @@ final class TradeStore {
         shouldNotifySync: Bool = true
     ) {
         let trade = Trade(
-            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
-            habitId: CanonicalRecordID.normalize(habitId),
+            id: id ?? RecordID(),
+            habitId: habitId,
             rewardId: nil,
             amount: amount,
             createdAt: createdAt,
@@ -67,8 +67,8 @@ final class TradeStore {
     }
 
     func addRewardPurchase(
-        id: String? = nil,
-        rewardId: String,
+        id: RecordID? = nil,
+        rewardId: RecordID,
         amount: Int,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
@@ -76,9 +76,9 @@ final class TradeStore {
         shouldNotifySync: Bool = true
     ) {
         let trade = Trade(
-            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
+            id: id ?? RecordID(),
             habitId: nil,
-            rewardId: CanonicalRecordID.normalize(rewardId),
+            rewardId: rewardId,
             amount: amount,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
@@ -88,19 +88,19 @@ final class TradeStore {
         appendOrReplace(trade, shouldNotifySync: shouldNotifySync)
     }
 
-    func addHabitTradeWithDate(habitId: String, amount: Int, createdAt: Date) {
+    func addHabitTradeWithDate(habitId: RecordID, amount: Int, createdAt: Date) {
         addHabitTrade(habitId: habitId, amount: amount, createdAt: createdAt)
     }
 
-    func addRewardPurchaseWithDate(rewardId: String, amount: Int, createdAt: Date) {
+    func addRewardPurchaseWithDate(rewardId: RecordID, amount: Int, createdAt: Date) {
         addRewardPurchase(rewardId: rewardId, amount: amount, createdAt: createdAt)
     }
 
     // User behaviour: pricing for one habit should only respond to that habit's
     // own completion history, and deleted records should stop affecting the
     // visible reward immediately.
-    func habitTradeDates(habitId: String) -> [Date] {
-        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
+    func habitTradeDates(habitId: RecordID) -> [Date] {
+        let canonicalHabitID = habitId
         return trades.compactMap { trade in
             guard trade.habitId == canonicalHabitID, trade.deletedAt == nil else { return nil }
             return trade.createdAt
@@ -109,24 +109,24 @@ final class TradeStore {
 
     // User behaviour: each reward's price should react only to that reward's
     // own purchase history, not to other rewards or habit claims.
-    func rewardPurchaseDates(rewardId: String) -> [Date] {
-        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
+    func rewardPurchaseDates(rewardId: RecordID) -> [Date] {
+        let canonicalRewardID = rewardId
         return trades.compactMap { trade in
             guard trade.rewardId == canonicalRewardID, trade.deletedAt == nil else { return nil }
             return trade.createdAt
         }
     }
 
-    func tradesInPeriod(habitId: String, days: Int) -> Int {
-        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
+    func tradesInPeriod(habitId: RecordID, days: Int) -> Int {
+        let canonicalHabitID = habitId
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
             $0.habitId == canonicalHabitID && $0.deletedAt == nil && $0.createdAt >= cutoff
         }.count
     }
 
-    func rewardPurchasesInPeriod(rewardId: String, days: Int) -> Int {
-        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
+    func rewardPurchasesInPeriod(rewardId: RecordID, days: Int) -> Int {
+        let canonicalRewardID = rewardId
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
             $0.rewardId == canonicalRewardID && $0.deletedAt == nil && $0.createdAt >= cutoff
@@ -140,7 +140,7 @@ final class TradeStore {
         }
     }
 
-    func getDirtyTrades(ids: Set<String>) -> [Trade] {
+    func getDirtyTrades(ids: Set<RecordID>) -> [Trade] {
         trades.filter { ids.contains($0.id) }
     }
 
@@ -150,7 +150,7 @@ final class TradeStore {
         }
     }
 
-    func allTradeIDs() -> [String] {
+    func allTradeIDs() -> [RecordID] {
         trades.map(\.id)
     }
 
@@ -194,7 +194,7 @@ final class TradeStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
@@ -207,13 +207,13 @@ final class TradeStore {
     }
 
     private static func normalizeTrades(_ trades: [Trade]) -> [Trade] {
-        var newestByID: [String: Trade] = [:]
+        var newestByID: [RecordID: Trade] = [:]
 
         for trade in trades {
             let normalized = Trade(
-                id: CanonicalRecordID.normalize(trade.id),
-                habitId: CanonicalRecordID.normalize(trade.habitId),
-                rewardId: CanonicalRecordID.normalize(trade.rewardId),
+                id: RecordID(rawValue: trade.id.rawValue),
+                habitId: trade.habitId.map { RecordID(rawValue: $0.rawValue) },
+                rewardId: trade.rewardId.map { RecordID(rawValue: $0.rawValue) },
                 amount: trade.amount,
                 createdAt: trade.createdAt,
                 updatedAt: trade.updatedAt,
@@ -229,7 +229,7 @@ final class TradeStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }

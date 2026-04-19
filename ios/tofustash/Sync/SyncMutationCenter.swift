@@ -13,7 +13,7 @@ enum SyncEntityKind: String, Codable, CaseIterable {
 struct SyncMutation: Sendable {
     let ownerID: String
     let entityKind: SyncEntityKind
-    let recordIDs: [String]
+    let recordIDs: [RecordID]
 }
 
 enum SyncMutationCenter {

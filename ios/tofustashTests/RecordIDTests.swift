@@ -2,12 +2,12 @@ import Foundation
 import Testing
 @testable import tofustash
 
-struct CanonicalRecordIDTests {
+struct RecordIDTests {
     // Behaviour: when sync echoes back the same UUID in lowercase, the app must
     // treat it as the same record that Swift created locally in uppercase.
-    @Test func normalizeLowercasesUUIDStrings() {
+    @Test func initLowercasesUUIDStrings() {
         #expect(
-            CanonicalRecordID.normalize("A0B1C2D3-E4F5-6789-ABCD-EF0123456789")
+            RecordID("A0B1C2D3-E4F5-6789-ABCD-EF0123456789").rawValue
             == "a0b1c2d3-e4f5-6789-abcd-ef0123456789"
         )
     }
@@ -27,6 +27,6 @@ struct CanonicalRecordIDTests {
         )
 
         let model = record.toModel()
-        #expect(model?.id == "a0b1c2d3-e4f5-6789-abcd-ef0123456789")
+        #expect(model?.id == RecordID("a0b1c2d3-e4f5-6789-abcd-ef0123456789"))
     }
 }

@@ -6,7 +6,7 @@ import Foundation
 // - `maxFrequency` is the maximum healthy purchase rate the user wants
 // - `damageTier` expresses how harmful/derailing the reward is
 struct Reward: Identifiable, Equatable, Sendable, Codable {
-    let id: String
+    let id: RecordID
     let name: String
     let description: String
     let createdAt: Date

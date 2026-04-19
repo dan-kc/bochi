@@ -7,7 +7,7 @@ import Foundation
 // In React/TS this would be a plain interface:
 //   interface Tag { id: string; name: string; colorHex: string; ... }
 struct Tag: Identifiable, Equatable, Sendable, Codable {
-    let id: String              // UUID string
+    let id: RecordID            // Canonical UUID wrapper
     let name: String            // Tag display name
     let colorHex: String        // "#RRGGBB" hex color for the tag pill
     let createdAt: Date

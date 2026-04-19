@@ -10,9 +10,9 @@ import Foundation
 // - Equatable: supports `==` comparison (auto-synthesized for structs)
 // - Sendable: safe to pass across threads
 struct Trade: Identifiable, Equatable, Sendable, Codable {
-    let id: String
-    let habitId: String?
-    let rewardId: String?
+    let id: RecordID
+    let habitId: RecordID?
+    let rewardId: RecordID?
     let amount: Int
     let createdAt: Date
     let updatedAt: Date

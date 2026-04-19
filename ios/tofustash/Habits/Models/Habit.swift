@@ -11,7 +11,7 @@ import Foundation
 // - Equatable: lets you use `==` to compare two Habits (auto-synthesized for structs).
 // - Sendable: marks this type as safe to pass across threads (like Rust's Send trait).
 struct Habit: Identifiable, Equatable, Sendable, Codable {
-    let id: String              // UUID string — unique identifier
+    let id: RecordID            // Canonical UUID wrapper — unique identifier
     let name: String            // 1-100 chars, required
     let description: String     // optional text — empty string means "not set"
     let createdAt: Date         // Swift uses Date (not ISO strings) for timestamps

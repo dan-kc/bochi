@@ -4,7 +4,7 @@ import Foundation
 // Think of it like a small selector layer in React: raw store records go in,
 // view-friendly rows come out.
 struct TradeHistoryEntry: Identifiable, Equatable {
-    let id: String
+    let id: RecordID
     let title: String
     let dateText: String
     let amountText: String

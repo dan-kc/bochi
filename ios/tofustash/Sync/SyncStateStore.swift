@@ -3,12 +3,12 @@ import Foundation
 @MainActor
 final class SyncStateStore {
     struct DirtyState: Codable, Equatable {
-        var habits: [String] = []
-        var trades: [String] = []
-        var tags: [String] = []
-        var habitTags: [String] = []
-        var rewards: [String] = []
-        var rewardTags: [String] = []
+        var habits: [RecordID] = []
+        var trades: [RecordID] = []
+        var tags: [RecordID] = []
+        var habitTags: [RecordID] = []
+        var rewards: [RecordID] = []
+        var rewardTags: [RecordID] = []
         var generalDifficulty: Bool = false
     }
 
@@ -35,7 +35,7 @@ final class SyncStateStore {
         statesByUserID[userID] ?? UserSyncState()
     }
 
-    func markDirty(userID: String, kind: SyncEntityKind, ids: [String]) {
+    func markDirty(userID: String, kind: SyncEntityKind, ids: [RecordID]) {
         var current = state(for: userID)
 
         switch kind {
@@ -105,11 +105,11 @@ final class SyncStateStore {
         JSONFileStore.save(PersistedState(statesByUserID: statesByUserID), to: storageURL)
     }
 
-    private func mergeUnique(_ existing: [String], _ incoming: [String]) -> [String] {
+    private func mergeUnique(_ existing: [RecordID], _ incoming: [RecordID]) -> [RecordID] {
         var values = Set(existing)
         for id in incoming {
             values.insert(id)
         }
-        return Array(values).sorted()
+        return Array(values).sorted { $0.rawValue < $1.rawValue }
     }
 }

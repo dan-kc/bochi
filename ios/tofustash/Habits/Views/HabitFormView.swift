@@ -29,7 +29,7 @@ struct HabitFormSnapshot {
     let description: String
     let frequency: Double?
     let difficultyTier: HabitDifficultyTier?
-    let habitId: String
+    let habitId: RecordID
 }
 
 struct HabitFormView: View {
@@ -49,7 +49,7 @@ struct HabitFormView: View {
     @State private var description = ""
     @State private var frequency: Double? = nil
     @State private var difficultyTier: HabitDifficultyTier? = nil
-    @State private var habitId: String = CanonicalRecordID.normalize(UUID().uuidString)
+    @State private var habitId = RecordID()
 
     @State private var showingFrequency = false
     @State private var showingDifficulty = false

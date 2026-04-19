@@ -4,11 +4,11 @@ import Foundation
 // Keeping reward links separate from habit links means the global tag catalog
 // stays shared while each feature owns its own association history.
 struct RewardTag: Identifiable, Equatable, Sendable, Codable {
-    let rewardId: String
-    let tagId: String
+    let rewardId: RecordID
+    let tagId: RecordID
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
 
-    var id: String { "\(rewardId):\(tagId)" }
+    var id: RecordID { RecordID("\(rewardId):\(tagId)") }
 }

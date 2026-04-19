@@ -48,7 +48,7 @@ final class RewardStore {
         rewards = rewardsByOwner[ownerID] ?? []
     }
 
-    func migrateRewards(from sourceOwnerID: String, to destinationOwnerID: String) -> [String] {
+    func migrateRewards(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
 
         let source = rewardsByOwner[sourceOwnerID] ?? []
@@ -65,7 +65,7 @@ final class RewardStore {
 
     @discardableResult
     func addReward(
-        id: String? = nil,
+        id: RecordID? = nil,
         name: String,
         description: String = "",
         maxFrequency: Double? = nil,
@@ -79,7 +79,7 @@ final class RewardStore {
         guard !trimmedName.isEmpty, trimmedName.count <= 100 else {
             return nil
         }
-        let canonicalID = CanonicalRecordID.normalize(id ?? UUID().uuidString)
+        let canonicalID = id ?? RecordID()
 
         let now = Date()
         let reward = Reward(
@@ -106,7 +106,7 @@ final class RewardStore {
     }
 
     func updateReward(
-        id: String,
+        id: RecordID,
         name: String? = nil,
         description: String? = nil,
         maxFrequency: Double?? = nil,
@@ -115,7 +115,7 @@ final class RewardStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        let canonicalID = CanonicalRecordID.normalize(id)
+        let canonicalID = id
         guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
@@ -152,8 +152,8 @@ final class RewardStore {
         }
     }
 
-    func deleteReward(id: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        let canonicalID = CanonicalRecordID.normalize(id)
+    func deleteReward(id: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalID = id
         guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
@@ -184,7 +184,7 @@ final class RewardStore {
         }
     }
 
-    func getDirtyRewards(ids: Set<String>) -> [Reward] {
+    func getDirtyRewards(ids: Set<RecordID>) -> [Reward] {
         rewards.filter { ids.contains($0.id) }
     }
 
@@ -194,7 +194,7 @@ final class RewardStore {
         }
     }
 
-    func allRewardIDs() -> [String] {
+    func allRewardIDs() -> [RecordID] {
         rewards.map(\.id)
     }
 
@@ -227,7 +227,7 @@ final class RewardStore {
 
         return mergedByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
@@ -240,11 +240,11 @@ final class RewardStore {
     }
 
     private static func normalizeRewards(_ rewards: [Reward]) -> [Reward] {
-        var newestByID: [String: Reward] = [:]
+        var newestByID: [RecordID: Reward] = [:]
 
         for reward in rewards {
             let normalized = Reward(
-                id: CanonicalRecordID.normalize(reward.id),
+                id: RecordID(rawValue: reward.id.rawValue),
                 name: reward.name,
                 description: reward.description,
                 createdAt: reward.createdAt,
@@ -263,13 +263,13 @@ final class RewardStore {
 
         return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
-                return lhs.id < rhs.id
+                return lhs.id.rawValue < rhs.id.rawValue
             }
             return lhs.createdAt < rhs.createdAt
         }
     }
 
-    private func notifySync(ids: [String]) {
+    private func notifySync(ids: [RecordID]) {
         SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .rewards, recordIDs: ids))
     }
 }
