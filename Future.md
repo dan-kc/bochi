@@ -33,6 +33,8 @@ Put the UI right underneath the title and just above the list of habits/rewards.
 
 # NEXT
 
+Scour codebase finding bad code/duplicates
+
 Fix compile warnings
 
 Remove Bought and Sold
@@ -40,5 +42,9 @@ Remove Bought and Sold
 Tag row and button row same size
 
 Remove bg color in habit/reward list
+
+Update seed
+
+Tasks
 
 # Todos?

@@ -19,12 +19,12 @@ struct RewardsView: View {
     @State private var purchasingReward: Reward? = nil
     @State private var rewardToDelete: Reward? = nil
     @State private var toastManager = ToastManager()
-    @State private var isListAtTop = true
 
     private var visibleRewards: [Reward] {
         EntityListQuery.apply(
             items: rewardStore.activeRewards,
             preferences: listPreferencesStore.rewardPreferences,
+            validTagIDs: tagStore.listFilterTagIDs(for: .rewards),
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.damageTier?.sortOrder },
@@ -36,62 +36,47 @@ struct RewardsView: View {
     }
 
     private var availableRewardTags: [Tag] {
-        let usedTagIDs = Set(
-            tagStore.rewardTags
-                .filter { $0.deletedAt == nil }
-                .map(\.tagId)
-        )
-
-        return tagStore.activeTags.filter { usedTagIDs.contains($0.id) }
+        tagStore.listFilterTags(for: .rewards)
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if rewardStore.activeRewards.isEmpty {
-                    ContentUnavailableView(
-                        "No Rewards Yet",
-                        systemImage: "gift",
-                        description: Text("Tap + to create your first reward.")
-                    )
-                } else {
-                    List {
-                        controlsRow
-
-                        Section {
-                            if visibleRewards.isEmpty {
-                                filteredEmptyStateRow
-                            } else {
-                                ForEach(visibleRewards) { reward in
-                                    rewardRow(reward)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button {
-                                                // Behaviour: Swiping a row should only open the
-                                                // confirmation alert. Using a `.destructive` swipe button
-                                                // makes SwiftUI preview the removal before the user confirms,
-                                                // which causes the row to flicker out and then back in.
-                                                rewardToDelete = reward
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                            .tint(.red)
-                                        }
-                                }
+            EntityListScreen(
+                hasAnyItems: !rewardStore.activeRewards.isEmpty,
+                visibleItemCount: visibleRewards.count,
+                emptyTitle: "No Rewards Yet",
+                emptySystemImage: "gift",
+                emptyDescription: "Tap + to create your first reward.",
+                filteredEmptyTitle: "No Matching Rewards",
+                filteredEmptyDescription: "Try changing the filters or clear them to see more rewards.",
+                preferences: listPreferencesStore.rewardPreferences,
+                availableTags: availableRewardTags,
+                difficultyLabel: "Difficulty",
+                frequencyLabel: "Freq",
+                onSelectSort: listPreferencesStore.setRewardSort,
+                onSelectDifficultyFilter: listPreferencesStore.setRewardDifficultyFilter,
+                onSelectFrequencyFilter: listPreferencesStore.setRewardFrequencyFilter,
+                onSelectTagMatchMode: listPreferencesStore.setRewardTagMatchMode,
+                onToggleTag: listPreferencesStore.toggleRewardTag,
+                onClearFilters: listPreferencesStore.clearRewardFilters
+            ) {
+                ForEach(visibleRewards) { reward in
+                    rewardRow(reward)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                // Behaviour: Swiping a row should only open the
+                                // confirmation alert. Using a `.destructive` swipe button
+                                // makes SwiftUI preview the removal before the user confirms,
+                                // which causes the row to flicker out and then back in.
+                                rewardToDelete = reward
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
-                    }
-                    .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
-                    .listStyle(.insetGrouped)
-                    .listSectionSpacing(0)
-                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
             .navigationTitle("Rewards")
-            .onChange(of: visibleRewards.isEmpty) { _, isEmpty in
-                if isEmpty {
-                    isListAtTop = true
-                }
-            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
@@ -174,42 +159,6 @@ struct RewardsView: View {
     private func priceSortValue(for reward: Reward) -> Int? {
         guard reward.canPurchase else { return nil }
         return priceForReward(reward)
-    }
-
-    private var controlsRow: some View {
-        EntityListControls(
-            preferences: listPreferencesStore.rewardPreferences,
-            availableTags: availableRewardTags,
-            difficultyLabel: "Difficulty",
-            frequencyLabel: "Freq",
-            isEnabled: isListAtTop,
-            onSelectSort: listPreferencesStore.setRewardSort,
-            onSelectDifficultyFilter: listPreferencesStore.setRewardDifficultyFilter,
-            onSelectFrequencyFilter: listPreferencesStore.setRewardFrequencyFilter,
-            onSelectTagMatchMode: listPreferencesStore.setRewardTagMatchMode,
-            onToggleTag: listPreferencesStore.toggleRewardTag,
-            onClearFilters: listPreferencesStore.clearRewardFilters
-        )
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        .padding(.top, -12)
-        .padding(.bottom, -6)
-    }
-
-    private var filteredEmptyStateRow: some View {
-        ContentUnavailableView {
-            Label("No Matching Rewards", systemImage: "line.3.horizontal.decrease.circle")
-        } description: {
-            Text("Try changing the filters or clear them to see more rewards.")
-        } actions: {
-            Button("Clear Filters") {
-                listPreferencesStore.clearRewardFilters()
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 260)
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
     }
 
     private func rewardRow(_ reward: Reward) -> some View {

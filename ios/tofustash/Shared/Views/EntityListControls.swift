@@ -174,7 +174,7 @@ struct EntityListControls: View {
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationBackground(.thinMaterial)
             .presentationContentInteraction(.scrolls)
             .toolbar {

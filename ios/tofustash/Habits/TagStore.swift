@@ -1,5 +1,10 @@
 import Foundation
 
+enum EntityListTagScope {
+    case habits
+    case rewards
+}
+
 @Observable
 @MainActor
 final class TagStore {
@@ -283,6 +288,33 @@ final class TagStore {
         case .reward(let rewardId):
             return tagsForReward(rewardId: rewardId)
         }
+    }
+
+    func listFilterTags(for scope: EntityListTagScope) -> [Tag] {
+        let validTagIDs = listFilterTagIDs(for: scope)
+        return activeTags.filter { validTagIDs.contains($0.id) }
+    }
+
+    func listFilterTagIDs(for scope: EntityListTagScope) -> Set<RecordID> {
+        let activeTagIDs = Set(activeTags.map(\.id))
+
+        let usedTagIDs: Set<RecordID>
+        switch scope {
+        case .habits:
+            usedTagIDs = Set(
+                habitTags
+                    .filter { $0.deletedAt == nil }
+                    .map(\.tagId)
+            )
+        case .rewards:
+            usedTagIDs = Set(
+                rewardTags
+                    .filter { $0.deletedAt == nil }
+                    .map(\.tagId)
+            )
+        }
+
+        return activeTagIDs.intersection(usedTagIDs)
     }
 
     func addTag(tagId: RecordID, to target: TagAssignmentTarget) {

@@ -109,6 +109,31 @@ Only tags that are currently attached to at least one item in that screen are sh
 - habit screen shows tags used by habits
 - reward screen shows tags used by rewards
 
+Saved tag filters only store tag ids, not tag names.
+
+That matters because the valid filter list is derived from the current screen data, not from whatever ids happened to be saved earlier.
+
+If a saved tag id is no longer valid for the current screen, the app treats it as stale.
+
+Examples:
+
+- the tag was deleted
+- the tag still exists globally, but is no longer attached to any habits
+- the tag still exists globally, but is no longer attached to any rewards
+- the current owner bucket changed after auth/session switching
+
+Stale tag-filter behaviour:
+
+- query evaluation ignores stale selected tag ids immediately
+- if all selected tag ids are stale, tag filtering behaves as off
+- the saved preferences are then pruned locally so the stale ids do not keep coming back
+
+Rename behavior:
+
+- renaming a tag does not require any filter migration
+- the list controls always render the current tag name from the live tag store
+- so a rename automatically shows up in the filter sheet the next time it renders
+
 ## Scroll Locking
 
 The sort/filter/tag buttons stay visible under the title, but they are disabled unless the list is scrolled all the way back to the top.
@@ -153,3 +178,7 @@ When a signed-out local user later signs in on the same device:
 - nothing is sent to the server or included in sync
 
 That keeps the iOS behavior consistent with the rest of the local stores while preserving the “preferences are device-local” rule.
+
+After an owner change or sync merge, the app re-validates saved tag filters against that owner’s current habit/reward tag sets.
+
+So if a different owner bucket does not contain a previously selected tag, that tag filter is removed locally instead of being allowed to hide all rows.

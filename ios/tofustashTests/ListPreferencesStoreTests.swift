@@ -50,4 +50,60 @@ struct ListPreferencesStoreTests {
         #expect(relaunchedStore.rewardPreferences.selectedTagIDs == [rewardTagID])
         #expect(relaunchedStore.habitPreferences == EntityListPreferences())
     }
+
+    // Behaviour: If a tag disappears from the habits filter list, the app should
+    // drop that stale saved tag id so reopening the list does not stay filtered by
+    // something the user can no longer see or uncheck.
+    @Test("Habit selected tags are pruned when they are no longer valid")
+    func sanitizeHabitSelectedTagsRemovesStaleIDs() {
+        let storageURL = TestHelpers.makeTemporaryFileURL("sanitize-habit-list-preferences")
+        let focus: RecordID = "focus"
+        let stale: RecordID = "deleted-tag"
+
+        let store = ListPreferencesStore(storageURL: storageURL)
+        store.toggleHabitTag(focus)
+        store.toggleHabitTag(stale)
+
+        let didChange = store.sanitizeHabitSelectedTags(validTagIDs: [focus])
+        let relaunchedStore = ListPreferencesStore(storageURL: storageURL)
+
+        #expect(didChange)
+        #expect(store.habitPreferences.selectedTagIDs == [focus])
+        #expect(relaunchedStore.habitPreferences.selectedTagIDs == [focus])
+    }
+
+    // Behaviour: Reward filters should fully clear their selected tag chips if
+    // every saved tag has disappeared from that reward list.
+    @Test("Reward selected tags clear when all saved ids are stale")
+    func sanitizeRewardSelectedTagsClearsAllStaleIDs() {
+        let storageURL = TestHelpers.makeTemporaryFileURL("sanitize-reward-list-preferences")
+        let store = ListPreferencesStore(storageURL: storageURL)
+
+        store.toggleRewardTag("deleted-tag")
+
+        let didChange = store.sanitizeRewardSelectedTags(validTagIDs: [])
+        let relaunchedStore = ListPreferencesStore(storageURL: storageURL)
+
+        #expect(didChange)
+        #expect(store.rewardPreferences.selectedTagIDs.isEmpty)
+        #expect(relaunchedStore.rewardPreferences.selectedTagIDs.isEmpty)
+    }
+
+    // Behaviour: When the user switches to another local owner bucket, any tag ids
+    // that do not exist in that owner's current filter list should be removed.
+    @Test("Owner switching can prune stale habit selected tag ids")
+    func ownerSwitchingCanPruneStaleHabitSelectedTagIDs() {
+        let storageURL = TestHelpers.makeTemporaryFileURL("owner-switch-habit-list-preferences")
+        let store = ListPreferencesStore(storageURL: storageURL, initialOwnerID: "user-a")
+
+        store.toggleHabitTag("focus")
+        store.setCurrentOwner("user-b")
+        store.toggleHabitTag("stale")
+        store.sanitizeHabitSelectedTags(validTagIDs: [])
+
+        #expect(store.habitPreferences.selectedTagIDs.isEmpty)
+
+        store.setCurrentOwner("user-a")
+        #expect(store.habitPreferences.selectedTagIDs == ["focus"])
+    }
 }

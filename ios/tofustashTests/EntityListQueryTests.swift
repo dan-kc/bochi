@@ -18,6 +18,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [easy, unset],
             preferences: preferences,
+            validTagIDs: [],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
@@ -43,6 +44,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [capped, uncapped],
             preferences: preferences,
+            validTagIDs: [],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.damageTier?.sortOrder },
@@ -77,6 +79,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [callFriend, pushups, reading],
             preferences: preferences,
+            validTagIDs: [social.id, health.id],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
@@ -109,6 +112,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [one, both],
             preferences: preferences,
+            validTagIDs: [social.id, health.id],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.damageTier?.sortOrder },
@@ -136,6 +140,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [cheap, missingPrice, expensive],
             preferences: EntityListPreferences(),
+            validTagIDs: [],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
@@ -163,6 +168,7 @@ struct EntityListQueryTests {
         let visible = EntityListQuery.apply(
             items: [hard, mediumNewer, trivial, mediumOlder],
             preferences: preferences,
+            validTagIDs: [],
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
@@ -173,6 +179,103 @@ struct EntityListQueryTests {
         )
 
         #expect(visible.map(\.id) == [trivial.id, mediumOlder.id, mediumNewer.id, hard.id])
+    }
+
+    // Behaviour: If a saved filter references tags that are no longer available
+    // on this list, the query should ignore those stale ids instead of hiding
+    // every row until the store cleanup runs.
+    @Test("Invalid selected tag ids are ignored by the query layer")
+    func invalidSelectedTagsAreIgnored() {
+        let focus = makeTag(id: "focus", name: "Focus")
+        let stretch = makeHabit(id: "stretch", createdAt: date(day: 1), frequency: 1, difficulty: .light)
+        let journal = makeHabit(id: "journal", createdAt: date(day: 2), frequency: 1, difficulty: .medium)
+        let tagsByHabitID: [RecordID: [Tag]] = [
+            stretch.id: [focus],
+            journal.id: []
+        ]
+
+        var preferences = EntityListPreferences()
+        preferences.selectedTagIDs = ["deleted-tag"]
+
+        let visible = EntityListQuery.apply(
+            items: [stretch, journal],
+            preferences: preferences,
+            validTagIDs: [focus.id],
+            id: \.id,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
+            price: { _ in nil },
+            hasDifficulty: { $0.difficultyTier != nil },
+            hasFrequency: { $0.frequency != nil },
+            tags: { tagsByHabitID[$0.id] ?? [] }
+        )
+
+        #expect(visible.map(\.id) == [stretch.id, journal.id])
+    }
+
+    // Behaviour: If a saved filter contains both current and stale tags, only the
+    // tags still present on the list should affect which rows stay visible.
+    @Test("Mixed valid and invalid selected tag ids only use the valid ids")
+    func mixedValidAndInvalidSelectedTagsOnlyUseValidIDs() {
+        let focus = makeTag(id: "focus", name: "Focus")
+        let deepWork = makeHabit(id: "deep-work", createdAt: date(day: 1), frequency: 1, difficulty: .hard)
+        let walk = makeHabit(id: "walk", createdAt: date(day: 2), frequency: 1, difficulty: .light)
+        let tagsByHabitID: [RecordID: [Tag]] = [
+            deepWork.id: [focus],
+            walk.id: []
+        ]
+
+        var preferences = EntityListPreferences()
+        preferences.selectedTagIDs = [focus.id, "deleted-tag"]
+        preferences.tagMatchMode = .any
+
+        let visible = EntityListQuery.apply(
+            items: [walk, deepWork],
+            preferences: preferences,
+            validTagIDs: [focus.id],
+            id: \.id,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
+            price: { _ in nil },
+            hasDifficulty: { $0.difficultyTier != nil },
+            hasFrequency: { $0.frequency != nil },
+            tags: { tagsByHabitID[$0.id] ?? [] }
+        )
+
+        #expect(visible.map(\.id) == [deepWork.id])
+    }
+
+    // Behaviour: "Match all" should still work after stale ids are stripped, so
+    // a deleted tag does not make a still-valid AND filter impossible to satisfy.
+    @Test("Tag all mode keeps working after invalid ids are removed")
+    func tagAllModeStillWorksAfterInvalidIDsAreRemoved() {
+        let focus = makeTag(id: "focus", name: "Focus")
+        let calm = makeTag(id: "calm", name: "Calm")
+        let tea = makeReward(id: "tea", createdAt: date(day: 1), maxFrequency: 1, damage: .light)
+        let nap = makeReward(id: "nap", createdAt: date(day: 2), maxFrequency: 1, damage: .medium)
+        let tagsByRewardID: [RecordID: [Tag]] = [
+            tea.id: [focus, calm],
+            nap.id: [focus]
+        ]
+
+        var preferences = EntityListPreferences()
+        preferences.selectedTagIDs = [focus.id, calm.id, "deleted-tag"]
+        preferences.tagMatchMode = .all
+
+        let visible = EntityListQuery.apply(
+            items: [tea, nap],
+            preferences: preferences,
+            validTagIDs: [focus.id, calm.id],
+            id: \.id,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.damageTier?.sortOrder },
+            price: { _ in nil },
+            hasDifficulty: { $0.damageTier != nil },
+            hasFrequency: { $0.maxFrequency != nil },
+            tags: { tagsByRewardID[$0.id] ?? [] }
+        )
+
+        #expect(visible.map(\.id) == [tea.id])
     }
 
     private func date(day: Int) -> Date {

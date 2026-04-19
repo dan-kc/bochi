@@ -183,4 +183,22 @@ struct SyncManagerTests {
 
         context.syncManager.updateSession(userID: nil)
     }
+
+    // Behaviour: If the device carries a saved habit filter for a tag that is no
+    // longer present after sign-in, switching into the signed-in owner should
+    // prune that stale tag id instead of keeping the list filtered invisibly.
+    @Test func signingInPrunesStaleHabitFilterTags() async throws {
+        let context = try await makeContext(pullResponse: makeResponse())
+        let deletedTag = context.tagStore.addTag(name: "Deleted Locally")!
+
+        context.listPreferencesStore.toggleHabitTag(deletedTag.id)
+        context.tagStore.deleteTag(id: deletedTag.id, shouldNotifySync: false)
+
+        context.syncManager.updateSession(userID: "user-123")
+
+        #expect(context.listPreferencesStore.currentOwnerID == "user-123")
+        #expect(context.listPreferencesStore.habitPreferences.selectedTagIDs.isEmpty)
+
+        context.syncManager.updateSession(userID: nil)
+    }
 }

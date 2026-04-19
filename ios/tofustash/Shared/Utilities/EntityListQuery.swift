@@ -7,6 +7,7 @@ enum EntityListQuery {
     static func apply<Item>(
         items: [Item],
         preferences: EntityListPreferences,
+        validTagIDs: Set<RecordID>,
         id: (Item) -> RecordID,
         createdAt: (Item) -> Date,
         difficultySortOrder: (Item) -> Int?,
@@ -15,11 +16,13 @@ enum EntityListQuery {
         hasFrequency: (Item) -> Bool,
         tags: (Item) -> [Tag]
     ) -> [Item] {
+        let selectedTagIDs = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
+
         let filteredItems = items.filter { item in
             matches(preferences.difficultyFilter, hasValue: hasDifficulty(item))
                 && matches(preferences.frequencyFilter, hasValue: hasFrequency(item))
                 && matchesTagFilter(
-                    selectedTagIDs: preferences.selectedTagIDs,
+                    selectedTagIDs: selectedTagIDs,
                     matchMode: preferences.tagMatchMode,
                     itemTags: tags(item)
                 )

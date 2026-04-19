@@ -6,6 +6,11 @@ import Foundation
 @Observable
 @MainActor
 final class ListPreferencesStore {
+    enum ListScope {
+        case habits
+        case rewards
+    }
+
     private struct PersistedState: Codable {
         var habitPreferencesByOwner: [String: EntityListPreferences] = [:]
         var rewardPreferencesByOwner: [String: EntityListPreferences] = [:]
@@ -66,65 +71,75 @@ final class ListPreferencesStore {
     }
 
     func setHabitSort(_ sort: EntityListSortOption) {
-        mutateHabitPreferences { $0.sort = sort }
+        mutatePreferences(for: .habits) { $0.sort = sort }
     }
 
     func setRewardSort(_ sort: EntityListSortOption) {
-        mutateRewardPreferences { $0.sort = sort }
+        mutatePreferences(for: .rewards) { $0.sort = sort }
     }
 
     func setHabitDifficultyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutateHabitPreferences { $0.difficultyFilter = filter }
+        mutatePreferences(for: .habits) { $0.difficultyFilter = filter }
     }
 
     func setRewardDifficultyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutateRewardPreferences { $0.difficultyFilter = filter }
+        mutatePreferences(for: .rewards) { $0.difficultyFilter = filter }
     }
 
     func setHabitFrequencyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutateHabitPreferences { $0.frequencyFilter = filter }
+        mutatePreferences(for: .habits) { $0.frequencyFilter = filter }
     }
 
     func setRewardFrequencyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutateRewardPreferences { $0.frequencyFilter = filter }
+        mutatePreferences(for: .rewards) { $0.frequencyFilter = filter }
     }
 
     func setHabitTagMatchMode(_ mode: EntityListTagMatchMode) {
-        mutateHabitPreferences { $0.tagMatchMode = mode }
+        mutatePreferences(for: .habits) { $0.tagMatchMode = mode }
     }
 
     func setRewardTagMatchMode(_ mode: EntityListTagMatchMode) {
-        mutateRewardPreferences { $0.tagMatchMode = mode }
+        mutatePreferences(for: .rewards) { $0.tagMatchMode = mode }
     }
 
     func toggleHabitTag(_ tagID: RecordID) {
-        mutateHabitPreferences { preferences in
+        mutatePreferences(for: .habits) { preferences in
             toggleTag(tagID, in: &preferences)
         }
     }
 
     func toggleRewardTag(_ tagID: RecordID) {
-        mutateRewardPreferences { preferences in
+        mutatePreferences(for: .rewards) { preferences in
             toggleTag(tagID, in: &preferences)
         }
     }
 
     func clearHabitFilters() {
-        mutateHabitPreferences { preferences in
-            preferences.difficultyFilter = .any
-            preferences.frequencyFilter = .any
-            preferences.selectedTagIDs = []
-            preferences.tagMatchMode = .any
-        }
+        clearFilters(for: .habits)
     }
 
     func clearRewardFilters() {
-        mutateRewardPreferences { preferences in
-            preferences.difficultyFilter = .any
-            preferences.frequencyFilter = .any
-            preferences.selectedTagIDs = []
-            preferences.tagMatchMode = .any
-        }
+        clearFilters(for: .rewards)
+    }
+
+    @discardableResult
+    func sanitizeHabitSelectedTags(validTagIDs: Set<RecordID>) -> Bool {
+        sanitizeSelectedTags(for: .habits, validTagIDs: validTagIDs)
+    }
+
+    @discardableResult
+    func sanitizeRewardSelectedTags(validTagIDs: Set<RecordID>) -> Bool {
+        sanitizeSelectedTags(for: .rewards, validTagIDs: validTagIDs)
+    }
+
+    @discardableResult
+    func sanitizeSelectedTags(
+        validHabitTagIDs: Set<RecordID>,
+        validRewardTagIDs: Set<RecordID>
+    ) -> Bool {
+        let habitsChanged = sanitizeHabitSelectedTags(validTagIDs: validHabitTagIDs)
+        let rewardsChanged = sanitizeRewardSelectedTags(validTagIDs: validRewardTagIDs)
+        return habitsChanged || rewardsChanged
     }
 
     private func toggleTag(_ tagID: RecordID, in preferences: inout EntityListPreferences) {
@@ -136,22 +151,57 @@ final class ListPreferencesStore {
         }
     }
 
-    private func mutateHabitPreferences(_ mutate: (inout EntityListPreferences) -> Void) {
+    private func clearFilters(for scope: ListScope) {
+        mutatePreferences(for: scope) { preferences in
+            preferences.difficultyFilter = .any
+            preferences.frequencyFilter = .any
+            preferences.selectedTagIDs = []
+            preferences.tagMatchMode = .any
+        }
+    }
+
+    @discardableResult
+    private func sanitizeSelectedTags(for scope: ListScope, validTagIDs: Set<RecordID>) -> Bool {
+        var didChange = false
+        mutatePreferences(for: scope) { preferences in
+            let sanitized = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
+            if sanitized != preferences.selectedTagIDs {
+                preferences.selectedTagIDs = sanitized
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    private func mutatePreferences(for scope: ListScope, _ mutate: (inout EntityListPreferences) -> Void) {
         // `inout` here is the closest Swift syntax to mutating a draft object
         // in Immer, then committing the next immutable snapshot to the store.
-        var next = habitPreferences
+        let current = preferences(for: scope)
+        var next = current
         mutate(&next)
-        habitPreferences = next
-        habitPreferencesByOwner[currentOwnerID] = next
+        guard next != current else { return }
+        setPreferences(next, for: scope)
         persist()
     }
 
-    private func mutateRewardPreferences(_ mutate: (inout EntityListPreferences) -> Void) {
-        var next = rewardPreferences
-        mutate(&next)
-        rewardPreferences = next
-        rewardPreferencesByOwner[currentOwnerID] = next
-        persist()
+    private func preferences(for scope: ListScope) -> EntityListPreferences {
+        switch scope {
+        case .habits:
+            habitPreferences
+        case .rewards:
+            rewardPreferences
+        }
+    }
+
+    private func setPreferences(_ preferences: EntityListPreferences, for scope: ListScope) {
+        switch scope {
+        case .habits:
+            habitPreferences = preferences
+            habitPreferencesByOwner[currentOwnerID] = preferences
+        case .rewards:
+            rewardPreferences = preferences
+            rewardPreferencesByOwner[currentOwnerID] = preferences
+        }
     }
 
     private func persist() {

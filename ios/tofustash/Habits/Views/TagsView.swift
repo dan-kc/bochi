@@ -12,6 +12,7 @@ struct TagsView: View {
     let target: TagAssignmentTarget
     @Environment(\.dismiss) private var dismiss
     @Environment(TagStore.self) private var tagStore
+    @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var searchText = ""
     @State private var isSearchPresented = false
@@ -131,7 +132,7 @@ struct TagsView: View {
         // Swipe to delete — like swipeable row actions in React Native
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                tagStore.deleteTag(id: tag.id)
+                deleteTagAndSanitizeFilters(tag.id)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -227,6 +228,7 @@ struct TagsView: View {
         } else {
             tagStore.addTag(tagId: tag.id, to: target)
         }
+        sanitizeListFilters()
     }
 
     private func createTagFromSearch() {
@@ -236,6 +238,7 @@ struct TagsView: View {
         isCreatingTag = true
         if let tag = tagStore.addTag(name: name) {
             tagStore.addTag(tagId: tag.id, to: target)
+            sanitizeListFilters()
             isSearchPresented = false
             searchText = ""
             // Open edit sheet for the new tag
@@ -250,5 +253,20 @@ struct TagsView: View {
         let validColor = editColor.contains(/^#[0-9A-Fa-f]{6}$/) ? editColor : nil
         tagStore.updateTag(id: tag.id, name: editName, colorHex: validColor)
         editingTag = nil
+    }
+
+    private func deleteTagAndSanitizeFilters(_ tagID: RecordID) {
+        tagStore.deleteTag(id: tagID)
+        sanitizeListFilters()
+    }
+
+    private func sanitizeListFilters() {
+        // User behaviour: when a tag is deleted or its last assignment disappears,
+        // any saved list filter pointing at that tag should be removed right away
+        // so reopening the list never lands on a stale hidden-results state.
+        listPreferencesStore.sanitizeSelectedTags(
+            validHabitTagIDs: tagStore.listFilterTagIDs(for: .habits),
+            validRewardTagIDs: tagStore.listFilterTagIDs(for: .rewards)
+        )
     }
 }

@@ -160,6 +160,7 @@ final class SyncManager {
         balanceStore.setCurrentOwner(ownerID)
         userSettingsStore.setCurrentOwner(ownerID)
         listPreferencesStore.setCurrentOwner(ownerID)
+        sanitizeListPreferencesForCurrentOwner()
     }
 
     private func migrateLocalDataIfNeeded(to userID: String) {
@@ -170,6 +171,7 @@ final class SyncManager {
         balanceStore.migrateBalance(from: StorageOwner.local, to: userID)
         let migratedDifficulty = userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID)
         _ = listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID)
+        sanitizeListPreferencesForCurrentOwner()
 
         if !migratedHabitIDs.isEmpty {
             syncStateStore.markDirty(userID: userID, kind: .habits, ids: migratedHabitIDs)
@@ -418,6 +420,7 @@ final class SyncManager {
         if !rewardTags.isEmpty {
             tagStore.mergeRewardTags(rewardTags)
         }
+        sanitizeListPreferencesForCurrentOwner()
 
         balanceStore.setBalance(Int(response.balance.tofuBalance.rounded()))
 
@@ -457,9 +460,20 @@ final class SyncManager {
         if !rewardTags.isEmpty {
             tagStore.mergeRewardTags(rewardTags)
         }
+        sanitizeListPreferencesForCurrentOwner()
 
         balanceStore.setBalance(Int(response.balance.tofuBalance.rounded()))
         userSettingsStore.setGeneralDifficulty(response.generalDifficulty, shouldNotifySync: false)
+    }
+
+    private func sanitizeListPreferencesForCurrentOwner() {
+        // User behaviour: when account switching, sync, or local migration changes
+        // which tags are currently available on a list, any saved filter chips for
+        // now-missing tags should disappear instead of silently hiding all rows.
+        listPreferencesStore.sanitizeSelectedTags(
+            validHabitTagIDs: tagStore.listFilterTagIDs(for: .habits),
+            validRewardTagIDs: tagStore.listFilterTagIDs(for: .rewards)
+        )
     }
 
     private struct DirtyIDSnapshot {

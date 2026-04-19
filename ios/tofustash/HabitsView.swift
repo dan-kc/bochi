@@ -18,12 +18,12 @@ struct HabitsView: View {
     @State private var tradingHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
-    @State private var isListAtTop = true
 
     private var visibleHabits: [Habit] {
         EntityListQuery.apply(
             items: habitStore.activeHabits,
             preferences: listPreferencesStore.habitPreferences,
+            validTagIDs: tagStore.listFilterTagIDs(for: .habits),
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
@@ -35,62 +35,47 @@ struct HabitsView: View {
     }
 
     private var availableHabitTags: [Tag] {
-        let usedTagIDs = Set(
-            tagStore.habitTags
-                .filter { $0.deletedAt == nil }
-                .map(\.tagId)
-        )
-
-        return tagStore.activeTags.filter { usedTagIDs.contains($0.id) }
+        tagStore.listFilterTags(for: .habits)
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if habitStore.activeHabits.isEmpty {
-                    ContentUnavailableView(
-                        "No Habits Yet",
-                        systemImage: "checkmark.circle",
-                        description: Text("Tap + to create your first habit.")
-                    )
-                } else {
-                    List {
-                        controlsRow
-
-                        Section {
-                            if visibleHabits.isEmpty {
-                                filteredEmptyStateRow
-                            } else {
-                                ForEach(visibleHabits) { habit in
-                                    habitRow(habit)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button {
-                                                // Behaviour: Swiping a row should only stage the delete
-                                                // confirmation. SwiftUI animates `.destructive` swipe
-                                                // buttons as if the row is already gone, which causes the
-                                                // brief disappear/reappear glitch before the user confirms.
-                                                habitToDelete = habit
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                            .tint(.red)
-                                        }
-                                }
+            EntityListScreen(
+                hasAnyItems: !habitStore.activeHabits.isEmpty,
+                visibleItemCount: visibleHabits.count,
+                emptyTitle: "No Habits Yet",
+                emptySystemImage: "checkmark.circle",
+                emptyDescription: "Tap + to create your first habit.",
+                filteredEmptyTitle: "No Matching Habits",
+                filteredEmptyDescription: "Try changing the filters or clear them to see more habits.",
+                preferences: listPreferencesStore.habitPreferences,
+                availableTags: availableHabitTags,
+                difficultyLabel: "Difficulty",
+                frequencyLabel: "Freq",
+                onSelectSort: listPreferencesStore.setHabitSort,
+                onSelectDifficultyFilter: listPreferencesStore.setHabitDifficultyFilter,
+                onSelectFrequencyFilter: listPreferencesStore.setHabitFrequencyFilter,
+                onSelectTagMatchMode: listPreferencesStore.setHabitTagMatchMode,
+                onToggleTag: listPreferencesStore.toggleHabitTag,
+                onClearFilters: listPreferencesStore.clearHabitFilters
+            ) {
+                ForEach(visibleHabits) { habit in
+                    habitRow(habit)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                // Behaviour: Swiping a row should only stage the delete
+                                // confirmation. SwiftUI animates `.destructive` swipe
+                                // buttons as if the row is already gone, which causes the
+                                // brief disappear/reappear glitch before the user confirms.
+                                habitToDelete = habit
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
-                    }
-                    .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
-                    .listStyle(.insetGrouped)
-                    .listSectionSpacing(0)
-                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
             .navigationTitle("Habits")
-            .onChange(of: visibleHabits.isEmpty) { _, isEmpty in
-                if isEmpty {
-                    isListAtTop = true
-                }
-            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     formRoute = HabitFormRoute(
@@ -178,42 +163,6 @@ struct HabitsView: View {
     private func priceSortValue(for habit: Habit) -> Int? {
         guard habit.canTrade else { return nil }
         return priceForHabit(habit)
-    }
-
-    private var controlsRow: some View {
-        EntityListControls(
-            preferences: listPreferencesStore.habitPreferences,
-            availableTags: availableHabitTags,
-            difficultyLabel: "Difficulty",
-            frequencyLabel: "Freq",
-            isEnabled: isListAtTop,
-            onSelectSort: listPreferencesStore.setHabitSort,
-            onSelectDifficultyFilter: listPreferencesStore.setHabitDifficultyFilter,
-            onSelectFrequencyFilter: listPreferencesStore.setHabitFrequencyFilter,
-            onSelectTagMatchMode: listPreferencesStore.setHabitTagMatchMode,
-            onToggleTag: listPreferencesStore.toggleHabitTag,
-            onClearFilters: listPreferencesStore.clearHabitFilters
-        )
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        .padding(.top, -12)
-        .padding(.bottom, -6)
-    }
-
-    private var filteredEmptyStateRow: some View {
-        ContentUnavailableView {
-            Label("No Matching Habits", systemImage: "line.3.horizontal.decrease.circle")
-        } description: {
-            Text("Try changing the filters or clear them to see more habits.")
-        } actions: {
-            Button("Clear Filters") {
-                listPreferencesStore.clearHabitFilters()
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 260)
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
     }
 
     private func habitRow(_ habit: Habit) -> some View {
