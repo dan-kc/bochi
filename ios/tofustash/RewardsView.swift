@@ -31,12 +31,17 @@ struct RewardsView: View {
                 } else {
                     List(rewardStore.activeRewards) { reward in
                         rewardRow(reward)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    // Behaviour: Swiping a row should only open the
+                                    // confirmation alert. Using a `.destructive` swipe button
+                                    // makes SwiftUI preview the removal before the user confirms,
+                                    // which causes the row to flicker out and then back in.
                                     rewardToDelete = reward
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .tint(.red)
                             }
                     }
                 }

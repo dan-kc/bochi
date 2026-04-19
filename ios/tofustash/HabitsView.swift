@@ -30,12 +30,17 @@ struct HabitsView: View {
                 } else {
                     List(habitStore.activeHabits) { habit in
                         habitRow(habit)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    // Behaviour: Swiping a row should only stage the delete
+                                    // confirmation. SwiftUI animates `.destructive` swipe
+                                    // buttons as if the row is already gone, which causes the
+                                    // brief disappear/reappear glitch before the user confirms.
                                     habitToDelete = habit
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .tint(.red)
                             }
                     }
                 }

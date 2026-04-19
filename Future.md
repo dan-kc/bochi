@@ -5,12 +5,11 @@ Write comments documenting user behaviours.
 Write tests when appropriate. When writing tests, ensure you comment what behaviour you are testing for. If there are no appropriate test, don't write one. Only write relevant BDD tests that match user workflows in the app. Do not run any tests, I will run them myself to validate.
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
-
 This is a habit tracking app where you have habits and rewards. You do habits to earn in-game currency, you spend them on rewards. An example habit is "10 pushups" or "Cold message a friend". An example reward is "Eat 1 chocolate bar" or "Spend 15 minutes on TikTok".
 
-Check ./docs/pricing.md. It mentions a 24hr window that is used and gives it's reasons why. I don't want this because some habits are done on a monthly basis and 24hrs wont effectively account for that. If i pick 2/month and i have already done 2 this month, last week, then i would still expect the formula to capture that and influence the price.
+------
 
-Is there a formula that could account for both? 
+When I swipe to delete an entry from a list, it brings up an alert to delete the entry. There is a bug, when the alert pops up, the entry seems to already be deleted from the list, then it comes back after a second. So it dissapears for a bit then comes back, then i can tap delete on the alert and it will correctly delete. This does not hapen when I delete from the habit change modal. Fix this visual glitch 
 
 
 # Filters
