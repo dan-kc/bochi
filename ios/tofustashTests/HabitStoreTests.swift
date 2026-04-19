@@ -246,7 +246,7 @@ struct HabitStoreTests {
     // is saved with the same ID that the tags were pre-associated with.
     @Test func addHabitWithProvidedIdUsesIt() {
         let sut = makeSUT()
-        let preGeneratedId = "my-custom-id-123"
+        let preGeneratedId = RecordID("my-custom-id-123")
 
         let habit = sut.addHabit(id: preGeneratedId, name: "Exercise")
 

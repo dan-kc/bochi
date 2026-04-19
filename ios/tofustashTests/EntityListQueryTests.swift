@@ -66,7 +66,7 @@ struct EntityListQueryTests {
         let callFriend = makeHabit(id: "call", createdAt: date(day: 1), frequency: 1, difficulty: .light)
         let pushups = makeHabit(id: "pushups", createdAt: date(day: 2), frequency: 1, difficulty: .hard)
         let reading = makeHabit(id: "read", createdAt: date(day: 3), frequency: 1, difficulty: .medium)
-        let tagsByHabitID: [RecordID: [Tag]] = [
+        let tagsByHabitID: [RecordID: [tofustash.Tag]] = [
             callFriend.id: [social],
             pushups.id: [health],
             reading.id: []
@@ -100,7 +100,7 @@ struct EntityListQueryTests {
         let health = makeTag(id: "health", name: "Health")
         let both = makeReward(id: "both", createdAt: date(day: 1), maxFrequency: 1, damage: .medium)
         let one = makeReward(id: "one", createdAt: date(day: 2), maxFrequency: 1, damage: .medium)
-        let tagsByRewardID: [RecordID: [Tag]] = [
+        let tagsByRewardID: [RecordID: [tofustash.Tag]] = [
             both.id: [social, health],
             one.id: [social]
         ]
@@ -189,7 +189,7 @@ struct EntityListQueryTests {
         let focus = makeTag(id: "focus", name: "Focus")
         let stretch = makeHabit(id: "stretch", createdAt: date(day: 1), frequency: 1, difficulty: .light)
         let journal = makeHabit(id: "journal", createdAt: date(day: 2), frequency: 1, difficulty: .medium)
-        let tagsByHabitID: [RecordID: [Tag]] = [
+        let tagsByHabitID: [RecordID: [tofustash.Tag]] = [
             stretch.id: [focus],
             journal.id: []
         ]
@@ -220,7 +220,7 @@ struct EntityListQueryTests {
         let focus = makeTag(id: "focus", name: "Focus")
         let deepWork = makeHabit(id: "deep-work", createdAt: date(day: 1), frequency: 1, difficulty: .hard)
         let walk = makeHabit(id: "walk", createdAt: date(day: 2), frequency: 1, difficulty: .light)
-        let tagsByHabitID: [RecordID: [Tag]] = [
+        let tagsByHabitID: [RecordID: [tofustash.Tag]] = [
             deepWork.id: [focus],
             walk.id: []
         ]
@@ -253,7 +253,7 @@ struct EntityListQueryTests {
         let calm = makeTag(id: "calm", name: "Calm")
         let tea = makeReward(id: "tea", createdAt: date(day: 1), maxFrequency: 1, damage: .light)
         let nap = makeReward(id: "nap", createdAt: date(day: 2), maxFrequency: 1, damage: .medium)
-        let tagsByRewardID: [RecordID: [Tag]] = [
+        let tagsByRewardID: [RecordID: [tofustash.Tag]] = [
             tea.id: [focus, calm],
             nap.id: [focus]
         ]
@@ -318,9 +318,9 @@ struct EntityListQueryTests {
         )
     }
 
-    private func makeTag(id: RecordID, name: String) -> Tag {
+    private func makeTag(id: RecordID, name: String) -> tofustash.Tag {
         let createdAt = date(day: 1)
-        return Tag(
+        return tofustash.Tag(
             id: id,
             name: name,
             colorHex: "#ffffff",

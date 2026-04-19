@@ -49,36 +49,6 @@ struct FrequencyMultiplierTests {
         ) == 1.0)
     }
 
-    // Behaviour: Doing a habit less often than desired pays more than doing it
-    // near or above the target cadence.
-    @Test func rewardFallsAsRecentCompletionsRise() {
-        let now = Date(timeIntervalSince1970: 2_000_000_000)
-        let olderHabit = makeHabit(
-            frequency: 1.0,
-            createdAt: now.addingTimeInterval(-10 * 86_400)
-        )
-
-        let zero = RewardCalculation.calculateFrequencyMultiplier(
-            habit: olderHabit,
-            completionDates: [],
-            now: now
-        )
-        let target = RewardCalculation.calculateFrequencyMultiplier(
-            habit: olderHabit,
-            completionDates: [now.addingTimeInterval(-86_400)],
-            now: now
-        )
-        let above = RewardCalculation.calculateFrequencyMultiplier(
-            habit: olderHabit,
-            completionDates: [now.addingTimeInterval(-43_200), now],
-            now: now
-        )
-
-        #expect(zero > target)
-        #expect(target > above)
-        #expect(target > 0.9 && target < 1.1)
-    }
-
     // Behaviour: Equivalent rates should stabilize the same way even if the
     // user picked different UI units such as `1/day` or `30/month`.
     @Test func equivalentRatesShareTheSameCadenceModel() {

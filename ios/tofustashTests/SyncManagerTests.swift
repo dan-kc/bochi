@@ -150,9 +150,9 @@ struct SyncManagerTests {
     // Behaviour: If a dirty local habit has newer fields than the server copy,
     // sync snapshots the local habit before pull so the push preserves the user's edit.
     @Test func dirtyHabitSnapshotPreservesLocalDifficultyDuringSync() async throws {
-        let habitID = "habit-123"
+        let habitID = RecordID("habit-123")
         let staleServerHabit = SyncHabitRecord(
-            id: habitID,
+            id: habitID.rawValue,
             name: "Habit",
             description: "",
             createdAt: "2026-04-18T10:00:00.000000",
@@ -170,7 +170,7 @@ struct SyncManagerTests {
         _ = context.habitStore.addHabit(
             id: habitID,
             name: "Habit",
-            difficultyTier: .trivial,
+            difficultyTier: HabitDifficultyTier.trivial,
             createdAt: Date(timeIntervalSince1970: 1_713_433_200),
             updatedAt: Date(timeIntervalSince1970: 1_713_433_200)
         )
@@ -178,10 +178,10 @@ struct SyncManagerTests {
         context.syncManager.updateSession(userID: "user-123")
         await context.syncManager.syncNow()
 
-        let pushedHabits = context.syncAPIClient.pushCalls.compactMap(\.0.habits).flatMap { $0 }
-        #expect(pushedHabits.contains { $0.id == habitID && $0.difficultyTier == .trivial })
+        let pushedHabits = context.syncAPIClient.pushCalls.compactMap { $0.0.habits }.flatMap { $0 }
+        #expect(pushedHabits.contains { $0.id == habitID.rawValue && $0.difficultyTier == HabitDifficultyTier.trivial })
 
-        context.syncManager.updateSession(userID: nil)
+        context.syncManager.updateSession(userID: String?.none)
     }
 
     // Behaviour: If the device carries a saved habit filter for a tag that is no

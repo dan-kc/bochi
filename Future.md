@@ -7,11 +7,10 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Scour ./ios and look for oppertunities to refactor. Specifically I want to keep the codebase as dry as possible. I do not want to go too extreme, but I'd say I want 8/10 DRYNESS. Also, keep an eye out for oppertunities to better group functionality/logic into classes, but I strongly avoid inheritance unless it is super obvious. List all of the changes and ask lots of questions on the specific abstractions and give me options 
+Run ios-test and fix any compile errors, also check any tests that are failing and investigate
 
 # NEXT
 
-Fix compile warnings
 
 Remove Bought and Sold
 
