@@ -44,6 +44,7 @@ struct ContentView: View {
     let previewBalanceStore = BalanceStore()
     let previewRewardStore = RewardStore()
     let previewSettingsStore = UserSettingsStore()
+    let previewListPreferencesStore = ListPreferencesStore()
 
     ContentView()
         // .environment() — injects into SwiftUI's environment (exactly like React Context Provider)
@@ -54,6 +55,7 @@ struct ContentView: View {
         .environment(previewBalanceStore)
         .environment(previewRewardStore)
         .environment(previewSettingsStore)
+        .environment(previewListPreferencesStore)
         .environment(
             SyncManager(
                 apiClient: AppConfiguration.makeSyncAPIClient(),
@@ -64,7 +66,8 @@ struct ContentView: View {
                 tradeStore: previewTradeStore,
                 tagStore: previewTagStore,
                 balanceStore: previewBalanceStore,
-                userSettingsStore: previewSettingsStore
+                userSettingsStore: previewSettingsStore,
+                listPreferencesStore: previewListPreferencesStore
             )
         )
 }

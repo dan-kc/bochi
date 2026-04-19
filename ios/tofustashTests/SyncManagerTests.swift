@@ -39,6 +39,7 @@ struct SyncManagerTests {
         let tagStore: TagStore
         let balanceStore: BalanceStore
         let userSettingsStore: UserSettingsStore
+        let listPreferencesStore: ListPreferencesStore
         let syncAPIClient: MockSyncAPIClient
     }
 
@@ -67,6 +68,7 @@ struct SyncManagerTests {
         let tagStore = TagStore(storageURL: TestHelpers.makeTemporaryFileURL("tags"))
         let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
         let userSettingsStore = UserSettingsStore(storageURL: TestHelpers.makeTemporaryFileURL("settings"))
+        let listPreferencesStore = ListPreferencesStore(storageURL: TestHelpers.makeTemporaryFileURL("list-preferences"))
         let syncStateStore = SyncStateStore(storageURL: TestHelpers.makeTemporaryFileURL("sync-state"))
 
         let syncAPIClient = MockSyncAPIClient(
@@ -84,6 +86,7 @@ struct SyncManagerTests {
             tagStore: tagStore,
             balanceStore: balanceStore,
             userSettingsStore: userSettingsStore,
+            listPreferencesStore: listPreferencesStore,
             debounceDuration: .seconds(60),
             backgroundPullDuration: .seconds(60),
             fullSyncResetDuration: .seconds(60 * 60)
@@ -98,6 +101,7 @@ struct SyncManagerTests {
             tagStore: tagStore,
             balanceStore: balanceStore,
             userSettingsStore: userSettingsStore,
+            listPreferencesStore: listPreferencesStore,
             syncAPIClient: syncAPIClient
         )
     }

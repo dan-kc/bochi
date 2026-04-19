@@ -12,15 +12,41 @@ struct HabitsView: View {
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
+    @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: HabitFormRoute? = nil
     @State private var tradingHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
+    @State private var isListAtTop = true
+
+    private var visibleHabits: [Habit] {
+        EntityListQuery.apply(
+            items: habitStore.activeHabits,
+            preferences: listPreferencesStore.habitPreferences,
+            id: \.id,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
+            price: priceSortValue(for:),
+            hasDifficulty: { $0.difficultyTier != nil },
+            hasFrequency: { $0.frequency != nil },
+            tags: { tagStore.tagsForHabit(habitId: $0.id) }
+        )
+    }
+
+    private var availableHabitTags: [Tag] {
+        let usedTagIDs = Set(
+            tagStore.habitTags
+                .filter { $0.deletedAt == nil }
+                .map(\.tagId)
+        )
+
+        return tagStore.activeTags.filter { usedTagIDs.contains($0.id) }
+    }
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            Group {
                 if habitStore.activeHabits.isEmpty {
                     ContentUnavailableView(
                         "No Habits Yet",
@@ -28,24 +54,43 @@ struct HabitsView: View {
                         description: Text("Tap + to create your first habit.")
                     )
                 } else {
-                    List(habitStore.activeHabits) { habit in
-                        habitRow(habit)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    // Behaviour: Swiping a row should only stage the delete
-                                    // confirmation. SwiftUI animates `.destructive` swipe
-                                    // buttons as if the row is already gone, which causes the
-                                    // brief disappear/reappear glitch before the user confirms.
-                                    habitToDelete = habit
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                    List {
+                        controlsRow
+
+                        Section {
+                            if visibleHabits.isEmpty {
+                                filteredEmptyStateRow
+                            } else {
+                                ForEach(visibleHabits) { habit in
+                                    habitRow(habit)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                            Button {
+                                                // Behaviour: Swiping a row should only stage the delete
+                                                // confirmation. SwiftUI animates `.destructive` swipe
+                                                // buttons as if the row is already gone, which causes the
+                                                // brief disappear/reappear glitch before the user confirms.
+                                                habitToDelete = habit
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                            .tint(.red)
+                                        }
                                 }
-                                .tint(.red)
                             }
+                        }
                     }
+                    .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
+                    .listStyle(.insetGrouped)
+                    .listSectionSpacing(0)
+                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
             .navigationTitle("Habits")
+            .onChange(of: visibleHabits.isEmpty) { _, isEmpty in
+                if isEmpty {
+                    isListAtTop = true
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     formRoute = HabitFormRoute(
@@ -130,6 +175,47 @@ struct HabitsView: View {
         )
     }
 
+    private func priceSortValue(for habit: Habit) -> Int? {
+        guard habit.canTrade else { return nil }
+        return priceForHabit(habit)
+    }
+
+    private var controlsRow: some View {
+        EntityListControls(
+            preferences: listPreferencesStore.habitPreferences,
+            availableTags: availableHabitTags,
+            difficultyLabel: "Difficulty",
+            frequencyLabel: "Freq",
+            isEnabled: isListAtTop,
+            onSelectSort: listPreferencesStore.setHabitSort,
+            onSelectDifficultyFilter: listPreferencesStore.setHabitDifficultyFilter,
+            onSelectFrequencyFilter: listPreferencesStore.setHabitFrequencyFilter,
+            onSelectTagMatchMode: listPreferencesStore.setHabitTagMatchMode,
+            onToggleTag: listPreferencesStore.toggleHabitTag,
+            onClearFilters: listPreferencesStore.clearHabitFilters
+        )
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .padding(.top, -12)
+        .padding(.bottom, -6)
+    }
+
+    private var filteredEmptyStateRow: some View {
+        ContentUnavailableView {
+            Label("No Matching Habits", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+            Text("Try changing the filters or clear them to see more habits.")
+        } actions: {
+            Button("Clear Filters") {
+                listPreferencesStore.clearHabitFilters()
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 260)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
         let canTrade = habit.canTrade
@@ -203,4 +289,5 @@ struct HabitsView: View {
         .environment(TradeStore())
         .environment(BalanceStore())
         .environment(UserSettingsStore())
+        .environment(ListPreferencesStore())
 }

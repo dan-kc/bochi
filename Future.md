@@ -9,27 +9,36 @@ This is a habit tracking app where you have habits and rewards. You do habits to
 
 ---
 
-The set difficulty modal UI is ugly. I like the title bar with unset, cancel and save.
-Underneath that have a horizontal list of difficulties that is horizontally scrollable. IT should be quite large and should center on the currently selected one. Also the currently selected one should be orange. They should all be pill shaped, gray unless it is currently selected in which case it is orange.
-Underneath that have the explaination text, underneath that have the example test.
-This should all fit in a .medium modal.
+Add filters and sorting to the habits and rewards list. The sort settings should persist on app close (but not saved to server or anything).
 
-# Filters
+You should be able to sort by:
 
-Filters
+Date created (oldets to newest)
+Date created (newest to oldest)
+Difficulty (lowest to highest)
+Difficulty (highest to lowest)
+Price (lowest to highest)
+Price (highest to lowest) (DEFAULT)
 
-# Settings page
+You should be able to filter by:
 
-Auth, do not just show a spinner if the network request fails.
+Has difficulty set
+Does not have difficulty set
+Has freq set
+Does not have freq set
 
-# Rewards
+Then there should also be a tags filter which allows you to select the tags you want to see.
 
-Implement the Rewards page. There are subtle differences in the Reward type. It should resemble closely the Habits. Ensure the abstractions are enforced such that the codebase is extremely DRY. Make this local-only for now, do not implement the local-first sync layer sound in the old project.
-
-# Trades
+Put the UI right underneath the title and just above the list of habits/rewards. A user should only be able to press these butons if they are scrolled all the way up.
 
 # NEXT
 
-Add the price
+Fix compile warnings
 
-Also ensure that this pill scroll correctly conveys the case where there is overflow.
+Remove Bought and Sold
+
+Tag row and button row same size
+
+Remove bg color in habit/reward list
+
+# Todos?

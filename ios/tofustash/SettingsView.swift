@@ -300,11 +300,13 @@ struct SettingsView: View {
     )
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()
+    let previewListPreferencesStore = ListPreferencesStore()
 
     SettingsView()
         .environment(previewAuthManager)
         .environment(previewSettingsStore)
         .environment(previewBalanceStore)
+        .environment(previewListPreferencesStore)
         .environment(
             SyncManager(
                 apiClient: AppConfiguration.makeSyncAPIClient(),
@@ -315,7 +317,8 @@ struct SettingsView: View {
                 tradeStore: TradeStore(),
                 tagStore: TagStore(),
                 balanceStore: previewBalanceStore,
-                userSettingsStore: previewSettingsStore
+                userSettingsStore: previewSettingsStore,
+                listPreferencesStore: previewListPreferencesStore
             )
         )
 }

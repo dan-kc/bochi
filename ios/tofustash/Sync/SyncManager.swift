@@ -12,6 +12,7 @@ final class SyncManager {
     private let tagStore: TagStore
     private let balanceStore: BalanceStore
     private let userSettingsStore: UserSettingsStore
+    private let listPreferencesStore: ListPreferencesStore
 
     private var mutationObserver: NSObjectProtocol?
     private var debounceTask: Task<Void, Never>?
@@ -38,6 +39,7 @@ final class SyncManager {
         tagStore: TagStore,
         balanceStore: BalanceStore,
         userSettingsStore: UserSettingsStore,
+        listPreferencesStore: ListPreferencesStore,
         debounceDuration: Duration = .seconds(2),
         backgroundPullDuration: Duration = .seconds(5),
         fullSyncResetDuration: Duration = .seconds(60 * 60 * 24)
@@ -51,6 +53,7 @@ final class SyncManager {
         self.tagStore = tagStore
         self.balanceStore = balanceStore
         self.userSettingsStore = userSettingsStore
+        self.listPreferencesStore = listPreferencesStore
         self.debounceDuration = debounceDuration
         self.backgroundPullDuration = backgroundPullDuration
         self.fullSyncResetDuration = fullSyncResetDuration
@@ -156,6 +159,7 @@ final class SyncManager {
         tagStore.setCurrentOwner(ownerID)
         balanceStore.setCurrentOwner(ownerID)
         userSettingsStore.setCurrentOwner(ownerID)
+        listPreferencesStore.setCurrentOwner(ownerID)
     }
 
     private func migrateLocalDataIfNeeded(to userID: String) {
@@ -165,6 +169,7 @@ final class SyncManager {
         let migratedTagData = tagStore.migrateData(from: StorageOwner.local, to: userID)
         balanceStore.migrateBalance(from: StorageOwner.local, to: userID)
         let migratedDifficulty = userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID)
+        _ = listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID)
 
         if !migratedHabitIDs.isEmpty {
             syncStateStore.markDirty(userID: userID, kind: .habits, ids: migratedHabitIDs)

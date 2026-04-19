@@ -33,6 +33,7 @@ struct tofustashApp: App {
 
     // UserSettingsStore holds gameplay settings like general difficulty.
     @State private var userSettingsStore: UserSettingsStore
+    @State private var listPreferencesStore: ListPreferencesStore
     @State private var syncManager: SyncManager
 
     init() {
@@ -46,6 +47,7 @@ struct tofustashApp: App {
         let balanceStore = BalanceStore()
         let rewardStore = RewardStore()
         let userSettingsStore = UserSettingsStore()
+        let listPreferencesStore = ListPreferencesStore()
         let syncStateStore = SyncStateStore()
         let syncManager = SyncManager(
             apiClient: AppConfiguration.makeSyncAPIClient(),
@@ -56,7 +58,8 @@ struct tofustashApp: App {
             tradeStore: tradeStore,
             tagStore: tagStore,
             balanceStore: balanceStore,
-            userSettingsStore: userSettingsStore
+            userSettingsStore: userSettingsStore,
+            listPreferencesStore: listPreferencesStore
         )
 
         _authManager = State(initialValue: authManager)
@@ -66,6 +69,7 @@ struct tofustashApp: App {
         _balanceStore = State(initialValue: balanceStore)
         _rewardStore = State(initialValue: rewardStore)
         _userSettingsStore = State(initialValue: userSettingsStore)
+        _listPreferencesStore = State(initialValue: listPreferencesStore)
         _syncManager = State(initialValue: syncManager)
     }
 
@@ -84,6 +88,7 @@ struct tofustashApp: App {
                 .environment(balanceStore)
                 .environment(rewardStore)
                 .environment(userSettingsStore)
+                .environment(listPreferencesStore)
                 .environment(syncManager)
                 // .task is useEffect with an empty dep array — runs once on mount.
                 // `await` is native here; no need for the async-function-inside-useEffect pattern.
