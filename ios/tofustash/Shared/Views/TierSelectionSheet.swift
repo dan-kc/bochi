@@ -45,17 +45,13 @@ struct TierSelectionSheet<Tier: PricingTierOption>: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                if let onUnset {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Unset") {
-                            onUnset()
-                            dismiss()
-                        }
-                    }
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(draftSelection)
+                        if draftSelection == nil {
+                            onUnset?()
+                        } else {
+                            onSave(draftSelection)
+                        }
                         dismiss()
                     }
                 }
@@ -67,21 +63,19 @@ struct TierSelectionSheet<Tier: PricingTierOption>: View {
     }
 
     private var selectedTierTitle: some View {
-        Group {
-            if let selected = draftSelection {
-                Text(selected.displayName)
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 14)
-            }
-        }
+        Text(draftSelection?.displayName ?? " ")
+            .font(.title3.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 14)
     }
 
     private var tierSelector: some View {
         HStack(spacing: 8) {
             ForEach(Array(options.enumerated()), id: \.element) { index, option in
                 Button {
-                    draftSelection = option
+                    // Tapping the active tier again clears the selection, which
+                    // lets the user unset directly from the same control row.
+                    draftSelection = draftSelection == option ? nil : option
                 } label: {
                     Text("\(index + 1)")
                         .font(.headline.weight(.semibold))
