@@ -39,8 +39,8 @@ final class RewardStore {
         self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "rewards")
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.rewardsByOwner = persisted.rewardsByOwner
-        self.rewards = persisted.rewardsByOwner[initialOwnerID] ?? []
+        self.rewardsByOwner = Self.normalizePersistedRewards(persisted.rewardsByOwner)
+        self.rewards = self.rewardsByOwner[initialOwnerID] ?? []
     }
 
     func setCurrentOwner(_ ownerID: String) {
@@ -79,10 +79,11 @@ final class RewardStore {
         guard !trimmedName.isEmpty, trimmedName.count <= 100 else {
             return nil
         }
+        let canonicalID = CanonicalRecordID.normalize(id ?? UUID().uuidString)
 
         let now = Date()
         let reward = Reward(
-            id: id ?? UUID().uuidString,
+            id: canonicalID,
             name: trimmedName,
             description: description,
             createdAt: createdAt ?? now,
@@ -114,7 +115,8 @@ final class RewardStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard let index = rewards.firstIndex(where: { $0.id == id }) else {
+        let canonicalID = CanonicalRecordID.normalize(id)
+        guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
 
@@ -146,12 +148,13 @@ final class RewardStore {
         mutateRewards { $0[index] = updated }
 
         if shouldNotifySync {
-            notifySync(ids: [id])
+            notifySync(ids: [canonicalID])
         }
     }
 
     func deleteReward(id: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        guard let index = rewards.firstIndex(where: { $0.id == id }) else {
+        let canonicalID = CanonicalRecordID.normalize(id)
+        guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
 
@@ -170,7 +173,7 @@ final class RewardStore {
         mutateRewards { $0[index] = deleted }
 
         if shouldNotifySync {
-            notifySync(ids: [id])
+            notifySync(ids: [canonicalID])
         }
     }
 
@@ -223,6 +226,42 @@ final class RewardStore {
         }
 
         return mergedByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private static func normalizePersistedRewards(_ rewardsByOwner: [String: [Reward]]) -> [String: [Reward]] {
+        Dictionary(uniqueKeysWithValues: rewardsByOwner.map { ownerID, rewards in
+            (ownerID, normalizeRewards(rewards))
+        })
+    }
+
+    private static func normalizeRewards(_ rewards: [Reward]) -> [Reward] {
+        var newestByID: [String: Reward] = [:]
+
+        for reward in rewards {
+            let normalized = Reward(
+                id: CanonicalRecordID.normalize(reward.id),
+                name: reward.name,
+                description: reward.description,
+                createdAt: reward.createdAt,
+                updatedAt: reward.updatedAt,
+                deletedAt: reward.deletedAt,
+                maxFrequency: reward.maxFrequency,
+                damageTier: reward.damageTier
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
                 return lhs.id < rhs.id
             }

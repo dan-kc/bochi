@@ -20,8 +20,8 @@ final class TradeStore {
         self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "trades")
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.tradesByOwner = persisted.tradesByOwner
-        self.trades = persisted.tradesByOwner[initialOwnerID] ?? []
+        self.tradesByOwner = Self.normalizePersistedTrades(persisted.tradesByOwner)
+        self.trades = self.tradesByOwner[initialOwnerID] ?? []
     }
 
     func setCurrentOwner(_ ownerID: String) {
@@ -54,8 +54,8 @@ final class TradeStore {
         shouldNotifySync: Bool = true
     ) {
         let trade = Trade(
-            id: id ?? UUID().uuidString,
-            habitId: habitId,
+            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
+            habitId: CanonicalRecordID.normalize(habitId),
             rewardId: nil,
             amount: amount,
             createdAt: createdAt,
@@ -76,9 +76,9 @@ final class TradeStore {
         shouldNotifySync: Bool = true
     ) {
         let trade = Trade(
-            id: id ?? UUID().uuidString,
+            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
             habitId: nil,
-            rewardId: rewardId,
+            rewardId: CanonicalRecordID.normalize(rewardId),
             amount: amount,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
@@ -100,8 +100,9 @@ final class TradeStore {
     // own completion history, and deleted records should stop affecting the
     // visible reward immediately.
     func habitTradeDates(habitId: String) -> [Date] {
-        trades.compactMap { trade in
-            guard trade.habitId == habitId, trade.deletedAt == nil else { return nil }
+        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
+        return trades.compactMap { trade in
+            guard trade.habitId == canonicalHabitID, trade.deletedAt == nil else { return nil }
             return trade.createdAt
         }
     }
@@ -109,23 +110,26 @@ final class TradeStore {
     // User behaviour: each reward's price should react only to that reward's
     // own purchase history, not to other rewards or habit claims.
     func rewardPurchaseDates(rewardId: String) -> [Date] {
-        trades.compactMap { trade in
-            guard trade.rewardId == rewardId, trade.deletedAt == nil else { return nil }
+        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
+        return trades.compactMap { trade in
+            guard trade.rewardId == canonicalRewardID, trade.deletedAt == nil else { return nil }
             return trade.createdAt
         }
     }
 
     func tradesInPeriod(habitId: String, days: Int) -> Int {
+        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.habitId == habitId && $0.deletedAt == nil && $0.createdAt >= cutoff
+            $0.habitId == canonicalHabitID && $0.deletedAt == nil && $0.createdAt >= cutoff
         }.count
     }
 
     func rewardPurchasesInPeriod(rewardId: String, days: Int) -> Int {
+        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.rewardId == rewardId && $0.deletedAt == nil && $0.createdAt >= cutoff
+            $0.rewardId == canonicalRewardID && $0.deletedAt == nil && $0.createdAt >= cutoff
         }.count
     }
 
@@ -189,6 +193,41 @@ final class TradeStore {
         }
 
         return mergedByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private static func normalizePersistedTrades(_ tradesByOwner: [String: [Trade]]) -> [String: [Trade]] {
+        Dictionary(uniqueKeysWithValues: tradesByOwner.map { ownerID, trades in
+            (ownerID, normalizeTrades(trades))
+        })
+    }
+
+    private static func normalizeTrades(_ trades: [Trade]) -> [Trade] {
+        var newestByID: [String: Trade] = [:]
+
+        for trade in trades {
+            let normalized = Trade(
+                id: CanonicalRecordID.normalize(trade.id),
+                habitId: CanonicalRecordID.normalize(trade.habitId),
+                rewardId: CanonicalRecordID.normalize(trade.rewardId),
+                amount: trade.amount,
+                createdAt: trade.createdAt,
+                updatedAt: trade.updatedAt,
+                deletedAt: trade.deletedAt
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
                 return lhs.id < rhs.id
             }

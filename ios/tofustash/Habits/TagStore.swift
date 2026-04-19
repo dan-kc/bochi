@@ -30,12 +30,12 @@ final class TagStore {
         self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "tags")
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.tagsByOwner = persisted.tagsByOwner
-        self.habitTagsByOwner = persisted.habitTagsByOwner
-        self.rewardTagsByOwner = persisted.rewardTagsByOwner
-        self.tags = persisted.tagsByOwner[initialOwnerID] ?? []
-        self.habitTags = persisted.habitTagsByOwner[initialOwnerID] ?? []
-        self.rewardTags = persisted.rewardTagsByOwner[initialOwnerID] ?? []
+        self.tagsByOwner = Self.normalizePersistedTags(persisted.tagsByOwner)
+        self.habitTagsByOwner = Self.normalizePersistedHabitTags(persisted.habitTagsByOwner)
+        self.rewardTagsByOwner = Self.normalizePersistedRewardTags(persisted.rewardTagsByOwner)
+        self.tags = self.tagsByOwner[initialOwnerID] ?? []
+        self.habitTags = self.habitTagsByOwner[initialOwnerID] ?? []
+        self.rewardTags = self.rewardTagsByOwner[initialOwnerID] ?? []
     }
 
     func setCurrentOwner(_ ownerID: String) {
@@ -87,7 +87,7 @@ final class TagStore {
 
         let now = Date()
         let tag = Tag(
-            id: id ?? UUID().uuidString,
+            id: CanonicalRecordID.normalize(id ?? UUID().uuidString),
             name: trimmed,
             colorHex: colorHex ?? ColorGeneration.randomHexColor(),
             createdAt: createdAt ?? now,
@@ -115,7 +115,8 @@ final class TagStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard let index = tags.firstIndex(where: { $0.id == id }) else { return }
+        let canonicalID = CanonicalRecordID.normalize(id)
+        guard let index = tags.firstIndex(where: { $0.id == canonicalID }) else { return }
 
         let existing = tags[index]
         let newName: String
@@ -139,7 +140,7 @@ final class TagStore {
         mutateTags { $0[index] = updated }
 
         if shouldNotifySync {
-            notifySync(kind: .tags, ids: [id])
+            notifySync(kind: .tags, ids: [canonicalID])
         }
     }
 
@@ -157,8 +158,8 @@ final class TagStore {
     ) {
         let now = Date()
         let association = HabitTag(
-            habitId: habitId,
-            tagId: tagId,
+            habitId: CanonicalRecordID.normalize(habitId),
+            tagId: CanonicalRecordID.normalize(tagId),
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt
@@ -178,8 +179,10 @@ final class TagStore {
     }
 
     func removeTagFromHabit(tagId: String, habitId: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalTagID = CanonicalRecordID.normalize(tagId)
+        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
         guard let index = habitTags.firstIndex(where: {
-            $0.tagId == tagId && $0.habitId == habitId && $0.deletedAt == nil
+            $0.tagId == canonicalTagID && $0.habitId == canonicalHabitID && $0.deletedAt == nil
         }) else { return }
 
         let existing = habitTags[index]
@@ -199,9 +202,10 @@ final class TagStore {
     }
 
     func tagsForHabit(habitId: String) -> [Tag] {
+        let canonicalHabitID = CanonicalRecordID.normalize(habitId)
         let activeTagIDs = Set(
             habitTags
-                .filter { $0.habitId == habitId && $0.deletedAt == nil }
+                .filter { $0.habitId == canonicalHabitID && $0.deletedAt == nil }
                 .map(\.tagId)
         )
 
@@ -218,8 +222,8 @@ final class TagStore {
     ) {
         let now = Date()
         let association = RewardTag(
-            rewardId: rewardId,
-            tagId: tagId,
+            rewardId: CanonicalRecordID.normalize(rewardId),
+            tagId: CanonicalRecordID.normalize(tagId),
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt
@@ -239,8 +243,10 @@ final class TagStore {
     }
 
     func removeTagFromReward(tagId: String, rewardId: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        let canonicalTagID = CanonicalRecordID.normalize(tagId)
+        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
         guard let index = rewardTags.firstIndex(where: {
-            $0.tagId == tagId && $0.rewardId == rewardId && $0.deletedAt == nil
+            $0.tagId == canonicalTagID && $0.rewardId == canonicalRewardID && $0.deletedAt == nil
         }) else { return }
 
         let existing = rewardTags[index]
@@ -260,9 +266,10 @@ final class TagStore {
     }
 
     func tagsForReward(rewardId: String) -> [Tag] {
+        let canonicalRewardID = CanonicalRecordID.normalize(rewardId)
         let activeTagIDs = Set(
             rewardTags
-                .filter { $0.rewardId == rewardId && $0.deletedAt == nil }
+                .filter { $0.rewardId == canonicalRewardID && $0.deletedAt == nil }
                 .map(\.tagId)
         )
 
@@ -441,5 +448,105 @@ final class TagStore {
 
     private func notifySync(kind: SyncEntityKind, ids: [String]) {
         SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: kind, recordIDs: ids))
+    }
+
+    private static func normalizePersistedTags(_ tagsByOwner: [String: [Tag]]) -> [String: [Tag]] {
+        Dictionary(uniqueKeysWithValues: tagsByOwner.map { ownerID, tags in
+            (ownerID, normalizeTags(tags))
+        })
+    }
+
+    private static func normalizePersistedHabitTags(_ habitTagsByOwner: [String: [HabitTag]]) -> [String: [HabitTag]] {
+        Dictionary(uniqueKeysWithValues: habitTagsByOwner.map { ownerID, habitTags in
+            (ownerID, normalizeHabitTags(habitTags))
+        })
+    }
+
+    private static func normalizePersistedRewardTags(_ rewardTagsByOwner: [String: [RewardTag]]) -> [String: [RewardTag]] {
+        Dictionary(uniqueKeysWithValues: rewardTagsByOwner.map { ownerID, rewardTags in
+            (ownerID, normalizeRewardTags(rewardTags))
+        })
+    }
+
+    private static func normalizeTags(_ tags: [Tag]) -> [Tag] {
+        var newestByID: [String: Tag] = [:]
+
+        for tag in tags {
+            let normalized = Tag(
+                id: CanonicalRecordID.normalize(tag.id),
+                name: tag.name,
+                colorHex: tag.colorHex,
+                createdAt: tag.createdAt,
+                updatedAt: tag.updatedAt,
+                deletedAt: tag.deletedAt
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private static func normalizeHabitTags(_ habitTags: [HabitTag]) -> [HabitTag] {
+        var newestByID: [String: HabitTag] = [:]
+
+        for habitTag in habitTags {
+            let normalized = HabitTag(
+                habitId: CanonicalRecordID.normalize(habitTag.habitId),
+                tagId: CanonicalRecordID.normalize(habitTag.tagId),
+                createdAt: habitTag.createdAt,
+                updatedAt: habitTag.updatedAt,
+                deletedAt: habitTag.deletedAt
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private static func normalizeRewardTags(_ rewardTags: [RewardTag]) -> [RewardTag] {
+        var newestByID: [String: RewardTag] = [:]
+
+        for rewardTag in rewardTags {
+            let normalized = RewardTag(
+                rewardId: CanonicalRecordID.normalize(rewardTag.rewardId),
+                tagId: CanonicalRecordID.normalize(rewardTag.tagId),
+                createdAt: rewardTag.createdAt,
+                updatedAt: rewardTag.updatedAt,
+                deletedAt: rewardTag.deletedAt
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
     }
 }

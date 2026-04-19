@@ -41,7 +41,7 @@ struct RewardFormView: View {
     @State private var description = ""
     @State private var maxFrequency: Double? = nil
     @State private var damageTier: RewardDamageTier? = nil
-    @State private var rewardId: String = UUID().uuidString
+    @State private var rewardId: String = CanonicalRecordID.normalize(UUID().uuidString)
 
     @State private var showingFrequency = false
     @State private var showingDamage = false

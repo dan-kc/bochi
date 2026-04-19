@@ -44,7 +44,7 @@ struct SyncHabitRecord: Codable {
         }
 
         return Habit(
-            id: id,
+            id: CanonicalRecordID.normalize(id),
             name: name,
             description: description,
             createdAt: createdAt,
@@ -57,7 +57,7 @@ struct SyncHabitRecord: Codable {
 
     static func from(_ habit: Habit) -> SyncHabitRecord {
         SyncHabitRecord(
-            id: habit.id,
+            id: CanonicalRecordID.normalize(habit.id),
             name: habit.name,
             description: habit.description,
             createdAt: AppDateCoding.backendTimestamp(from: habit.createdAt),
@@ -84,9 +84,9 @@ struct SyncTradeRecord: Codable {
         }
 
         return Trade(
-            id: id,
-            habitId: habitId,
-            rewardId: rewardId,
+            id: CanonicalRecordID.normalize(id),
+            habitId: CanonicalRecordID.normalize(habitId),
+            rewardId: CanonicalRecordID.normalize(rewardId),
             amount: amount,
             createdAt: createdAt,
             updatedAt: AppDateCoding.parseBackendTimestamp(updatedAt) ?? createdAt,
@@ -96,9 +96,9 @@ struct SyncTradeRecord: Codable {
 
     static func from(_ trade: Trade) -> SyncTradeRecord {
         SyncTradeRecord(
-            id: trade.id,
-            habitId: trade.habitId,
-            rewardId: trade.rewardId,
+            id: CanonicalRecordID.normalize(trade.id),
+            habitId: CanonicalRecordID.normalize(trade.habitId),
+            rewardId: CanonicalRecordID.normalize(trade.rewardId),
             amount: trade.amount,
             createdAt: AppDateCoding.backendTimestamp(from: trade.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: trade.updatedAt),
@@ -124,7 +124,7 @@ struct SyncTagRecord: Codable {
         }
 
         return Tag(
-            id: id,
+            id: CanonicalRecordID.normalize(id),
             name: name,
             colorHex: colorHex,
             createdAt: createdAt,
@@ -135,7 +135,7 @@ struct SyncTagRecord: Codable {
 
     static func from(_ tag: Tag) -> SyncTagRecord {
         SyncTagRecord(
-            id: tag.id,
+            id: CanonicalRecordID.normalize(tag.id),
             name: tag.name,
             colorHex: tag.colorHex,
             createdAt: AppDateCoding.backendTimestamp(from: tag.createdAt),
@@ -161,8 +161,8 @@ struct SyncHabitTagRecord: Codable {
         }
 
         return HabitTag(
-            habitId: habitId,
-            tagId: tagId,
+            habitId: CanonicalRecordID.normalize(habitId),
+            tagId: CanonicalRecordID.normalize(tagId),
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
@@ -171,8 +171,8 @@ struct SyncHabitTagRecord: Codable {
 
     static func from(_ habitTag: HabitTag) -> SyncHabitTagRecord {
         SyncHabitTagRecord(
-            habitId: habitTag.habitId,
-            tagId: habitTag.tagId,
+            habitId: CanonicalRecordID.normalize(habitTag.habitId),
+            tagId: CanonicalRecordID.normalize(habitTag.tagId),
             createdAt: AppDateCoding.backendTimestamp(from: habitTag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: habitTag.updatedAt),
             deletedAt: habitTag.deletedAt.map(AppDateCoding.backendTimestamp)
@@ -199,7 +199,7 @@ struct SyncRewardRecord: Codable {
         }
 
         return Reward(
-            id: id,
+            id: CanonicalRecordID.normalize(id),
             name: name,
             description: description,
             createdAt: createdAt,
@@ -212,7 +212,7 @@ struct SyncRewardRecord: Codable {
 
     static func from(_ reward: Reward) -> SyncRewardRecord {
         SyncRewardRecord(
-            id: reward.id,
+            id: CanonicalRecordID.normalize(reward.id),
             name: reward.name,
             description: reward.description,
             createdAt: AppDateCoding.backendTimestamp(from: reward.createdAt),
@@ -240,8 +240,8 @@ struct SyncRewardTagRecord: Codable {
         }
 
         return RewardTag(
-            rewardId: rewardId,
-            tagId: tagId,
+            rewardId: CanonicalRecordID.normalize(rewardId),
+            tagId: CanonicalRecordID.normalize(tagId),
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
@@ -250,8 +250,8 @@ struct SyncRewardTagRecord: Codable {
 
     static func from(_ rewardTag: RewardTag) -> SyncRewardTagRecord {
         SyncRewardTagRecord(
-            rewardId: rewardTag.rewardId,
-            tagId: rewardTag.tagId,
+            rewardId: CanonicalRecordID.normalize(rewardTag.rewardId),
+            tagId: CanonicalRecordID.normalize(rewardTag.tagId),
             createdAt: AppDateCoding.backendTimestamp(from: rewardTag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: rewardTag.updatedAt),
             deletedAt: rewardTag.deletedAt.map(AppDateCoding.backendTimestamp)

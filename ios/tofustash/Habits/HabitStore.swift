@@ -24,8 +24,8 @@ final class HabitStore {
         self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "habits")
         self.currentOwnerID = initialOwnerID
         let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.habitsByOwner = persisted.habitsByOwner
-        self.habits = persisted.habitsByOwner[initialOwnerID] ?? []
+        self.habitsByOwner = Self.normalizePersistedHabits(persisted.habitsByOwner)
+        self.habits = self.habitsByOwner[initialOwnerID] ?? []
     }
 
     func setCurrentOwner(_ ownerID: String) {
@@ -64,10 +64,11 @@ final class HabitStore {
         guard !trimmedName.isEmpty, trimmedName.count <= 100 else {
             return nil
         }
+        let canonicalID = CanonicalRecordID.normalize(id ?? UUID().uuidString)
 
         let now = Date()
         let habit = Habit(
-            id: id ?? UUID().uuidString,
+            id: canonicalID,
             name: trimmedName,
             description: description,
             createdAt: createdAt ?? now,
@@ -90,7 +91,8 @@ final class HabitStore {
     }
 
     func deleteHabit(id: String, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        guard let index = habits.firstIndex(where: { $0.id == id }) else {
+        let canonicalID = CanonicalRecordID.normalize(id)
+        guard let index = habits.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
 
@@ -109,7 +111,7 @@ final class HabitStore {
         mutateHabits { $0[index] = deleted }
 
         if shouldNotifySync {
-            notifySync(ids: [id])
+            notifySync(ids: [canonicalID])
         }
     }
 
@@ -123,7 +125,8 @@ final class HabitStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard let index = habits.firstIndex(where: { $0.id == id }) else {
+        let canonicalID = CanonicalRecordID.normalize(id)
+        guard let index = habits.firstIndex(where: { $0.id == canonicalID }) else {
             return
         }
 
@@ -155,7 +158,7 @@ final class HabitStore {
         mutateHabits { $0[index] = updated }
 
         if shouldNotifySync {
-            notifySync(ids: [id])
+            notifySync(ids: [canonicalID])
         }
     }
 
@@ -208,6 +211,42 @@ final class HabitStore {
         }
 
         return mergedByID.values.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id < rhs.id
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private static func normalizePersistedHabits(_ habitsByOwner: [String: [Habit]]) -> [String: [Habit]] {
+        Dictionary(uniqueKeysWithValues: habitsByOwner.map { ownerID, habits in
+            (ownerID, normalizeHabits(habits))
+        })
+    }
+
+    private static func normalizeHabits(_ habits: [Habit]) -> [Habit] {
+        var newestByID: [String: Habit] = [:]
+
+        for habit in habits {
+            let normalized = Habit(
+                id: CanonicalRecordID.normalize(habit.id),
+                name: habit.name,
+                description: habit.description,
+                createdAt: habit.createdAt,
+                updatedAt: habit.updatedAt,
+                deletedAt: habit.deletedAt,
+                frequency: habit.frequency,
+                difficultyTier: habit.difficultyTier
+            )
+
+            if let existing = newestByID[normalized.id], existing.updatedAt > normalized.updatedAt {
+                continue
+            }
+
+            newestByID[normalized.id] = normalized
+        }
+
+        return newestByID.values.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {
                 return lhs.id < rhs.id
             }
