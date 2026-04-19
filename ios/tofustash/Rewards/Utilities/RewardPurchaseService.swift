@@ -24,15 +24,14 @@ enum RewardPurchaseService {
         generalDifficulty: Double,
         quantity: Int = 1
     ) throws -> Int {
-        let purchasesInPeriod = tradeStore.rewardPurchasesInPeriod(
-            rewardId: reward.id,
-            days: RewardPriceCalculation.pricingWindowDays
-        )
+        let purchaseDate = Date()
+        var purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
         let totalPrice = RewardPriceCalculation.calculateMultiPurchaseTotal(
             reward: reward,
             allRewards: rewardStore.activeRewards,
-            currentPurchases: purchasesInPeriod,
+            purchaseDates: purchaseDates,
             quantity: quantity,
+            now: purchaseDate,
             generalDifficulty: generalDifficulty
         )
 
@@ -40,14 +39,16 @@ enum RewardPurchaseService {
             throw RewardPurchaseError.insufficientBalance(required: totalPrice, available: balanceStore.balance)
         }
 
-        for index in 0..<quantity {
+        for _ in 0..<quantity {
             let price = RewardPriceCalculation.calculatePrice(
                 reward: reward,
                 allRewards: rewardStore.activeRewards,
-                purchasesInPeriod: purchasesInPeriod + index,
+                purchaseDates: purchaseDates,
+                now: purchaseDate,
                 generalDifficulty: generalDifficulty
             )
-            tradeStore.addRewardPurchase(rewardId: reward.id, amount: -price)
+            tradeStore.addRewardPurchase(rewardId: reward.id, amount: -price, createdAt: purchaseDate)
+            purchaseDates.append(purchaseDate)
         }
 
         balanceStore.subtractTofu(totalPrice)

@@ -45,22 +45,80 @@ struct FrequencyMultiplierTests {
     @Test func nilFrequencyUsesNeutralMultiplier() {
         #expect(RewardCalculation.calculateFrequencyMultiplier(
             habit: makeHabit(frequency: nil),
-            completionsInPeriod: 5
+            completionDates: []
         ) == 1.0)
     }
 
     // Behaviour: Doing a habit less often than desired pays more than doing it
-    // at or above the target rate.
+    // near or above the target cadence.
     @Test func rewardFallsAsRecentCompletionsRise() {
-        let habit = makeHabit(frequency: 1.0)
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let olderHabit = makeHabit(
+            frequency: 1.0,
+            createdAt: now.addingTimeInterval(-10 * 86_400)
+        )
 
-        let zero = RewardCalculation.calculateFrequencyMultiplier(habit: habit, completionsInPeriod: 0, periodDays: 7)
-        let target = RewardCalculation.calculateFrequencyMultiplier(habit: habit, completionsInPeriod: 7, periodDays: 7)
-        let above = RewardCalculation.calculateFrequencyMultiplier(habit: habit, completionsInPeriod: 14, periodDays: 7)
+        let zero = RewardCalculation.calculateFrequencyMultiplier(
+            habit: olderHabit,
+            completionDates: [],
+            now: now
+        )
+        let target = RewardCalculation.calculateFrequencyMultiplier(
+            habit: olderHabit,
+            completionDates: [now.addingTimeInterval(-86_400)],
+            now: now
+        )
+        let above = RewardCalculation.calculateFrequencyMultiplier(
+            habit: olderHabit,
+            completionDates: [now.addingTimeInterval(-43_200), now],
+            now: now
+        )
 
-        #expect(zero == 2.0)
-        #expect(target == 1.0)
-        #expect(above < 1.0)
+        #expect(zero > target)
+        #expect(target > above)
+        #expect(target > 0.9 && target < 1.1)
+    }
+
+    // Behaviour: Equivalent rates should stabilize the same way even if the
+    // user picked different UI units such as `1/day` or `30/month`.
+    @Test func equivalentRatesShareTheSameCadenceModel() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let createdAt = now.addingTimeInterval(-10 * 86_400)
+        let dailyHabit = makeHabit(frequency: 1.0, createdAt: createdAt)
+        let monthlyHabit = makeHabit(frequency: 30.0 / 30.0, createdAt: createdAt)
+        let completionDates = [now.addingTimeInterval(-86_400)]
+
+        let daily = RewardCalculation.calculateFrequencyMultiplier(
+            habit: dailyHabit,
+            completionDates: completionDates,
+            now: now
+        )
+        let monthly = RewardCalculation.calculateFrequencyMultiplier(
+            habit: monthlyHabit,
+            completionDates: completionDates,
+            now: now
+        )
+
+        #expect(abs(daily - monthly) < 0.0001)
+    }
+
+    // Behaviour: A newly created habit should not jump straight to the maximum
+    // payout before the app has enough history to judge the user's cadence.
+    @Test func newHabitStartsNearNeutralDuringWarmup() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let newHabit = makeHabit(
+            frequency: 1.0,
+            createdAt: now.addingTimeInterval(-6 * 3_600)
+        )
+
+        let multiplier = RewardCalculation.calculateFrequencyMultiplier(
+            habit: newHabit,
+            completionDates: [],
+            now: now
+        )
+
+        #expect(multiplier > 1.0)
+        #expect(multiplier < 2.0)
     }
 }
 
@@ -73,7 +131,7 @@ struct CalculateRewardTests {
         let reward = RewardCalculation.calculateReward(
             habit: habit,
             allHabits: [habit],
-            completionsInPeriod: 0,
+            completionDates: [],
             generalDifficulty: 5
         )
 
@@ -99,20 +157,23 @@ struct MultiPurchaseTotalTests {
         let first = RewardCalculation.calculateReward(
             habit: habit,
             allHabits: [habit],
-            completionsInPeriod: 0,
+            completionDates: [],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let second = RewardCalculation.calculateReward(
             habit: habit,
             allHabits: [habit],
-            completionsInPeriod: 1,
+            completionDates: [Date(timeIntervalSince1970: 2_000_000_000)],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let total = RewardCalculation.calculateMultiPurchaseTotal(
             habit: habit,
             allHabits: [habit],
-            currentCompletions: 0,
+            completionDates: [],
             quantity: 2,
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
 

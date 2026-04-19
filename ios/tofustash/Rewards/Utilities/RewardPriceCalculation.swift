@@ -6,10 +6,7 @@ import Foundation
 enum RewardPriceCalculation {
     nonisolated private static let beta = 3.0
     nonisolated private static let maxFrequencyMultiplier = 50.0
-
-    // Rewards price against a rolling 24-hour window so caps like "3/day"
-    // react on the same day the user exceeds them.
-    nonisolated static let pricingWindowDays = 1
+    nonisolated private static let rewardNeutralRatio = 0.0
 
     nonisolated static func calculateDamageMultiplier(reward: Reward, allRewards: [Reward]) -> Double {
         reward.damageTier?.multiplier ?? RewardDamageTier.medium.multiplier
@@ -17,19 +14,25 @@ enum RewardPriceCalculation {
 
     nonisolated static func calculateFrequencyMultiplier(
         reward: Reward,
-        purchasesInPeriod: Int,
-        periodDays: Double = Double(pricingWindowDays)
+        purchaseDates: [Date],
+        now: Date = Date()
     ) -> Double {
-        guard let maxFrequency = reward.maxFrequency, maxFrequency != 0 else {
+        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: reward.maxFrequency) else {
             return 1
         }
 
-        let expectedPurchases = maxFrequency * periodDays
-        guard expectedPurchases != 0 else {
-            return 1
-        }
-
-        let effectiveRatio = Double(purchasesInPeriod) / expectedPurchases
+        let rawRatio = CadenceDecayPricing.normalizedUsageRatio(
+            eventDates: purchaseDates,
+            targetSpacingDays: targetSpacingDays,
+            now: now
+        )
+        let effectiveRatio = CadenceDecayPricing.blendedUsageRatio(
+            rawRatio: rawRatio,
+            createdAt: reward.createdAt,
+            targetSpacingDays: targetSpacingDays,
+            neutralRatio: rewardNeutralRatio,
+            now: now
+        )
 
         if effectiveRatio >= 1 {
             return maxFrequencyMultiplier
@@ -42,11 +45,16 @@ enum RewardPriceCalculation {
     nonisolated static func calculatePrice(
         reward: Reward,
         allRewards: [Reward],
-        purchasesInPeriod: Int = 0,
+        purchaseDates: [Date] = [],
+        now: Date = Date(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         let damageMultiplier = calculateDamageMultiplier(reward: reward, allRewards: allRewards)
-        let frequencyMultiplier = calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: purchasesInPeriod)
+        let frequencyMultiplier = calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: purchaseDates,
+            now: now
+        )
 
         let price = 100.0 * generalDifficulty * damageMultiplier * frequencyMultiplier
         return Int(price.rounded())
@@ -55,18 +63,23 @@ enum RewardPriceCalculation {
     nonisolated static func calculateMultiPurchaseTotal(
         reward: Reward,
         allRewards: [Reward],
-        currentPurchases: Int,
+        purchaseDates: [Date],
         quantity: Int,
+        now: Date = Date(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         var total = 0
-        for index in 0..<quantity {
+        var projectedPurchaseDates = purchaseDates
+
+        for _ in 0..<quantity {
             total += calculatePrice(
                 reward: reward,
                 allRewards: allRewards,
-                purchasesInPeriod: currentPurchases + index,
+                purchaseDates: projectedPurchaseDates,
+                now: now,
                 generalDifficulty: generalDifficulty
             )
+            projectedPurchaseDates.append(now)
         }
         return total
     }

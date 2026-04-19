@@ -1,5 +1,64 @@
 import Foundation
 
+// Shared cadence helpers for both habit rewards and reward prices.
+//
+// User behaviour we want:
+// - if two frequencies mean the same underlying rate, such as `1/day` and
+//   `30/month`, they should stabilize at the same speed
+// - recent actions should matter more than old ones
+// - the history fade should depend on the configured cadence, not on a fixed
+//   "last N days" window
+enum CadenceDecayPricing {
+    nonisolated private static let secondsPerDay = 86_400.0
+
+    // If actions happen exactly on schedule forever, the decayed score tends to
+    // this value. Dividing by it keeps "on target" near ratio 1.0.
+    nonisolated static let steadyStateUsageNormalization = 1.0 / (1.0 - exp(-1.0))
+
+    // New entities should not instantly trust sparse history. Warm-up is based
+    // on target spacing so equivalent rates stabilize equally fast.
+    nonisolated private static let warmupSpacingMultiplier = 2.0
+
+    nonisolated static func targetSpacingDays(ratePerDay: Double?) -> Double? {
+        guard let ratePerDay, ratePerDay > 0 else { return nil }
+        return 1.0 / ratePerDay
+    }
+
+    nonisolated static func normalizedUsageRatio(
+        eventDates: [Date],
+        targetSpacingDays: Double,
+        now: Date = Date()
+    ) -> Double {
+        guard targetSpacingDays > 0 else { return 0 }
+
+        let usageScore = eventDates.reduce(into: 0.0) { partialResult, eventDate in
+            let ageSeconds = now.timeIntervalSince(eventDate)
+            guard ageSeconds >= 0 else { return }
+
+            let ageDays = ageSeconds / secondsPerDay
+            partialResult += exp(-ageDays / targetSpacingDays)
+        }
+
+        return usageScore / steadyStateUsageNormalization
+    }
+
+    nonisolated static func blendedUsageRatio(
+        rawRatio: Double,
+        createdAt: Date,
+        targetSpacingDays: Double,
+        neutralRatio: Double,
+        now: Date = Date()
+    ) -> Double {
+        guard targetSpacingDays > 0 else { return neutralRatio }
+
+        let ageDays = max(0, now.timeIntervalSince(createdAt) / secondsPerDay)
+        let warmupDays = targetSpacingDays * warmupSpacingMultiplier
+        let weight = min(1.0, ageDays / warmupDays)
+
+        return (weight * rawRatio) + ((1.0 - weight) * neutralRatio)
+    }
+}
+
 protocol PricingTierOption: CaseIterable, Codable, Equatable, Sendable, Hashable, RawRepresentable<String> {
     var displayName: String { get }
     var shortDescription: String { get }

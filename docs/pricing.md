@@ -27,6 +27,8 @@ There is no random pricing component anymore.
 - Harder habits should always pay more than easier ones when frequency is equal.
 - More damaging rewards should always cost more than less damaging ones when frequency is equal.
 - The displayed reward price should react quickly enough to match the cap the user entered.
+- Monthly and daily frequencies should both be handled by the same rule.
+- Equivalent rates such as `1/day` and `30/month` should stabilize the same way.
 - Multi-claim and multi-buy totals should reflect each incremental action, not `currentPrice * quantity`.
 - The same pricing rule should be reused everywhere the iOS app previews, displays, and persists prices.
 
@@ -67,6 +69,98 @@ reward does not force the user to re-rank existing items.
 - `heavy = 1.1`
 - `extreme = 1.25`
 
+## Shared Cadence Model
+
+Implemented in `ios/tofustash/Shared/Models/PricingTiers.swift` via `CadenceDecayPricing`.
+
+Both habits and rewards now use the same recency model.
+
+The app does **not** count actions inside a fixed window such as:
+
+- last 7 days
+- last 24 hours
+
+Instead, every past action contributes a fading amount of recent usage.
+
+### Inputs
+
+Let:
+
+- `f` = configured frequency in times/day
+- `tau = 1 / f`
+  - this is the target spacing in days between actions
+- `t_i` = timestamp of a past completion or purchase
+- `now` = current timestamp
+
+Examples:
+
+- `3/day => tau ~= 0.333 days ~= 8 hours`
+- `1/day => tau = 1 day`
+- `30/month ~= 1/day => tau = 1 day`
+- `2/month ~= 2/30 day^-1 => tau = 15 days`
+
+This is the key normalisation rule:
+
+- if two user-entered frequencies mean the same times/day rate, they get the
+  same `tau`
+- therefore `1/day` and `30/month` behave the same
+
+### Decayed Usage Score
+
+For a list of past action timestamps:
+
+`U = sum over all actions i of exp(-(now - t_i) / tau)`
+
+Behaviourally:
+
+- recent actions matter more than old ones
+- fast-cadence items forget history quickly
+- slow-cadence items remember history longer
+
+### Normalised Usage Ratio
+
+If actions happen exactly on schedule forever, the decayed score tends to:
+
+`1 + e^-1 + e^-2 + ... = 1 / (1 - e^-1) ~= 1.582`
+
+So the app normalises with:
+
+`r_raw = U / 1.582`
+
+This keeps "on target cadence" near ratio `1`.
+
+### Cold-Start Warm-Up
+
+Brand-new habits and rewards should not overreact when history is still sparse.
+
+Let:
+
+- `ageDays` = days since the habit or reward was created
+- `warmupDays = 2 * tau`
+- `w = min(1, ageDays / warmupDays)`
+
+Then:
+
+`r_eff = w * r_raw + (1 - w) * r_neutral`
+
+Important behaviour:
+
+- the warm-up depends only on the normalised rate
+- it does **not** depend on whether the user entered day/week/month in the UI
+- equivalent rates therefore stabilize equally fast
+
+The neutral ratio differs by entity type:
+
+- habits use `r_neutral = 1`
+- rewards use `r_neutral = 0`
+
+Reason:
+
+- a new habit should start near its neutral payout instead of jumping straight
+  to maximum reward
+- a new reward should start near its base price instead of becoming expensive
+  before the user has any real purchase history
+
 ## 1. Habit Completion Reward
 
 Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
@@ -86,23 +180,12 @@ still blocks trading until the user has set both frequency and difficulty.
 
 Let:
 
-- `f_h` = target frequency in times/day
-- `c_h` = completions in the last 7 days
+- `f_h` = target habit frequency in times/day
+- `tau_h = 1 / f_h`
+- `r_h_eff` = cadence-adjusted completion ratio from the shared model
 - `alpha = 2.5`
 
-Then expected completions are:
-
-`E_h = 7 * f_h`
-
-and the completion ratio is:
-
-`r_h = c_h / E_h`
-
-The current iOS implementation does not use age blending for habits, so:
-
-`r_h_eff = r_h`
-
-and:
+Then:
 
 `F_h = 2 / (1 + (r_h_eff ^ alpha))`
 
@@ -112,9 +195,15 @@ If no frequency is set, the fallback is:
 
 Behaviourally:
 
-- `r_h = 0  =>  F_h = 2`
-- `r_h = 1  =>  F_h = 1`
-- `r_h > 1  =>  F_h < 1`
+- `r_h_eff = 0  =>  F_h = 2`
+- `r_h_eff = 1  =>  F_h = 1`
+- `r_h_eff > 1  =>  F_h < 1`
+
+This means:
+
+- under-done habits pay more
+- on-target habits pay the base amount
+- over-done habits pay less
 
 ### Habit Setup Gating
 
@@ -145,78 +234,77 @@ until the user has set both max frequency and damage tier.
 Let:
 
 - `f_r` = max healthy purchase rate in times/day
-- `c_r` = purchases in the last 1 day
+- `tau_r = 1 / f_r`
+- `r_r_eff` = cadence-adjusted purchase ratio from the shared model
 - `beta = 3`
 
-Then expected purchases are:
+Then:
 
-`E_r = f_r`
-
-and the purchase ratio is:
-
-`r_r = c_r / E_r`
-
-The multiplier is:
-
-If `r_r >= 1`:
+If `r_r_eff >= 1`:
 
 `F_r = 50`
 
-If `r_r < 1`:
+If `r_r_eff < 1`:
 
-`F_r = min(50, (2 / (1 - (r_r ^ beta))) - 1)`
+`F_r = min(50, (2 / (1 - (r_r_eff ^ beta))) - 1)`
 
 If no max frequency is set, the fallback is:
 
 `F_r = 1`
 
-Some useful values:
+Behaviourally:
 
-- `r_r = 0  =>  F_r = 1`
-- `r_r = 1/3  =>  F_r ~= 1.077`
-- `r_r = 2/3  =>  F_r ~= 1.842`
-- `r_r -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `50`
+- `r_r_eff = 0  =>  F_r = 1`
+- `r_r_eff -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `50`
+- `r_r_eff >= 1  =>  F_r = 50`
 
-### Reward Pricing Behaviour
+This means:
 
-Reward pricing uses a rolling 24-hour purchase window.
+- the first purchase of a new or lightly used reward is near base price
+- repeated recent purchases raise the price
+- buying at or above the intended cadence becomes extremely expensive
 
-This is deliberate.
+### Why This Replaces A Fixed Window
 
-If the user sets a reward to `3/day`, they expect:
+The old problem was:
 
-1. the first purchase today to use the base price
-2. the second purchase today to cost more
-3. the third purchase today to cost even more
-4. later purchases today to become very expensive
+- short windows work for `3/day`
+- longer windows work for `2/month`
+- no single hard window works well for both
 
-Using a long window like 60 days makes early same-day purchases look flat because the ratio barely moves. A 24-hour window keeps the app aligned with the way the cap is expressed in the UI.
+Cadence-scaled decay fixes that because the memory length comes from `tau`.
+
+Examples:
+
+- `3/day` uses `tau ~= 8 hours`, so same-day repeat purchases still move price quickly
+- `2/month` uses `tau = 15 days`, so purchases from last week still matter
+- `1/day` and `30/month` both normalise to `tau = 1 day`, so they behave the same
 
 ## 3. Multi-Quantity Behaviour
 
 ### Habit Claim Modal
 
-For claiming `q` times from a habit with current completion count `c_h`:
+For claiming `q` times from a habit with current completion timestamps `H`:
 
-`TotalHabitReward(q) = sum from i = 0 to q - 1 of Reward(c_h + i)`
+`TotalHabitReward(q) = sum of Reward(H with each newly projected claim appended one by one)`
 
 So the total is generally not:
 
-`q * Reward(c_h)`
+`q * Reward(current state)`
 
-because \(F_h\) changes after each increment.
+because `F_h` changes after each projected increment.
 
 ### Reward Buy Modal
 
-For buying `q` times from a reward with current purchase count `c_r`:
+For buying `q` times from a reward with current purchase timestamps `P`:
 
-`TotalRewardCost(q) = sum from i = 0 to q - 1 of Cost(c_r + i)`
+`TotalRewardCost(q) = sum of Cost(P with each newly projected buy appended one by one)`
 
 So the total is generally not:
 
-`q * Cost(c_r)`
+`q * Cost(current state)`
 
-because \(F_r\) changes after each increment.
+because `F_r` changes after each projected increment.
 
 ## 4. Where This Rule Is Used
 
@@ -235,15 +323,19 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
 ## 5. User-Facing Behaviour
 
 - A harder habit tier always pays more than an easier habit tier when the two
-  habits have the same frequency and completion count.
+  habits have the same frequency and completion history.
 - A more damaging reward tier always costs more than a less damaging reward
-  tier when the two rewards have the same cap and purchase count.
-- Habit rewards fall as the user keeps completing the same habit above its
-  desired rate.
+  tier when the two rewards have the same cap and purchase history.
+- Habit rewards fall as the user keeps completing the same habit toward or
+  above its intended cadence.
 - Reward prices rise as the user keeps buying the same reward toward or past
-  its desired cap.
+  its intended cadence.
 - Rewards remain purchasable after the cap, but they become extremely
   expensive because the frequency multiplier clamps at `50`.
+- Recent actions matter more than old ones, but old actions fade smoothly
+  instead of dropping out at a hard time boundary.
+- Equivalent rates such as `1/day` and `30/month` behave the same because the
+  app normalises everything to times/day before pricing.
 - The same inputs always produce the same price. There is no time-bucket or
   pseudo-random drift in the current system.
 
@@ -251,8 +343,7 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
 
 - Habit `frequency` is stored on iOS as times/day.
 - Reward `maxFrequency` is stored on iOS as times/day.
-- Habit frequency response is measured over a rolling 7-day window.
-- Reward price response is measured over a rolling 24-hour window.
 - Habit difficulty is stored as `difficultyTier`.
 - Reward damage is stored as `damageTier`.
+- Habit and reward pricing both use timestamp-based cadence decay.
 - There is no relative ranking and no random multiplier.

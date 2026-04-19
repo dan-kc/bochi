@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import tofustash
 
-// Tests for TradeStore — tracks habit completion trades and provides
-// completion counts for reward price calculations.
+// Tests for TradeStore — tracks habit completion/reward purchase history and
+// exposes timestamp lists for pricing calculations.
 @MainActor
 struct TradeStoreTests {
 
@@ -38,39 +38,46 @@ struct TradeStoreTests {
         #expect(sut.trades[0].id != sut.trades[1].id)
     }
 
-    // Behaviour: Reward calculations only count this habit's recent completions inside the selected window.
-    @Test("tradesInPeriod counts trades for the specified habit within the period")
-    func countsCorrectly() {
+    // Behaviour: Habit pricing only sees completion timestamps for the selected
+    // habit, in chronological order.
+    @Test("habitTradeDates returns matching habit completion timestamps")
+    func habitTradeDatesAreScopedAndOrdered() {
         let sut = makeSUT()
-        sut.addHabitTrade(habitId: "h1", amount: 100)
-        sut.addHabitTrade(habitId: "h1", amount: 200)
-        #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 2)
+        let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let secondDate = Date(timeIntervalSince1970: 1_700_000_100)
+
+        sut.addHabitTradeWithDate(habitId: "h1", amount: 100, createdAt: firstDate)
+        sut.addHabitTradeWithDate(habitId: "h1", amount: 200, createdAt: secondDate)
+
+        #expect(sut.habitTradeDates(habitId: "h1") == [firstDate, secondDate])
     }
 
     // Behaviour: Another habit's completions do not lower this habit's reward.
-    @Test("tradesInPeriod excludes trades for other habits")
-    func excludesOtherHabits() {
+    @Test("habitTradeDates excludes trades for other habits")
+    func habitTradeDatesExcludeOtherHabits() {
         let sut = makeSUT()
         sut.addHabitTrade(habitId: "h1", amount: 100)
         sut.addHabitTrade(habitId: "h2", amount: 200)
-        #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 1)
+        #expect(sut.habitTradeDates(habitId: "h1").count == 1)
     }
 
-    // Behaviour: Old completions fall out of the recent window so stale history stops affecting current rewards.
-    @Test("tradesInPeriod excludes trades older than the period")
-    func excludesOldTrades() {
+    // Behaviour: Old completions still remain in history because the pricing
+    // curve now fades them continuously instead of dropping them at a hard cutoff.
+    @Test("habitTradeDates keeps older completion timestamps")
+    func habitTradeDatesKeepOlderTrades() {
         let sut = makeSUT()
-        // Add a trade that's 10 days old
-        sut.addHabitTradeWithDate(habitId: "h1", amount: 100, createdAt: Date(timeIntervalSinceNow: -10 * 86400))
-        // Add a fresh trade
-        sut.addHabitTrade(habitId: "h1", amount: 200)
-        // 7-day window should only include the fresh trade
-        #expect(sut.tradesInPeriod(habitId: "h1", days: 7) == 1)
+        let olderDate = Date(timeIntervalSinceNow: -10 * 86400)
+        let freshDate = Date()
+
+        sut.addHabitTradeWithDate(habitId: "h1", amount: 100, createdAt: olderDate)
+        sut.addHabitTradeWithDate(habitId: "h1", amount: 200, createdAt: freshDate)
+
+        #expect(sut.habitTradeDates(habitId: "h1").count == 2)
     }
 
     // Behaviour: Reward pricing only counts past purchases of that same reward,
     // not habit completions or purchases of other rewards.
-    @Test("rewardPurchasesInPeriod counts only matching reward purchases")
+    @Test("rewardPurchaseDates returns only matching reward purchases")
     func rewardPurchasesAreScopedToReward() {
         let sut = makeSUT()
         sut.addRewardPurchase(rewardId: "reward-1", amount: -250)
@@ -78,6 +85,6 @@ struct TradeStoreTests {
         sut.addRewardPurchase(rewardId: "reward-2", amount: -150)
         sut.addHabitTrade(habitId: "habit-1", amount: 100)
 
-        #expect(sut.rewardPurchasesInPeriod(rewardId: "reward-1", days: 60) == 2)
+        #expect(sut.rewardPurchaseDates(rewardId: "reward-1").count == 2)
     }
 }

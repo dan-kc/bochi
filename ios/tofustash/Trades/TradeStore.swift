@@ -96,6 +96,25 @@ final class TradeStore {
         addRewardPurchase(rewardId: rewardId, amount: amount, createdAt: createdAt)
     }
 
+    // User behaviour: pricing for one habit should only respond to that habit's
+    // own completion history, and deleted records should stop affecting the
+    // visible reward immediately.
+    func habitTradeDates(habitId: String) -> [Date] {
+        trades.compactMap { trade in
+            guard trade.habitId == habitId, trade.deletedAt == nil else { return nil }
+            return trade.createdAt
+        }
+    }
+
+    // User behaviour: each reward's price should react only to that reward's
+    // own purchase history, not to other rewards or habit claims.
+    func rewardPurchaseDates(rewardId: String) -> [Date] {
+        trades.compactMap { trade in
+            guard trade.rewardId == rewardId, trade.deletedAt == nil else { return nil }
+            return trade.createdAt
+        }
+    }
+
     func tradesInPeriod(habitId: String, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {

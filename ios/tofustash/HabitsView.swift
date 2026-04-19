@@ -116,11 +116,11 @@ struct HabitsView: View {
     }
 
     private func priceForHabit(_ habit: Habit) -> Int {
-        let completions = tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
+        let completionDates = tradeStore.habitTradeDates(habitId: habit.id)
         return RewardCalculation.calculateReward(
             habit: habit,
             allHabits: habitStore.activeHabits,
-            completionsInPeriod: completions,
+            completionDates: completionDates,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }

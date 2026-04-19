@@ -6,17 +6,12 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Review the pricing calculation for habits and rewards in ./docs/pricing.md.
-
 This is a habit tracking app where you have habits and rewards. You do habits to earn in-game currency, you spend them on rewards. An example habit is "10 pushups" or "Cold message a friend". An example reward is "Eat 1 chocolate bar" or "Spend 15 minutes on TikTok".
 
-Having maintained a similar system for myself, I noticed that it was too time consuming setting the price of things myself because when things change I need to keep updating it. I don't want to be able to just do 100 pushups and get what I want. There needs to be limits.
+Check ./docs/pricing.md. It mentions a 24hr window that is used and gives it's reasons why. I don't want this because some habits are done on a monthly basis and 24hrs wont effectively account for that. If i pick 2/month and i have already done 2 this month, last week, then i would still expect the formula to capture that and influence the price.
 
-Instead we derive the price of a habit from it's "difficulty", it's "minimum desired frequency" and the number of times you've completed the habit recently. The difficulty is just how difficult it is relative to other habits, whereas the minimum desired frequency is a set number. Rewards are priced similarly, except with "damage" and "maximum desired frequency" instead.
+Is there a formula that could account for both? 
 
-Obviously the difficulty only really works if all habits are of reasonably similar difficulty, if one is MUCH harder than others then just having a relative ranking breaks down. But I don't want to have to rank them out of 10 instead, because what if something was a 10 and then you add a new habit that is harder, now that is the 10 and I'd have to re-calculate the rest. It's more upkeep.
-
-Review what I have in ./docs/pricing.md and suggest improvements.
 
 # Filters
 

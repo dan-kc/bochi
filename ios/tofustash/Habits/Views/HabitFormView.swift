@@ -122,11 +122,11 @@ struct HabitFormView: View {
 
     private var currentPrice: Int {
         guard let habit = draftHabitForTrade else { return 0 }
-        let completions = tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
+        let completionDates = tradeStore.habitTradeDates(habitId: habit.id)
         return RewardCalculation.calculateReward(
             habit: habit,
             allHabits: habitStore.activeHabits,
-            completionsInPeriod: completions,
+            completionDates: completionDates,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
     }

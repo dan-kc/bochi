@@ -46,21 +46,78 @@ struct RewardFrequencyMultiplierTests {
     @Test func nilFrequencyUsesNeutralMultiplier() {
         #expect(RewardPriceCalculation.calculateFrequencyMultiplier(
             reward: makeReward(maxFrequency: nil),
-            purchasesInPeriod: 4
+            purchaseDates: []
         ) == 1.0)
     }
 
     // Behaviour: Same-day repeat purchases make the next purchase more
-    // expensive, and hitting the cap clamps at the hard limit.
+    // expensive, and aggressive overuse still clamps at the hard limit.
     @Test func multiplierRisesTowardAndAtCap() {
-        let reward = makeReward(maxFrequency: 3.0)
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let reward = makeReward(
+            maxFrequency: 3.0,
+            createdAt: now.addingTimeInterval(-5 * 86_400)
+        )
 
-        let first = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 1, periodDays: 1)
-        let second = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 2, periodDays: 1)
-        let capped = RewardPriceCalculation.calculateFrequencyMultiplier(reward: reward, purchasesInPeriod: 3, periodDays: 1)
+        let first = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: [now],
+            now: now
+        )
+        let second = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: [now, now],
+            now: now
+        )
+        let capped = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: [now, now, now],
+            now: now
+        )
 
         #expect(second > first)
         #expect(capped == 50.0)
+    }
+
+    // Behaviour: Equivalent rates should stabilize the same way even if they
+    // were entered as different units such as `1/day` and `30/month`.
+    @Test func equivalentRatesShareTheSameCadenceModel() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let createdAt = now.addingTimeInterval(-10 * 86_400)
+        let dailyReward = makeReward(maxFrequency: 1.0, createdAt: createdAt)
+        let monthlyReward = makeReward(maxFrequency: 30.0 / 30.0, createdAt: createdAt)
+        let purchaseDates = [now.addingTimeInterval(-86_400)]
+
+        let daily = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: dailyReward,
+            purchaseDates: purchaseDates,
+            now: now
+        )
+        let monthly = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: monthlyReward,
+            purchaseDates: purchaseDates,
+            now: now
+        )
+
+        #expect(abs(daily - monthly) < 0.0001)
+    }
+
+    // Behaviour: A brand-new low-frequency reward starts near its base price
+    // instead of overreacting to sparse history.
+    @Test func newRewardStartsNearBasePriceDuringWarmup() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let reward = makeReward(
+            maxFrequency: 2.0 / 30.0,
+            createdAt: now.addingTimeInterval(-6 * 3_600)
+        )
+
+        let multiplier = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: [],
+            now: now
+        )
+
+        #expect(multiplier == 1.0)
     }
 }
 
@@ -73,7 +130,7 @@ struct RewardPriceTests {
         let price = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 0,
+            purchaseDates: [],
             generalDifficulty: 5
         )
 
@@ -88,19 +145,25 @@ struct RewardPriceTests {
         let first = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 0,
+            purchaseDates: [],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let second = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 1,
+            purchaseDates: [Date(timeIntervalSince1970: 2_000_000_000)],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let third = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 2,
+            purchaseDates: [
+                Date(timeIntervalSince1970: 2_000_000_000),
+                Date(timeIntervalSince1970: 2_000_000_000)
+            ],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
 
@@ -116,20 +179,23 @@ struct RewardPriceTests {
         let first = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 0,
+            purchaseDates: [],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let second = RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: [reward],
-            purchasesInPeriod: 1,
+            purchaseDates: [Date(timeIntervalSince1970: 2_000_000_000)],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
         let total = RewardPriceCalculation.calculateMultiPurchaseTotal(
             reward: reward,
             allRewards: [reward],
-            currentPurchases: 0,
+            purchaseDates: [],
             quantity: 2,
+            now: Date(timeIntervalSince1970: 2_000_000_000),
             generalDifficulty: 5
         )
 

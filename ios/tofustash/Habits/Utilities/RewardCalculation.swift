@@ -13,8 +13,8 @@ enum RewardCalculation {
     // target completion rate for a habit.
     nonisolated private static let alpha = 2.5
 
-    // The neutral completion ratio used as a fallback when age blending
-    // is in effect. At ratio 1.0, the frequency multiplier F equals 1.0.
+    // New habits warm up toward "on target" instead of immediately assuming
+    // the user is under-performing a brand-new habit with no real history yet.
     nonisolated private static let habitNeutralRatio = 1.0
 
     // Difficulty is now a fixed user-chosen tier instead of a relative ranking.
@@ -24,34 +24,41 @@ enum RewardCalculation {
 
     nonisolated static func calculateFrequencyMultiplier(
         habit: Habit,
-        completionsInPeriod: Int,
-        periodDays: Int = 7
+        completionDates: [Date],
+        now: Date = Date()
     ) -> Double {
-        guard let frequency = habit.frequency, frequency != 0 else {
+        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: habit.frequency) else {
             return 1
         }
 
-        let expectedCompletions = frequency * Double(periodDays)
-        guard expectedCompletions != 0 else {
-            return 1
-        }
+        let rawRatio = CadenceDecayPricing.normalizedUsageRatio(
+            eventDates: completionDates,
+            targetSpacingDays: targetSpacingDays,
+            now: now
+        )
+        let effectiveRatio = CadenceDecayPricing.blendedUsageRatio(
+            rawRatio: rawRatio,
+            createdAt: habit.createdAt,
+            targetSpacingDays: targetSpacingDays,
+            neutralRatio: habitNeutralRatio,
+            now: now
+        )
 
-        let r = Double(completionsInPeriod) / expectedCompletions
-        let rEff = r
-
-        return 2.0 / (1.0 + pow(rEff, alpha))
+        return 2.0 / (1.0 + pow(effectiveRatio, alpha))
     }
 
     nonisolated static func calculateReward(
         habit: Habit,
         allHabits: [Habit],
-        completionsInPeriod: Int = 0,
+        completionDates: [Date] = [],
+        now: Date = Date(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         let difficultyMultiplier = calculateDifficultyMultiplier(habit: habit)
         let frequencyMultiplier = calculateFrequencyMultiplier(
             habit: habit,
-            completionsInPeriod: completionsInPeriod
+            completionDates: completionDates,
+            now: now
         )
 
         let reward = 100.0 * generalDifficulty * difficultyMultiplier * frequencyMultiplier
@@ -74,18 +81,23 @@ enum RewardCalculation {
     nonisolated static func calculateMultiPurchaseTotal(
         habit: Habit,
         allHabits: [Habit],
-        currentCompletions: Int,
+        completionDates: [Date],
         quantity: Int,
+        now: Date = Date(),
         generalDifficulty: Double = 5.0
     ) -> Int {
         var total = 0
-        for i in 0..<quantity {
+        var projectedCompletionDates = completionDates
+
+        for _ in 0..<quantity {
             total += calculateReward(
                 habit: habit,
                 allHabits: allHabits,
-                completionsInPeriod: currentCompletions + i,
+                completionDates: projectedCompletionDates,
+                now: now,
                 generalDifficulty: generalDifficulty
             )
+            projectedCompletionDates.append(now)
         }
         return total
     }

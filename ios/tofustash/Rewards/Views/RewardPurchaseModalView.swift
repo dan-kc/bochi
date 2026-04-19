@@ -18,15 +18,15 @@ struct RewardPurchaseModalView: View {
     @State private var spentAmount = 0
     @State private var purchaseErrorMessage: String? = nil
 
-    private var purchasesInPeriod: Int {
-        tradeStore.rewardPurchasesInPeriod(rewardId: reward.id, days: 60)
+    private var purchaseDates: [Date] {
+        tradeStore.rewardPurchaseDates(rewardId: reward.id)
     }
 
     private var totalPrice: Int {
         RewardPriceCalculation.calculateMultiPurchaseTotal(
             reward: reward,
             allRewards: rewardStore.activeRewards,
-            currentPurchases: purchasesInPeriod,
+            purchaseDates: purchaseDates,
             quantity: quantity,
             generalDifficulty: userSettingsStore.generalDifficulty
         )

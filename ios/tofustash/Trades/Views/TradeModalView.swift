@@ -5,8 +5,9 @@ import SwiftUI
 //
 // The quantity counter is the centerpiece — the user can claim a habit multiple
 // times in one go (e.g., "I did 20 pushups" when the habit is "Do 10 pushups").
-// Each successive claim changes the price because the frequency multiplier F
-// adjusts based on completionsInPeriod, so the total is NOT simply price * qty.
+// Each successive claim changes the price because the frequency multiplier
+// reacts to the projected completion history, so the total is NOT simply
+// price * qty.
 //
 // After claiming, the UI is replaced with a celebration animation, then the
 // modal dismisses.
@@ -33,20 +34,20 @@ struct TradeModalView: View {
     @State private var claimed = false
     @State private var claimedAmount = 0
 
-    // How many times this habit was completed in the last 7 days.
-    // Used as the base for multi-purchase price calculation.
-    private var currentCompletions: Int {
-        tradeStore.tradesInPeriod(habitId: habit.id, days: 7)
+    // The projected claim total starts from the habit's actual completion
+    // timestamps, not from a fixed "last N days" count.
+    private var completionDates: [Date] {
+        tradeStore.habitTradeDates(habitId: habit.id)
     }
 
     // The total tofu earned for the selected quantity. NOT price * quantity —
-    // each successive completion has a different price because the frequency
-    // multiplier changes as completionsInPeriod increments.
+    // each successive completion changes the projected history, so the
+    // multiplier is recalculated after every increment.
     private var totalPrice: Int {
         RewardCalculation.calculateMultiPurchaseTotal(
             habit: habit,
             allHabits: habitStore.activeHabits,
-            currentCompletions: currentCompletions,
+            completionDates: completionDates,
             quantity: quantity,
             generalDifficulty: userSettingsStore.generalDifficulty
         )
@@ -157,8 +158,9 @@ struct TradeModalView: View {
 
     // Execute the trade: create trade records, update balance, show celebration.
     private func claimReward() {
+        let claimDate = Date()
         let total = totalPrice
-        var completions = currentCompletions
+        var projectedCompletionDates = completionDates
 
         // Create individual trade records for each completion so the
         // trade history accurately reflects each completion event.
@@ -166,11 +168,12 @@ struct TradeModalView: View {
             let price = RewardCalculation.calculateReward(
                 habit: habit,
                 allHabits: habitStore.activeHabits,
-                completionsInPeriod: completions,
+                completionDates: projectedCompletionDates,
+                now: claimDate,
                 generalDifficulty: userSettingsStore.generalDifficulty
             )
-            tradeStore.addHabitTrade(habitId: habit.id, amount: price)
-            completions += 1
+            tradeStore.addHabitTrade(habitId: habit.id, amount: price, createdAt: claimDate)
+            projectedCompletionDates.append(claimDate)
         }
 
         // Update balance
