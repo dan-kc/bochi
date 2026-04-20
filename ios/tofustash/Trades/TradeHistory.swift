@@ -39,7 +39,7 @@ enum TradeHistoryBuilder {
                     itemName = "Unknown trade"
                 }
 
-                let title = "\(isHabitTrade ? "Sold" : "Bought") \(itemName)"
+                let title = "\(itemName)"
                 let isPositive = trade.amount >= 0
                 let amountText = "\(isPositive ? "+" : "-")\(abs(trade.amount))"
 

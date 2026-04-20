@@ -9,7 +9,6 @@ For features that cannot be simply explained with code, write appropriate docume
 
 # NEXT
 
-
 Remove Bought and Sold
 
 Tag row and button row same size

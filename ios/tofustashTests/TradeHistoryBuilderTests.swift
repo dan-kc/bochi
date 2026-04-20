@@ -47,9 +47,9 @@ struct TradeHistoryBuilderTests {
         )
 
         #expect(entries.map(\.id) == [RecordID("newer"), RecordID("older")])
-        #expect(entries[0].title == "Bought Ice Cream")
+        #expect(entries[0].title == "Ice Cream")
         #expect(entries[0].amountText == "-120")
-        #expect(entries[1].title == "Sold Morning Run")
+        #expect(entries[1].title == "Morning Run")
         #expect(entries[1].amountText == "+50")
     }
 
@@ -70,7 +70,7 @@ struct TradeHistoryBuilderTests {
             formatDate: { _ in "date" }
         )
 
-        #expect(entries[0].title == "Sold Deleted habit")
-        #expect(entries[1].title == "Bought Deleted reward")
+        #expect(entries[0].title == "Deleted habit")
+        #expect(entries[1].title == "Deleted reward")
     }
 }
