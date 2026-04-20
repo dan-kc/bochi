@@ -360,6 +360,20 @@ final class TagStore {
         }
     }
 
+    func replaceAll(
+        tags authoritativeTags: [Tag],
+        habitTags authoritativeHabitTags: [HabitTag],
+        rewardTags authoritativeRewardTags: [RewardTag]
+    ) {
+        tags = OwnerScopedRecordSupport.sorted(authoritativeTags)
+        habitTags = OwnerScopedRecordSupport.sorted(authoritativeHabitTags)
+        rewardTags = OwnerScopedRecordSupport.sorted(authoritativeRewardTags)
+        tagsByOwner[currentOwnerID] = tags
+        habitTagsByOwner[currentOwnerID] = habitTags
+        rewardTagsByOwner[currentOwnerID] = rewardTags
+        persist()
+    }
+
     func getDirtyTags(ids: Set<RecordID>) -> [Tag] {
         tags.filter { ids.contains($0.id) }
     }

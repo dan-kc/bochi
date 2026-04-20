@@ -201,4 +201,152 @@ struct SyncManagerTests {
 
         context.syncManager.updateSession(userID: nil)
     }
+
+    // Behaviour: a full sync should be authoritative for persisted owner data.
+    // If the server now returns only one tag for a habit, stale older local
+    // habit-tag links must disappear instead of sticking around forever.
+    @Test func fullSyncReplacesStaleHabitTagAssociations() async throws {
+        let habitID = RecordID("habit-1")
+        let fitnessTagID = RecordID("tag-fitness")
+        let staleTagAID = RecordID("tag-old-a")
+        let staleTagBID = RecordID("tag-old-b")
+
+        let serverHabit = SyncHabitRecord(
+            id: habitID.rawValue,
+            name: "Stretch hamstrings",
+            description: "",
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T10:00:00.000000",
+            deletedAt: nil,
+            minDailyFrequency: 1,
+            difficultyTier: .light
+        )
+        let serverFitnessTag = SyncTagRecord(
+            id: fitnessTagID.rawValue,
+            name: "Fitness",
+            colorHex: "#22C55E",
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T10:00:00.000000",
+            deletedAt: nil
+        )
+        let serverHabitTag = SyncHabitTagRecord(
+            habitId: habitID.rawValue,
+            tagId: fitnessTagID.rawValue,
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T10:00:00.000000",
+            deletedAt: nil
+        )
+
+        let context = try await makeContext(
+            pullResponse: makeResponse(
+                habits: [serverHabit],
+                tags: [serverFitnessTag],
+                habitTags: [serverHabitTag]
+            )
+        )
+
+        context.habitStore.setCurrentOwner("user-123")
+        context.tagStore.setCurrentOwner("user-123")
+
+        _ = context.habitStore.addHabit(
+            id: habitID,
+            name: "Stretch hamstrings",
+            description: "",
+            frequency: 1,
+            difficultyTier: .light,
+            createdAt: Date(timeIntervalSince1970: 1_713_433_200),
+            updatedAt: Date(timeIntervalSince1970: 1_713_433_200),
+            shouldNotifySync: false
+        )
+        _ = context.tagStore.addTag(
+            id: fitnessTagID,
+            name: "Fitness",
+            colorHex: "#22C55E",
+            createdAt: Date(timeIntervalSince1970: 1_713_433_200),
+            updatedAt: Date(timeIntervalSince1970: 1_713_433_200),
+            shouldNotifySync: false
+        )
+        _ = context.tagStore.addTag(
+            id: staleTagAID,
+            name: "Old A",
+            colorHex: "#FF0000",
+            createdAt: Date(timeIntervalSince1970: 1_713_433_200),
+            updatedAt: Date(timeIntervalSince1970: 1_713_433_200),
+            shouldNotifySync: false
+        )
+        _ = context.tagStore.addTag(
+            id: staleTagBID,
+            name: "Old B",
+            colorHex: "#0000FF",
+            createdAt: Date(timeIntervalSince1970: 1_713_433_200),
+            updatedAt: Date(timeIntervalSince1970: 1_713_433_200),
+            shouldNotifySync: false
+        )
+        context.tagStore.addTagToHabit(tagId: fitnessTagID, habitId: habitID, shouldNotifySync: false)
+        context.tagStore.addTagToHabit(tagId: staleTagAID, habitId: habitID, shouldNotifySync: false)
+        context.tagStore.addTagToHabit(tagId: staleTagBID, habitId: habitID, shouldNotifySync: false)
+
+        #expect(context.tagStore.tagsForHabit(habitId: habitID).count == 3)
+
+        context.syncManager.updateSession(userID: "user-123")
+        await context.syncManager.syncNow()
+
+        let resultingTags = context.tagStore.tagsForHabit(habitId: habitID)
+        #expect(resultingTags.count == 1)
+        #expect(resultingTags.first?.id == fitnessTagID)
+
+        context.syncManager.updateSession(userID: nil)
+    }
+
+    // Behaviour: first authenticated sync must preserve unsynced local-first
+    // records even if the push response does not echo them back. The client
+    // should rebuild from the server snapshot, reapply dirty local records, and
+    // only then push.
+    @Test func fullSyncPreservesDirtyLocalHabitWhenPushResponseIsEmpty() async throws {
+        let localHabitID = RecordID("local-habit-1")
+
+        let context = try await makeContext(
+            pullResponse: makeResponse(),
+            pushResponse: makeResponse()
+        )
+
+        _ = context.habitStore.addHabit(
+            id: localHabitID,
+            name: "Offline Habit",
+            description: "",
+            frequency: 1,
+            difficultyTier: .light,
+            createdAt: Date(timeIntervalSince1970: 1_713_433_200),
+            updatedAt: Date(timeIntervalSince1970: 1_713_433_200)
+        )
+
+        context.syncManager.updateSession(userID: "user-123")
+        await context.syncManager.syncNow()
+
+        #expect(context.habitStore.activeHabits.contains { $0.id == localHabitID })
+        #expect(context.syncAPIClient.pushCalls.count == 1)
+        #expect(context.syncAPIClient.pushCalls[0].0.habits?.contains { $0.id == localHabitID.rawValue } == true)
+
+        context.syncManager.updateSession(userID: nil)
+    }
+
+    // Behaviour: a dirty local general difficulty change must not be overwritten
+    // by the pull phase before push runs. The local value should be pushed and
+    // then remain persisted after sync completes.
+    @Test func syncPreservesDirtyGeneralDifficultyUntilPush() async throws {
+        let context = try await makeContext(
+            pullResponse: makeResponse(generalDifficulty: 5.0),
+            pushResponse: makeResponse(generalDifficulty: 10.0)
+        )
+
+        context.syncManager.updateSession(userID: "user-123")
+        context.userSettingsStore.setGeneralDifficulty(10.0)
+        await context.syncManager.syncNow()
+
+        #expect(context.syncAPIClient.pushCalls.count == 1)
+        #expect(context.syncAPIClient.pushCalls[0].0.generalDifficulty == 10.0)
+        #expect(context.userSettingsStore.generalDifficulty == 10.0)
+
+        context.syncManager.updateSession(userID: nil)
+    }
 }

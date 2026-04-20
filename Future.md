@@ -7,14 +7,16 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Remove the white background color in habit/reward list. It is currently white but I want it completely transparent.
+Change the pricing calculation such that general difficulty has no effect on habit price. It should be only have an effect on reward price
+
 
 # NEXT
 
+Tasks. Should they have a time limit. And an option to say "I did the time for this, but keep it because it's not done"
 
-Update seed
+Damage should do more.
 
-Tasks
+General difficulty
 
 Add dates option to habit?
 

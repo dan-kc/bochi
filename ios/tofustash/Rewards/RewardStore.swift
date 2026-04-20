@@ -180,6 +180,12 @@ final class RewardStore {
         }
     }
 
+    func replaceRewards(_ authoritativeRewards: [Reward]) {
+        rewards = OwnerScopedRecordSupport.sorted(authoritativeRewards)
+        rewardsByOwner[currentOwnerID] = rewards
+        persist()
+    }
+
     func getDirtyRewards(ids: Set<RecordID>) -> [Reward] {
         rewards.filter { ids.contains($0.id) }
     }

@@ -136,6 +136,12 @@ final class TradeStore {
         }
     }
 
+    func replaceTrades(_ authoritativeTrades: [Trade]) {
+        trades = OwnerScopedRecordSupport.sorted(authoritativeTrades)
+        tradesByOwner[currentOwnerID] = trades
+        persist()
+    }
+
     func getDirtyTrades(ids: Set<RecordID>) -> [Trade] {
         trades.filter { ids.contains($0.id) }
     }

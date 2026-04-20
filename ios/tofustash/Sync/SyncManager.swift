@@ -292,10 +292,24 @@ final class SyncManager {
         let dirtyRewards = rewardStore.getDirtyRewards(ids: dirtySnapshot.rewards)
         let dirtyRewardTags = tagStore.getDirtyRewardTags(ids: dirtySnapshot.rewardTags)
         let generalDifficultyDirty = syncState.dirty.generalDifficulty
+        let isFullSync = syncState.lastSync == nil
 
         do {
             let pullResponse = try await apiClient.pullSync(since: syncState.lastSync, accessToken: accessToken)
-            applyPullResponse(pullResponse, filteringDirtyState: nil)
+            if isFullSync {
+                replaceCurrentOwnerStateFromFullPull(
+                    pullResponse: pullResponse,
+                    dirtyHabits: dirtyHabits,
+                    dirtyTrades: dirtyTrades,
+                    dirtyTags: dirtyTags,
+                    dirtyHabitTags: dirtyHabitTags,
+                    dirtyRewards: dirtyRewards,
+                    dirtyRewardTags: dirtyRewardTags,
+                    generalDifficultyDirty: generalDifficultyDirty
+                )
+            } else {
+                applyPullResponse(pullResponse, filteringDirtyState: syncState)
+            }
 
             if !dirtyHabits.isEmpty
                 || !dirtyTrades.isEmpty
@@ -322,8 +336,8 @@ final class SyncManager {
                     generalDifficulty: generalDifficultyDirty ? userSettingsStore.generalDifficulty : nil
                 )
 
-                let pushResponse = try await apiClient.pushSync(pushRequest, accessToken: accessToken)
-                applyPushResponse(pushResponse)
+                let response = try await apiClient.pushSync(pushRequest, accessToken: accessToken)
+                applyPushResponse(response)
             }
 
             let serverTime = AppDateCoding.parseBackendTimestamp(pullResponse.serverTime) ?? Date()
@@ -350,6 +364,56 @@ final class SyncManager {
         }
 
         isSyncing = false
+    }
+
+    private func replaceCurrentOwnerStateFromFullPull(
+        pullResponse: SyncResponse,
+        dirtyHabits: [Habit],
+        dirtyTrades: [Trade],
+        dirtyTags: [Tag],
+        dirtyHabitTags: [HabitTag],
+        dirtyRewards: [Reward],
+        dirtyRewardTags: [RewardTag],
+        generalDifficultyDirty: Bool
+    ) {
+        let authoritativeHabits = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.habits.compactMap { $0.toModel() },
+            remote: dirtyHabits
+        )
+        let authoritativeTrades = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.trades.compactMap { $0.toModel() },
+            remote: dirtyTrades
+        )
+        let authoritativeTags = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.tags.compactMap { $0.toModel() },
+            remote: dirtyTags
+        )
+        let authoritativeHabitTags = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.habitTags.compactMap { $0.toModel() },
+            remote: dirtyHabitTags
+        )
+        let authoritativeRewards = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.rewards.compactMap { $0.toModel() },
+            remote: dirtyRewards
+        )
+        let authoritativeRewardTags = OwnerScopedRecordSupport.mergeRecords(
+            local: pullResponse.rewardTags.compactMap { $0.toModel() },
+            remote: dirtyRewardTags
+        )
+
+        habitStore.replaceHabits(authoritativeHabits)
+        tradeStore.replaceTrades(authoritativeTrades)
+        tagStore.replaceAll(
+            tags: authoritativeTags,
+            habitTags: authoritativeHabitTags,
+            rewardTags: authoritativeRewardTags
+        )
+        rewardStore.replaceRewards(authoritativeRewards)
+        balanceStore.setBalance(Int(pullResponse.balance.tofuBalance.rounded()))
+        if !generalDifficultyDirty {
+            userSettingsStore.setGeneralDifficulty(pullResponse.generalDifficulty, shouldNotifySync: false)
+        }
+        sanitizeListPreferencesForCurrentOwner()
     }
 
     private func applyPullResponse(_ response: SyncResponse, filteringDirtyState dirtyState: SyncStateStore.UserSyncState?) {

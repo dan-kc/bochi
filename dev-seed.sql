@@ -1,55 +1,43 @@
 -- Fixture data for tofustash development
 
 INSERT INTO users (id, email, password, premium, theme_preference, tofu_balance) VALUES
-('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto', 150.0),
-('22222222-2222-2222-2222-222222222222', 'bob@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', true, 'dark', 370.0),
-('33333333-3333-3333-3333-333333333333', 'charlie@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'light', 0.0);
+('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto', 150.0);
 
--- Tags for Alice
 INSERT INTO tags (id, user_id, name, color_hex) VALUES
-('aaaa1111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Work', '#FF5733  '),
-('aaaa2222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Personal', '#33FF57  '),
-('aaaa3333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Urgent', '#FF0000  ');
+('aaaa1111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Fitness', '#22C55E'),
+('aaaa2222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Food', '#F59E0B');
 
--- Tags for Bob
-INSERT INTO tags (id, user_id, name, color_hex) VALUES
-('bbbb1111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'Health', '#00FF00  '),
-('bbbb2222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'Learning', '#0000FF  ');
+INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_tier) VALUES
+('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Stretch hamstrings', '', 1.0, 'light'),
+('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Side hip stretches 2 mins', '', 1.0, 'light'),
+('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Refill water bottle', '', 4.0, 'trivial'),
+('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Refill water jug', '', 2.0, 'trivial'),
+('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', '20 Pullups', '', 1.0, 'light'),
+('aaaa0006-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111', 'Standing hip flexor stretch', '', 1.0, 'light'),
+('aaaa0007-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111', 'Split squats', '', 3.0 / 7.0, 'light'),
+('aaaa0008-0000-0000-0000-000000000008', '11111111-1111-1111-1111-111111111111', 'Neck tucks', '', 1.0, 'light'),
+('aaaa0009-0000-0000-0000-000000000009', '11111111-1111-1111-1111-111111111111', 'Wash hair', '', 3.0 / 7.0, 'medium'),
+('aaaa0010-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111', 'Phimosis ring', '', 3.0, 'light'),
+('aaaa0011-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111', 'Burpees', '', 4.0 / 7.0, 'light'),
+('aaaa0012-0000-0000-0000-000000000012', '11111111-1111-1111-1111-111111111111', 'Cold message a friend', '', 1.0 / 7.0, 'hard');
 
--- Habits for Alice
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
-('aaaa0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Complete project proposal', 'Write and submit the Q1 project proposal to management', NULL, 'a0'),
-('aaaa0002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Review pull requests', 'Go through pending PRs on the main repo', NULL, 'a1'),
-('aaaa0003-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Exercise', 'Daily workout routine', 1.0, 'a2'),
-('aaaa0004-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Read documentation', 'Catch up on new API documentation', NULL, 'a3'),
-('aaaa0005-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Team standup', 'Daily team sync meeting', 1.0, 'a4');
+INSERT INTO habit_tags (habit_id, tag_id) VALUES
+('aaaa0001-0000-0000-0000-000000000001', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0002-0000-0000-0000-000000000002', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0005-0000-0000-0000-000000000005', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0006-0000-0000-0000-000000000006', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0007-0000-0000-0000-000000000007', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0008-0000-0000-0000-000000000008', 'aaaa1111-1111-1111-1111-111111111111'),
+('aaaa0011-0000-0000-0000-000000000011', 'aaaa1111-1111-1111-1111-111111111111');
 
--- Habits for Bob
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
-('bbbb0001-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Morning meditation', 'Start the day with 15 minutes of mindfulness', 1.0, 'a0'),
-('bbbb0002-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'Learn Rust', 'Complete chapter 5 of the Rust book', NULL, 'a1'),
-('bbbb0003-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Grocery shopping', 'Buy vegetables and fruits for the week', NULL, 'a2');
+INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, damage_tier) VALUES
+('aaaa1000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Coffee', '', 2.0, 'medium'),
+('aaaa1000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Rice cakes', '', 2.0, 'medium'),
+('aaaa1000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Rot 15 mins', '', 2.0, 'medium'),
+('aaaa1000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'Music 15 mins', '', 4.0, 'medium'),
+('aaaa1000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'Cannabis', '', 2.0, 'heavy'),
+('aaaa1000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111', 'Get in bed 15 mins', '', 5.0, 'harmless');
 
--- Habits for Charlie
-INSERT INTO habits (id, user_id, name, description, min_daily_frequency, difficulty_rank) VALUES
-('cccc0001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'Setup new laptop', 'Install dev tools and configure environment', NULL, 'a0');
-
--- Rewards for Alice
-INSERT INTO rewards (id, user_id, name, description, max_daily_frequency) VALUES
-('aaaa1000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Coffee break', 'Enjoy a nice cup of coffee', 3.0),
-('aaaa1000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Gaming session', 'Play video games for 30 minutes', 2.0),
-('aaaa1000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Movie night', 'Watch a movie of your choice', 1.0);
-
--- Rewards for Bob
-INSERT INTO rewards (id, user_id, name, description, max_daily_frequency) VALUES
-('bbbb1000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'Snack time', 'Have a healthy snack', 4.0),
-('bbbb1000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'YouTube break', 'Watch YouTube for 15 minutes', 2.0);
-
--- Trades (habit completions and reward claims)
-INSERT INTO trades (id, user_id, habit_id, reward_id, amount) VALUES
-('aaaa2000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'aaaa0003-0000-0000-0000-000000000003', NULL, 10),
-('aaaa2000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'aaaa0005-0000-0000-0000-000000000005', NULL, 5),
-('aaaa2000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', NULL, 'aaaa1000-0000-0000-0000-000000000001', -5),
-('bbbb2000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
-('bbbb2000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'bbbb0001-0000-0000-0000-000000000001', NULL, 15),
-('bbbb2000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', NULL, 'bbbb1000-0000-0000-0000-000000000001', -10);
+INSERT INTO reward_tags (reward_id, tag_id) VALUES
+('aaaa1000-0000-0000-0000-000000000001', 'aaaa2222-2222-2222-2222-222222222222'),
+('aaaa1000-0000-0000-0000-000000000002', 'aaaa2222-2222-2222-2222-222222222222');

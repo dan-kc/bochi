@@ -165,6 +165,12 @@ final class HabitStore {
         }
     }
 
+    func replaceHabits(_ authoritativeHabits: [Habit]) {
+        habits = OwnerScopedRecordSupport.sorted(authoritativeHabits)
+        habitsByOwner[currentOwnerID] = habits
+        persist()
+    }
+
     func getDirtyHabits(ids: Set<RecordID>) -> [Habit] {
         habits.filter { ids.contains($0.id) }
     }
