@@ -31,10 +31,6 @@ struct HabitsView: View {
         )
     }
 
-    private var availableHabitTags: [Tag] {
-        tagStore.activeTags
-    }
-
     var body: some View {
         NavigationStack {
             EntityListScreen(
@@ -46,7 +42,6 @@ struct HabitsView: View {
                 filteredEmptyTitle: "No Matching Habits",
                 filteredEmptyDescription: "Try changing the selected tags or clear them to see more habits.",
                 preferences: listPreferencesStore.habitPreferences,
-                availableTags: availableHabitTags,
                 tagScope: .habits,
                 onSelectSort: listPreferencesStore.setHabitSort,
                 onClearFilters: listPreferencesStore.clearHabitFilters

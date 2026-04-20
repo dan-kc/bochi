@@ -19,7 +19,6 @@ struct EntityListScreen<RowContent: View>: View {
     let filteredEmptyTitle: String
     let filteredEmptyDescription: String
     let preferences: EntityListPreferences
-    let availableTags: [Tag]
     let tagScope: EntityListTagScope
     let onSelectSort: (EntityListSortOption) -> Void
     let onClearFilters: () -> Void
@@ -36,7 +35,6 @@ struct EntityListScreen<RowContent: View>: View {
         filteredEmptyTitle: String,
         filteredEmptyDescription: String,
         preferences: EntityListPreferences,
-        availableTags: [Tag],
         tagScope: EntityListTagScope,
         onSelectSort: @escaping (EntityListSortOption) -> Void,
         onClearFilters: @escaping () -> Void,
@@ -50,7 +48,6 @@ struct EntityListScreen<RowContent: View>: View {
         self.filteredEmptyTitle = filteredEmptyTitle
         self.filteredEmptyDescription = filteredEmptyDescription
         self.preferences = preferences
-        self.availableTags = availableTags
         self.tagScope = tagScope
         self.onSelectSort = onSelectSort
         self.onClearFilters = onClearFilters
@@ -111,7 +108,6 @@ struct EntityListScreen<RowContent: View>: View {
     private var controlsRow: some View {
         EntityListControls(
             preferences: preferences,
-            availableTags: availableTags,
             tagScope: tagScope,
             isEnabled: isListAtTop,
             onSelectSort: onSelectSort
@@ -129,8 +125,10 @@ struct EntityListScreen<RowContent: View>: View {
         } description: {
             Text(filteredEmptyDescription)
         } actions: {
-            Button("Clear Filters") {
-                onClearFilters()
+            if preferences.hasActiveFilters {
+                Button("Clear Filters") {
+                    onClearFilters()
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 260)

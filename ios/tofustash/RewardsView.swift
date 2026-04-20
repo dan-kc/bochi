@@ -33,10 +33,6 @@ struct RewardsView: View {
         )
     }
 
-    private var availableRewardTags: [Tag] {
-        tagStore.activeTags
-    }
-
     var body: some View {
         NavigationStack {
             EntityListScreen(
@@ -48,7 +44,6 @@ struct RewardsView: View {
                 filteredEmptyTitle: "No Matching Rewards",
                 filteredEmptyDescription: "Try changing the selected tags or clear them to see more rewards.",
                 preferences: listPreferencesStore.rewardPreferences,
-                availableTags: availableRewardTags,
                 tagScope: .rewards,
                 onSelectSort: listPreferencesStore.setRewardSort,
                 onClearFilters: listPreferencesStore.clearRewardFilters

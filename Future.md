@@ -7,27 +7,12 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
+Scrap this, Instead display a search bar. On the RHS of the search bar should be a button that has the icons you used for filter and sort, maybe seperated by a vertical line. Everything should be on one line. The search bar should filter names.
+
+Change tag pills to also be transparent. Also make the gray colours reserved, can't be used with tags.
+That way they can be used on the same line maybe.
+
 # NEXT
-
-Add padding at the bottom of list
-
-Clear filters button looks off
-
-Buttons don't work in filter menu, only if you tap the text
-
-Filter UI.
-
-Defualt: 
-
-(Sort: Date created (oldest to newest))
-Tags filter: None
-
-(Sort: Date created (oldest to newest))
-Tags filter: Any: (Fitness) (Urgent)
-
-Fitlers button just scrolls up
-
-- Filtered out section at bottom
 
 Tasks. Should they have a time limit. And an option to say "I did the time for this, but keep it because it's not done"
 
