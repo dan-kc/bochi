@@ -3,8 +3,7 @@ import Foundation
 // Pure functions for calculating the tofu reward a user sees when completing a
 // habit.
 //
-// Formula: Reward = round(100 * G * T * F)
-//   G = general difficulty (user-configurable scalar, default 5.0)
+// Formula: Reward = round(100 * T * F)
 //   T = fixed difficulty-tier multiplier
 //   F = frequency multiplier based on completion rate, range (0, 2)
 enum RewardCalculation {
@@ -51,8 +50,7 @@ enum RewardCalculation {
         habit: Habit,
         allHabits: [Habit],
         completionDates: [Date] = [],
-        now: Date = Date(),
-        generalDifficulty: Double = 5.0
+        now: Date = Date()
     ) -> Int {
         let difficultyMultiplier = calculateDifficultyMultiplier(habit: habit)
         let frequencyMultiplier = calculateFrequencyMultiplier(
@@ -61,7 +59,7 @@ enum RewardCalculation {
             now: now
         )
 
-        let reward = 100.0 * generalDifficulty * difficultyMultiplier * frequencyMultiplier
+        let reward = 100.0 * difficultyMultiplier * frequencyMultiplier
         return Int(reward.rounded())
     }
 
@@ -83,8 +81,7 @@ enum RewardCalculation {
         allHabits: [Habit],
         completionDates: [Date],
         quantity: Int,
-        now: Date = Date(),
-        generalDifficulty: Double = 5.0
+        now: Date = Date()
     ) -> Int {
         var total = 0
         var projectedCompletionDates = completionDates
@@ -94,8 +91,7 @@ enum RewardCalculation {
                 habit: habit,
                 allHabits: allHabits,
                 completionDates: projectedCompletionDates,
-                now: now,
-                generalDifficulty: generalDifficulty
+                now: now
             )
             projectedCompletionDates.append(now)
         }

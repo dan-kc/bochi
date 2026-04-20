@@ -11,7 +11,6 @@ struct HabitsView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
-    @Environment(UserSettingsStore.self) private var userSettingsStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: HabitFormRoute? = nil
@@ -148,8 +147,7 @@ struct HabitsView: View {
         return RewardCalculation.calculateReward(
             habit: habit,
             allHabits: habitStore.activeHabits,
-            completionDates: completionDates,
-            generalDifficulty: userSettingsStore.generalDifficulty
+            completionDates: completionDates
         )
     }
 

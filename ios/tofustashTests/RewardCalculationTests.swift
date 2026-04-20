@@ -94,18 +94,18 @@ struct FrequencyMultiplierTests {
 
 struct CalculateRewardTests {
     // Behaviour: The user-facing reward is a deterministic whole-number tofu
-    // amount with no time-bucket randomness.
+    // amount with no time-bucket randomness, and habit payouts are not scaled
+    // by the general difficulty setting.
     @Test func rewardUsesTierAndFrequencyWithoutRandomness() {
         let habit = makeHabit(frequency: 1.0, difficultyTier: .hard)
 
         let reward = RewardCalculation.calculateReward(
             habit: habit,
             allHabits: [habit],
-            completionDates: [],
-            generalDifficulty: 5
+            completionDates: []
         )
 
-        #expect(reward == 1_100)
+        #expect(reward == 220)
     }
 
     // Behaviour: The app explains exactly which required habit inputs are still
@@ -128,23 +128,20 @@ struct MultiPurchaseTotalTests {
             habit: habit,
             allHabits: [habit],
             completionDates: [],
-            now: Date(timeIntervalSince1970: 2_000_000_000),
-            generalDifficulty: 5
+            now: Date(timeIntervalSince1970: 2_000_000_000)
         )
         let second = RewardCalculation.calculateReward(
             habit: habit,
             allHabits: [habit],
             completionDates: [Date(timeIntervalSince1970: 2_000_000_000)],
-            now: Date(timeIntervalSince1970: 2_000_000_000),
-            generalDifficulty: 5
+            now: Date(timeIntervalSince1970: 2_000_000_000)
         )
         let total = RewardCalculation.calculateMultiPurchaseTotal(
             habit: habit,
             allHabits: [habit],
             completionDates: [],
             quantity: 2,
-            now: Date(timeIntervalSince1970: 2_000_000_000),
-            generalDifficulty: 5
+            now: Date(timeIntervalSince1970: 2_000_000_000)
         )
 
         #expect(total == first + second)

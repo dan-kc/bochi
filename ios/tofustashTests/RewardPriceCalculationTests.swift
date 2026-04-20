@@ -137,6 +137,27 @@ struct RewardPriceTests {
         #expect(price == 550)
     }
 
+    // Behaviour: Changing general difficulty should make the same reward more
+    // or less expensive, so the setting still changes spending pressure.
+    @Test func generalDifficultyRaisesRewardPrice() {
+        let reward = makeReward(maxFrequency: 3.0, damageTier: .medium)
+
+        let easierPrice = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [],
+            generalDifficulty: 2
+        )
+        let harderPrice = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [],
+            generalDifficulty: 8
+        )
+
+        #expect(harderPrice > easierPrice)
+    }
+
     // Behaviour: The reward list price rises with repeated same-day purchases
     // instead of staying flat.
     @Test func repeatedPurchasesRaiseVisiblePrice() {

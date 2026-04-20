@@ -22,7 +22,6 @@ struct TradeModalView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TradeStore.self) private var tradeStore
     @Environment(BalanceStore.self) private var balanceStore
-    @Environment(UserSettingsStore.self) private var userSettingsStore
 
     // How many times the user wants to claim this habit. Starts at 1.
     // Capped at maxQuantity to prevent accidental excessive claims.
@@ -48,8 +47,7 @@ struct TradeModalView: View {
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionDates: completionDates,
-            quantity: quantity,
-            generalDifficulty: userSettingsStore.generalDifficulty
+            quantity: quantity
         )
     }
 
@@ -169,8 +167,7 @@ struct TradeModalView: View {
                 habit: habit,
                 allHabits: habitStore.activeHabits,
                 completionDates: projectedCompletionDates,
-                now: claimDate,
-                generalDifficulty: userSettingsStore.generalDifficulty
+                now: claimDate
             )
             tradeStore.addHabitTrade(habitId: habit.id, amount: price, createdAt: claimDate)
             projectedCompletionDates.append(claimDate)

@@ -1,8 +1,8 @@
 import SwiftUI
 
-// A sheet for adjusting the general difficulty setting, which scales all
-// reward amounts. Higher values mean larger rewards (and costs once the
-// rewards system is implemented).
+// A sheet for adjusting the general difficulty setting, which scales reward
+// purchase costs across the app. Habit payouts stay controlled by each
+// habit's own difficulty tier and cadence.
 //
 // Port of frontend/components/settings/GeneralDifficultyModal.tsx.
 // Uses a TextField with validation instead of the React Native TextInput.
@@ -20,7 +20,7 @@ struct GeneralDifficultyView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Controls the overall scale of rewards and costs. Higher values mean larger rewards and costs. Default is 5.")
+                    Text("Controls the overall scale of reward costs. Higher values make rewards more expensive. Habit payouts are not affected. Default is 5.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 

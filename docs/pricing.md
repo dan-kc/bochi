@@ -9,15 +9,22 @@ There are two related calculations:
 - habit completion reward: how much tofu the user earns
 - reward purchase cost: how much tofu the user spends
 
-Both share the same outer form:
+The two calculations now differ at the top level:
 
-`value = round(100 * G * T * F)`
+`habitReward = round(100 * T_h * F_h)`
+
+`rewardCost = round(100 * G * T_r * F_r)`
 
 where:
 
 - `G` is the user-configurable general difficulty
 - `T` is the fixed tier multiplier
 - `F` is the frequency multiplier
+
+Behaviourally:
+
+- changing general difficulty only changes reward purchase cost
+- changing general difficulty does not change habit completion reward
 
 There is no random pricing component anymore.
 
@@ -165,7 +172,7 @@ Reason:
 
 Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
 
-`Reward = round(100 * G * T_h * F_h)`
+`Reward = round(100 * T_h * F_h)`
 
 ### Tier Multiplier
 
@@ -326,6 +333,8 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
   habits have the same frequency and completion history.
 - A more damaging reward tier always costs more than a less damaging reward
   tier when the two rewards have the same cap and purchase history.
+- Raising general difficulty makes rewards more expensive without changing
+  habit payouts.
 - Habit rewards fall as the user keeps completing the same habit toward or
   above its intended cadence.
 - Reward prices rise as the user keeps buying the same reward toward or past
