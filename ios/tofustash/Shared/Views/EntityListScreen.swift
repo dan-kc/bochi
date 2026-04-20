@@ -9,7 +9,7 @@ struct EntityListScreen<RowContent: View>: View {
     // scrollable children. The simplest equivalent is to append a final spacer
     // row with a fixed height. Because both habits and rewards use this shared
     // shell, one constant keeps the extra runway consistent across both tabs.
-    private static let bottomContentPadding: CGFloat = 96
+    private static var bottomContentPadding: CGFloat { 96 }
 
     let hasAnyItems: Bool
     let visibleItemCount: Int
@@ -20,13 +20,8 @@ struct EntityListScreen<RowContent: View>: View {
     let filteredEmptyDescription: String
     let preferences: EntityListPreferences
     let availableTags: [Tag]
-    let difficultyLabel: String
-    let frequencyLabel: String
+    let tagScope: EntityListTagScope
     let onSelectSort: (EntityListSortOption) -> Void
-    let onSelectDifficultyFilter: (EntityListOptionalFieldFilter) -> Void
-    let onSelectFrequencyFilter: (EntityListOptionalFieldFilter) -> Void
-    let onSelectTagMatchMode: (EntityListTagMatchMode) -> Void
-    let onToggleTag: (RecordID) -> Void
     let onClearFilters: () -> Void
     let rowContent: RowContent
 
@@ -42,13 +37,8 @@ struct EntityListScreen<RowContent: View>: View {
         filteredEmptyDescription: String,
         preferences: EntityListPreferences,
         availableTags: [Tag],
-        difficultyLabel: String,
-        frequencyLabel: String,
+        tagScope: EntityListTagScope,
         onSelectSort: @escaping (EntityListSortOption) -> Void,
-        onSelectDifficultyFilter: @escaping (EntityListOptionalFieldFilter) -> Void,
-        onSelectFrequencyFilter: @escaping (EntityListOptionalFieldFilter) -> Void,
-        onSelectTagMatchMode: @escaping (EntityListTagMatchMode) -> Void,
-        onToggleTag: @escaping (RecordID) -> Void,
         onClearFilters: @escaping () -> Void,
         @ViewBuilder rowContent: () -> RowContent
     ) {
@@ -61,13 +51,8 @@ struct EntityListScreen<RowContent: View>: View {
         self.filteredEmptyDescription = filteredEmptyDescription
         self.preferences = preferences
         self.availableTags = availableTags
-        self.difficultyLabel = difficultyLabel
-        self.frequencyLabel = frequencyLabel
+        self.tagScope = tagScope
         self.onSelectSort = onSelectSort
-        self.onSelectDifficultyFilter = onSelectDifficultyFilter
-        self.onSelectFrequencyFilter = onSelectFrequencyFilter
-        self.onSelectTagMatchMode = onSelectTagMatchMode
-        self.onToggleTag = onToggleTag
         self.onClearFilters = onClearFilters
         self.rowContent = rowContent()
     }
@@ -127,21 +112,15 @@ struct EntityListScreen<RowContent: View>: View {
         EntityListControls(
             preferences: preferences,
             availableTags: availableTags,
-            difficultyLabel: difficultyLabel,
-            frequencyLabel: frequencyLabel,
+            tagScope: tagScope,
             isEnabled: isListAtTop,
-            onSelectSort: onSelectSort,
-            onSelectDifficultyFilter: onSelectDifficultyFilter,
-            onSelectFrequencyFilter: onSelectFrequencyFilter,
-            onSelectTagMatchMode: onSelectTagMatchMode,
-            onToggleTag: onToggleTag,
-            onClearFilters: onClearFilters
+            onSelectSort: onSelectSort
         )
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
-        .padding(.top, -12)
-        .padding(.bottom, -6)
+        .padding(.top, -4)
+        .padding(.bottom, 12)
     }
 
     private var filteredEmptyStateRow: some View {

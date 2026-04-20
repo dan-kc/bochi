@@ -237,7 +237,7 @@ struct HabitFormView: View {
             )
         }
         .sheet(isPresented: $showingTags) {
-            TagsView(target: .habit(habitId))
+            TagsView(selectionMode: .assignment(.habit(habitId)))
         }
         .sheet(item: $tradingHabit) { habit in
             TradeModalView(habit: habit) {

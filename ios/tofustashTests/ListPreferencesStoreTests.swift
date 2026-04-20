@@ -5,7 +5,7 @@ import Testing
 struct ListPreferencesStoreTests {
 
     // Behaviour: After the user customizes the habits list, the app should reopen
-    // with the same sort, field filters, and selected tags still active.
+    // with the same sort and selected tag filters still active.
     @Test("Habit list preferences persist across store relaunch")
     func habitPreferencesPersistAcrossRelaunch() {
         let storageURL = TestHelpers.makeTemporaryFileURL("persisted-habit-list-preferences")
@@ -13,17 +13,11 @@ struct ListPreferencesStoreTests {
 
         let firstStore = ListPreferencesStore(storageURL: storageURL)
         firstStore.setHabitSort(.difficultyLowToHigh)
-        firstStore.setHabitDifficultyFilter(.hasValue)
-        firstStore.setHabitFrequencyFilter(.missingValue)
-        firstStore.setHabitTagMatchMode(.all)
         firstStore.toggleHabitTag(tagID)
 
         let relaunchedStore = ListPreferencesStore(storageURL: storageURL)
 
         #expect(relaunchedStore.habitPreferences.sort == .difficultyLowToHigh)
-        #expect(relaunchedStore.habitPreferences.difficultyFilter == .hasValue)
-        #expect(relaunchedStore.habitPreferences.frequencyFilter == .missingValue)
-        #expect(relaunchedStore.habitPreferences.tagMatchMode == .all)
         #expect(relaunchedStore.habitPreferences.selectedTagIDs == [tagID])
     }
 
@@ -36,17 +30,11 @@ struct ListPreferencesStoreTests {
 
         let firstStore = ListPreferencesStore(storageURL: storageURL)
         firstStore.setRewardSort(.oldestToNewest)
-        firstStore.setRewardDifficultyFilter(.missingValue)
-        firstStore.setRewardFrequencyFilter(.hasValue)
-        firstStore.setRewardTagMatchMode(.any)
         firstStore.toggleRewardTag(rewardTagID)
 
         let relaunchedStore = ListPreferencesStore(storageURL: storageURL)
 
         #expect(relaunchedStore.rewardPreferences.sort == .oldestToNewest)
-        #expect(relaunchedStore.rewardPreferences.difficultyFilter == .missingValue)
-        #expect(relaunchedStore.rewardPreferences.frequencyFilter == .hasValue)
-        #expect(relaunchedStore.rewardPreferences.tagMatchMode == .any)
         #expect(relaunchedStore.rewardPreferences.selectedTagIDs == [rewardTagID])
         #expect(relaunchedStore.habitPreferences == EntityListPreferences())
     }
@@ -73,7 +61,7 @@ struct ListPreferencesStoreTests {
     }
 
     // Behaviour: Reward filters should fully clear their selected tag chips if
-    // every saved tag has disappeared from that reward list.
+    // every saved tag has disappeared from the current owner tag catalog.
     @Test("Reward selected tags clear when all saved ids are stale")
     func sanitizeRewardSelectedTagsClearsAllStaleIDs() {
         let storageURL = TestHelpers.makeTemporaryFileURL("sanitize-reward-list-preferences")
@@ -90,7 +78,7 @@ struct ListPreferencesStoreTests {
     }
 
     // Behaviour: When the user switches to another local owner bucket, any tag ids
-    // that do not exist in that owner's current filter list should be removed.
+    // that do not exist in that owner's current tag catalog should be removed.
     @Test("Owner switching can prune stale habit selected tag ids")
     func ownerSwitchingCanPruneStaleHabitSelectedTagIDs() {
         let storageURL = TestHelpers.makeTemporaryFileURL("owner-switch-habit-list-preferences")

@@ -532,11 +532,11 @@ final class SyncManager {
 
     private func sanitizeListPreferencesForCurrentOwner() {
         // User behaviour: when account switching, sync, or local migration changes
-        // which tags are currently available on a list, any saved filter chips for
-        // now-missing tags should disappear instead of silently hiding all rows.
+        // which tags exist for the current owner, any saved filter chips for
+        // deleted tags should disappear instead of silently hiding all rows.
         listPreferencesStore.sanitizeSelectedTags(
-            validHabitTagIDs: tagStore.listFilterTagIDs(for: .habits),
-            validRewardTagIDs: tagStore.listFilterTagIDs(for: .rewards)
+            validHabitTagIDs: tagStore.activeTagIDs,
+            validRewardTagIDs: tagStore.activeTagIDs
         )
     }
 

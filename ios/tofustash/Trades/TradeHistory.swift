@@ -28,7 +28,6 @@ enum TradeHistoryBuilder {
             .filter { $0.deletedAt == nil }
             .sorted { $0.createdAt > $1.createdAt }
             .map { trade in
-                let isHabitTrade = trade.habitId != nil
                 let itemName: String
 
                 if let habitId = trade.habitId {

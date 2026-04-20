@@ -78,30 +78,6 @@ final class ListPreferencesStore {
         mutatePreferences(for: .rewards) { $0.sort = sort }
     }
 
-    func setHabitDifficultyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutatePreferences(for: .habits) { $0.difficultyFilter = filter }
-    }
-
-    func setRewardDifficultyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutatePreferences(for: .rewards) { $0.difficultyFilter = filter }
-    }
-
-    func setHabitFrequencyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutatePreferences(for: .habits) { $0.frequencyFilter = filter }
-    }
-
-    func setRewardFrequencyFilter(_ filter: EntityListOptionalFieldFilter) {
-        mutatePreferences(for: .rewards) { $0.frequencyFilter = filter }
-    }
-
-    func setHabitTagMatchMode(_ mode: EntityListTagMatchMode) {
-        mutatePreferences(for: .habits) { $0.tagMatchMode = mode }
-    }
-
-    func setRewardTagMatchMode(_ mode: EntityListTagMatchMode) {
-        mutatePreferences(for: .rewards) { $0.tagMatchMode = mode }
-    }
-
     func toggleHabitTag(_ tagID: RecordID) {
         mutatePreferences(for: .habits) { preferences in
             toggleTag(tagID, in: &preferences)
@@ -153,10 +129,7 @@ final class ListPreferencesStore {
 
     private func clearFilters(for scope: ListScope) {
         mutatePreferences(for: scope) { preferences in
-            preferences.difficultyFilter = .any
-            preferences.frequencyFilter = .any
             preferences.selectedTagIDs = []
-            preferences.tagMatchMode = .any
         }
     }
 

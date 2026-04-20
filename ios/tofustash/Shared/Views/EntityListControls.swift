@@ -1,46 +1,51 @@
 import SwiftUI
 
-// Reusable control strip for both list screens. The controls stay lightweight
-// in the list itself, then open bottom sheets when the user wants to configure
-// sorting or filtering in more detail.
+// Reusable control strip for both list screens. The list itself only shows the
+// current sort and tag state, then opens sheets when the user wants to change
+// either of those decisions.
 struct EntityListControls: View {
     let preferences: EntityListPreferences
     let availableTags: [Tag]
-    let difficultyLabel: String
-    let frequencyLabel: String
+    let tagScope: EntityListTagScope
     let isEnabled: Bool
     let onSelectSort: (EntityListSortOption) -> Void
-    let onSelectDifficultyFilter: (EntityListOptionalFieldFilter) -> Void
-    let onSelectFrequencyFilter: (EntityListOptionalFieldFilter) -> Void
-    let onSelectTagMatchMode: (EntityListTagMatchMode) -> Void
-    let onToggleTag: (RecordID) -> Void
-    let onClearFilters: () -> Void
 
     @State private var isShowingSortSheet = false
-    @State private var isShowingFiltersSheet = false
+    @State private var isShowingTagsSheet = false
+
+    private var selectedTags: [Tag] {
+        let tagsByID = Dictionary(uniqueKeysWithValues: availableTags.map { ($0.id, $0) })
+        return preferences.selectedTagIDs.compactMap { tagsByID[$0] }
+    }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                Button {
-                    isShowingSortSheet = true
-                } label: {
-                    controlLabel(title: "Sort", systemImage: "arrow.up.arrow.down.circle")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    isShowingFiltersSheet = true
-                } label: {
-                    controlLabel(title: filtersButtonTitle, systemImage: "line.3.horizontal.decrease.circle")
-                }
-                .buttonStyle(.bordered)
+        VStack(spacing: 0) {
+            Button {
+                isShowingSortSheet = true
+            } label: {
+                sortRow
             }
-            .padding(.leading, 0)
-            .padding(.trailing, 16)
-            .padding(.top, 0)
-            .padding(.bottom, 0)
+            .buttonStyle(.plain)
+
+            Divider()
+                .padding(.leading, 42)
+
+            Button {
+                isShowingTagsSheet = true
+            } label: {
+                tagsRow
+            }
+            .buttonStyle(.plain)
         }
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color(.separator).opacity(0.35), lineWidth: 1)
+                }
+        }
+        .shadow(color: .black.opacity(0.04), radius: 12, y: 2)
         // Behaviour: while the user is reading farther down the list, freeze the
         // buttons so an accidental tap cannot reorder the content and make them
         // lose their place.
@@ -52,8 +57,8 @@ struct EntityListControls: View {
         .sheet(isPresented: $isShowingSortSheet) {
             sortSheet
         }
-        .sheet(isPresented: $isShowingFiltersSheet) {
-            filtersSheet
+        .sheet(isPresented: $isShowingTagsSheet) {
+            TagsView(selectionMode: .listFilter(tagScope))
         }
     }
 
@@ -95,122 +100,78 @@ struct EntityListControls: View {
         }
     }
 
-    private var filtersSheet: some View {
-        NavigationStack {
-            List {
-                Section(difficultyLabel) {
-                    ForEach(EntityListOptionalFieldFilter.allCases) { filter in
-                        Button {
-                            onSelectDifficultyFilter(filter)
-                        } label: {
-                            rowLabel(
-                                title: filter.label(fieldName: difficultyLabel),
-                                isSelected: filter == preferences.difficultyFilter
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Section(frequencyLabel) {
-                    ForEach(EntityListOptionalFieldFilter.allCases) { filter in
-                        Button {
-                            onSelectFrequencyFilter(filter)
-                        } label: {
-                            rowLabel(
-                                title: filter.label(fieldName: frequencyLabel),
-                                isSelected: filter == preferences.frequencyFilter
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Section("Tag Matching") {
-                    ForEach(EntityListTagMatchMode.allCases) { mode in
-                        Button {
-                            onSelectTagMatchMode(mode)
-                        } label: {
-                            rowLabel(
-                                title: mode.label,
-                                isSelected: mode == preferences.tagMatchMode
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Section("Tags") {
-                    if availableTags.isEmpty {
-                        Text("No tags yet")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(availableTags) { tag in
-                            Button {
-                                onToggleTag(tag.id)
-                            } label: {
-                                HStack {
-                                    Text(tag.name)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if preferences.selectedTagIDs.contains(tag.id) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                if preferences.hasActiveFilters {
-                    Section {
-                        Button("Clear Filters", role: .destructive) {
-                            onClearFilters()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.large])
-            .presentationBackground(.thinMaterial)
-            .presentationContentInteraction(.scrolls)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        isShowingFiltersSheet = false
-                    }
-                }
-            }
-        }
-    }
-
-    private var filtersButtonTitle: String {
-        preferences.hasActiveFilters ? "Filters On" : "Filters"
-    }
-
-    private func rowLabel(title: String, isSelected: Bool) -> some View {
-        HStack {
-            Text(title)
+    private var sortRow: some View {
+        controlRow(
+            title: "Sort",
+            systemImage: "arrow.up.arrow.down.circle"
+        ) {
+            Text(preferences.sort.label)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(.primary)
-            Spacer()
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.blue)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var tagsRow: some View {
+        controlRow(
+            title: "Tags",
+            systemImage: preferences.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "tag.circle"
+        ) {
+            if selectedTags.isEmpty {
+                Text("All tags")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // User behaviour: selected tags should read like active chips at a
+                // glance, not like serialized filter text the user has to parse.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(selectedTags) { tag in
+                            Text(tag.name)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: tag.colorHex).opacity(0.14))
+                                .foregroundStyle(Color(hex: tag.colorHex))
+                                .overlay {
+                                    Capsule()
+                                        .stroke(Color(hex: tag.colorHex).opacity(0.28), lineWidth: 1)
+                                }
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.trailing, 8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    private func controlLabel(title: String, systemImage: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: preferences.hasActiveFilters && title == filtersButtonTitle ? "line.3.horizontal.decrease.circle.fill" : systemImage)
-            Text(title)
+    private func controlRow<Content: View>(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 26, height: 26)
+
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            content()
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
-        .font(.body)
-        .fontWeight(.medium)
-        .foregroundStyle(.blue)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
     }
 }

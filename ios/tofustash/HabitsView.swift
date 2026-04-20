@@ -22,19 +22,17 @@ struct HabitsView: View {
         EntityListQuery.apply(
             items: habitStore.activeHabits,
             preferences: listPreferencesStore.habitPreferences,
-            validTagIDs: tagStore.listFilterTagIDs(for: .habits),
+            validTagIDs: tagStore.activeTagIDs,
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: priceSortValue(for:),
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { tagStore.tagsForHabit(habitId: $0.id) }
         )
     }
 
     private var availableHabitTags: [Tag] {
-        tagStore.listFilterTags(for: .habits)
+        tagStore.activeTags
     }
 
     var body: some View {
@@ -46,16 +44,11 @@ struct HabitsView: View {
                 emptySystemImage: "checkmark.circle",
                 emptyDescription: "Tap + to create your first habit.",
                 filteredEmptyTitle: "No Matching Habits",
-                filteredEmptyDescription: "Try changing the filters or clear them to see more habits.",
+                filteredEmptyDescription: "Try changing the selected tags or clear them to see more habits.",
                 preferences: listPreferencesStore.habitPreferences,
                 availableTags: availableHabitTags,
-                difficultyLabel: "Difficulty",
-                frequencyLabel: "Freq",
+                tagScope: .habits,
                 onSelectSort: listPreferencesStore.setHabitSort,
-                onSelectDifficultyFilter: listPreferencesStore.setHabitDifficultyFilter,
-                onSelectFrequencyFilter: listPreferencesStore.setHabitFrequencyFilter,
-                onSelectTagMatchMode: listPreferencesStore.setHabitTagMatchMode,
-                onToggleTag: listPreferencesStore.toggleHabitTag,
                 onClearFilters: listPreferencesStore.clearHabitFilters
             ) {
                 ForEach(Array(visibleHabits.enumerated()), id: \.element.id) { index, habit in

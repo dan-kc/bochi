@@ -12,20 +12,15 @@ enum EntityListQuery {
         createdAt: (Item) -> Date,
         difficultySortOrder: (Item) -> Int?,
         price: (Item) -> Int?,
-        hasDifficulty: (Item) -> Bool,
-        hasFrequency: (Item) -> Bool,
         tags: (Item) -> [Tag]
     ) -> [Item] {
         let selectedTagIDs = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
 
         let filteredItems = items.filter { item in
-            matches(preferences.difficultyFilter, hasValue: hasDifficulty(item))
-                && matches(preferences.frequencyFilter, hasValue: hasFrequency(item))
-                && matchesTagFilter(
-                    selectedTagIDs: selectedTagIDs,
-                    matchMode: preferences.tagMatchMode,
-                    itemTags: tags(item)
-                )
+            matchesTagFilter(
+                selectedTagIDs: selectedTagIDs,
+                itemTags: tags(item)
+            )
         }
 
         return filteredItems.sorted { lhs, rhs in
@@ -41,36 +36,16 @@ enum EntityListQuery {
         }
     }
 
-    private static func matches(_ filter: EntityListOptionalFieldFilter, hasValue: Bool) -> Bool {
-        switch filter {
-        case .any:
-            true
-        case .hasValue:
-            hasValue
-        case .missingValue:
-            !hasValue
-        }
-    }
-
     private static func matchesTagFilter(
         selectedTagIDs: [RecordID],
-        matchMode: EntityListTagMatchMode,
         itemTags: [Tag]
     ) -> Bool {
         guard !selectedTagIDs.isEmpty else { return true }
 
         let itemTagIDs = Set(itemTags.map(\.id))
-
-        switch matchMode {
-        case .any:
-            // Behaviour: "match any" should widen the result set to anything that
-            // shares at least one chosen tag.
-            return selectedTagIDs.contains { itemTagIDs.contains($0) }
-        case .all:
-            // Behaviour: "match all" should act like an AND query so only items
-            // carrying every selected tag remain visible.
-            return selectedTagIDs.allSatisfy { itemTagIDs.contains($0) }
-        }
+        // Behaviour: selecting multiple tags should widen the result set to
+        // anything that shares at least one chosen tag.
+        return selectedTagIDs.contains { itemTagIDs.contains($0) }
     }
 
     private static func compare<Item>(

@@ -228,7 +228,7 @@ struct RewardFormView: View {
             )
         }
         .sheet(isPresented: $showingTags) {
-            TagsView(target: .reward(rewardId))
+            TagsView(selectionMode: .assignment(.reward(rewardId)))
         }
         .sheet(item: $purchasingReward) { reward in
             RewardPurchaseModalView(reward: reward) {

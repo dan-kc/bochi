@@ -24,19 +24,17 @@ struct RewardsView: View {
         EntityListQuery.apply(
             items: rewardStore.activeRewards,
             preferences: listPreferencesStore.rewardPreferences,
-            validTagIDs: tagStore.listFilterTagIDs(for: .rewards),
+            validTagIDs: tagStore.activeTagIDs,
             id: \.id,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.damageTier?.sortOrder },
             price: priceSortValue(for:),
-            hasDifficulty: { $0.damageTier != nil },
-            hasFrequency: { $0.maxFrequency != nil },
             tags: { tagStore.tagsForReward(rewardId: $0.id) }
         )
     }
 
     private var availableRewardTags: [Tag] {
-        tagStore.listFilterTags(for: .rewards)
+        tagStore.activeTags
     }
 
     var body: some View {
@@ -48,16 +46,11 @@ struct RewardsView: View {
                 emptySystemImage: "gift",
                 emptyDescription: "Tap + to create your first reward.",
                 filteredEmptyTitle: "No Matching Rewards",
-                filteredEmptyDescription: "Try changing the filters or clear them to see more rewards.",
+                filteredEmptyDescription: "Try changing the selected tags or clear them to see more rewards.",
                 preferences: listPreferencesStore.rewardPreferences,
                 availableTags: availableRewardTags,
-                difficultyLabel: "Difficulty",
-                frequencyLabel: "Freq",
+                tagScope: .rewards,
                 onSelectSort: listPreferencesStore.setRewardSort,
-                onSelectDifficultyFilter: listPreferencesStore.setRewardDifficultyFilter,
-                onSelectFrequencyFilter: listPreferencesStore.setRewardFrequencyFilter,
-                onSelectTagMatchMode: listPreferencesStore.setRewardTagMatchMode,
-                onToggleTag: listPreferencesStore.toggleRewardTag,
                 onClearFilters: listPreferencesStore.clearRewardFilters
             ) {
                 ForEach(Array(visibleRewards.enumerated()), id: \.element.id) { index, reward in

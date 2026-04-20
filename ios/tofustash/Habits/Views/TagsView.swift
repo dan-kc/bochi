@@ -1,5 +1,10 @@
 import SwiftUI
 
+enum TagSelectionMode: Equatable {
+    case assignment(TagAssignmentTarget)
+    case listFilter(EntityListTagScope)
+}
+
 // View for managing tags on a habit. Shows all available tags with
 // checkmarks for those already applied. Also allows creating, editing,
 // and deleting tags.
@@ -9,7 +14,7 @@ import SwiftUI
 // a NavigationStack (presented as a .sheet) which gives us free scrolling,
 // swipe-to-delete, and native iOS styling.
 struct TagsView: View {
-    let target: TagAssignmentTarget
+    let selectionMode: TagSelectionMode
     @Environment(\.dismiss) private var dismiss
     @Environment(TagStore.self) private var tagStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
@@ -21,9 +26,21 @@ struct TagsView: View {
     @State private var editName = ""
     @State private var editColor = ""
 
-    // Tags currently applied to this habit
+    // Tags currently selected in this sheet. For forms this means "applied to
+    // the current habit/reward"; for list filters this means "active chips in
+    // the current saved list view".
     private var appliedTagIds: Set<RecordID> {
-        Set(tagStore.tags(for: target).map(\.id))
+        switch selectionMode {
+        case .assignment(let target):
+            Set(tagStore.tags(for: target).map(\.id))
+        case .listFilter(let scope):
+            switch scope {
+            case .habits:
+                Set(listPreferencesStore.habitPreferences.selectedTagIDs)
+            case .rewards:
+                Set(listPreferencesStore.rewardPreferences.selectedTagIDs)
+            }
+        }
     }
 
     // Filtered tags based on search
@@ -95,7 +112,8 @@ struct TagsView: View {
         let isApplied = appliedTagIds.contains(tag.id)
 
         return HStack {
-            // Toggle tag on/off for this habit
+            // User behaviour: tapping a tag row should immediately toggle the
+            // selection, whether the user is tagging an item or narrowing a list.
             Button {
                 toggleTag(tag)
             } label: {
@@ -149,7 +167,7 @@ struct TagsView: View {
 
                 Section("Color") {
                     TextField("Hex color (#RRGGBB)", text: $editColor)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
 
                     // Color preview
                     if editColor.contains(/^#[0-9A-Fa-f]{6}$/) {
@@ -223,10 +241,20 @@ struct TagsView: View {
     ]
 
     private func toggleTag(_ tag: Tag) {
-        if appliedTagIds.contains(tag.id) {
-            tagStore.removeTag(tagId: tag.id, from: target)
-        } else {
-            tagStore.addTag(tagId: tag.id, to: target)
+        switch selectionMode {
+        case .assignment(let target):
+            if appliedTagIds.contains(tag.id) {
+                tagStore.removeTag(tagId: tag.id, from: target)
+            } else {
+                tagStore.addTag(tagId: tag.id, to: target)
+            }
+        case .listFilter(let scope):
+            switch scope {
+            case .habits:
+                listPreferencesStore.toggleHabitTag(tag.id)
+            case .rewards:
+                listPreferencesStore.toggleRewardTag(tag.id)
+            }
         }
         sanitizeListFilters()
     }
@@ -237,7 +265,17 @@ struct TagsView: View {
 
         isCreatingTag = true
         if let tag = tagStore.addTag(name: name) {
-            tagStore.addTag(tagId: tag.id, to: target)
+            switch selectionMode {
+            case .assignment(let target):
+                tagStore.addTag(tagId: tag.id, to: target)
+            case .listFilter(let scope):
+                switch scope {
+                case .habits:
+                    listPreferencesStore.toggleHabitTag(tag.id)
+                case .rewards:
+                    listPreferencesStore.toggleRewardTag(tag.id)
+                }
+            }
             sanitizeListFilters()
             isSearchPresented = false
             searchText = ""
@@ -261,12 +299,12 @@ struct TagsView: View {
     }
 
     private func sanitizeListFilters() {
-        // User behaviour: when a tag is deleted or its last assignment disappears,
-        // any saved list filter pointing at that tag should be removed right away
-        // so reopening the list never lands on a stale hidden-results state.
+        // User behaviour: when a tag is deleted, any saved list filter pointing
+        // at that tag should be removed right away so reopening the list never
+        // lands on a stale hidden-results state.
         listPreferencesStore.sanitizeSelectedTags(
-            validHabitTagIDs: tagStore.listFilterTagIDs(for: .habits),
-            validRewardTagIDs: tagStore.listFilterTagIDs(for: .rewards)
+            validHabitTagIDs: tagStore.activeTagIDs,
+            validRewardTagIDs: tagStore.activeTagIDs
         )
     }
 }

@@ -5,62 +5,10 @@ import Testing
 @MainActor
 struct EntityListQueryTests {
 
-    // Behaviour: When the user filters habits to only those with a difficulty,
-    // unranked habits should disappear from the list.
-    @Test("Habit difficulty filter keeps only ranked habits")
-    func habitDifficultyFilterKeepsRankedHabits() {
-        let easy = makeHabit(id: "easy", createdAt: date(day: 1), frequency: 1, difficulty: .light)
-        let unset = makeHabit(id: "unset", createdAt: date(day: 2), frequency: 1, difficulty: nil)
-
-        var preferences = EntityListPreferences()
-        preferences.difficultyFilter = .hasValue
-
-        let visible = EntityListQuery.apply(
-            items: [easy, unset],
-            preferences: preferences,
-            validTagIDs: [],
-            id: \.id,
-            createdAt: \.createdAt,
-            difficultySortOrder: { $0.difficultyTier?.sortOrder },
-            price: { _ in nil },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
-            tags: { _ in [] }
-        )
-
-        #expect(visible.map(\.id) == [easy.id])
-    }
-
-    // Behaviour: When the user filters rewards to entries without a frequency cap,
-    // only uncapped rewards remain visible.
-    @Test("Reward frequency filter keeps only rewards without a frequency")
-    func rewardFrequencyFilterKeepsMissingFrequencyRewards() {
-        let uncapped = makeReward(id: "uncapped", createdAt: date(day: 1), maxFrequency: nil, damage: .heavy)
-        let capped = makeReward(id: "capped", createdAt: date(day: 2), maxFrequency: 1, damage: .heavy)
-
-        var preferences = EntityListPreferences()
-        preferences.frequencyFilter = .missingValue
-
-        let visible = EntityListQuery.apply(
-            items: [capped, uncapped],
-            preferences: preferences,
-            validTagIDs: [],
-            id: \.id,
-            createdAt: \.createdAt,
-            difficultySortOrder: { $0.damageTier?.sortOrder },
-            price: { _ in nil },
-            hasDifficulty: { $0.damageTier != nil },
-            hasFrequency: { $0.maxFrequency != nil },
-            tags: { _ in [] }
-        )
-
-        #expect(visible.map(\.id) == [uncapped.id])
-    }
-
     // Behaviour: In "match any" mode, selecting multiple tags should widen the
     // list to anything matching at least one chosen tag.
-    @Test("Tag any mode keeps items with at least one selected tag")
-    func tagAnyModeMatchesAtLeastOneTag() {
+    @Test("Selecting multiple tags keeps items with at least one selected tag")
+    func selectedTagsMatchAtLeastOneTag() {
         let social = makeTag(id: "social", name: "Social")
         let health = makeTag(id: "health", name: "Health")
         let callFriend = makeHabit(id: "call", createdAt: date(day: 1), frequency: 1, difficulty: .light)
@@ -74,7 +22,6 @@ struct EntityListQueryTests {
 
         var preferences = EntityListPreferences()
         preferences.selectedTagIDs = [social.id, health.id]
-        preferences.tagMatchMode = .any
 
         let visible = EntityListQuery.apply(
             items: [callFriend, pushups, reading],
@@ -84,45 +31,36 @@ struct EntityListQueryTests {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { tagsByHabitID[$0.id] ?? [] }
         )
 
         #expect(visible.map(\.id) == [callFriend.id, pushups.id])
     }
 
-    // Behaviour: In "match all" mode, the user should only see entries that
-    // contain every selected tag.
-    @Test("Tag all mode keeps only items containing every selected tag")
-    func tagAllModeRequiresEveryTag() {
-        let social = makeTag(id: "social", name: "Social")
-        let health = makeTag(id: "health", name: "Health")
-        let both = makeReward(id: "both", createdAt: date(day: 1), maxFrequency: 1, damage: .medium)
-        let one = makeReward(id: "one", createdAt: date(day: 2), maxFrequency: 1, damage: .medium)
-        let tagsByRewardID: [RecordID: [tofustash.Tag]] = [
-            both.id: [social, health],
-            one.id: [social]
+    // Behaviour: When no tags are selected, the user should see the full list
+    // and the tag controls should effectively read as "All".
+    @Test("No selected tags leaves the full list visible")
+    func noSelectedTagsLeavesListVisible() {
+        let focus = makeTag(id: "focus", name: "Focus")
+        let stretch = makeHabit(id: "stretch", createdAt: date(day: 1), frequency: 1, difficulty: .light)
+        let journal = makeHabit(id: "journal", createdAt: date(day: 2), frequency: 1, difficulty: .medium)
+        let tagsByHabitID: [RecordID: [tofustash.Tag]] = [
+            stretch.id: [focus],
+            journal.id: []
         ]
 
-        var preferences = EntityListPreferences()
-        preferences.selectedTagIDs = [social.id, health.id]
-        preferences.tagMatchMode = .all
-
         let visible = EntityListQuery.apply(
-            items: [one, both],
-            preferences: preferences,
-            validTagIDs: [social.id, health.id],
+            items: [journal, stretch],
+            preferences: EntityListPreferences(),
+            validTagIDs: [focus.id],
             id: \.id,
             createdAt: \.createdAt,
-            difficultySortOrder: { $0.damageTier?.sortOrder },
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
-            hasDifficulty: { $0.damageTier != nil },
-            hasFrequency: { $0.maxFrequency != nil },
-            tags: { tagsByRewardID[$0.id] ?? [] }
+            tags: { tagsByHabitID[$0.id] ?? [] }
         )
 
-        #expect(visible.map(\.id) == [both.id])
+        #expect(visible.map(\.id) == [stretch.id, journal.id])
     }
 
     // Behaviour: Price descending is the default list view, so the most
@@ -145,8 +83,6 @@ struct EntityListQueryTests {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { prices[$0.id] },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { _ in [] }
         )
 
@@ -173,8 +109,6 @@ struct EntityListQueryTests {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { _ in [] }
         )
 
@@ -182,8 +116,8 @@ struct EntityListQueryTests {
     }
 
     // Behaviour: If a saved filter references tags that are no longer available
-    // on this list, the query should ignore those stale ids instead of hiding
-    // every row until the store cleanup runs.
+    // for the current owner, the query should ignore those stale ids instead of
+    // hiding every row until the store cleanup runs.
     @Test("Invalid selected tag ids are ignored by the query layer")
     func invalidSelectedTagsAreIgnored() {
         let focus = makeTag(id: "focus", name: "Focus")
@@ -205,8 +139,6 @@ struct EntityListQueryTests {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { tagsByHabitID[$0.id] ?? [] }
         )
 
@@ -214,7 +146,7 @@ struct EntityListQueryTests {
     }
 
     // Behaviour: If a saved filter contains both current and stale tags, only the
-    // tags still present on the list should affect which rows stay visible.
+    // tags still present for the current owner should affect which rows stay visible.
     @Test("Mixed valid and invalid selected tag ids only use the valid ids")
     func mixedValidAndInvalidSelectedTagsOnlyUseValidIDs() {
         let focus = makeTag(id: "focus", name: "Focus")
@@ -227,7 +159,6 @@ struct EntityListQueryTests {
 
         var preferences = EntityListPreferences()
         preferences.selectedTagIDs = [focus.id, "deleted-tag"]
-        preferences.tagMatchMode = .any
 
         let visible = EntityListQuery.apply(
             items: [walk, deepWork],
@@ -237,45 +168,10 @@ struct EntityListQueryTests {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
-            hasDifficulty: { $0.difficultyTier != nil },
-            hasFrequency: { $0.frequency != nil },
             tags: { tagsByHabitID[$0.id] ?? [] }
         )
 
         #expect(visible.map(\.id) == [deepWork.id])
-    }
-
-    // Behaviour: "Match all" should still work after stale ids are stripped, so
-    // a deleted tag does not make a still-valid AND filter impossible to satisfy.
-    @Test("Tag all mode keeps working after invalid ids are removed")
-    func tagAllModeStillWorksAfterInvalidIDsAreRemoved() {
-        let focus = makeTag(id: "focus", name: "Focus")
-        let calm = makeTag(id: "calm", name: "Calm")
-        let tea = makeReward(id: "tea", createdAt: date(day: 1), maxFrequency: 1, damage: .light)
-        let nap = makeReward(id: "nap", createdAt: date(day: 2), maxFrequency: 1, damage: .medium)
-        let tagsByRewardID: [RecordID: [tofustash.Tag]] = [
-            tea.id: [focus, calm],
-            nap.id: [focus]
-        ]
-
-        var preferences = EntityListPreferences()
-        preferences.selectedTagIDs = [focus.id, calm.id, "deleted-tag"]
-        preferences.tagMatchMode = .all
-
-        let visible = EntityListQuery.apply(
-            items: [tea, nap],
-            preferences: preferences,
-            validTagIDs: [focus.id, calm.id],
-            id: \.id,
-            createdAt: \.createdAt,
-            difficultySortOrder: { $0.damageTier?.sortOrder },
-            price: { _ in nil },
-            hasDifficulty: { $0.damageTier != nil },
-            hasFrequency: { $0.maxFrequency != nil },
-            tags: { tagsByRewardID[$0.id] ?? [] }
-        )
-
-        #expect(visible.map(\.id) == [tea.id])
     }
 
     private func date(day: Int) -> Date {
@@ -297,24 +193,6 @@ struct EntityListQueryTests {
             deletedAt: nil,
             frequency: frequency,
             difficultyTier: difficulty
-        )
-    }
-
-    private func makeReward(
-        id: RecordID,
-        createdAt: Date,
-        maxFrequency: Double?,
-        damage: RewardDamageTier?
-    ) -> Reward {
-        Reward(
-            id: id,
-            name: id.rawValue,
-            description: "",
-            createdAt: createdAt,
-            updatedAt: createdAt,
-            deletedAt: nil,
-            maxFrequency: maxFrequency,
-            damageTier: damage
         )
     }
 
