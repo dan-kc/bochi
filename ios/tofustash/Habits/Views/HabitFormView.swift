@@ -158,7 +158,7 @@ struct HabitFormView: View {
                             .padding(.horizontal, 16)
 
                         if !habitTags.isEmpty {
-                            TagPillsRow(tags: habitTags, leadingInset: 16)
+                            TagPillsRow(tags: habitTags, size: .form, leadingInset: 16)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     showingTags = true

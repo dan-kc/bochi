@@ -146,7 +146,7 @@ struct RewardFormView: View {
                             .padding(.horizontal, 16)
 
                         if !rewardTags.isEmpty {
-                            TagPillsRow(tags: rewardTags, leadingInset: 16)
+                            TagPillsRow(tags: rewardTags, size: .form, leadingInset: 16)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     showingTags = true

@@ -652,12 +652,12 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   tag: {
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[1.5],
     borderRadius: borderRadius.full,
   },
   tagText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontWeight: fontWeight.medium,
   },
   heroButton: {

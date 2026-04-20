@@ -6,7 +6,40 @@ import SwiftUI
 // wrapping a whole <div> in React with a single onClick handler rather
 // than putting onClick on each child element.
 struct TagPillsRow: View {
+    enum Size {
+        case compact
+        case form
+
+        var font: Font {
+            switch self {
+            case .compact:
+                .caption
+            case .form:
+                .subheadline
+            }
+        }
+
+        var horizontalPadding: CGFloat {
+            switch self {
+            case .compact:
+                10
+            case .form:
+                14
+            }
+        }
+
+        var verticalPadding: CGFloat {
+            switch self {
+            case .compact:
+                4
+            case .form:
+                8
+            }
+        }
+    }
+
     let tags: [Tag]
+    var size: Size = .compact
     var leadingInset: CGFloat = 0
     private let fadeWidth: CGFloat = 24
 
@@ -15,10 +48,10 @@ struct TagPillsRow: View {
             HStack(spacing: 8) {
                 ForEach(tags) { tag in
                     Text(tag.name)
-                        .font(.caption)
+                        .font(size.font)
                         .fontWeight(.medium)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, size.horizontalPadding)
+                        .padding(.vertical, size.verticalPadding)
                         .background(Color(hex: tag.colorHex).opacity(0.85))
                         .foregroundStyle(.white)
                         // Capsule shape = fully rounded pill, like borderRadius: 999 in CSS
