@@ -5,6 +5,12 @@ import SwiftUI
 // controls at the top, controls locked while scrolled down, and a distinct
 // empty state when filters hide everything.
 struct EntityListScreen<RowContent: View>: View {
+    // SwiftUI `List` does not expose a CSS-like "padding-bottom" on just the
+    // scrollable children. The simplest equivalent is to append a final spacer
+    // row with a fixed height. Because both habits and rewards use this shared
+    // shell, one constant keeps the extra runway consistent across both tabs.
+    private static let bottomContentPadding: CGFloat = 96
+
     let hasAnyItems: Bool
     let visibleItemCount: Int
     let emptyTitle: String
@@ -93,6 +99,8 @@ struct EntityListScreen<RowContent: View>: View {
                                 // row should sit directly on the parent surface instead of
                                 // getting the default opaque grouped-cell fill.
                                 .listRowBackground(Color.clear)
+
+                            bottomPaddingRow
                         }
                     }
                 }
@@ -150,5 +158,16 @@ struct EntityListScreen<RowContent: View>: View {
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+    }
+
+    private var bottomPaddingRow: some View {
+        Color.clear
+            .frame(height: Self.bottomContentPadding)
+            // Behaviour: the user should be able to scroll the final habit or
+            // reward completely above the floating add button so the row never
+            // feels clipped or harder to tap near the bottom edge.
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }

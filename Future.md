@@ -7,14 +7,29 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Increase the infuence "damage" and "difficulty" have on pricing, by roughly quadrouple. increase the infuence frequency has too, by 50%ish. Talk me through the changes. I am not referring to "general difficulty". I am referring to the damage field on rewards and the difficulty field on habits.
-
 # NEXT
 
+Add padding at the bottom of list
+
+Clear filters button looks off
+
+Buttons don't work in filter menu, only if you tap the text
+
+Filter UI.
+
+Defualt: 
+
+(Sort: Date created (oldest to newest))
+Tags filter: None
+
+(Sort: Date created (oldest to newest))
+Tags filter: Any: (Fitness) (Urgent)
+
+Fitlers button just scrolls up
+
+- Filtered out section at bottom
+
 Tasks. Should they have a time limit. And an option to say "I did the time for this, but keep it because it's not done"
-
-
-General difficulty
 
 Add dates option to habit?
 
