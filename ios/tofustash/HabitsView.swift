@@ -59,8 +59,10 @@ struct HabitsView: View {
                 onToggleTag: listPreferencesStore.toggleHabitTag,
                 onClearFilters: listPreferencesStore.clearHabitFilters
             ) {
-                ForEach(visibleHabits) { habit in
-                    habitRow(habit)
+                ForEach(Array(visibleHabits.enumerated()), id: \.element.id) { index, habit in
+                    EntityListRowSurface(showsDivider: index < visibleHabits.count - 1) {
+                        habitRow(habit)
+                    }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 // Behaviour: Swiping a row should only stage the delete

@@ -60,8 +60,10 @@ struct RewardsView: View {
                 onToggleTag: listPreferencesStore.toggleRewardTag,
                 onClearFilters: listPreferencesStore.clearRewardFilters
             ) {
-                ForEach(visibleRewards) { reward in
-                    rewardRow(reward)
+                ForEach(Array(visibleRewards.enumerated()), id: \.element.id) { index, reward in
+                    EntityListRowSurface(showsDivider: index < visibleRewards.count - 1) {
+                        rewardRow(reward)
+                    }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 // Behaviour: Swiping a row should only open the

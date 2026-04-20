@@ -7,14 +7,15 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
+Remove the white background color in habit/reward list. It is currently white but I want it completely transparent.
+
 # NEXT
 
-Tag row and button row same size
-
-Remove bg color in habit/reward list
 
 Update seed
 
 Tasks
+
+Add dates option to habit?
 
 # Todos?

@@ -83,13 +83,26 @@ struct EntityListScreen<RowContent: View>: View {
                             filteredEmptyStateRow
                         } else {
                             rowContent
+                                // Behaviour: habit/reward content should line up with the
+                                // control strip and navigation title. We set the insets
+                                // ourselves so the list stays sharp-edged without the
+                                // grouped container clipping the row content.
+                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                                .listRowSeparator(.hidden)
+                                // Behaviour: once the user has items, every habit/reward
+                                // row should sit directly on the parent surface instead of
+                                // getting the default opaque grouped-cell fill.
+                                .listRowBackground(Color.clear)
                         }
                     }
                 }
                 .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
-                .listStyle(.insetGrouped)
+                .listStyle(.plain)
                 .listSectionSpacing(0)
                 .contentMargins(.top, 0, for: .scrollContent)
+                // Behaviour: the scrolling surface itself also stays transparent,
+                // otherwise iOS paints a white grouped background behind clear rows.
+                .scrollContentBackground(.hidden)
             }
         }
         .onChange(of: visibleItemCount == 0) { _, isEmpty in
@@ -116,7 +129,7 @@ struct EntityListScreen<RowContent: View>: View {
             onToggleTag: onToggleTag,
             onClearFilters: onClearFilters
         )
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .padding(.top, -12)
@@ -134,6 +147,7 @@ struct EntityListScreen<RowContent: View>: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 260)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }
