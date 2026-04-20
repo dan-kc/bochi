@@ -7,14 +7,12 @@ Write tests when appropriate. When writing tests, ensure you comment what behavi
 Ensure the codebase is as DRY as **reasonably** possible.
 For features that cannot be simply explained with code, write appropriate documentation in ./docs. Observer the auth document too see the level of detail I need.
 
-Change the pricing calculation such that general difficulty has no effect on habit price. It should be only have an effect on reward price
-
+Increase the infuence "damage" and "difficulty" have on pricing, by roughly quadrouple. increase the infuence frequency has too, by 50%ish. Talk me through the changes. I am not referring to "general difficulty". I am referring to the damage field on rewards and the difficulty field on habits.
 
 # NEXT
 
 Tasks. Should they have a time limit. And an option to say "I did the time for this, but keep it because it's not done"
 
-Damage should do more.
 
 General difficulty
 

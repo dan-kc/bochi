@@ -67,6 +67,19 @@ protocol PricingTierOption: CaseIterable, Codable, Equatable, Sendable, Hashable
     var sortOrder: Int { get }
 }
 
+enum PricingTierScaling {
+    // React mental model: each tier starts with a neutral base multiplier, then
+    // pricing scales by how far that tier sits from `1.0`.
+    nonisolated private static let neutralMultiplier = 1.0
+
+    nonisolated static func scaledMultiplier(
+        from baseMultiplier: Double,
+        influenceMultiplier: Double
+    ) -> Double {
+        neutralMultiplier + ((baseMultiplier - neutralMultiplier) * influenceMultiplier)
+    }
+}
+
 enum HabitDifficultyTier: String, PricingTierOption {
     case trivial
     case light
@@ -106,11 +119,11 @@ enum HabitDifficultyTier: String, PricingTierOption {
 
     nonisolated var multiplier: Double {
         switch self {
-        case .trivial: 0.8
-        case .light: 0.9
-        case .medium: 1.0
-        case .hard: 1.1
-        case .extreme: 1.25
+        case .trivial: PricingTierScaling.scaledMultiplier(from: 0.8, influenceMultiplier: 4.0)
+        case .light: PricingTierScaling.scaledMultiplier(from: 0.9, influenceMultiplier: 4.0)
+        case .medium: PricingTierScaling.scaledMultiplier(from: 1.0, influenceMultiplier: 4.0)
+        case .hard: PricingTierScaling.scaledMultiplier(from: 1.1, influenceMultiplier: 4.0)
+        case .extreme: PricingTierScaling.scaledMultiplier(from: 1.25, influenceMultiplier: 4.0)
         }
     }
 
@@ -164,11 +177,11 @@ enum RewardDamageTier: String, PricingTierOption {
 
     nonisolated var multiplier: Double {
         switch self {
-        case .harmless: 0.8
-        case .light: 0.9
-        case .medium: 1.0
-        case .heavy: 1.1
-        case .extreme: 1.25
+        case .harmless: PricingTierScaling.scaledMultiplier(from: 0.8, influenceMultiplier: 4.0)
+        case .light: PricingTierScaling.scaledMultiplier(from: 0.9, influenceMultiplier: 4.0)
+        case .medium: PricingTierScaling.scaledMultiplier(from: 1.0, influenceMultiplier: 4.0)
+        case .heavy: PricingTierScaling.scaledMultiplier(from: 1.1, influenceMultiplier: 4.0)
+        case .extreme: PricingTierScaling.scaledMultiplier(from: 1.25, influenceMultiplier: 4.0)
         }
     }
 

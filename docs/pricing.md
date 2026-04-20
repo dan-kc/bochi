@@ -62,19 +62,26 @@ reward does not force the user to re-rank existing items.
 
 ### Habit Difficulty Multipliers
 
-- `trivial = 0.8`
-- `light = 0.9`
+- `trivial = 0.2`
+- `light = 0.6`
 - `medium = 1.0`
-- `hard = 1.1`
-- `extreme = 1.25`
+- `hard = 1.4`
+- `extreme = 2.0`
+
+These values come from taking the previous tier multipliers and scaling each
+tier's distance from the neutral `1.0` baseline by `4x`.
 
 ### Reward Damage Multipliers
 
-- `harmless = 0.8`
-- `light = 0.9`
+- `harmless = 0.2`
+- `light = 0.6`
 - `medium = 1.0`
-- `heavy = 1.1`
-- `extreme = 1.25`
+- `heavy = 1.4`
+- `extreme = 2.0`
+
+As with habits, reward damage uses the same `4x` scaling away from the neutral
+`1.0` baseline, so low-damage rewards get cheaper and high-damage rewards get
+more expensive much faster than before.
 
 ## Shared Cadence Model
 
@@ -190,7 +197,7 @@ Let:
 - `f_h` = target habit frequency in times/day
 - `tau_h = 1 / f_h`
 - `r_h_eff` = cadence-adjusted completion ratio from the shared model
-- `alpha = 2.5`
+- `alpha = 3.75`
 
 Then:
 
@@ -211,6 +218,8 @@ This means:
 - under-done habits pay more
 - on-target habits pay the base amount
 - over-done habits pay less
+- compared with the previous curve, pricing now reacts about `50%` more
+  aggressively to the same cadence drift
 
 ### Habit Setup Gating
 
@@ -243,7 +252,7 @@ Let:
 - `f_r` = max healthy purchase rate in times/day
 - `tau_r = 1 / f_r`
 - `r_r_eff` = cadence-adjusted purchase ratio from the shared model
-- `beta = 3`
+- `beta = 4.5`
 
 Then:
 
@@ -261,6 +270,9 @@ If no max frequency is set, the fallback is:
 
 Behaviourally:
 
+- buy prices ramp up sooner as the user approaches the configured cap
+- compared with the previous curve, frequency pressure is about `50%` stronger
+  for the same purchase history
 - `r_r_eff = 0  =>  F_r = 1`
 - `r_r_eff -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `50`
 - `r_r_eff >= 1  =>  F_r = 50`

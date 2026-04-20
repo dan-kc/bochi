@@ -28,8 +28,8 @@ struct DifficultyMultiplierTests {
         let trivial = makeHabit(difficultyTier: .trivial)
         let extreme = makeHabit(difficultyTier: .extreme)
 
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: trivial) == 0.8)
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: extreme) == 1.25)
+        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: trivial) == 0.2)
+        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: extreme) == 2.0)
     }
 
     // Behaviour: If the user has not picked a tier yet, pricing falls back to
@@ -105,7 +105,7 @@ struct CalculateRewardTests {
             completionDates: []
         )
 
-        #expect(reward == 220)
+        #expect(reward == 280)
     }
 
     // Behaviour: The app explains exactly which required habit inputs are still

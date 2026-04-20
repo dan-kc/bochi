@@ -8,9 +8,9 @@ import Foundation
 //   F = frequency multiplier based on completion rate, range (0, 2)
 enum RewardCalculation {
 
-    // Higher values make rewards fall off faster once the user exceeds the
-    // target completion rate for a habit.
-    nonisolated private static let alpha = 2.5
+    // Higher values make payouts react more strongly when the user drifts away
+    // from the target cadence for this habit.
+    nonisolated private static let alpha = 3.75
 
     // New habits warm up toward "on target" instead of immediately assuming
     // the user is under-performing a brand-new habit with no real history yet.

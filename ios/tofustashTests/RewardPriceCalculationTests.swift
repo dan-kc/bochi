@@ -28,8 +28,8 @@ struct RewardDamageMultiplierTests {
         let harmless = makeReward(damageTier: .harmless)
         let extreme = makeReward(damageTier: .extreme)
 
-        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: harmless, allRewards: [harmless]) == 0.8)
-        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: extreme, allRewards: [extreme]) == 1.25)
+        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: harmless, allRewards: [harmless]) == 0.2)
+        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: extreme, allRewards: [extreme]) == 2.0)
     }
 
     // Behaviour: If the user has not classified a reward yet, pricing falls
@@ -134,7 +134,7 @@ struct RewardPriceTests {
             generalDifficulty: 5
         )
 
-        #expect(price == 550)
+        #expect(price == 700)
     }
 
     // Behaviour: Changing general difficulty should make the same reward more

@@ -4,7 +4,9 @@ import Foundation
 // Habit reward calculation because the frequency curve is inverted: buying a
 // reward near or above its cap should get more expensive, not cheaper.
 enum RewardPriceCalculation {
-    nonisolated private static let beta = 3.0
+    // Raising beta steepens the buy-price curve so frequent purchases get
+    // expensive sooner, while still using the same cap and warm-up model.
+    nonisolated private static let beta = 4.5
     nonisolated private static let maxFrequencyMultiplier = 50.0
     nonisolated private static let rewardNeutralRatio = 0.0
 
