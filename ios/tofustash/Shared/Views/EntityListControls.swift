@@ -54,15 +54,15 @@ struct EntityListControls: View {
         } label: {
             HStack(spacing: 6) {
                 Text(preferences.sort.fieldLabel)
-                    .font(.subheadline.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(.primary)
 
                 Text(preferences.sort.directionArrow)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(Color(.secondarySystemBackground))
             .overlay {
                 Capsule()
@@ -83,15 +83,15 @@ struct EntityListControls: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(isHighlighted ? .orange : .secondary)
 
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(isHighlighted ? .orange : .primary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(Color(.secondarySystemBackground))
             .overlay {
                 Capsule()
