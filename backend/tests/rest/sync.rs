@@ -4,7 +4,7 @@ use crate::common::{
 };
 use crate::generate_email_from_fn;
 use axum::http::StatusCode;
-use serde_json::json;
+use serde_json::{json, Value};
 
 // ============================================================================
 // Sync Pull (GET /api/sync) Tests
@@ -1968,6 +1968,143 @@ async fn test_sync_push_general_difficulty_with_other_entities() {
     assert_eq!(
         pull_json.get("habits").unwrap().as_array().unwrap().len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence() {
+    let email = generate_email_from_fn!(test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Stretch",
+            "description": "Morning stretch",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "durationSeconds": 600,
+            "lockoutDurationSeconds": 3600,
+            "skipConsequence": 5
+        }]
+    });
+
+    let (status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let habit = push_json.get("habits").unwrap().as_array().unwrap().first().unwrap();
+    assert_eq!(habit.get("durationSeconds").unwrap(), 600);
+    assert_eq!(habit.get("lockoutDurationSeconds").unwrap(), 3600);
+    assert_eq!(habit.get("skipConsequence").unwrap(), 5);
+
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let pulled_habit = pull_json.get("habits").unwrap().as_array().unwrap().first().unwrap();
+    assert_eq!(pulled_habit.get("durationSeconds").unwrap(), 600);
+    assert_eq!(pulled_habit.get("lockoutDurationSeconds").unwrap(), 3600);
+    assert_eq!(pulled_habit.get("skipConsequence").unwrap(), 5);
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_validates_duration_range() {
+    let email = generate_email_from_fn!(test_sync_push_habit_validates_duration_range);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Stretch",
+            "description": "Morning stretch",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "durationSeconds": 43201
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'duration_seconds' must be between 1 and 43200. You sent 43201."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_validates_lockout_duration_range() {
+    let email = generate_email_from_fn!(test_sync_push_habit_validates_lockout_duration_range);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Stretch",
+            "description": "Morning stretch",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "lockoutDurationSeconds": 43201
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'lockout_duration_seconds' must be between 1 and 43200. You sent 43201."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_validates_skip_consequence_range() {
+    let email = generate_email_from_fn!(test_sync_push_habit_validates_skip_consequence_range);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Stretch",
+            "description": "Morning stretch",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "skipConsequence": 0
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'skip_consequence' must be between 1 and 5. You sent 0."
+                .to_string()
+        )
     );
 }
 

@@ -10,6 +10,9 @@ struct HabitFormFocusTests {
             description: "",
             frequency: nil,
             difficultyTier: nil,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil,
             tagCount: 0
         ) == false)
     }
@@ -22,6 +25,9 @@ struct HabitFormFocusTests {
             description: "",
             frequency: nil,
             difficultyTier: .medium,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil,
             tagCount: 0,
             isFirstHabit: true
         ) == false)
@@ -33,10 +39,13 @@ struct HabitFormFocusTests {
         let pills = HabitFormView.buildPillData(
             hasTagsApplied: false,
             difficultyTier: .hard,
-            frequency: 1.0
+            frequency: 1.0,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil
         )
 
-        #expect(pills.count == 3)
+        #expect(pills.count == 6)
         #expect(pills[1].id == "difficulty")
         #expect(pills[1].label == "Hard")
         #expect(pills[1].isSet == true)
@@ -48,12 +57,35 @@ struct HabitFormFocusTests {
         let pills = HabitFormView.buildPillData(
             hasTagsApplied: false,
             difficultyTier: nil,
-            frequency: 1.0
+            frequency: 1.0,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil
         )
 
         #expect(pills[2].id == "frequency")
         #expect(pills[2].isSet == true)
         #expect(pills[2].label != "Frequency")
+    }
+
+    // Behaviour: The form should summarize duration and lockout values so the
+    // user can review them without reopening either modal.
+    @Test func durationAndLockoutPillsShowTimeSummaries() {
+        let pills = HabitFormView.buildPillData(
+            hasTagsApplied: false,
+            difficultyTier: nil,
+            frequency: nil,
+            durationSeconds: 900,
+            lockoutDurationSeconds: 3_600,
+            skipConsequence: nil
+        )
+
+        #expect(pills[3].id == "duration")
+        #expect(pills[3].isSet == true)
+        #expect(pills[3].label != "Duration")
+        #expect(pills[4].id == "lockout")
+        #expect(pills[4].isSet == true)
+        #expect(pills[4].label != "Lockout")
     }
 
     // Behaviour: Auto-save trims accidental whitespace before the store sees

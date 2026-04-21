@@ -59,7 +59,7 @@ enum CadenceDecayPricing {
     }
 }
 
-protocol PricingTierOption: CaseIterable, Codable, Equatable, Sendable, Hashable, RawRepresentable<String> {
+protocol PricingTierOption: CaseIterable, Codable, Equatable, Sendable, Hashable, RawRepresentable {
     var displayName: String { get }
     var shortDescription: String { get }
     var example: String { get }
@@ -193,5 +193,52 @@ enum RewardDamageTier: String, PricingTierOption {
         case .heavy: 3
         case .extreme: 4
         }
+    }
+}
+
+enum SkipConsequenceTier: Int, PricingTierOption {
+    case one = 1
+    case two = 2
+    case three = 3
+    case four = 4
+    case five = 5
+
+    nonisolated var displayName: String { "\(rawValue)" }
+
+    nonisolated var shortDescription: String {
+        switch self {
+        case .one: "Missing this habit is barely noticeable."
+        case .two: "Skipping it starts to matter, but recovery is easy."
+        case .three: "Missing the target meaningfully hurts momentum."
+        case .four: "Letting this slip has clear short-term consequences."
+        case .five: "Missing the target quickly creates a serious problem."
+        }
+    }
+
+    nonisolated var example: String {
+        switch self {
+        case .one: "Nice to have, but low stakes if missed."
+        case .two: "Helpful for consistency, but easy to catch up."
+        case .three: "A few missed days noticeably weaken the habit."
+        case .four: "Skipping this tends to derail an important area."
+        case .five: "Missing this target has strong real-world consequences."
+        }
+    }
+
+    nonisolated var multiplier: Double {
+        switch self {
+        case .one: 1.0
+        case .two: 1.15
+        case .three: 1.3
+        case .four: 1.5
+        case .five: 1.75
+        }
+    }
+
+    nonisolated var sortOrder: Int { rawValue - 1 }
+
+    nonisolated static func from(_ rawValue: Int?) -> SkipConsequenceTier? {
+        guard let rawValue else { return nil }
+        return SkipConsequenceTier(rawValue: rawValue)
     }
 }

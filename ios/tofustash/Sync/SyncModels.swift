@@ -34,6 +34,35 @@ struct SyncHabitRecord: Codable {
     let deletedAt: String?
     let minDailyFrequency: Double?
     let difficultyTier: HabitDifficultyTier?
+    let durationSeconds: Int?
+    let lockoutDurationSeconds: Int?
+    let skipConsequence: Int?
+
+    init(
+        id: String,
+        name: String,
+        description: String,
+        createdAt: String,
+        updatedAt: String,
+        deletedAt: String?,
+        minDailyFrequency: Double?,
+        difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int? = nil,
+        lockoutDurationSeconds: Int? = nil,
+        skipConsequence: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.minDailyFrequency = minDailyFrequency
+        self.difficultyTier = difficultyTier
+        self.durationSeconds = durationSeconds
+        self.lockoutDurationSeconds = lockoutDurationSeconds
+        self.skipConsequence = skipConsequence
+    }
 
     func toModel() -> Habit? {
         guard
@@ -51,7 +80,10 @@ struct SyncHabitRecord: Codable {
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
             frequency: minDailyFrequency,
-            difficultyTier: difficultyTier
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            lockoutDurationSeconds: lockoutDurationSeconds,
+            skipConsequence: skipConsequence
         )
     }
 
@@ -64,7 +96,10 @@ struct SyncHabitRecord: Codable {
             updatedAt: AppDateCoding.backendTimestamp(from: habit.updatedAt),
             deletedAt: habit.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
             minDailyFrequency: habit.frequency,
-            difficultyTier: habit.difficultyTier
+            difficultyTier: habit.difficultyTier,
+            durationSeconds: habit.durationSeconds,
+            lockoutDurationSeconds: habit.lockoutDurationSeconds,
+            skipConsequence: habit.skipConsequence
         )
     }
 }

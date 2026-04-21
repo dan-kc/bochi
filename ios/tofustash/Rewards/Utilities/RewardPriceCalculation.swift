@@ -7,11 +7,13 @@ enum RewardPriceCalculation {
     // Raising beta steepens the buy-price curve so frequent purchases get
     // expensive sooner, while still using the same cap and warm-up model.
     nonisolated private static let beta = 4.5
-    nonisolated private static let maxFrequencyMultiplier = 50.0
+    // Hard-cap the top-end so extreme or blank rewards stay expensive without
+    // blowing out into prices that are unrealistic for the in-app economy.
+    nonisolated private static let maxFrequencyMultiplier = 20.0
     nonisolated private static let rewardNeutralRatio = 0.0
 
     nonisolated static func calculateDamageMultiplier(reward: Reward, allRewards: [Reward]) -> Double {
-        reward.damageTier?.multiplier ?? RewardDamageTier.medium.multiplier
+        reward.damageTier?.multiplier ?? RewardDamageTier.extreme.multiplier
     }
 
     nonisolated static func calculateFrequencyMultiplier(
@@ -19,8 +21,9 @@ enum RewardPriceCalculation {
         purchaseDates: [Date],
         now: Date = Date()
     ) -> Double {
-        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: reward.maxFrequency) else {
-            return 1
+        let configuredRate = reward.maxFrequency ?? FrequencyBounds.minimumDailyRate
+        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: configuredRate) else {
+            return maxFrequencyMultiplier
         }
 
         let rawRatio = CadenceDecayPricing.normalizedUsageRatio(

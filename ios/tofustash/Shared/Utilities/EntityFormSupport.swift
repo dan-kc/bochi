@@ -27,7 +27,6 @@ enum EntityFormSupport {
 
     static func buildPills(
         configs: [EntityFormPillConfig],
-        animatedIDs: Set<String>,
         actions: [String: () -> Void]
     ) -> [PillItem] {
         configs.map { config in
@@ -36,8 +35,7 @@ enum EntityFormSupport {
                 label: config.label,
                 icon: config.icon,
                 isSet: config.isSet,
-                action: actions[config.id],
-                animating: animatedIDs.contains(config.id) && !config.isSet
+                action: actions[config.id]
             )
         }
     }

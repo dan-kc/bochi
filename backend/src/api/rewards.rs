@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::ApiError;
+use super::habits::{MAX_DAILY_FREQUENCY, MIN_DAILY_FREQUENCY};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,23 +33,21 @@ pub struct RewardResponse {
     pub damage_tier: Option<RewardDamageTier>,
 }
 
-pub async fn create_reward(
-    State(app): State<App>,
-    Extension(user): Extension<AuthenticatedUser>,
-    Json(input): Json<CreateRewardRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    // Validate name length
-    let name_len = input.name.chars().count();
+pub(crate) fn validate_reward_fields(
+    name: &str,
+    description: &str,
+    max_daily_frequency: Option<f32>,
+) -> Result<(), ApiError> {
+    let name_len = name.chars().count();
     if name_len > 100 || name_len < 1 {
         let msg = format!(
             "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
-            input.name.len()
+            name.len()
         );
         return Err(ApiError::Validation(msg));
     }
 
-    // Validate description length
-    let desc_len = input.description.chars().count();
+    let desc_len = description.chars().count();
     if desc_len > 10000 {
         let msg = format!(
             "Description is too long ({} characters), max 10,000.",
@@ -57,16 +56,26 @@ pub async fn create_reward(
         return Err(ApiError::Validation(msg));
     }
 
-    // Validate max_daily_frequency range
-    if let Some(freq) = input.max_daily_frequency {
-        if freq < 0.0 || freq > 100.0 {
+    if let Some(freq) = max_daily_frequency {
+        let freq = freq as f64;
+        if !(MIN_DAILY_FREQUENCY..=MAX_DAILY_FREQUENCY).contains(&freq) {
             let msg = format!(
-                "The 'max_daily_frequency must be between 0 and 100. You sent {}.",
-                freq as i32
+                "The 'max_daily_frequency' must be between {} and {}. You sent {}.",
+                MIN_DAILY_FREQUENCY, MAX_DAILY_FREQUENCY, freq
             );
             return Err(ApiError::Validation(msg));
         }
     }
+
+    Ok(())
+}
+
+pub async fn create_reward(
+    State(app): State<App>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(input): Json<CreateRewardRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    validate_reward_fields(&input.name, &input.description, input.max_daily_frequency)?;
 
     let opts = CreateRewardOptions {
         user_id: user.user_id,

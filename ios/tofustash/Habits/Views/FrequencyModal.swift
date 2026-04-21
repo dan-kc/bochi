@@ -31,7 +31,7 @@ struct FrequencyModal: View {
 
                 Section {
                     TextField("Times per period", text: $valueText)
-                        .keyboardType(.decimalPad)
+                        .keyboardType(.numberPad)
 
                     // Picker with .segmented style renders as a segmented control —
                     // like a SegmentedControl in React Native or radio buttons in a row.
@@ -45,6 +45,12 @@ struct FrequencyModal: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Text("Enter a whole number. Allowed range: 1 per month up to 100 per day.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 // Show current frequency summary if set
@@ -82,11 +88,17 @@ struct FrequencyModal: View {
                     Button("Done") {
                         saveAndDismiss()
                     }
-                    .disabled(valueText.isEmpty || Double(valueText) == nil)
+                    .disabled(!hasValidFrequencyInput)
                 }
             }
             .onAppear {
                 initializeFromBinding()
+            }
+            .onChange(of: valueText) { _, newValue in
+                let digitsOnly = newValue.filter(\.isNumber)
+                if digitsOnly != newValue {
+                    valueText = digitsOnly
+                }
             }
         }
     }
@@ -102,9 +114,15 @@ struct FrequencyModal: View {
     }
 
     private func saveAndDismiss() {
-        guard let value = Double(valueText), value > 0 else { return }
+        guard hasValidFrequencyInput else { return }
 
-        frequency = FrequencyConversion.toDailyRate(value: value, period: period)
+        frequency = FrequencyConversion.toDailyRate(value: Double(Int(valueText) ?? 0), period: period)
         dismiss()
+    }
+
+    private var hasValidFrequencyInput: Bool {
+        guard let value = Int(valueText), value > 0 else { return false }
+        let rate = FrequencyConversion.toDailyRate(value: Double(value), period: period)
+        return FrequencyBounds.contains(rate)
     }
 }

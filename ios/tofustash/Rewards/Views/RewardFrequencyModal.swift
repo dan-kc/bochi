@@ -21,7 +21,7 @@ struct RewardFrequencyModal: View {
 
                 Section {
                     TextField("Times per period", text: $valueText)
-                        .keyboardType(.decimalPad)
+                        .keyboardType(.numberPad)
 
                     Picker("Period", selection: $period) {
                         ForEach(FrequencyPeriod.allCases, id: \.self) { option in
@@ -29,6 +29,12 @@ struct RewardFrequencyModal: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Text("Enter a whole number. Allowed range: 1 per month up to 100 per day.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 if let maxFrequency {
@@ -64,11 +70,17 @@ struct RewardFrequencyModal: View {
                     Button("Done") {
                         saveAndDismiss()
                     }
-                    .disabled(valueText.isEmpty || Double(valueText) == nil)
+                    .disabled(!hasValidFrequencyInput)
                 }
             }
             .onAppear {
                 initializeFromBinding()
+            }
+            .onChange(of: valueText) { _, newValue in
+                let digitsOnly = newValue.filter(\.isNumber)
+                if digitsOnly != newValue {
+                    valueText = digitsOnly
+                }
             }
         }
     }
@@ -82,8 +94,14 @@ struct RewardFrequencyModal: View {
     }
 
     private func saveAndDismiss() {
-        guard let value = Double(valueText), value > 0 else { return }
-        maxFrequency = FrequencyConversion.toDailyRate(value: value, period: period)
+        guard hasValidFrequencyInput else { return }
+        maxFrequency = FrequencyConversion.toDailyRate(value: Double(Int(valueText) ?? 0), period: period)
         dismiss()
+    }
+
+    private var hasValidFrequencyInput: Bool {
+        guard let value = Int(valueText), value > 0 else { return false }
+        let rate = FrequencyConversion.toDailyRate(value: Double(value), period: period)
+        return FrequencyBounds.contains(rate)
     }
 }

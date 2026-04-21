@@ -51,6 +51,17 @@ struct TradeModalView: View {
         )
     }
 
+    private var isLocked: Bool {
+        HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
+    }
+
+    private var lockoutSummary: String? {
+        guard let remainingSeconds = HabitLockout.remainingSeconds(habit: habit, tradeStore: tradeStore) else {
+            return nil
+        }
+        return DurationFormatting.countdown(secondsRemaining: remainingSeconds)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -140,10 +151,26 @@ struct TradeModalView: View {
 
             Spacer()
 
-            // Behaviour: the user confirms the exact quantity and payout in the
-            // same visual block instead of needing to move to the top bar.
-            ClaimRewardButton(price: totalPrice, layout: .expanded(title: "Claim")) {
-                claimReward()
+            if isLocked {
+                HStack {
+                    Label("Locked", systemImage: "lock.fill")
+                    Spacer()
+                    if let lockoutSummary {
+                        Text(lockoutSummary)
+                            .fontWeight(.semibold)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(.thinMaterial, in: Capsule())
+            } else {
+                // Behaviour: the user confirms the exact quantity and payout in the
+                // same visual block instead of needing to move to the top bar.
+                ClaimRewardButton(price: totalPrice, layout: .expanded(title: "Claim")) {
+                    claimReward()
+                }
             }
 
             Spacer()
@@ -154,6 +181,7 @@ struct TradeModalView: View {
 
     // Execute the trade: create trade records, update balance, show celebration.
     private func claimReward() {
+        guard !HabitLockout.isLocked(habit: habit, tradeStore: tradeStore) else { return }
         let claimDate = Date()
         let total = totalPrice
         var projectedCompletionDates = completionDates

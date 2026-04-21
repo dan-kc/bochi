@@ -14,6 +14,8 @@ use crate::{
 };
 
 use super::ApiError;
+use super::habits::validate_habit_fields;
+use super::rewards::validate_reward_fields;
 
 // ============================================================================
 // Request/Response Types
@@ -48,6 +50,9 @@ pub struct SyncHabitInput {
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub lockout_duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
 }
 
 #[derive(Deserialize)]
@@ -136,6 +141,9 @@ pub struct HabitOutput {
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub lockout_duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
 }
 
 #[derive(Serialize)]
@@ -301,6 +309,9 @@ pub async fn get_sync(
             deleted_at: row.deleted_at,
             min_daily_frequency: row.min_daily_frequency,
             difficulty_tier: row.difficulty_tier,
+            duration_seconds: row.duration_seconds,
+            lockout_duration_seconds: row.lockout_duration_seconds,
+            skip_consequence: row.skip_consequence,
         })
         .collect();
 
@@ -412,36 +423,14 @@ pub async fn post_sync(
                 ApiError::Validation(format!("Invalid habit id format: {}", habit_input.id))
             })?;
 
-            // Validate name length
-            let name_len = habit_input.name.chars().count();
-            if name_len > 100 || name_len < 1 {
-                let msg = format!(
-                    "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
-                    name_len
-                );
-                return Err(ApiError::Validation(msg));
-            }
-
-            // Validate description length
-            let desc_len = habit_input.description.chars().count();
-            if desc_len > 10000 {
-                let msg = format!(
-                    "Description is too long ({} characters), max 10,000.",
-                    desc_len
-                );
-                return Err(ApiError::Validation(msg));
-            }
-
-            // Validate min_daily_frequency
-            if let Some(freq) = habit_input.min_daily_frequency {
-                if freq < 0.0 || freq > 100.0 {
-                    let msg = format!(
-                        "The 'min_daily_frequency must be between 0 and 100. You sent {}.",
-                        freq as i32
-                    );
-                    return Err(ApiError::Validation(msg));
-                }
-            }
+            validate_habit_fields(
+                &habit_input.name,
+                &habit_input.description,
+                habit_input.min_daily_frequency,
+                habit_input.duration_seconds,
+                habit_input.lockout_duration_seconds,
+                habit_input.skip_consequence,
+            )?;
 
             let upsert_opts = database::UpsertHabitOptions {
                 id: habit_id,
@@ -451,6 +440,9 @@ pub async fn post_sync(
                 deleted_at: habit_input.deleted_at,
                 min_daily_frequency: habit_input.min_daily_frequency,
                 difficulty_tier: habit_input.difficulty_tier,
+                duration_seconds: habit_input.duration_seconds,
+                lockout_duration_seconds: habit_input.lockout_duration_seconds,
+                skip_consequence: habit_input.skip_consequence,
             };
 
             let habit_row = Database::upsert_habit_tx(&mut tx, user.user_id, &upsert_opts)
@@ -469,6 +461,9 @@ pub async fn post_sync(
                 deleted_at: habit_row.deleted_at,
                 min_daily_frequency: habit_row.min_daily_frequency,
                 difficulty_tier: habit_row.difficulty_tier,
+                duration_seconds: habit_row.duration_seconds,
+                lockout_duration_seconds: habit_row.lockout_duration_seconds,
+                skip_consequence: habit_row.skip_consequence,
             });
         }
     }
@@ -481,36 +476,11 @@ pub async fn post_sync(
                 ApiError::Validation(format!("Invalid reward id format: {}", reward_input.id))
             })?;
 
-            // Validate name length
-            let name_len = reward_input.name.chars().count();
-            if name_len > 100 || name_len < 1 {
-                let msg = format!(
-                    "Please provide a name between 1 and 100 characters long. Your current name is {} characters.",
-                    name_len
-                );
-                return Err(ApiError::Validation(msg));
-            }
-
-            // Validate description length
-            let desc_len = reward_input.description.chars().count();
-            if desc_len > 10000 {
-                let msg = format!(
-                    "Description is too long ({} characters), max 10,000.",
-                    desc_len
-                );
-                return Err(ApiError::Validation(msg));
-            }
-
-            // Validate max_daily_frequency
-            if let Some(freq) = reward_input.max_daily_frequency {
-                if freq < 0.0 || freq > 100.0 {
-                    let msg = format!(
-                        "The 'max_daily_frequency' must be between 0 and 100. You sent {}.",
-                        freq as i32
-                    );
-                    return Err(ApiError::Validation(msg));
-                }
-            }
+            validate_reward_fields(
+                &reward_input.name,
+                &reward_input.description,
+                reward_input.max_daily_frequency.map(|freq| freq as f32),
+            )?;
 
             let upsert_opts = database::UpsertRewardOptions {
                 id: reward_id,

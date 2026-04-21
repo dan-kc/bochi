@@ -43,6 +43,12 @@ pub struct TradableItem {
     pub min_daily_frequency: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lockout_duration_seconds: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip_consequence: Option<i16>,
     // Reward fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_daily_frequency: Option<f32>,
@@ -94,6 +100,9 @@ pub async fn create_trade(
                     deleted_at: trade_row.habit_deleted_at,
                     min_daily_frequency: trade_row.habit_min_daily_frequency,
                     difficulty_tier: trade_row.habit_difficulty_tier,
+                    duration_seconds: trade_row.habit_duration_seconds,
+                    lockout_duration_seconds: trade_row.habit_lockout_duration_seconds,
+                    skip_consequence: trade_row.habit_skip_consequence,
                     max_daily_frequency: None,
                     damage_tier: None,
                 },
@@ -131,6 +140,9 @@ pub async fn create_trade(
                     deleted_at: trade_row.reward_deleted_at,
                     min_daily_frequency: None,
                     difficulty_tier: None,
+                    duration_seconds: None,
+                    lockout_duration_seconds: None,
+                    skip_consequence: None,
                     max_daily_frequency: trade_row.reward_max_daily_frequency,
                     damage_tier: trade_row.reward_damage_tier,
                 },

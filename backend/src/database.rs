@@ -85,13 +85,18 @@ impl Database {
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO habits
-            (user_id, name, description, min_daily_frequency, difficulty_tier) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier",
+            (user_id, name, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence",
         )
         .bind(create_habit_options.user_id)
         .bind(create_habit_options.name)
         .bind(create_habit_options.description)
         .bind(create_habit_options.min_daily_frequency)
         .bind(create_habit_options.difficulty_tier)
+        .bind(create_habit_options.duration_seconds)
+        .bind(create_habit_options.lockout_duration_seconds)
+        .bind(create_habit_options.skip_consequence)
         .fetch_one(&self.pool)
         .await
     }
@@ -132,7 +137,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_tier AS habit_difficulty_tier
+                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_tier AS habit_difficulty_tier, h.duration_seconds AS habit_duration_seconds, h.lockout_duration_seconds AS habit_lockout_duration_seconds, h.skip_consequence AS habit_skip_consequence
             FROM new_trade nt
             JOIN habits h ON nt.habit_id = h.id",
         )
@@ -315,7 +320,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
                      FROM habits
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -327,7 +332,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
                      FROM habits
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -563,8 +568,8 @@ impl Database {
         habit: &UpsertHabitOptions,
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_tier)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (id) DO UPDATE SET
                 user_id = CASE
                     WHEN habits.user_id = $2 THEN habits.user_id
@@ -590,7 +595,20 @@ impl Database {
                     WHEN habits.user_id = $2 THEN EXCLUDED.difficulty_tier
                     ELSE habits.difficulty_tier
                 END
-             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier",
+                ,
+                duration_seconds = CASE
+                    WHEN habits.user_id = $2 THEN EXCLUDED.duration_seconds
+                    ELSE habits.duration_seconds
+                END,
+                lockout_duration_seconds = CASE
+                    WHEN habits.user_id = $2 THEN EXCLUDED.lockout_duration_seconds
+                    ELSE habits.lockout_duration_seconds
+                END,
+                skip_consequence = CASE
+                    WHEN habits.user_id = $2 THEN EXCLUDED.skip_consequence
+                    ELSE habits.skip_consequence
+                END
+             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence",
         )
         .bind(habit.id)
         .bind(user_id)
@@ -600,6 +618,9 @@ impl Database {
         .bind(habit.deleted_at)
         .bind(habit.min_daily_frequency)
         .bind(habit.difficulty_tier)
+        .bind(habit.duration_seconds)
+        .bind(habit.lockout_duration_seconds)
+        .bind(habit.skip_consequence)
         .fetch_one(&mut **tx)
         .await
     }
@@ -911,6 +932,9 @@ pub struct CreateHabitOptions {
     pub description: String,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub lockout_duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
 }
 
 pub struct CreateTradeWithHabitOptions {
@@ -959,6 +983,9 @@ pub struct UpsertHabitOptions {
     pub deleted_at: Option<NaiveDateTime>,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub lockout_duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
 }
 
 pub struct UpsertTradeOptions {
@@ -1058,6 +1085,9 @@ pub struct HabitRow {
     pub description: String,
     pub min_daily_frequency: Option<f64>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub lockout_duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1096,6 +1126,9 @@ pub struct TradeWithHabitRow {
     pub habit_description: String,
     pub habit_min_daily_frequency: Option<f64>,
     pub habit_difficulty_tier: Option<HabitDifficultyTier>,
+    pub habit_duration_seconds: Option<i32>,
+    pub habit_lockout_duration_seconds: Option<i32>,
+    pub habit_skip_consequence: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]

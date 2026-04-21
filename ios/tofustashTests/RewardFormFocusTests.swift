@@ -59,4 +59,17 @@ struct RewardFormFocusTests {
     @Test func autoSaveNameIsTrimmed() {
         #expect(RewardFormView.nameForAutoSave("  Chips  ") == "Chips")
     }
+
+    // Behaviour: Reward forms should still show pricing placeholders even when
+    // buying is no longer blocked by missing pricing fields.
+    @Test func blankRewardPillsStillShowPlaceholders() {
+        let pills = RewardFormView.buildPillData(
+            hasTagsApplied: false,
+            damageTier: nil,
+            maxFrequency: nil
+        )
+
+        #expect(pills[1].label == "Damage")
+        #expect(pills[2].label == "Max Frequency")
+    }
 }

@@ -140,14 +140,15 @@ struct HabitsView: View {
     }
 
     private func priceSortValue(for habit: Habit) -> Int? {
-        EntityActionSupport.sortableAmount(isActionable: habit.canTrade) {
+        let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
+        return EntityActionSupport.sortableAmount(isActionable: habit.canTrade && !isLocked) {
             priceForHabit(habit)
         }
     }
 
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
-        let canTrade = habit.canTrade
+        let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -166,14 +167,12 @@ struct HabitsView: View {
                 HStack(spacing: 8) {
                     habitMetaPill(
                         text: FrequencyConversion.formatSummary(habit.frequency) ?? "Frequency",
-                        isSet: habit.frequency != nil,
-                        animating: habit.frequency == nil
+                        isSet: habit.frequency != nil
                     )
 
                     habitMetaPill(
                         text: habit.difficultyTier?.displayName ?? "Difficulty",
-                        isSet: habit.difficultyTier != nil,
-                        animating: habit.difficultyTier == nil
+                        isSet: habit.difficultyTier != nil
                     )
                 }
 
@@ -188,18 +187,25 @@ struct HabitsView: View {
                 openChangeForm(habit, focus: nil)
             }
 
-            if canTrade {
-                let price = priceForHabit(habit)
-                ClaimRewardButton(price: price, layout: .compact) {
-                    tradingHabit = habit
+            if habit.canTrade {
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44, alignment: .center)
+                } else {
+                    let price = priceForHabit(habit)
+                    ClaimRewardButton(price: price, layout: .compact) {
+                        tradingHabit = habit
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func habitMetaPill(text: String, isSet: Bool, animating: Bool) -> some View {
-        EntityListMetaPill(text: text, isSet: isSet, animating: animating)
+    private func habitMetaPill(text: String, isSet: Bool) -> some View {
+        EntityListMetaPill(text: text, isSet: isSet)
     }
 
     private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {

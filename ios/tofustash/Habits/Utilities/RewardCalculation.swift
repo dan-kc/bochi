@@ -3,14 +3,18 @@ import Foundation
 // Pure functions for calculating the tofu reward a user sees when completing a
 // habit.
 //
-// Formula: Reward = round(100 * T * F)
+// Formula: Reward = round(100 * T * F * D * S)
 //   T = fixed difficulty-tier multiplier
 //   F = frequency multiplier based on completion rate, range (0, 2)
+//   D = expected-effort duration multiplier
+//   S = skip-consequence multiplier
 enum RewardCalculation {
 
     // Higher values make payouts react more strongly when the user drifts away
     // from the target cadence for this habit.
     nonisolated private static let alpha = 3.75
+    nonisolated private static let maxDurationSeconds = 43_200.0
+    nonisolated private static let durationInfluence = 0.35
 
     // New habits warm up toward "on target" instead of immediately assuming
     // the user is under-performing a brand-new habit with no real history yet.
@@ -18,7 +22,7 @@ enum RewardCalculation {
 
     // Difficulty is now a fixed user-chosen tier instead of a relative ranking.
     nonisolated static func calculateDifficultyMultiplier(habit: Habit) -> Double {
-        habit.difficultyTier?.multiplier ?? HabitDifficultyTier.medium.multiplier
+        habit.difficultyTier?.multiplier ?? HabitDifficultyTier.trivial.multiplier
     }
 
     nonisolated static func calculateFrequencyMultiplier(
@@ -26,8 +30,9 @@ enum RewardCalculation {
         completionDates: [Date],
         now: Date = Date()
     ) -> Double {
-        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: habit.frequency) else {
-            return 1
+        let configuredRate = habit.frequency ?? FrequencyBounds.maximumDailyRate
+        guard let targetSpacingDays = CadenceDecayPricing.targetSpacingDays(ratePerDay: configuredRate) else {
+            return 1.0
         }
 
         let rawRatio = CadenceDecayPricing.normalizedUsageRatio(
@@ -46,6 +51,19 @@ enum RewardCalculation {
         return 2.0 / (1.0 + pow(effectiveRatio, alpha))
     }
 
+    nonisolated static func calculateDurationMultiplier(habit: Habit) -> Double {
+        guard let durationSeconds = habit.durationSeconds, durationSeconds > 0 else {
+            return 1.0
+        }
+
+        let normalized = log1p(Double(durationSeconds)) / log1p(maxDurationSeconds)
+        return 1.0 + (normalized * durationInfluence)
+    }
+
+    nonisolated static func calculateSkipConsequenceMultiplier(habit: Habit) -> Double {
+        SkipConsequenceTier.from(habit.skipConsequence)?.multiplier ?? 1.0
+    }
+
     nonisolated static func calculateReward(
         habit: Habit,
         allHabits: [Habit],
@@ -58,22 +76,15 @@ enum RewardCalculation {
             completionDates: completionDates,
             now: now
         )
+        let durationMultiplier = calculateDurationMultiplier(habit: habit)
+        let skipConsequenceMultiplier = calculateSkipConsequenceMultiplier(habit: habit)
 
-        let reward = 100.0 * difficultyMultiplier * frequencyMultiplier
+        let reward = 100.0
+            * difficultyMultiplier
+            * frequencyMultiplier
+            * durationMultiplier
+            * skipConsequenceMultiplier
         return Int(reward.rounded())
-    }
-
-    // Human-readable reason the trade action is blocked.
-    nonisolated static func missingTradeProperties(
-        frequency: Double?,
-        difficultyTier: HabitDifficultyTier?
-    ) -> String? {
-        switch (frequency == nil, difficultyTier == nil) {
-        case (true, true): return "frequency and difficulty"
-        case (true, false): return "frequency"
-        case (false, true): return "difficulty"
-        case (false, false): return nil
-        }
     }
 
     nonisolated static func calculateMultiPurchaseTotal(

@@ -19,6 +19,9 @@ enum HabitFormMode: Equatable {
 enum HabitFormFocus: Equatable {
     case frequency
     case difficulty
+    case duration
+    case lockout
+    case skipConsequence
     case tags
 }
 
@@ -29,6 +32,9 @@ struct HabitFormSnapshot {
     let description: String
     let frequency: Double?
     let difficultyTier: HabitDifficultyTier?
+    let durationSeconds: Int?
+    let lockoutDurationSeconds: Int?
+    let skipConsequence: Int?
     let habitId: RecordID
 }
 
@@ -47,10 +53,16 @@ struct HabitFormView: View {
     @State private var description = ""
     @State private var frequency: Double? = nil
     @State private var difficultyTier: HabitDifficultyTier? = nil
+    @State private var durationSeconds: Int? = nil
+    @State private var lockoutDurationSeconds: Int? = nil
+    @State private var skipConsequence: Int? = nil
     @State private var habitId = RecordID()
 
     @State private var showingFrequency = false
     @State private var showingDifficulty = false
+    @State private var showingDuration = false
+    @State private var showingLockout = false
+    @State private var showingSkipConsequence = false
     @State private var showingTags = false
     @State private var tradingHabit: Habit? = nil
     @State private var showingDeleteConfirmation = false
@@ -81,12 +93,52 @@ struct HabitFormView: View {
         mode.isNew
     }
 
-    private var canTrade: Bool {
-        frequency != nil && difficultyTier != nil
+    private var showsTradeButton: Bool {
+        !isNewMode
     }
 
-    private var showsTradeButton: Bool {
-        !isNewMode && canTrade
+    private var draftHabit: Habit {
+        switch mode {
+        case .new:
+            return Habit(
+                id: habitId,
+                name: Self.nameForAutoSave(name),
+                description: description,
+                createdAt: Date(),
+                updatedAt: Date(),
+                deletedAt: nil,
+                frequency: frequency,
+                difficultyTier: difficultyTier,
+                durationSeconds: durationSeconds,
+                lockoutDurationSeconds: lockoutDurationSeconds,
+                skipConsequence: skipConsequence
+            )
+        case .change(let existingHabit):
+            return Habit(
+                id: existingHabit.id,
+                name: Self.nameForAutoSave(name).isEmpty ? existingHabit.name : Self.nameForAutoSave(name),
+                description: description,
+                createdAt: existingHabit.createdAt,
+                updatedAt: existingHabit.updatedAt,
+                deletedAt: existingHabit.deletedAt,
+                frequency: frequency,
+                difficultyTier: difficultyTier,
+                durationSeconds: durationSeconds,
+                lockoutDurationSeconds: lockoutDurationSeconds,
+                skipConsequence: skipConsequence
+            )
+        }
+    }
+
+    private var isLocked: Bool {
+        HabitLockout.isLocked(habit: draftHabit, tradeStore: tradeStore)
+    }
+
+    private var lockoutSummary: String? {
+        guard let remainingSeconds = HabitLockout.remainingSeconds(habit: draftHabit, tradeStore: tradeStore) else {
+            return nil
+        }
+        return DurationFormatting.countdown(secondsRemaining: remainingSeconds)
     }
 
     private var hasContent: Bool {
@@ -95,34 +147,18 @@ struct HabitFormView: View {
             description: description,
             frequency: frequency,
             difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            lockoutDurationSeconds: lockoutDurationSeconds,
+            skipConsequence: skipConsequence,
             tagCount: habitTags.count,
             isFirstHabit: false
         )
     }
 
-    // The trade preview is based on the draft currently visible in the sheet.
-    // If the user changes frequency or difficulty, the price preview follows the
-    // draft immediately instead of waiting for them to close and reopen.
-    private var draftHabitForTrade: Habit? {
-        guard case .change(let existingHabit) = mode else { return nil }
-
-        return Habit(
-            id: existingHabit.id,
-            name: Self.nameForAutoSave(name).isEmpty ? existingHabit.name : Self.nameForAutoSave(name),
-            description: description,
-            createdAt: existingHabit.createdAt,
-            updatedAt: existingHabit.updatedAt,
-            deletedAt: existingHabit.deletedAt,
-            frequency: frequency,
-            difficultyTier: difficultyTier
-        )
-    }
-
     private var currentPrice: Int {
-        guard let habit = draftHabitForTrade else { return 0 }
-        let completionDates = tradeStore.habitTradeDates(habitId: habit.id)
+        let completionDates = tradeStore.habitTradeDates(habitId: draftHabit.id)
         return RewardCalculation.calculateReward(
-            habit: habit,
+            habit: draftHabit,
             allHabits: habitStore.activeHabits,
             completionDates: completionDates
         )
@@ -236,6 +272,20 @@ struct HabitFormView: View {
                 onUnset: difficultyTier != nil ? { difficultyTier = nil } : nil
             )
         }
+        .sheet(isPresented: $showingDuration) {
+            HabitDurationModal(durationSeconds: $durationSeconds)
+        }
+        .sheet(isPresented: $showingLockout) {
+            HabitLockoutDurationModal(durationSeconds: $lockoutDurationSeconds)
+        }
+        .sheet(isPresented: $showingSkipConsequence) {
+            TierSelectionSheet(
+                title: "Set Skip Consequence",
+                currentSelection: SkipConsequenceTier.from(skipConsequence),
+                onSave: { skipConsequence = $0?.rawValue },
+                onUnset: skipConsequence != nil ? { skipConsequence = nil } : nil
+            )
+        }
         .sheet(isPresented: $showingTags) {
             TagsView(selectionMode: .assignment(.habit(habitId)))
         }
@@ -272,6 +322,15 @@ struct HabitFormView: View {
         .onChange(of: difficultyTier) { _, _ in
             autoSaveIfNeeded()
         }
+        .onChange(of: durationSeconds) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: lockoutDurationSeconds) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: skipConsequence) { _, _ in
+            autoSaveIfNeeded()
+        }
         .onDisappear {
             // New-habit dismissal is treated as a recoverable discard only when
             // the user actually entered meaningful content.
@@ -281,6 +340,9 @@ struct HabitFormView: View {
                     description: description,
                     frequency: frequency,
                     difficultyTier: difficultyTier,
+                    durationSeconds: durationSeconds,
+                    lockoutDurationSeconds: lockoutDurationSeconds,
+                    skipConsequence: skipConsequence,
                     habitId: habitId
                 ))
             }
@@ -300,14 +362,35 @@ struct HabitFormView: View {
     private var floatingControls: some View {
         VStack(spacing: 10) {
             if showsTradeButton {
-                tradeButton
+                if isLocked {
+                    lockedTradeSummary
+                } else {
+                    tradeButton
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var lockedTradeSummary: some View {
+        HStack {
+            Label("Locked", systemImage: "lock.fill")
+            Spacer()
+            if let lockoutSummary {
+                Text(lockoutSummary)
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.thinMaterial, in: Capsule())
+    }
+
     private var tradeButton: some View {
         ClaimRewardButton(price: currentPrice, layout: .expanded(title: "Claim Reward")) {
+            guard !HabitLockout.isLocked(habit: draftHabit, tradeStore: tradeStore) else { return }
             guard let persistedHabit = persistHabit() else { return }
             didPersist = true
             tradingHabit = persistedHabit
@@ -319,6 +402,9 @@ struct HabitFormView: View {
         description: String,
         frequency: Double?,
         difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int?,
+        lockoutDurationSeconds: Int?,
+        skipConsequence: Int?,
         tagCount: Int,
         isFirstHabit: Bool = false
     ) -> Bool {
@@ -329,7 +415,7 @@ struct HabitFormView: View {
             secondaryValueIsSet: difficultyTier != nil,
             tagCount: tagCount,
             ignoreSecondaryValue: isFirstHabit
-        )
+        ) || durationSeconds != nil || lockoutDurationSeconds != nil || skipConsequence != nil
     }
 
     static func nameForAutoSave(_ name: String) -> String {
@@ -339,13 +425,22 @@ struct HabitFormView: View {
     static func buildPillData(
         hasTagsApplied: Bool,
         difficultyTier: HabitDifficultyTier?,
-        frequency: Double?
+        frequency: Double?,
+        durationSeconds: Int?,
+        lockoutDurationSeconds: Int?,
+        skipConsequence: Int?
     ) -> [EntityFormPillConfig] {
         let frequencyLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
+        let durationLabel = DurationFormatting.summary(seconds: durationSeconds) ?? "Duration"
+        let lockoutLabel = DurationFormatting.summary(seconds: lockoutDurationSeconds) ?? "Lockout"
+        let skipLabel = SkipConsequenceTier.from(skipConsequence)?.displayName ?? "Skip"
         return [
             EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
             EntityFormPillConfig(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
             EntityFormPillConfig(id: "frequency", label: frequencyLabel, icon: "clock", isSet: frequency != nil),
+            EntityFormPillConfig(id: "duration", label: durationLabel, icon: "timer", isSet: durationSeconds != nil),
+            EntityFormPillConfig(id: "lockout", label: lockoutLabel, icon: "lock", isSet: lockoutDurationSeconds != nil),
+            EntityFormPillConfig(id: "skip", label: skipLabel, icon: "exclamationmark.triangle", isSet: skipConsequence != nil),
         ]
     }
 
@@ -353,21 +448,22 @@ struct HabitFormView: View {
         let configs = Self.buildPillData(
             hasTagsApplied: !habitTags.isEmpty,
             difficultyTier: difficultyTier,
-            frequency: frequency
+            frequency: frequency,
+            durationSeconds: durationSeconds,
+            lockoutDurationSeconds: lockoutDurationSeconds,
+            skipConsequence: skipConsequence
         )
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "difficulty": { showingDifficulty = true },
             "frequency": { showingFrequency = true },
+            "duration": { showingDuration = true },
+            "lockout": { showingLockout = true },
+            "skip": { showingSkipConsequence = true },
         ]
-        let animatedIDs = canTrade ? Set<String>() : Set([
-            frequency == nil ? "frequency" : nil,
-            difficultyTier == nil ? "difficulty" : nil,
-        ].compactMap { $0 })
 
         return EntityFormSupport.buildPills(
             configs: configs,
-            animatedIDs: animatedIDs,
             actions: actions
         )
     }
@@ -381,12 +477,18 @@ struct HabitFormView: View {
             description = prefill.description
             frequency = prefill.frequency
             difficultyTier = prefill.difficultyTier
+            durationSeconds = prefill.durationSeconds
+            lockoutDurationSeconds = prefill.lockoutDurationSeconds
+            skipConsequence = prefill.skipConsequence
             habitId = prefill.habitId
         } else if case .change(let habit) = mode {
             name = habit.name
             description = habit.description
             frequency = habit.frequency
             difficultyTier = habit.difficultyTier
+            durationSeconds = habit.durationSeconds
+            lockoutDurationSeconds = habit.lockoutDurationSeconds
+            skipConsequence = habit.skipConsequence
             habitId = habit.id
         }
 
@@ -400,6 +502,12 @@ struct HabitFormView: View {
                 showingFrequency = true
             case .difficulty:
                 showingDifficulty = true
+            case .duration:
+                showingDuration = true
+            case .lockout:
+                showingLockout = true
+            case .skipConsequence:
+                showingSkipConsequence = true
             case .tags:
                 showingTags = true
             }
@@ -419,7 +527,10 @@ struct HabitFormView: View {
                 name: name,
                 description: description,
                 frequency: frequency,
-                difficultyTier: difficultyTier
+                difficultyTier: difficultyTier,
+                durationSeconds: durationSeconds,
+                lockoutDurationSeconds: lockoutDurationSeconds,
+                skipConsequence: skipConsequence
             )
         }
 
@@ -428,10 +539,13 @@ struct HabitFormView: View {
             name: Self.nameForAutoSave(name),
             description: description,
             frequency: .some(frequency),
-            difficultyTier: .some(difficultyTier)
+            difficultyTier: .some(difficultyTier),
+            durationSeconds: .some(durationSeconds),
+            lockoutDurationSeconds: .some(lockoutDurationSeconds),
+            skipConsequence: .some(skipConsequence)
         )
 
-        return draftHabitForTrade
+        return draftHabit
     }
 }
 

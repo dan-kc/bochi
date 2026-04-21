@@ -33,21 +33,34 @@ struct RewardDamageMultiplierTests {
     }
 
     // Behaviour: If the user has not classified a reward yet, pricing falls
-    // back to the neutral medium tier.
-    @Test func missingTierFallsBackToMediumMultiplier() {
+    // back to the most expensive extreme tier so blank fields never make rewards cheaper.
+    @Test func missingTierFallsBackToExtremeMultiplier() {
         let reward = makeReward(damageTier: nil)
-        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: reward, allRewards: [reward]) == 1.0)
+        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: reward, allRewards: [reward]) == 2.0)
     }
 }
 
 struct RewardFrequencyMultiplierTests {
-    // Behaviour: A reward with no cap behaves like an uncapped purchase and
-    // keeps the neutral price multiplier.
-    @Test func nilFrequencyUsesNeutralMultiplier() {
-        #expect(RewardPriceCalculation.calculateFrequencyMultiplier(
-            reward: makeReward(maxFrequency: nil),
+    // Behaviour: Leaving max frequency blank should price the reward like the
+    // strictest selectable cap instead of a separate punitive fallback path.
+    @Test func nilFrequencyMatchesStrictestConfiguredCap() {
+        let createdAt = Date(timeIntervalSince1970: 1_577_836_800)
+        let blank = makeReward(maxFrequency: nil, createdAt: createdAt)
+        let configured = makeReward(
+            maxFrequency: FrequencyBounds.minimumDailyRate,
+            createdAt: createdAt
+        )
+
+        let blankMultiplier = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: blank,
             purchaseDates: []
-        ) == 1.0)
+        )
+        let configuredMultiplier = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: configured,
+            purchaseDates: []
+        )
+
+        #expect(blankMultiplier == configuredMultiplier)
     }
 
     // Behaviour: Same-day repeat purchases make the next purchase more
@@ -76,7 +89,7 @@ struct RewardFrequencyMultiplierTests {
         )
 
         #expect(second > first)
-        #expect(capped == 50.0)
+        #expect(capped == 20.0)
     }
 
     // Behaviour: Equivalent rates should stabilize the same way even if they
@@ -221,5 +234,55 @@ struct RewardPriceTests {
         )
 
         #expect(total == first + second)
+    }
+
+    // Behaviour: Leaving all optional reward pricing inputs blank should be
+    // more expensive than a configured moderate reward.
+    @Test func missingFieldsUseLargestRewardFallbacks() {
+        let blank = makeReward(maxFrequency: nil, damageTier: nil)
+        let configured = makeReward(maxFrequency: 3.0, damageTier: .medium)
+
+        let blankPrice = RewardPriceCalculation.calculatePrice(
+            reward: blank,
+            allRewards: [blank],
+            purchaseDates: [],
+            generalDifficulty: 5
+        )
+        let configuredPrice = RewardPriceCalculation.calculatePrice(
+            reward: configured,
+            allRewards: [configured],
+            purchaseDates: [],
+            generalDifficulty: 5
+        )
+
+        #expect(blankPrice > configuredPrice)
+    }
+
+    // Behaviour: A blank reward should match the strictest selectable
+    // frequency cap plus the highest damage tier, not a separate nil-only rule.
+    @Test func blankRewardPriceMatchesExtremeConfiguredReward() {
+        let createdAt = Date(timeIntervalSince1970: 1_577_836_800)
+        let blank = makeReward(maxFrequency: nil, damageTier: nil, createdAt: createdAt)
+        let configured = makeReward(
+            maxFrequency: FrequencyBounds.minimumDailyRate,
+            damageTier: .extreme,
+            createdAt: createdAt
+        )
+
+        let blankPrice = RewardPriceCalculation.calculatePrice(
+            reward: blank,
+            allRewards: [blank],
+            purchaseDates: [],
+            generalDifficulty: 5
+        )
+        let configuredPrice = RewardPriceCalculation.calculatePrice(
+            reward: configured,
+            allRewards: [configured],
+            purchaseDates: [],
+            generalDifficulty: 5
+        )
+
+        #expect(blankPrice == configuredPrice)
+        #expect(blankPrice == 20_000)
     }
 }

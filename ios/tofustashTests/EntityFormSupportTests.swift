@@ -34,19 +34,24 @@ struct EntityFormSupportTests {
         ) == false)
     }
 
-    // Behaviour: unset required pills should animate attention while already
-    // configured pills stay calm and tappable.
-    @Test func buildPillsOnlyAnimatesRequestedUnsetPills() {
+    // Behaviour: pill-building should preserve the configured label, icon, and
+    // action state without adding extra presentation-only metadata.
+    @Test func buildPillsPreservesConfiguredPillState() {
         let pills = EntityFormSupport.buildPills(
             configs: [
                 EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: true),
                 EntityFormPillConfig(id: "frequency", label: "Frequency", icon: "clock", isSet: false),
             ],
-            animatedIDs: ["tags", "frequency"],
             actions: [:]
         )
 
-        #expect(pills[0].animating == false)
-        #expect(pills[1].animating == true)
+        #expect(pills[0].id == "tags")
+        #expect(pills[0].label == "Tags")
+        #expect(pills[0].icon == "tag")
+        #expect(pills[0].isSet == true)
+        #expect(pills[1].id == "frequency")
+        #expect(pills[1].label == "Frequency")
+        #expect(pills[1].icon == "clock")
+        #expect(pills[1].isSet == false)
     }
 }

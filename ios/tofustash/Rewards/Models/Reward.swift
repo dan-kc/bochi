@@ -15,10 +15,10 @@ struct Reward: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let maxFrequency: Double?
     let damageTier: RewardDamageTier?
 
-    // Rewards follow the same gating rule as habits: the user must define both
-    // the cap (max frequency) and the damage tier before the app
-    // shows a market price or purchase action.
+    // Buying is allowed even when optional pricing fields are blank. The
+    // calculator now uses the most expensive fallback values by default so
+    // filling in more detail can only improve the price.
     var canPurchase: Bool {
-        deletedAt == nil && maxFrequency != nil && damageTier != nil
+        deletedAt == nil
     }
 }

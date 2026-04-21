@@ -11,7 +11,7 @@ There are two related calculations:
 
 The two calculations now differ at the top level:
 
-`habitReward = round(100 * T_h * F_h)`
+`habitReward = round(100 * T_h * F_h * D_h * S_h)`
 
 `rewardCost = round(100 * G * T_r * F_r)`
 
@@ -25,8 +25,6 @@ Behaviourally:
 
 - changing general difficulty only changes reward purchase cost
 - changing general difficulty does not change habit completion reward
-
-There is no random pricing component anymore.
 
 ## Design Goals
 
@@ -179,16 +177,14 @@ Reason:
 
 Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
 
-`Reward = round(100 * T_h * F_h)`
+`Reward = round(100 * T_h * F_h * D_h * S_h)`
 
 ### Tier Multiplier
 
 `T_h` comes directly from the selected habit difficulty tier.
 
-If the habit has no tier yet, iOS calculation code falls back to `medium = 1.0`.
-
-This fallback exists so helper functions remain deterministic, but the app
-still blocks trading until the user has set both frequency and difficulty.
+If the habit has no tier yet, iOS calculation code falls back to
+`trivial = 0.2` so blank pricing fields never improve payout.
 
 ### Frequency Multiplier
 
@@ -203,9 +199,10 @@ Then:
 
 `F_h = 2 / (1 + (r_h_eff ^ alpha))`
 
-If no frequency is set, the fallback is:
+If no frequency is set, iOS prices it as if the habit were configured to the
+highest allowed minimum cadence:
 
-`F_h = 1`
+`f_h = 100/day`
 
 Behaviourally:
 
@@ -223,12 +220,37 @@ This means:
 
 ### Habit Setup Gating
 
-The habit claim flow is blocked until both of these are set:
+Habit pricing fields are optional. Leaving them blank uses the cheapest
+fallbacks instead of blocking the claim flow.
 
-- `frequency`
-- `difficultyTier`
+### Duration Multiplier
 
-The UI explains what is missing using `RewardCalculation.missingTradeProperties`.
+`D_h` uses the expected effort duration in seconds.
+
+If no duration is set:
+
+`D_h = 1`
+
+If duration is set:
+
+`D_h = 1 + 0.35 * (log(1 + durationSeconds) / log(1 + 43200))`
+
+This makes longer habits pay more, but with diminishing returns up to the
+12-hour maximum.
+
+### Skip Consequence Multiplier
+
+`S_h` comes from the 1...5 skip consequence rank.
+
+- `1 => 1.0`
+- `2 => 1.15`
+- `3 => 1.3`
+- `4 => 1.5`
+- `5 => 1.75`
+
+If no skip consequence is set:
+
+`S_h = 1`
 
 ## 2. Reward Purchase Cost
 
@@ -240,10 +262,8 @@ Implemented in `ios/tofustash/Rewards/Utilities/RewardPriceCalculation.swift`.
 
 `T_r` comes directly from the selected reward damage tier.
 
-If the reward has no tier yet, iOS calculation code falls back to `medium = 1.0`.
-
-As with habits, the helper stays deterministic but the UI still blocks buying
-until the user has set both max frequency and damage tier.
+If the reward has no tier yet, iOS calculation code falls back to
+`extreme = 2.0` so blank pricing fields never make rewards cheaper.
 
 ### Frequency Multiplier
 
@@ -258,15 +278,16 @@ Then:
 
 If `r_r_eff >= 1`:
 
-`F_r = 50`
+`F_r = 20`
 
 If `r_r_eff < 1`:
 
-`F_r = min(50, (2 / (1 - (r_r_eff ^ beta))) - 1)`
+`F_r = min(20, (2 / (1 - (r_r_eff ^ beta))) - 1)`
 
-If no max frequency is set, the fallback is:
+If no max frequency is set, iOS prices it as if the reward were configured to
+the strictest allowed cap:
 
-`F_r = 1`
+`f_r = 1/month`
 
 Behaviourally:
 
@@ -274,14 +295,15 @@ Behaviourally:
 - compared with the previous curve, frequency pressure is about `50%` stronger
   for the same purchase history
 - `r_r_eff = 0  =>  F_r = 1`
-- `r_r_eff -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `50`
-- `r_r_eff >= 1  =>  F_r = 50`
+- `r_r_eff -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `20`
+- `r_r_eff >= 1  =>  F_r = 20`
 
 This means:
 
 - the first purchase of a new or lightly used reward is near base price
 - repeated recent purchases raise the price
-- buying at or above the intended cadence becomes extremely expensive
+- buying at or above the intended cadence becomes sharply more expensive, but
+  stays inside a bounded ceiling
 
 ### Why This Replaces A Fixed Window
 
@@ -352,7 +374,7 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
 - Reward prices rise as the user keeps buying the same reward toward or past
   its intended cadence.
 - Rewards remain purchasable after the cap, but they become extremely
-  expensive because the frequency multiplier clamps at `50`.
+  expensive because the frequency multiplier clamps at `20`.
 - Recent actions matter more than old ones, but old actions fade smoothly
   instead of dropping out at a hard time boundary.
 - Equivalent rates such as `1/day` and `30/month` behave the same because the
@@ -364,6 +386,7 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
 
 - Habit `frequency` is stored on iOS as times/day.
 - Reward `maxFrequency` is stored on iOS as times/day.
+- Habit and reward frequency inputs are bounded to `1/month ... 100/day`.
 - Habit difficulty is stored as `difficultyTier`.
 - Reward damage is stored as `damageTier`.
 - Habit and reward pricing both use timestamp-based cadence decay.

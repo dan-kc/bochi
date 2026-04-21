@@ -246,7 +246,7 @@ async fn test_create_reward_max_daily_frequency_negative() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'max_daily_frequency must be between 0 and 100. You sent -1."
+            "Validation Error: The 'max_daily_frequency' must be between 0.03333333333333333 and 100. You sent -1."
                 .to_string()
         )
     );
@@ -280,7 +280,7 @@ async fn test_create_reward_max_daily_frequency_too_large() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'max_daily_frequency must be between 0 and 100. You sent 101."
+            "Validation Error: The 'max_daily_frequency' must be between 0.03333333333333333 and 100. You sent 101."
                 .to_string()
         )
     );
@@ -338,8 +338,41 @@ async fn test_create_reward_max_daily_frequency_zero() {
 
     let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
 
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+
+    let error = errors.first().unwrap();
+    assert_eq!(
+        error.get("message").unwrap(),
+        &Value::String(
+            "Validation Error: The 'max_daily_frequency' must be between 0.03333333333333333 and 100. You sent 0."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_create_reward_max_daily_frequency_one_per_month_boundary() {
+    let email = generate_email_from_fn!(test_create_reward_max_daily_frequency_one_per_month_boundary);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "name": "Test Reward",
+        "description": "Test description",
+        "maxDailyFrequency": 1.0 / 30.0
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(json.get("maxDailyFrequency").unwrap(), 0.0);
+    assert_eq!(
+        json.get("maxDailyFrequency").unwrap(),
+        &Value::from(1.0 / 30.0)
+    );
 }
 
 #[tokio::test]

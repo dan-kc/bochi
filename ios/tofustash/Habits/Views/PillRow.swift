@@ -27,20 +27,10 @@ struct PillRow: View {
 
 private struct PillButton: View {
     let pill: PillItem
-    @State private var isHighlighted = false
-
-    private var shouldAnimateAttention: Bool {
-        pill.animating && !pill.isSet
-    }
 
     private var tintColor: Color {
         guard !pill.isSet else { return .orange }
-        guard pill.animating else { return .secondary }
-        return isHighlighted ? .gray.opacity(0.75) : .secondary
-    }
-
-    private var glowColor: Color {
-        pill.animating && !pill.isSet && isHighlighted ? .white.opacity(0.22) : .clear
+        return .secondary
     }
 
     var body: some View {
@@ -53,41 +43,6 @@ private struct PillButton: View {
         }
         .buttonStyle(.bordered)
         .tint(tintColor)
-        .shadow(color: glowColor, radius: 8)
-        .animation(
-            shouldAnimateAttention
-                ? .easeInOut(duration: 1.15).repeatForever(autoreverses: true)
-                : .easeInOut(duration: 0.2),
-            value: isHighlighted
-        )
-        .animation(nil, value: pill.label)
-        .animation(nil, value: pill.isSet)
-        .onAppear {
-            guard shouldAnimateAttention else {
-                isHighlighted = false
-                return
-            }
-
-            isHighlighted = false
-            DispatchQueue.main.async {
-                isHighlighted = true
-            }
-        }
-        .onChange(of: pill.animating) { _, newValue in
-            if newValue && !pill.isSet {
-                isHighlighted = false
-                DispatchQueue.main.async {
-                    isHighlighted = true
-                }
-            } else {
-                isHighlighted = false
-            }
-        }
-        .onChange(of: pill.isSet) { _, newValue in
-            if newValue {
-                isHighlighted = false
-            }
-        }
     }
 }
 
@@ -101,8 +56,4 @@ struct PillItem: Identifiable {
     let icon: String          // SF Symbol name (like Material Icon names in React)
     let isSet: Bool           // true = orange, false = gray
     var action: (() -> Void)? = nil  // called when tapped — like onClick in React
-    // When true, the pill plays a scale-bounce animation to draw the user's
-    // attention — e.g. after difficulty is set via the ranker. Like adding a
-    // CSS animation class via state in React: className={animating ? "bounce" : ""}
-    var animating: Bool = false
 }

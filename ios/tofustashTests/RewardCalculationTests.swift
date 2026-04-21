@@ -6,6 +6,9 @@ private func makeHabit(
     id: RecordID = "habit-1",
     frequency: Double? = nil,
     difficultyTier: HabitDifficultyTier? = nil,
+    durationSeconds: Int? = nil,
+    lockoutDurationSeconds: Int? = nil,
+    skipConsequence: Int? = nil,
     createdAt: Date = Date(timeIntervalSince1970: 1_577_836_800),
     deletedAt: Date? = nil
 ) -> Habit {
@@ -17,7 +20,10 @@ private func makeHabit(
         updatedAt: createdAt,
         deletedAt: deletedAt,
         frequency: frequency,
-        difficultyTier: difficultyTier
+        difficultyTier: difficultyTier,
+        durationSeconds: durationSeconds,
+        lockoutDurationSeconds: lockoutDurationSeconds,
+        skipConsequence: skipConsequence
     )
 }
 
@@ -33,20 +39,34 @@ struct DifficultyMultiplierTests {
     }
 
     // Behaviour: If the user has not picked a tier yet, pricing falls back to
-    // the neutral medium tier instead of failing.
-    @Test func missingTierFallsBackToMediumMultiplier() {
+    // the cheapest trivial tier so blank fields never improve payout.
+    @Test func missingTierFallsBackToTrivialMultiplier() {
         let habit = makeHabit(difficultyTier: nil)
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: habit) == 1.0)
+        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: habit) == 0.2)
     }
 }
 
 struct FrequencyMultiplierTests {
-    // Behaviour: A habit with no target frequency keeps neutral pricing.
-    @Test func nilFrequencyUsesNeutralMultiplier() {
-        #expect(RewardCalculation.calculateFrequencyMultiplier(
-            habit: makeHabit(frequency: nil),
+    // Behaviour: Leaving a habit frequency blank should price it exactly like
+    // the highest selectable minimum cadence instead of a separate magic rule.
+    @Test func nilFrequencyMatchesHighestConfiguredFrequency() {
+        let createdAt = Date(timeIntervalSince1970: 1_577_836_800)
+        let blank = makeHabit(frequency: nil, createdAt: createdAt)
+        let configured = makeHabit(
+            frequency: FrequencyBounds.maximumDailyRate,
+            createdAt: createdAt
+        )
+
+        let blankMultiplier = RewardCalculation.calculateFrequencyMultiplier(
+            habit: blank,
             completionDates: []
-        ) == 1.0)
+        )
+        let configuredMultiplier = RewardCalculation.calculateFrequencyMultiplier(
+            habit: configured,
+            completionDates: []
+        )
+
+        #expect(blankMultiplier == configuredMultiplier)
     }
 
     // Behaviour: Equivalent rates should stabilize the same way even if the
@@ -92,12 +112,51 @@ struct FrequencyMultiplierTests {
     }
 }
 
+struct DurationAndSkipMultiplierTests {
+    // Behaviour: Longer expected effort should pay more, but with diminishing
+    // returns instead of a linear explosion.
+    @Test func durationRaisesRewardWithDiminishingReturns() {
+        let short = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 300))
+        let medium = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 3_600))
+        let long = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 43_200))
+
+        #expect(short >= 1.0)
+        #expect(medium > short)
+        #expect(long > medium)
+        #expect((long - medium) < (medium - short))
+    }
+
+    // Behaviour: Leaving duration blank should keep the smallest duration modifier.
+    @Test func missingDurationUsesNeutralMinimumMultiplier() {
+        #expect(RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: nil)) == 1.0)
+    }
+
+    // Behaviour: More serious skip consequence should make the same habit pay more.
+    @Test func skipConsequenceRaisesReward() {
+        let low = RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: 1))
+        let high = RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: 5))
+
+        #expect(low == 1.0)
+        #expect(high > low)
+    }
+
+    // Behaviour: Leaving skip consequence blank should keep the smallest modifier.
+    @Test func missingSkipConsequenceUsesNeutralMinimumMultiplier() {
+        #expect(RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: nil)) == 1.0)
+    }
+}
+
 struct CalculateRewardTests {
     // Behaviour: The user-facing reward is a deterministic whole-number tofu
     // amount with no time-bucket randomness, and habit payouts are not scaled
     // by the general difficulty setting.
     @Test func rewardUsesTierAndFrequencyWithoutRandomness() {
-        let habit = makeHabit(frequency: 1.0, difficultyTier: .hard)
+        let habit = makeHabit(
+            frequency: 1.0,
+            difficultyTier: .hard,
+            durationSeconds: nil,
+            skipConsequence: 1
+        )
 
         let reward = RewardCalculation.calculateReward(
             habit: habit,
@@ -108,13 +167,26 @@ struct CalculateRewardTests {
         #expect(reward == 280)
     }
 
-    // Behaviour: The app explains exactly which required habit inputs are still
-    // missing before the user can claim tofu.
-    @Test func missingTradePropertiesDescribesIncompleteSetup() {
-        #expect(RewardCalculation.missingTradeProperties(frequency: nil, difficultyTier: nil) == "frequency and difficulty")
-        #expect(RewardCalculation.missingTradeProperties(frequency: nil, difficultyTier: .medium) == "frequency")
-        #expect(RewardCalculation.missingTradeProperties(frequency: 1.0, difficultyTier: nil) == "difficulty")
-        #expect(RewardCalculation.missingTradeProperties(frequency: 1.0, difficultyTier: .medium) == nil)
+    // Behaviour: Leaving the optional pricing fields blank should produce the
+    // smallest payout instead of blocking the claim flow.
+    @Test func missingFieldsUseLowestRewardFallbacks() {
+        let cheapest = makeHabit(
+            frequency: nil,
+            difficultyTier: nil,
+            durationSeconds: nil,
+            skipConsequence: nil
+        )
+        let richer = makeHabit(
+            frequency: 1.0,
+            difficultyTier: .medium,
+            durationSeconds: 900,
+            skipConsequence: 3
+        )
+
+        let cheapReward = RewardCalculation.calculateReward(habit: cheapest, allHabits: [cheapest])
+        let richerReward = RewardCalculation.calculateReward(habit: richer, allHabits: [richer])
+
+        #expect(cheapReward < richerReward)
     }
 }
 

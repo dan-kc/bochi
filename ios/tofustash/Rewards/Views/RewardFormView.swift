@@ -85,10 +85,6 @@ struct RewardFormView: View {
         mode.isNew
     }
 
-    private var canPurchase: Bool {
-        maxFrequency != nil && damageTier != nil
-    }
-
     private var hasContent: Bool {
         Self.hasContent(
             name: trimmedName,
@@ -123,18 +119,16 @@ struct RewardFormView: View {
 
     private var currentPrice: Int {
         guard let reward = draftRewardForPurchase else { return 0 }
-        return EntityActionSupport.visibleAmount(isActionable: reward.canPurchase) {
-            let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
-            let allRewards = rewardStore.activeRewards.map { existing in
-                existing.id == reward.id ? reward : existing
-            }
-            return RewardPriceCalculation.calculatePrice(
-                reward: reward,
-                allRewards: allRewards,
-                purchaseDates: purchaseDates,
-                generalDifficulty: userSettingsStore.generalDifficulty
-            )
+        let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
+        let allRewards = rewardStore.activeRewards.map { existing in
+            existing.id == reward.id ? reward : existing
         }
+        return RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: allRewards,
+            purchaseDates: purchaseDates,
+            generalDifficulty: userSettingsStore.generalDifficulty
+        )
     }
 
     var body: some View {
@@ -286,7 +280,7 @@ struct RewardFormView: View {
 
     private var floatingControls: some View {
         VStack(spacing: 10) {
-            if !isNewMode && canPurchase {
+            if !isNewMode {
                 TofuActionButton(amount: currentPrice, polarity: .spending, layout: .expanded(title: "Buy Reward")) {
                     guard let persistedReward = persistReward() else { return }
                     didPersist = true
@@ -343,14 +337,9 @@ struct RewardFormView: View {
             "damage": { showingDamage = true },
             "frequency": { showingFrequency = true },
         ]
-        let animatedIDs = Set([
-            maxFrequency == nil ? "frequency" : nil,
-            damageTier == nil ? "damage" : nil,
-        ].compactMap { $0 })
 
         return EntityFormSupport.buildPills(
             configs: configs,
-            animatedIDs: animatedIDs,
             actions: actions
         )
     }

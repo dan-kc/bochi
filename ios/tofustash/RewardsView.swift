@@ -127,15 +127,13 @@ struct RewardsView: View {
     }
 
     private func priceForReward(_ reward: Reward) -> Int {
-        EntityActionSupport.visibleAmount(isActionable: reward.canPurchase) {
-            let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
-            return RewardPriceCalculation.calculatePrice(
-                reward: reward,
-                allRewards: rewardStore.activeRewards,
-                purchaseDates: purchaseDates,
-                generalDifficulty: userSettingsStore.generalDifficulty
-            )
-        }
+        let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
+        return RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: rewardStore.activeRewards,
+            purchaseDates: purchaseDates,
+            generalDifficulty: userSettingsStore.generalDifficulty
+        )
     }
 
     private func priceSortValue(for reward: Reward) -> Int? {
@@ -147,9 +145,7 @@ struct RewardsView: View {
     private func rewardRow(_ reward: Reward) -> some View {
         let tags = tagStore.tagsForReward(rewardId: reward.id)
         let canPurchase = reward.canPurchase
-        let price = EntityActionSupport.visibleAmount(isActionable: canPurchase) {
-            priceForReward(reward)
-        }
+        let price = priceForReward(reward)
         let canAfford = canPurchase && balanceStore.balance >= price
 
         return HStack(alignment: .bottom) {
@@ -169,14 +165,12 @@ struct RewardsView: View {
                 HStack(spacing: 8) {
                     EntityListMetaPill(
                         text: FrequencyConversion.formatSummary(reward.maxFrequency).map { "Max \($0)" } ?? "Max Frequency",
-                        isSet: reward.maxFrequency != nil,
-                        animating: reward.maxFrequency == nil
+                        isSet: reward.maxFrequency != nil
                     )
 
                     EntityListMetaPill(
                         text: reward.damageTier?.displayName ?? "Damage",
-                        isSet: reward.damageTier != nil,
-                        animating: reward.damageTier == nil
+                        isSet: reward.damageTier != nil
                     )
                 }
 

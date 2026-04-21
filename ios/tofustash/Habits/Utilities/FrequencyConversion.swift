@@ -30,6 +30,7 @@ enum FrequencyPeriod: String, CaseIterable, Equatable {
 // Caseless enum = namespace (can't be instantiated). Like a TS module
 // that only exports functions.
 enum FrequencyConversion {
+    private static let integerTolerance = 0.0001
 
     // Converts a user-entered value + period to a daily rate.
     //   3 times per week → 3 / 7 ≈ 0.4286
@@ -38,17 +39,34 @@ enum FrequencyConversion {
         value / period.divisor
     }
 
+    private static func isWholeNumber(_ value: Double) -> Bool {
+        abs(value.rounded() - value) < integerTolerance
+    }
+
     // Picks the friendliest period for display so the user sees "1/week"
     // instead of awkward decimals when possible.
     static func fromDailyRate(_ daily: Double) -> (value: Double, period: FrequencyPeriod) {
+        if daily >= 1, isWholeNumber(daily) {
+            return (daily, .day)
+        }
+
+        let weekly = daily * FrequencyPeriod.week.divisor
+        if weekly >= 1, isWholeNumber(weekly) {
+            return (weekly, .week)
+        }
+
+        let monthly = daily * FrequencyPeriod.month.divisor
+        if monthly >= 1, isWholeNumber(monthly) {
+            return (monthly, .month)
+        }
+
         if daily >= 1 {
             return (daily, .day)
         }
-        let weekly = daily * 7
         if weekly >= 1 {
             return (weekly, .week)
         }
-        return (daily * 30, .month)
+        return (monthly, .month)
     }
 
     // Compact summary used in habit pills and list rows.

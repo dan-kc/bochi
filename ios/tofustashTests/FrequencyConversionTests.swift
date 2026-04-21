@@ -55,12 +55,12 @@ struct FrequencyConversionTests {
         #expect(period == .month)
     }
 
-    // Behaviour: When displaying 0.5/day, the user sees "3.5/week" because the
-    // system picks the most readable period (weekly value >= 1).
+    // Behaviour: When a stored daily rate can be shown as a whole number in a
+    // larger unit, the editor prefers that discrete representation.
     @Test func fromDailyRateChoosesBestPeriod() {
         let (value, period) = FrequencyConversion.fromDailyRate(0.5)
-        #expect(abs(value - 3.5) < 0.0001)
-        #expect(period == .week)
+        #expect(abs(value - 15.0) < 0.0001)
+        #expect(period == .month)
     }
 
     // MARK: - formatSummary

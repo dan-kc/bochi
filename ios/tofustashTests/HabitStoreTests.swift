@@ -47,11 +47,21 @@ struct HabitStoreTests {
     @Test func addHabitWithAllFields() {
         let sut = makeSUT()
 
-        let habit = sut.addHabit(name: "Exercise", description: "Daily workout", frequency: 1.0)
+        let habit = sut.addHabit(
+            name: "Exercise",
+            description: "Daily workout",
+            frequency: 1.0,
+            durationSeconds: 900,
+            lockoutDurationSeconds: 3600,
+            skipConsequence: 4
+        )
 
         #expect(habit?.name == "Exercise")
         #expect(habit?.description == "Daily workout")
         #expect(habit?.frequency == 1.0)
+        #expect(habit?.durationSeconds == 900)
+        #expect(habit?.lockoutDurationSeconds == 3600)
+        #expect(habit?.skipConsequence == 4)
     }
 
     // Behaviour: When a user types a habit name with leading/trailing spaces,
@@ -177,7 +187,15 @@ struct HabitStoreTests {
     // (description, frequency, difficulty, createdAt) remain untouched.
     @Test func updateHabitPreservesUnchangedFields() {
         let sut = makeSUT()
-        let habit = sut.addHabit(name: "Exercise", description: "Daily", frequency: 1.0, difficultyTier: .medium)!
+        let habit = sut.addHabit(
+            name: "Exercise",
+            description: "Daily",
+            frequency: 1.0,
+            difficultyTier: .medium,
+            durationSeconds: 300,
+            lockoutDurationSeconds: 1800,
+            skipConsequence: 2
+        )!
 
         // Only update the name — all other fields should stay the same
         sut.updateHabit(id: habit.id, name: "Workout")
@@ -187,7 +205,29 @@ struct HabitStoreTests {
         #expect(updated.description == "Daily")
         #expect(updated.frequency == 1.0)
         #expect(updated.difficultyTier == .medium)
+        #expect(updated.durationSeconds == 300)
+        #expect(updated.lockoutDurationSeconds == 1800)
+        #expect(updated.skipConsequence == 2)
         #expect(updated.createdAt == habit.createdAt)
+    }
+
+    // Behaviour: When a user edits duration, lockout, and skip consequence,
+    // those values should persist with the habit.
+    @Test func updateHabitChangesDurationLockoutAndSkipConsequence() {
+        let sut = makeSUT()
+        let habit = sut.addHabit(name: "Exercise")!
+
+        sut.updateHabit(
+            id: habit.id,
+            durationSeconds: .some(900),
+            lockoutDurationSeconds: .some(7200),
+            skipConsequence: .some(5)
+        )
+
+        let updated = sut.habits.first!
+        #expect(updated.durationSeconds == 900)
+        #expect(updated.lockoutDurationSeconds == 7200)
+        #expect(updated.skipConsequence == 5)
     }
 
     // Behaviour: When a user renames a habit with leading/trailing spaces,

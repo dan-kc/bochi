@@ -159,7 +159,10 @@ struct SyncManagerTests {
             updatedAt: "2026-04-18T10:00:00.000000",
             deletedAt: nil,
             minDailyFrequency: nil,
-            difficultyTier: nil
+            difficultyTier: nil,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil
         )
 
         let context = try await makeContext(
@@ -171,6 +174,9 @@ struct SyncManagerTests {
             id: habitID,
             name: "Habit",
             difficultyTier: HabitDifficultyTier.trivial,
+            durationSeconds: 900,
+            lockoutDurationSeconds: 3600,
+            skipConsequence: 4,
             createdAt: Date(timeIntervalSince1970: 1_713_433_200),
             updatedAt: Date(timeIntervalSince1970: 1_713_433_200)
         )
@@ -179,7 +185,13 @@ struct SyncManagerTests {
         await context.syncManager.syncNow()
 
         let pushedHabits = context.syncAPIClient.pushCalls.compactMap { $0.0.habits }.flatMap { $0 }
-        #expect(pushedHabits.contains { $0.id == habitID.rawValue && $0.difficultyTier == HabitDifficultyTier.trivial })
+        #expect(pushedHabits.contains {
+            $0.id == habitID.rawValue
+                && $0.difficultyTier == HabitDifficultyTier.trivial
+                && $0.durationSeconds == 900
+                && $0.lockoutDurationSeconds == 3600
+                && $0.skipConsequence == 4
+        })
 
         context.syncManager.updateSession(userID: String?.none)
     }
@@ -219,7 +231,10 @@ struct SyncManagerTests {
             updatedAt: "2026-04-18T10:00:00.000000",
             deletedAt: nil,
             minDailyFrequency: 1,
-            difficultyTier: .light
+            difficultyTier: .light,
+            durationSeconds: nil,
+            lockoutDurationSeconds: nil,
+            skipConsequence: nil
         )
         let serverFitnessTag = SyncTagRecord(
             id: fitnessTagID.rawValue,

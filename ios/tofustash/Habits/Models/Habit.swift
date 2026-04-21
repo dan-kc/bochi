@@ -21,12 +21,40 @@ struct Habit: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
                                 // like `T | null` in TypeScript.
     let frequency: Double?      // times per day (e.g. 0.5 = every other day). nil = not set.
     let difficultyTier: HabitDifficultyTier?
+    let durationSeconds: Int?
+    let lockoutDurationSeconds: Int?
+    let skipConsequence: Int?
 
-    // Whether this habit has the required properties to calculate a reward price.
-    // Both frequency and difficulty tier must be set for the reward formula to
-    // produce meaningful results — without frequency, F is always 1 (no diminishing
-    // returns), and without a difficulty tier the user has not classified the habit yet.
+    init(
+        id: RecordID,
+        name: String,
+        description: String,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        frequency: Double?,
+        difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int? = nil,
+        lockoutDurationSeconds: Int? = nil,
+        skipConsequence: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.frequency = frequency
+        self.difficultyTier = difficultyTier
+        self.durationSeconds = durationSeconds
+        self.lockoutDurationSeconds = lockoutDurationSeconds
+        self.skipConsequence = skipConsequence
+    }
+
+    // Claiming is no longer blocked by missing pricing fields. Optional inputs
+    // fall back to the cheapest reward calculation instead, so users can still
+    // claim immediately and improve pricing later by filling in more detail.
     var canTrade: Bool {
-        frequency != nil && difficultyTier != nil
+        deletedAt == nil
     }
 }

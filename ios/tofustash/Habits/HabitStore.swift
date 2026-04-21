@@ -51,6 +51,9 @@ final class HabitStore {
         description: String = "",
         frequency: Double? = nil,
         difficultyTier: HabitDifficultyTier? = nil,
+        durationSeconds: Int? = nil,
+        lockoutDurationSeconds: Int? = nil,
+        skipConsequence: Int? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -71,7 +74,10 @@ final class HabitStore {
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt,
             frequency: frequency,
-            difficultyTier: difficultyTier
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            lockoutDurationSeconds: lockoutDurationSeconds,
+            skipConsequence: skipConsequence
         )
 
         mutateHabits {
@@ -101,7 +107,10 @@ final class HabitStore {
             updatedAt: deletedAt,
             deletedAt: deletedAt,
             frequency: existing.frequency,
-            difficultyTier: existing.difficultyTier
+            difficultyTier: existing.difficultyTier,
+            durationSeconds: existing.durationSeconds,
+            lockoutDurationSeconds: existing.lockoutDurationSeconds,
+            skipConsequence: existing.skipConsequence
         )
 
         mutateHabits { $0[index] = deleted }
@@ -117,6 +126,9 @@ final class HabitStore {
         description: String? = nil,
         frequency: Double?? = nil,
         difficultyTier: HabitDifficultyTier?? = nil,
+        durationSeconds: Int?? = nil,
+        lockoutDurationSeconds: Int?? = nil,
+        skipConsequence: Int?? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
@@ -148,7 +160,10 @@ final class HabitStore {
             updatedAt: updatedAt,
             deletedAt: deletedAt ?? existing.deletedAt,
             frequency: frequency ?? existing.frequency,
-            difficultyTier: difficultyTier ?? existing.difficultyTier
+            difficultyTier: difficultyTier ?? existing.difficultyTier,
+            durationSeconds: durationSeconds ?? existing.durationSeconds,
+            lockoutDurationSeconds: lockoutDurationSeconds ?? existing.lockoutDurationSeconds,
+            skipConsequence: skipConsequence ?? existing.skipConsequence
         )
 
         mutateHabits { $0[index] = updated }
@@ -213,7 +228,10 @@ final class HabitStore {
                 updatedAt: habit.updatedAt,
                 deletedAt: habit.deletedAt,
                 frequency: habit.frequency,
-                difficultyTier: habit.difficultyTier
+                difficultyTier: habit.difficultyTier,
+                durationSeconds: habit.durationSeconds,
+                lockoutDurationSeconds: habit.lockoutDurationSeconds,
+                skipConsequence: habit.skipConsequence
             )
         }
     }
