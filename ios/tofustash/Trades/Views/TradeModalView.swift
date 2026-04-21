@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Modal for claiming a habit reward. Shows the habit name, a quantity counter,
-// the total price, and Cancel/Claim buttons.
+// the total reward, and a primary claim action near that running total.
 //
 // The quantity counter is the centerpiece — the user can claim a habit multiple
 // times in one go (e.g., "I did 20 pushups" when the habit is "Do 10 pushups").
@@ -79,9 +79,6 @@ struct TradeModalView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Claim") { claimReward() }
-                    }
                 }
             }
         }
@@ -93,12 +90,23 @@ struct TradeModalView: View {
 
     private var formContent: some View {
         VStack(spacing: 24) {
-            // Habit name — display only, not editable from this modal
-            Text(habit.name)
-                .font(.headline)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
+            // Behaviour: the sheet now opens with the payout summary in the
+            // most prominent spot, so the user focuses on the outcome first.
+            VStack(spacing: 4) {
+                Text("Total Reward")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(totalPrice)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .contentTransition(.numericText())
+                        .animation(.snappy, value: totalPrice)
+                    Image(systemName: "cube.fill")
+                        .font(.body)
+                }
+            }
+            .padding(.top, 8)
 
             Spacer()
 
@@ -132,20 +140,10 @@ struct TradeModalView: View {
 
             Spacer()
 
-            // Total price display
-            VStack(spacing: 4) {
-                Text("Total Reward")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Text("\(totalPrice)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .contentTransition(.numericText())
-                        .animation(.snappy, value: totalPrice)
-                    Image(systemName: "cube.fill")
-                        .font(.body)
-                }
+            // Behaviour: the user confirms the exact quantity and payout in the
+            // same visual block instead of needing to move to the top bar.
+            ClaimRewardButton(price: totalPrice, layout: .expanded(title: "Claim")) {
+                claimReward()
             }
 
             Spacer()

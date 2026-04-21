@@ -58,12 +58,6 @@ struct RewardPurchaseModalView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Buy") {
-                            purchaseReward()
-                        }
-                        .disabled(!canAfford)
-                    }
                 }
             }
         }
@@ -85,11 +79,22 @@ struct RewardPurchaseModalView: View {
 
     private var formContent: some View {
         VStack(spacing: 24) {
-            Text(reward.name)
-                .font(.headline)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
+            // Behaviour: the sheet now leads with the current total cost so
+            // the user sees the spend decision before any supporting copy.
+            VStack(spacing: 4) {
+                Text("Total Cost")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(totalPrice)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .contentTransition(.numericText())
+                    Image(systemName: "cube.fill")
+                }
+                .foregroundStyle(canAfford ? Color.primary : Color.red)
+            }
+            .padding(.top, 8)
 
             if !reward.description.isEmpty {
                 Text(reward.description)
@@ -128,19 +133,12 @@ struct RewardPurchaseModalView: View {
 
             Spacer()
 
-            VStack(spacing: 4) {
-                Text("Total Cost")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Text("\(totalPrice)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .contentTransition(.numericText())
-                    Image(systemName: "cube.fill")
-                }
-                .foregroundStyle(canAfford ? Color.primary : Color.red)
+            // Behaviour: the buy action sits directly under the total so the
+            // user confirms cost and purchase in one focused area of the sheet.
+            TofuActionButton(amount: totalPrice, polarity: .spending, layout: .expanded(title: "Buy")) {
+                purchaseReward()
             }
+            .disabled(!canAfford)
 
             if !canAfford {
                 Text("You need \(totalPrice - balanceStore.balance) more tofu to buy this reward.")
