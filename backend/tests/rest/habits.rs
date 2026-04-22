@@ -494,8 +494,8 @@ async fn test_create_habit_duration_cannot_exceed_twelve_hours() {
 }
 
 #[tokio::test]
-async fn test_create_habit_lockout_duration_must_be_positive() {
-    let email = generate_email_from_fn!(test_create_habit_lockout_duration_must_be_positive);
+async fn test_create_habit_lockout_duration_must_be_at_least_one_minute() {
+    let email = generate_email_from_fn!(test_create_habit_lockout_duration_must_be_at_least_one_minute);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -504,7 +504,7 @@ async fn test_create_habit_lockout_duration_must_be_positive() {
     let body = json!({
         "name": "Test Habit",
         "description": "Test description",
-        "lockoutDurationSeconds": 0
+        "lockoutDurationSeconds": 59
     });
 
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
@@ -514,15 +514,15 @@ async fn test_create_habit_lockout_duration_must_be_positive() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'lockout_duration_seconds' must be between 1 and 43200. You sent 0."
+            "Validation Error: The 'lockout_duration_seconds' must be between 60 and 2592000. You sent 59."
                 .to_string()
         )
     );
 }
 
 #[tokio::test]
-async fn test_create_habit_lockout_duration_cannot_exceed_twelve_hours() {
-    let email = generate_email_from_fn!(test_create_habit_lockout_duration_cannot_exceed_twelve_hours);
+async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
+    let email = generate_email_from_fn!(test_create_habit_lockout_duration_cannot_exceed_thirty_days);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -531,7 +531,7 @@ async fn test_create_habit_lockout_duration_cannot_exceed_twelve_hours() {
     let body = json!({
         "name": "Test Habit",
         "description": "Test description",
-        "lockoutDurationSeconds": 43201
+        "lockoutDurationSeconds": 2_592_001
     });
 
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
@@ -541,7 +541,7 @@ async fn test_create_habit_lockout_duration_cannot_exceed_twelve_hours() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'lockout_duration_seconds' must be between 1 and 43200. You sent 43201."
+            "Validation Error: The 'lockout_duration_seconds' must be between 60 and 2592000. You sent 2592001."
                 .to_string()
         )
     );

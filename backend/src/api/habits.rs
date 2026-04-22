@@ -12,6 +12,8 @@ use super::ApiError;
 
 pub(crate) const MIN_DAILY_FREQUENCY: f64 = 1.0 / 30.0;
 pub(crate) const MAX_DAILY_FREQUENCY: f64 = 100.0;
+pub(crate) const MIN_LOCKOUT_DURATION_SECONDS: i32 = 60;
+pub(crate) const MAX_LOCKOUT_DURATION_SECONDS: i32 = 2_592_000;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,9 +90,13 @@ pub(crate) fn validate_habit_fields(
     }
 
     if let Some(lockout_duration_seconds) = lockout_duration_seconds {
-        if !(1..=43_200).contains(&lockout_duration_seconds) {
+        if !(MIN_LOCKOUT_DURATION_SECONDS..=MAX_LOCKOUT_DURATION_SECONDS)
+            .contains(&lockout_duration_seconds)
+        {
             let msg = format!(
-                "The 'lockout_duration_seconds' must be between 1 and 43200. You sent {}.",
+                "The 'lockout_duration_seconds' must be between {} and {}. You sent {}.",
+                MIN_LOCKOUT_DURATION_SECONDS,
+                MAX_LOCKOUT_DURATION_SECONDS,
                 lockout_duration_seconds
             );
             return Err(ApiError::Validation(msg));

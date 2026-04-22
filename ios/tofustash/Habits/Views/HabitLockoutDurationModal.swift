@@ -5,9 +5,9 @@ import SwiftUI
 // separately from expected duration.
 struct HabitLockoutDurationModal: View {
     private enum DurationUnit: String, CaseIterable {
-        case seconds
         case minutes
         case hours
+        case days
 
         var label: String { rawValue.capitalized }
     }
@@ -18,7 +18,8 @@ struct HabitLockoutDurationModal: View {
     @State private var valueText = ""
     @State private var unit: DurationUnit = .minutes
 
-    private static let maxDurationSeconds = 43_200
+    private static let minDurationSeconds = 60
+    private static let maxDurationSeconds = 2_592_000
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,12 @@ struct HabitLockoutDurationModal: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Text("Choose a lockout between 1 minute and 30 days.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 if let durationSeconds {
@@ -88,30 +95,33 @@ struct HabitLockoutDurationModal: View {
 
         let seconds: Int
         switch unit {
-        case .seconds:
-            seconds = value
         case .minutes:
             seconds = value * 60
         case .hours:
             seconds = value * 3_600
+        case .days:
+            seconds = value * 86_400
         }
 
-        guard seconds <= Self.maxDurationSeconds else { return nil }
+        guard (Self.minDurationSeconds...Self.maxDurationSeconds).contains(seconds) else { return nil }
         return seconds
     }
 
     private func initializeFromBinding() {
         guard let durationSeconds else { return }
 
-        if durationSeconds % 3_600 == 0 {
+        if durationSeconds % 86_400 == 0 {
+            unit = .days
+            valueText = String(durationSeconds / 86_400)
+        } else if durationSeconds % 3_600 == 0 {
             unit = .hours
             valueText = String(durationSeconds / 3_600)
-        } else if durationSeconds % 60 == 0 {
-            unit = .minutes
-            valueText = String(durationSeconds / 60)
         } else {
-            unit = .seconds
-            valueText = String(durationSeconds)
+            // Legacy values may include second-level precision, but the editor
+            // now only supports minute granularity. Round up so reopening the
+            // field never shortens an existing cooldown for the user.
+            unit = .minutes
+            valueText = String((durationSeconds + 59) / 60)
         }
     }
 

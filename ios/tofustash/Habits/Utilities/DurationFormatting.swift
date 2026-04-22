@@ -1,11 +1,11 @@
 import Foundation
 
 // Shared duration copy used by the new duration and lockout inputs. The app
-// stores integer seconds, but users think in minutes and hours.
+// stores integer seconds, but users think in days, hours, and minutes.
 enum DurationFormatting {
     private static let formatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.allowedUnits = [.day, .hour, .minute, .second]
         formatter.unitsStyle = .abbreviated
         formatter.maximumUnitCount = 2
         formatter.zeroFormattingBehavior = .dropAll
@@ -21,4 +21,3 @@ enum DurationFormatting {
         summary(seconds: max(0, secondsRemaining)) ?? "0s"
     }
 }
-
