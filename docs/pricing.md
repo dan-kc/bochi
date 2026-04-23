@@ -32,6 +32,7 @@ Behaviourally:
 - Harder habits should always pay more than easier ones when frequency is equal.
 - More damaging rewards should always cost more than less damaging ones when frequency is equal.
 - The displayed reward price should react quickly enough to match the cap the user entered.
+- Higher-frequency reward caps should tolerate short bursts better than low-frequency caps.
 - Monthly and daily frequencies should both be handled by the same rule.
 - Equivalent rates such as `1/day` and `30/month` should stabilize the same way.
 - Multi-claim and multi-buy totals should reflect each incremental action, not `currentPrice * quantity`.
@@ -272,17 +273,19 @@ Let:
 - `f_r` = max healthy purchase rate in times/day
 - `tau_r = 1 / f_r`
 - `r_r_eff` = cadence-adjusted purchase ratio from the shared model
-- `beta = 4.5`
+- `b_r = max(1, sqrt(f_r))`
+- `r_r_burst = r_r_eff / b_r`
+- `beta = 2.5`
 
 Then:
 
-If `r_r_eff >= 1`:
+If `r_r_burst >= 1`:
 
 `F_r = 20`
 
-If `r_r_eff < 1`:
+If `r_r_burst < 1`:
 
-`F_r = min(20, (2 / (1 - (r_r_eff ^ beta))) - 1)`
+`F_r = min(20, (2 / (1 - (r_r_burst ^ beta))) - 1)`
 
 If no max frequency is set, iOS prices it as if the reward were configured to
 the strictest allowed cap:
@@ -291,19 +294,20 @@ the strictest allowed cap:
 
 Behaviourally:
 
-- buy prices ramp up sooner as the user approaches the configured cap
-- compared with the previous curve, frequency pressure is about `50%` stronger
-  for the same purchase history
+- buy prices still ramp up as the user approaches the configured cap
+- higher-frequency rewards get burst slack before they hit the steep part of the curve
+- low-frequency rewards such as weekly or monthly caps get little or no extra slack
 - `r_r_eff = 0  =>  F_r = 1`
-- `r_r_eff -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `20`
-- `r_r_eff >= 1  =>  F_r = 20`
+- `r_r_burst -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `20`
+- `r_r_burst >= 1  =>  F_r = 20`
 
 This means:
 
 - the first purchase of a new or lightly used reward is near base price
 - repeated recent purchases raise the price
-- buying at or above the intended cadence becomes sharply more expensive, but
-  stays inside a bounded ceiling
+- high-frequency rewards can absorb a short same-day cluster before slamming into the ceiling
+- sustained buying at or above the intended cadence still becomes sharply more
+  expensive, but stays inside a bounded ceiling
 
 ### Why This Replaces A Fixed Window
 
@@ -320,6 +324,8 @@ Examples:
 - `3/day` uses `tau ~= 8 hours`, so same-day repeat purchases still move price quickly
 - `2/month` uses `tau = 15 days`, so purchases from last week still matter
 - `1/day` and `30/month` both normalise to `tau = 1 day`, so they behave the same
+- `4/day` can now tolerate a short burst better than `1/day` because the burst
+  slack scales from the configured daily rate
 
 ## 3. Multi-Quantity Behaviour
 
@@ -373,6 +379,8 @@ This keeps the visible price, the modal total, and the persisted trades in sync.
   above its intended cadence.
 - Reward prices rise as the user keeps buying the same reward toward or past
   its intended cadence.
+- High-frequency reward caps are interpreted as sustained cadence limits, not
+  exact minimum spacing between every pair of purchases.
 - Rewards remain purchasable after the cap, but they become extremely
   expensive because the frequency multiplier clamps at `20`.
 - Recent actions matter more than old ones, but old actions fade smoothly

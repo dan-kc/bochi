@@ -92,6 +92,30 @@ struct RewardFrequencyMultiplierTests {
         #expect(capped == 20.0)
     }
 
+    // Behaviour: A reward configured for several times per day should tolerate
+    // a short burst better than a strict "every N hours" spacing rule.
+    @Test func highFrequencyRewardGetsBurstSlackBeforeCap() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let reward = makeReward(
+            maxFrequency: 4.0,
+            createdAt: now.addingTimeInterval(-10 * 86_400)
+        )
+        let purchaseDates = [
+            now.addingTimeInterval(-86_400),
+            now,
+            now
+        ]
+
+        let multiplier = RewardPriceCalculation.calculateFrequencyMultiplier(
+            reward: reward,
+            purchaseDates: purchaseDates,
+            now: now
+        )
+
+        #expect(multiplier > 1.0)
+        #expect(multiplier < 20.0)
+    }
+
     // Behaviour: Equivalent rates should stabilize the same way even if they
     // were entered as different units such as `1/day` and `30/month`.
     @Test func equivalentRatesShareTheSameCadenceModel() {
@@ -203,6 +227,38 @@ struct RewardPriceTests {
 
         #expect(second > first)
         #expect(third > second)
+    }
+
+    // Behaviour: A 4/day reward should not jump straight to the maximum price
+    // after one purchase yesterday and two purchases today.
+    @Test func clusteredHighFrequencyPurchasesStayBelowPriceCap() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let reward = makeReward(
+            maxFrequency: 4.0,
+            damageTier: .light,
+            createdAt: now.addingTimeInterval(-10 * 86_400)
+        )
+        let secondToday = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [now.addingTimeInterval(-86_400), now],
+            now: now,
+            generalDifficulty: 5
+        )
+        let nextPrice = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [
+                now.addingTimeInterval(-86_400),
+                now,
+                now
+            ],
+            now: now,
+            generalDifficulty: 5
+        )
+
+        #expect(nextPrice > secondToday)
+        #expect(nextPrice < 6_000)
     }
 
     // Behaviour: Buying several rewards in one go sums each incremental price

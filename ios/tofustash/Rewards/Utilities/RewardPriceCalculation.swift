@@ -4,9 +4,10 @@ import Foundation
 // Habit reward calculation because the frequency curve is inverted: buying a
 // reward near or above its cap should get more expensive, not cheaper.
 enum RewardPriceCalculation {
-    // Raising beta steepens the buy-price curve so frequent purchases get
-    // expensive sooner, while still using the same cap and warm-up model.
-    nonisolated private static let beta = 4.5
+    // Lowering beta softens the ramp for high-frequency rewards so short
+    // bursts do not explode into the cap as quickly, while sustained overuse
+    // still gets expensive.
+    nonisolated private static let beta = 2.5
     // Hard-cap the top-end so extreme or blank rewards stay expensive without
     // blowing out into prices that are unrealistic for the in-app economy.
     nonisolated private static let maxFrequencyMultiplier = 20.0
@@ -38,13 +39,20 @@ enum RewardPriceCalculation {
             neutralRatio: rewardNeutralRatio,
             now: now
         )
+        // Higher daily caps should allow a small same-day cluster before the
+        // user hits the steepest part of the overuse curve.
+        let adjustedRatio = effectiveRatio / burstAllowance(ratePerDay: configuredRate)
 
-        if effectiveRatio >= 1 {
+        if adjustedRatio >= 1 {
             return maxFrequencyMultiplier
         }
 
-        let multiplier = 2 / (1 - pow(effectiveRatio, beta)) - 1
+        let multiplier = 2 / (1 - pow(adjustedRatio, beta)) - 1
         return min(multiplier, maxFrequencyMultiplier)
+    }
+
+    nonisolated private static func burstAllowance(ratePerDay: Double) -> Double {
+        max(1.0, sqrt(ratePerDay))
     }
 
     nonisolated static func calculatePrice(
