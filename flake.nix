@@ -86,7 +86,7 @@
                 "rustfmt"
               ])
               typescript-language-server
-              nodePackages.prettier
+              prettier
               nodejs
               eas-cli
               rust-analyzer
