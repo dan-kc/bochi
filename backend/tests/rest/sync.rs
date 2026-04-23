@@ -133,7 +133,10 @@ async fn test_sync_pull_empty_for_new_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        0.0
+    );
     assert!(json.get("serverTime").unwrap().is_string());
 
     // User data should still be present
@@ -196,7 +199,10 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
     assert_eq!(trades[0].get("amount").unwrap(), 500);
 
     // Check balance updated
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        500.0
+    );
 }
 
 #[tokio::test]
@@ -238,7 +244,10 @@ async fn test_sync_push_ordering_habit_before_trade() {
 
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 1);
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 300.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        300.0
+    );
 }
 
 #[tokio::test]
@@ -359,7 +368,10 @@ async fn test_sync_push_updates_balance_correctly() {
 
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 2);
     // Balance should be sum of both trades: 500 + 300 = 800
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 800.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        800.0
+    );
 }
 
 #[tokio::test]
@@ -442,7 +454,10 @@ async fn test_sync_push_validates_habit_fields() {
 
     let errors = json.get("errors").unwrap().as_array().unwrap();
     let error = &errors[0];
-    assert_eq!(error.get("code").unwrap().as_str().unwrap(), "BAD_USER_INPUT");
+    assert_eq!(
+        error.get("code").unwrap().as_str().unwrap(),
+        "BAD_USER_INPUT"
+    );
 }
 
 #[tokio::test]
@@ -477,18 +492,27 @@ async fn test_sync_push_idempotent_same_ids() {
         make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        500.0
+    );
 
     // Push same data again - should be idempotent
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
     // Balance should still be 500 (not 1000)
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 500.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        500.0
+    );
 
     // Verify only one habit and one trade exist
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    assert_eq!(pull_json.get("habits").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(
+        pull_json.get("habits").unwrap().as_array().unwrap().len(),
+        1
+    );
     assert_eq!(
         pull_json.get("trades").unwrap().as_array().unwrap().len(),
         1
@@ -546,7 +570,10 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
     assert_eq!(trades[0].get("habitId").unwrap(), &habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 750);
 
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 750.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        750.0
+    );
 }
 
 #[tokio::test]
@@ -569,8 +596,7 @@ async fn test_sync_incremental_after_push() {
         }]
     });
 
-    let (_, json1) =
-        make_authenticated_post_request(&access_token, "/api/sync", push1_body).await;
+    let (_, json1) = make_authenticated_post_request(&access_token, "/api/sync", push1_body).await;
     let server_time = json1
         .get("serverTime")
         .unwrap()
@@ -649,7 +675,10 @@ async fn test_sync_only_returns_own_data() {
     // User 2 should see nothing
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
-    assert_eq!(json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        0.0
+    );
 }
 
 // ============================================================================
@@ -757,8 +786,14 @@ async fn test_sync_pull_tags_filtered_by_since() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+    let (_, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json
+        .get("serverTime")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Create second tag after getting timestamp
     let tag2_id = uuid::Uuid::new_v4().to_string();
@@ -829,8 +864,14 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+    let (_, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json
+        .get("serverTime")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Add second habit-tag association after timestamp
     let sync_body2 = json!({
@@ -1218,7 +1259,8 @@ async fn test_sync_push_tag_idempotent() {
     });
 
     // First push
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
@@ -1267,7 +1309,8 @@ async fn test_sync_push_habit_tag_idempotent() {
     });
 
     // First push
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
@@ -1278,7 +1321,15 @@ async fn test_sync_push_habit_tag_idempotent() {
 
     // Verify only one association exists
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    assert_eq!(pull_json.get("habitTags").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(
+        pull_json
+            .get("habitTags")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1307,6 +1358,7 @@ async fn test_sync_tags_data_isolation() {
 
     // User 2 tries to pull
     let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    dbg!(json.clone());
     assert_eq!(status, StatusCode::OK);
 
     // User 2 should not see User 1's tag
@@ -1421,8 +1473,14 @@ async fn test_sync_pull_rewards_filtered_by_since() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    let (_, push_json) = make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json.get("serverTime").unwrap().as_str().unwrap().to_string();
+    let (_, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+    let server_time = push_json
+        .get("serverTime")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Create second reward after getting timestamp
     let reward2_id = uuid::Uuid::new_v4().to_string();
@@ -1527,7 +1585,10 @@ async fn test_sync_push_updates_reward() {
     let rewards = json.get("rewards").unwrap().as_array().unwrap();
     assert_eq!(rewards.len(), 1);
     assert_eq!(rewards[0].get("name").unwrap(), "Updated");
-    assert_eq!(rewards[0].get("description").unwrap(), "Updated description");
+    assert_eq!(
+        rewards[0].get("description").unwrap(),
+        "Updated description"
+    );
     assert_eq!(rewards[0].get("damageTier").unwrap(), "extreme");
 }
 
@@ -1733,7 +1794,8 @@ async fn test_sync_push_reward_idempotent() {
     });
 
     // First push
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
@@ -1744,7 +1806,10 @@ async fn test_sync_push_reward_idempotent() {
 
     // Verify only one reward exists
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    assert_eq!(pull_json.get("rewards").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(
+        pull_json.get("rewards").unwrap().as_array().unwrap().len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1921,8 +1986,7 @@ async fn test_sync_push_general_difficulty_boundary_values() {
     let body = json!({
         "generalDifficulty": 0.01
     });
-    let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("generalDifficulty").unwrap(), 0.01);
 
@@ -1930,8 +1994,7 @@ async fn test_sync_push_general_difficulty_boundary_values() {
     let body = json!({
         "generalDifficulty": 999.99
     });
-    let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("generalDifficulty").unwrap(), 999.99);
 }
@@ -1973,7 +2036,9 @@ async fn test_sync_push_general_difficulty_with_other_entities() {
 
 #[tokio::test]
 async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence() {
-    let email = generate_email_from_fn!(test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence);
+    let email = generate_email_from_fn!(
+        test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence
+    );
     let password = "password123";
 
     register_user(&email, password).await;
@@ -1997,13 +2062,25 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
         make_authenticated_post_request(&access_token, "/api/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
-    let habit = push_json.get("habits").unwrap().as_array().unwrap().first().unwrap();
+    let habit = push_json
+        .get("habits")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(habit.get("durationSeconds").unwrap(), 600);
     assert_eq!(habit.get("lockoutDurationSeconds").unwrap(), 3600);
     assert_eq!(habit.get("skipConsequence").unwrap(), 5);
 
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    let pulled_habit = pull_json.get("habits").unwrap().as_array().unwrap().first().unwrap();
+    let pulled_habit = pull_json
+        .get("habits")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(pulled_habit.get("durationSeconds").unwrap(), 600);
     assert_eq!(pulled_habit.get("lockoutDurationSeconds").unwrap(), 3600);
     assert_eq!(pulled_habit.get("skipConsequence").unwrap(), 5);
@@ -2032,7 +2109,13 @@ async fn test_sync_push_habit_validates_duration_range() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -2065,7 +2148,13 @@ async fn test_sync_push_habit_validates_lockout_duration_range() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -2098,7 +2187,13 @@ async fn test_sync_push_habit_validates_lockout_duration_maximum() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -2131,7 +2226,13 @@ async fn test_sync_push_habit_validates_skip_consequence_range() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -2143,7 +2244,8 @@ async fn test_sync_push_habit_validates_skip_consequence_range() {
 
 #[tokio::test]
 async fn test_sync_push_without_general_difficulty_preserves_existing() {
-    let email = generate_email_from_fn!(test_sync_push_without_general_difficulty_preserves_existing);
+    let email =
+        generate_email_from_fn!(test_sync_push_without_general_difficulty_preserves_existing);
     let password = "password123";
 
     register_user(&email, password).await;

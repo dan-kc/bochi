@@ -20,7 +20,9 @@ fn get_set_cookie_headers(response: &http::Response<axum::body::Body>) -> Vec<St
 
 /// Helper to find a specific cookie by name from Set-Cookie headers
 fn find_cookie<'a>(cookies: &'a [String], name: &str) -> Option<&'a String> {
-    cookies.iter().find(|c| c.starts_with(&format!("{}=", name)))
+    cookies
+        .iter()
+        .find(|c| c.starts_with(&format!("{}=", name)))
 }
 
 /// Helper to check if a cookie has a specific attribute

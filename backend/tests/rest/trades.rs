@@ -137,7 +137,8 @@ async fn test_create_trade_with_both_habit_and_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`".to_string()
+            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`"
+                .to_string()
         )
     );
     assert_eq!(
@@ -170,7 +171,8 @@ async fn test_create_trade_with_neither_habit_nor_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`".to_string()
+            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`"
+                .to_string()
         )
     );
     assert_eq!(

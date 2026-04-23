@@ -354,7 +354,8 @@ async fn test_create_reward_max_daily_frequency_zero() {
 
 #[tokio::test]
 async fn test_create_reward_max_daily_frequency_one_per_month_boundary() {
-    let email = generate_email_from_fn!(test_create_reward_max_daily_frequency_one_per_month_boundary);
+    let email =
+        generate_email_from_fn!(test_create_reward_max_daily_frequency_one_per_month_boundary);
     let password = "password123";
 
     register_user(&email, password).await;

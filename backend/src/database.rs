@@ -4,9 +4,7 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres, Transaction};
 use url::form_urlencoded;
 use uuid::Uuid;
 
-#[derive(
-    Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
 #[sqlx(type_name = "habit_difficulty_tier", rename_all = "snake_case")]
 pub enum HabitDifficultyTier {
@@ -17,9 +15,7 @@ pub enum HabitDifficultyTier {
     Extreme,
 }
 
-#[derive(
-    Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
 #[sqlx(type_name = "reward_damage_tier", rename_all = "snake_case")]
 pub enum RewardDamageTier {
@@ -251,10 +247,10 @@ impl Database {
              FROM users
              WHERE email = $1",
         )
-            .bind(email)
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or(sqlx::Error::RowNotFound)
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
     }
 
     /// Returns the user by ID.
@@ -399,9 +395,9 @@ impl Database {
              FROM users
              WHERE id = $1",
         )
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
     }
 
     /// Get the account-level auth and subscription state needed by the client.
@@ -418,9 +414,9 @@ impl Database {
              FROM users
              WHERE id = $1",
         )
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
     }
 
     /// Returns the user who already owns a given Apple original transaction, if any.
@@ -737,26 +733,24 @@ impl Database {
         habit_tag: &UpsertHabitTagOptions,
     ) -> Result<HabitTagRow, sqlx::Error> {
         // Validate habit belongs to user
-        let habit_valid: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM habits WHERE id = $1 AND user_id = $2",
-        )
-        .bind(habit_tag.habit_id)
-        .bind(user_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let habit_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM habits WHERE id = $1 AND user_id = $2")
+                .bind(habit_tag.habit_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
 
         if habit_valid.is_none() {
             return Err(sqlx::Error::RowNotFound);
         }
 
         // Validate tag belongs to user
-        let tag_valid: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM tags WHERE id = $1 AND user_id = $2",
-        )
-        .bind(habit_tag.tag_id)
-        .bind(user_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let tag_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tags WHERE id = $1 AND user_id = $2")
+                .bind(habit_tag.tag_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
 
         if tag_valid.is_none() {
             return Err(sqlx::Error::RowNotFound);
@@ -885,26 +879,24 @@ impl Database {
         reward_tag: &UpsertRewardTagOptions,
     ) -> Result<RewardTagRow, sqlx::Error> {
         // Validate reward belongs to user
-        let reward_valid: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM rewards WHERE id = $1 AND user_id = $2",
-        )
-        .bind(reward_tag.reward_id)
-        .bind(user_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let reward_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM rewards WHERE id = $1 AND user_id = $2")
+                .bind(reward_tag.reward_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
 
         if reward_valid.is_none() {
             return Err(sqlx::Error::RowNotFound);
         }
 
         // Validate tag belongs to user
-        let tag_valid: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM tags WHERE id = $1 AND user_id = $2",
-        )
-        .bind(reward_tag.tag_id)
-        .bind(user_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let tag_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tags WHERE id = $1 AND user_id = $2")
+                .bind(reward_tag.tag_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
 
         if tag_valid.is_none() {
             return Err(sqlx::Error::RowNotFound);

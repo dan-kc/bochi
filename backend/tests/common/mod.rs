@@ -142,7 +142,10 @@ pub async fn make_authenticated_get_request(
             Request::builder()
                 .method(Method::GET)
                 .uri(path)
-                .header(http::header::AUTHORIZATION, format!("Bearer {}", access_token))
+                .header(
+                    http::header::AUTHORIZATION,
+                    format!("Bearer {}", access_token),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -179,7 +182,10 @@ pub async fn make_authenticated_post_request(
                 .method(Method::POST)
                 .uri(path)
                 .header(http::header::CONTENT_TYPE, "application/json")
-                .header(http::header::AUTHORIZATION, format!("Bearer {}", access_token))
+                .header(
+                    http::header::AUTHORIZATION,
+                    format!("Bearer {}", access_token),
+                )
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )

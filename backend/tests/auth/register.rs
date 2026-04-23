@@ -436,8 +436,7 @@ async fn test_register_multiple_validation_errors() {
 
     // We should get validation errors
     assert!(
-        error_codes.contains(&"EMAIL_TOO_LONG")
-            || error_codes.contains(&"INVALID_EMAIL_ADDRESS"),
+        error_codes.contains(&"EMAIL_TOO_LONG") || error_codes.contains(&"INVALID_EMAIL_ADDRESS"),
         "Should have EMAIL_TOO_LONG or INVALID_EMAIL_ADDRESS error"
     );
     assert!(

@@ -48,7 +48,10 @@ async fn test_link_apple_subscription_marks_signed_in_account_as_apple_premium()
     .await;
 
     assert_eq!(status, StatusCode::OK, "Response: {:?}", json);
-    assert_eq!(json.get("email").and_then(|v| v.as_str()), Some(email.as_str()));
+    assert_eq!(
+        json.get("email").and_then(|v| v.as_str()),
+        Some(email.as_str())
+    );
     assert_eq!(
         json.get("subscriptionSource").and_then(|v| v.as_str()),
         Some("apple")

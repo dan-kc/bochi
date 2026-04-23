@@ -8,8 +8,8 @@ use crate::{
     router::{App, AuthenticatedUser},
 };
 
-use super::ApiError;
 use super::habits::{MAX_DAILY_FREQUENCY, MIN_DAILY_FREQUENCY};
+use super::ApiError;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

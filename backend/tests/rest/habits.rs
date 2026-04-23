@@ -75,7 +75,8 @@ async fn test_create_habit_with_difficulty_tier() {
 
 #[tokio::test]
 async fn test_create_habit_with_duration_lockout_and_skip_consequence() {
-    let email = generate_email_from_fn!(test_create_habit_with_duration_lockout_and_skip_consequence);
+    let email =
+        generate_email_from_fn!(test_create_habit_with_duration_lockout_and_skip_consequence);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -378,7 +379,8 @@ async fn test_create_habit_min_daily_frequency_zero() {
 
 #[tokio::test]
 async fn test_create_habit_min_daily_frequency_one_per_month_boundary() {
-    let email = generate_email_from_fn!(test_create_habit_min_daily_frequency_one_per_month_boundary);
+    let email =
+        generate_email_from_fn!(test_create_habit_min_daily_frequency_one_per_month_boundary);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -456,7 +458,13 @@ async fn test_create_habit_duration_must_be_positive() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -483,7 +491,13 @@ async fn test_create_habit_duration_cannot_exceed_twelve_hours() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -495,7 +509,8 @@ async fn test_create_habit_duration_cannot_exceed_twelve_hours() {
 
 #[tokio::test]
 async fn test_create_habit_lockout_duration_must_be_at_least_one_minute() {
-    let email = generate_email_from_fn!(test_create_habit_lockout_duration_must_be_at_least_one_minute);
+    let email =
+        generate_email_from_fn!(test_create_habit_lockout_duration_must_be_at_least_one_minute);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -510,7 +525,13 @@ async fn test_create_habit_lockout_duration_must_be_at_least_one_minute() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -522,7 +543,8 @@ async fn test_create_habit_lockout_duration_must_be_at_least_one_minute() {
 
 #[tokio::test]
 async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
-    let email = generate_email_from_fn!(test_create_habit_lockout_duration_cannot_exceed_thirty_days);
+    let email =
+        generate_email_from_fn!(test_create_habit_lockout_duration_cannot_exceed_thirty_days);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -537,7 +559,13 @@ async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
@@ -549,7 +577,8 @@ async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
 
 #[tokio::test]
 async fn test_create_habit_skip_consequence_must_be_between_one_and_five() {
-    let email = generate_email_from_fn!(test_create_habit_skip_consequence_must_be_between_one_and_five);
+    let email =
+        generate_email_from_fn!(test_create_habit_skip_consequence_must_be_between_one_and_five);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -564,7 +593,13 @@ async fn test_create_habit_skip_consequence_must_be_between_one_and_five() {
     let (status, json) = make_authenticated_post_request(&access_token, "/api/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    let error = json.get("errors").unwrap().as_array().unwrap().first().unwrap();
+    let error = json
+        .get("errors")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap();
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(

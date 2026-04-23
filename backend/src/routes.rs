@@ -175,7 +175,10 @@ impl Display for Error {
                 write!(f, "Failed to link Apple subscription. Please try again.")
             }
             Self::SubscriptionAlreadyLinked => {
-                write!(f, "This Apple subscription is already linked to another account.")
+                write!(
+                    f,
+                    "This Apple subscription is already linked to another account."
+                )
             }
         }
     }
@@ -436,7 +439,9 @@ struct MeResponse {
     subscription_expires_at: Option<chrono::NaiveDateTime>,
 }
 
-fn me_response_from_account_state(account_state: crate::database::UserAccountStateRow) -> MeResponse {
+fn me_response_from_account_state(
+    account_state: crate::database::UserAccountStateRow,
+) -> MeResponse {
     MeResponse {
         email: account_state.email,
         subscription_source: account_state.subscription_source,

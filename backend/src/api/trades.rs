@@ -5,7 +5,10 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    database::{CreateTradeWithHabitOptions, CreateTradeWithRewardOptions, HabitDifficultyTier, RewardDamageTier},
+    database::{
+        CreateTradeWithHabitOptions, CreateTradeWithRewardOptions, HabitDifficultyTier,
+        RewardDamageTier,
+    },
     router::{App, AuthenticatedUser},
 };
 

@@ -17,7 +17,8 @@ async fn test_get_me_requires_authentication() {
 async fn test_get_me_returns_registered_user_default_subscription_state() {
     // When a user signs in on a device, the app needs one place to learn who the
     // account belongs to and whether premium sync features are currently unlocked.
-    let email = generate_email_from_fn!(test_get_me_returns_registered_user_default_subscription_state);
+    let email =
+        generate_email_from_fn!(test_get_me_returns_registered_user_default_subscription_state);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -26,7 +27,10 @@ async fn test_get_me_returns_registered_user_default_subscription_state() {
     let (status, json) = make_authenticated_get_request(&access_token, "/auth/me").await;
 
     assert_eq!(status, StatusCode::OK, "Response: {:?}", json);
-    assert_eq!(json.get("email").and_then(|v| v.as_str()), Some(email.as_str()));
+    assert_eq!(
+        json.get("email").and_then(|v| v.as_str()),
+        Some(email.as_str())
+    );
     assert_eq!(
         json.get("subscriptionSource"),
         Some(&serde_json::Value::Null),

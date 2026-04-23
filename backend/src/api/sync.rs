@@ -13,9 +13,9 @@ use crate::{
     router::{App, AuthenticatedUser},
 };
 
-use super::ApiError;
 use super::habits::validate_habit_fields;
 use super::rewards::validate_reward_fields;
+use super::ApiError;
 
 // ============================================================================
 // Request/Response Types
@@ -642,10 +642,7 @@ pub async fn post_sync(
 
             // Validate tag_id is a valid UUID
             let tag_id = habit_tag_input.tag_id.parse::<Uuid>().map_err(|_| {
-                ApiError::Validation(format!(
-                    "Invalid tag_id format: {}",
-                    habit_tag_input.tag_id
-                ))
+                ApiError::Validation(format!("Invalid tag_id format: {}", habit_tag_input.tag_id))
             })?;
 
             let upsert_opts = database::UpsertHabitTagOptions {
@@ -655,16 +652,15 @@ pub async fn post_sync(
                 deleted_at: habit_tag_input.deleted_at,
             };
 
-            let habit_tag_row =
-                Database::upsert_habit_tag_tx(&mut tx, user.user_id, &upsert_opts)
-                    .await
-                    .map_err(|e| {
-                        error!("Database Error upserting habit_tag: {:?}", e);
-                        ApiError::Validation(format!(
-                            "Invalid habit or tag reference for habit_id: {}, tag_id: {}",
-                            habit_id, tag_id
-                        ))
-                    })?;
+            let habit_tag_row = Database::upsert_habit_tag_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting habit_tag: {:?}", e);
+                    ApiError::Validation(format!(
+                        "Invalid habit or tag reference for habit_id: {}, tag_id: {}",
+                        habit_id, tag_id
+                    ))
+                })?;
 
             result_habit_tags.push(HabitTagOutput {
                 habit_id: habit_tag_row.habit_id.to_string(),
