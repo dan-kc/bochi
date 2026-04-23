@@ -2,6 +2,10 @@ Remove the seconds field from the lockout modal. Add days. The max value should 
 
 ---
 
+Fix max lockout bounds
+
+Errors on frontend
+
 Per entry trade history
 
 Reminders, push notifications
