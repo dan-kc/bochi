@@ -16,7 +16,7 @@ use super::ApiError;
 pub struct CreateRewardRequest {
     pub name: String,
     pub description: String,
-    pub max_daily_frequency: Option<f32>,
+    pub max_daily_frequency: Option<f64>,
     pub damage_tier: Option<RewardDamageTier>,
 }
 
@@ -29,14 +29,14 @@ pub struct RewardResponse {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub max_daily_frequency: Option<f32>,
+    pub max_daily_frequency: Option<f64>,
     pub damage_tier: Option<RewardDamageTier>,
 }
 
 pub(crate) fn validate_reward_fields(
     name: &str,
     description: &str,
-    max_daily_frequency: Option<f32>,
+    max_daily_frequency: Option<f64>,
 ) -> Result<(), ApiError> {
     let name_len = name.chars().count();
     if name_len > 100 || name_len < 1 {
@@ -57,7 +57,6 @@ pub(crate) fn validate_reward_fields(
     }
 
     if let Some(freq) = max_daily_frequency {
-        let freq = freq as f64;
         if !(MIN_DAILY_FREQUENCY..=MAX_DAILY_FREQUENCY).contains(&freq) {
             let msg = format!(
                 "The 'max_daily_frequency' must be between {} and {}. You sent {}.",

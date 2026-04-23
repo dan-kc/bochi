@@ -360,7 +360,7 @@ pub async fn get_sync(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
-            max_daily_frequency: row.max_daily_frequency.map(|f| f as f64),
+            max_daily_frequency: row.max_daily_frequency,
             damage_tier: row.damage_tier,
         })
         .collect();
@@ -479,7 +479,7 @@ pub async fn post_sync(
             validate_reward_fields(
                 &reward_input.name,
                 &reward_input.description,
-                reward_input.max_daily_frequency.map(|freq| freq as f32),
+                reward_input.max_daily_frequency,
             )?;
 
             let upsert_opts = database::UpsertRewardOptions {
@@ -506,7 +506,7 @@ pub async fn post_sync(
                 created_at: reward_row.created_at,
                 updated_at: reward_row.updated_at,
                 deleted_at: reward_row.deleted_at,
-                max_daily_frequency: reward_row.max_daily_frequency.map(|f| f as f64),
+                max_daily_frequency: reward_row.max_daily_frequency,
                 damage_tier: reward_row.damage_tier,
             });
         }

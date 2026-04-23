@@ -866,7 +866,7 @@ impl Database {
         .bind(&reward.description)
         .bind(reward.created_at)
         .bind(reward.deleted_at)
-        .bind(reward.max_daily_frequency.map(|f| f as f32))
+        .bind(reward.max_daily_frequency)
         .bind(reward.damage_tier)
         .fetch_one(&mut **tx)
         .await
@@ -963,7 +963,7 @@ pub struct CreateRewardOptions {
     pub user_id: Uuid,
     pub name: String,
     pub description: String,
-    pub max_daily_frequency: Option<f32>,
+    pub max_daily_frequency: Option<f64>,
     pub damage_tier: Option<RewardDamageTier>,
 }
 
@@ -1090,7 +1090,7 @@ pub struct RewardRow {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub max_daily_frequency: Option<f32>,
+    pub max_daily_frequency: Option<f64>,
     pub damage_tier: Option<RewardDamageTier>,
 }
 
@@ -1136,7 +1136,7 @@ pub struct TradeWithRewardRow {
     pub reward_updated_at: NaiveDateTime,
     pub reward_deleted_at: Option<NaiveDateTime>,
     pub reward_description: String,
-    pub reward_max_daily_frequency: Option<f32>,
+    pub reward_max_daily_frequency: Option<f64>,
     pub reward_damage_tier: Option<RewardDamageTier>,
 }
 

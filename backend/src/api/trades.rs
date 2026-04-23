@@ -54,7 +54,7 @@ pub struct TradableItem {
     pub skip_consequence: Option<i16>,
     // Reward fields
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_daily_frequency: Option<f32>,
+    pub max_daily_frequency: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage_tier: Option<RewardDamageTier>,
 }
