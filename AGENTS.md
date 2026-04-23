@@ -3,7 +3,6 @@
 - Habit tracker: complete habits to earn currency; spend currency on rewards.
 - Run repo commands through the Nix devshell so env from `flake.nix` and `scripts.nix` is loaded.
 - Prefer `nix develop -c <cmd>` for script helpers like `t`, `start`, `stop`, `status`, `seed`, and `run`.
-- `./frontend` is legacy; ignore it.
 
 ## iOS
 - Use default SwiftUI styling, including default icons.

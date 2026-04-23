@@ -8,11 +8,6 @@ enum TagSelectionMode: Equatable {
 // View for managing tags on a habit. Shows all available tags with
 // checkmarks for those already applied. Also allows creating, editing,
 // and deleting tags.
-//
-// Port of frontend/components/TagSelectionModal.tsx. The React version
-// used a BottomSheet with a ScrollView. In SwiftUI, we use a List inside
-// a NavigationStack (presented as a .sheet) which gives us free scrolling,
-// swipe-to-delete, and native iOS styling.
 struct TagsView: View {
     let selectionMode: TagSelectionMode
     @Environment(\.dismiss) private var dismiss

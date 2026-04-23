@@ -8,14 +8,7 @@ logs
 .terraform
 .pgdata
 .backend.pid
-.frontend.pid
 .lspmux.pid
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
 
 # Native
 xcuserdata/
@@ -29,9 +22,6 @@ DerivedData/
 *.key
 *.mobileprovision
 
-# Metro
-.metro-health-check*
-
 # debug
 npm-debug.*
 yarn-debug.*
@@ -43,9 +33,6 @@ yarn-error.*
 
 # local env files
 .env*.local
-
-# typescript
-*.tsbuildinfo
 
 app-example
 

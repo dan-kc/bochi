@@ -37,7 +37,7 @@ let
       fi
 
       mkdir -p "$ROOT/logs"
-      touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/frontend.log" "$ROOT/logs/backend.log" "$ROOT/logs/lspmux.log"
+      touch "$ROOT/logs/postgres.log" "$ROOT/logs/adminer.log" "$ROOT/logs/backend.log" "$ROOT/logs/lspmux.log"
 
       echo "Checking services..."
 
@@ -94,26 +94,6 @@ let
         echo "  ✓ Adminer started"
       fi
 
-      # Frontend
-      if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
-        echo "  ✓ Frontend already running"
-      else
-        echo "  → Starting Frontend..."
-        cd "$ROOT/frontend"
-        nohup bash -c 'PATH="${pkgs.nodejs}/bin:$PATH" ${pkgs.nodejs}/bin/npm run web 2>&1 | ${pkgs.moreutils}/bin/ts "[%Y-%m-%d %H:%M:%S]"' >> "$ROOT/logs/frontend.log" 2>&1 &
-        echo $! > "$ROOT/.frontend.pid"
-        disown
-        cd "$ROOT"
-        # Wait for frontend to start listening (up to 10 seconds)
-        for i in {1..20}; do
-          if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
-            break
-          fi
-          sleep 0.5
-        done
-        echo "  ✓ Frontend started"
-      fi
-
       # LSP Mux
       if [ -f "$ROOT/.lspmux.pid" ] && kill -0 $(cat "$ROOT/.lspmux.pid") 2>/dev/null; then
         echo "  ✓ LSP Mux already running"
@@ -149,16 +129,6 @@ let
       else
         rm -f "$ROOT/.lspmux.pid"
         echo "  ✗ LSP Mux not running"
-      fi
-
-      # Frontend
-      FRONTEND_PID=$(lsof -t -i :${env.FRONTEND_PORT} -sTCP:LISTEN 2>/dev/null)
-      if [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null; then
-        rm -f "$ROOT/.frontend.pid"
-        echo "  ✓ Frontend stopped"
-      else
-        rm -f "$ROOT/.frontend.pid"
-        echo "  ✗ Frontend not running"
       fi
 
       # Adminer
@@ -215,13 +185,6 @@ let
         echo "  Adminer      ✗ Stopped"
       fi
 
-      # Frontend
-      if lsof -i :${env.FRONTEND_PORT} -sTCP:LISTEN &>/dev/null; then
-        echo "  Frontend     ✓ Running    localhost:${env.FRONTEND_PORT}"
-      else
-        echo "  Frontend     ✗ Stopped"
-      fi
-
       # LSP Mux
       if [ -f "$ROOT/.lspmux.pid" ] && kill -0 $(cat "$ROOT/.lspmux.pid") 2>/dev/null; then
         echo "  LSP Mux      ✓ Running    localhost:${env.LSPMUX_PORT}"
@@ -269,32 +232,6 @@ let
       JWT_PUBLIC_KEY="${env.JWT_PUBLIC_KEY}" \
       LOG_DESTINATION=logs \
       cargo run "$@"
-    '';
-
-    # Start frontend dev server
-    run-frontend = pkgs.writeShellScriptBin "run-frontend" ''
-      set -e
-      cd frontend
-      npm run start "$@"
-    '';
-
-    # Run npm commands in frontend directory
-    npm = pkgs.writeShellScriptBin "npm" ''
-      export PATH="${pkgs.nodejs}/bin:$PATH"
-      (cd frontend && npm "$@")
-    '';
-
-    # Run pnpm commands in frontend directory
-    pnpm = pkgs.writeShellScriptBin "pnpm" ''
-      export PATH="${pkgs.nodejs}/bin:${pkgs.pnpm}/bin:$PATH"
-      (cd frontend && pnpm "$@")
-    '';
-
-    # Start frontend web dev server
-    web = pkgs.writeShellScriptBin "web" ''
-      set -e
-      export PATH="${pkgs.nodejs}/bin:$PATH"
-      (cd frontend && npm run web "$@")
     '';
 
     # Build and run native iOS app in simulator

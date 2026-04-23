@@ -1,7 +1,6 @@
 import Foundation
 
 // Generates random vibrant colors for tags. Port of the color generation
-// logic from frontend/lib/tag.ts `generateRandomColor()`.
 //
 // Uses HSL color space to ensure colors are vibrant (not too pale or dark),
 // then converts to hex. This is the same approach as CSS `hsl(h, s%, l%)`.

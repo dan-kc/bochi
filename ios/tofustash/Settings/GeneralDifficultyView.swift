@@ -3,9 +3,6 @@ import SwiftUI
 // A sheet for adjusting the general difficulty setting, which scales reward
 // purchase costs across the app. Habit payouts stay controlled by each
 // habit's own difficulty tier and cadence.
-//
-// Port of frontend/components/settings/GeneralDifficultyModal.tsx.
-// Uses a TextField with validation instead of the React Native TextInput.
 struct GeneralDifficultyView: View {
     @Environment(UserSettingsStore.self) private var userSettingsStore
     @Environment(\.dismiss) private var dismiss

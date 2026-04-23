@@ -1,9 +1,5 @@
 Tofustash is a gamified productivity tool to handle your habits. It is themed on personal finance and the stock exchange. You earn "tofu" that is the in game currency. It is awarded for completing habits, and it is spent on rewards like "eat a chocolate bar".
 
-## Frontend
-
-A local-first React Native application for Web, Android and IOS. The web service is only used for easy testing.
-
 ## Backend
 
 A rust axum graphql server.
@@ -24,8 +20,6 @@ The app uses a unified sync system for offline-first operation:
 - **Full sync**: Automatically triggered every 24 hours to ensure consistency
 
 Client-side state is stored in a single `tofustash_sync_state` JSON blob containing the last sync timestamp and dirty entity IDs.
-
-For details on sync internals and schema migration strategy, see [frontend/lib/sync/README.md](frontend/lib/sync/README.md).
 
 ## Development
 

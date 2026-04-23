@@ -44,10 +44,6 @@
     MCowBQYDK2VwAyEAgqOy39tZbw5kBo7F7+BIJfcemdiIbQhirZW4NV8lC2I=
     -----END PUBLIC KEY-----";
 
-          # Frontend
-          FRONTEND_PORT = "8502";
-          FRONTEND_LOG_FILE = "./logs/frontend.log";
-
           # Postgres
           POSTGRES_LOG_FILE = "./logs/postgres.log";
 
@@ -85,10 +81,7 @@
                 "rustc"
                 "rustfmt"
               ])
-              typescript-language-server
               prettier
-              nodejs
-              eas-cli
               rust-analyzer
               terraform-ls
               adminer
@@ -112,7 +105,6 @@
             ++ scripts;
           shellHook = ''
             # export RUST_BACKTRACE=1
-            export FRONTEND_PORT="${env.FRONTEND_PORT}"
             export HOST="localhost"
             export LSPMUX_PORT="${env.LSPMUX_PORT}"
             status
