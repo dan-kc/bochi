@@ -734,11 +734,12 @@ pub async fn post_sync(
             })?;
     }
 
-    // Recalculate balance from all trades
-    let new_balance = Database::recalculate_balance_tx(&mut tx, user.user_id)
+    // Return a balance derived from the just-written trade history instead of
+    // relying on a separate cached column.
+    let new_balance = Database::calculate_balance_from_trades_tx(&mut tx, user.user_id)
         .await
         .map_err(|e| {
-            error!("Database Error recalculating balance: {:?}", e);
+            error!("Database Error calculating balance from trades: {:?}", e);
             ApiError::Internal
         })?;
 

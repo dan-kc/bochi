@@ -5,7 +5,6 @@ use crate::common::{
 use crate::generate_email_from_fn;
 use axum::http::StatusCode;
 use serde_json::{json, Value};
-use tofustash_backend::database::Database;
 
 // ============================================================================
 // Sync Pull (GET /api/sync) Tests
@@ -122,8 +121,8 @@ async fn test_sync_pull_with_since_filters_all_entities() {
 }
 
 #[tokio::test]
-async fn test_sync_pull_recomputes_balance_from_trade_history() {
-    let email = generate_email_from_fn!(test_sync_pull_recomputes_balance_from_trade_history);
+async fn test_sync_pull_balance_sums_only_active_trade_history() {
+    let email = generate_email_from_fn!(test_sync_pull_balance_sums_only_active_trade_history);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -138,12 +137,21 @@ async fn test_sync_pull_recomputes_balance_from_trade_history() {
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
     let sync_body = json!({
-        "trades": [{
-            "id": uuid::Uuid::new_v4().to_string(),
-            "habitId": habit_id,
-            "amount": 282,
-            "createdAt": "2025-01-01T10:00:00"
-        }]
+        "trades": [
+            {
+                "id": uuid::Uuid::new_v4().to_string(),
+                "habitId": habit_id,
+                "amount": 282,
+                "createdAt": "2025-01-01T10:00:00"
+            },
+            {
+                "id": uuid::Uuid::new_v4().to_string(),
+                "habitId": habit_id,
+                "amount": 50,
+                "createdAt": "2025-01-01T10:05:00",
+                "deletedAt": "2025-01-01T10:10:00"
+            }
+        ]
     });
     let (push_status, push_json) =
         make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
@@ -153,14 +161,10 @@ async fn test_sync_pull_recomputes_balance_from_trade_history() {
         282.0
     );
 
-    let database = Database::new().await;
-    let user = database.get_user_from_email(&email).await.unwrap();
-    database.set_user_balance(user.id, -999.0).await.unwrap();
-
     let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
-    assert_eq!(pull_json.get("trades").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(pull_json.get("trades").unwrap().as_array().unwrap().len(), 2);
     assert_eq!(
         pull_json.get("balance").unwrap().get("tofuBalance").unwrap(),
         282.0

@@ -377,8 +377,7 @@ impl Database {
         }
     }
 
-    /// Calculate a user's balance directly from non-deleted trades without
-    /// reading or updating the cached users.tofu_balance column.
+    /// Calculate a user's balance directly from non-deleted trades.
     pub async fn calculate_balance_from_trades(&self, user_id: Uuid) -> Result<f64, sqlx::Error> {
         let (total,): (Option<i64>,) = sqlx::query_as(
             "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
@@ -388,17 +387,6 @@ impl Database {
         .await?;
 
         Ok(total.unwrap_or(0) as f64)
-    }
-
-    #[allow(dead_code)]
-    pub async fn set_user_balance(&self, user_id: Uuid, balance: f64) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE users SET tofu_balance = $2 WHERE id = $1")
-            .bind(user_id)
-            .bind(balance)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
     }
 
     /// Get user profile (email, entitlement state, and general difficulty)
@@ -637,7 +625,7 @@ impl Database {
         .await
     }
 
-    /// Upsert a trade within a transaction (does not update balance - caller should use recalculate_balance_tx)
+    /// Upsert a trade within a transaction.
     pub async fn upsert_trade_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
@@ -692,24 +680,8 @@ impl Database {
         .await
     }
 
-    /// Recalculate user balance from all non-deleted trades within a transaction
-    pub async fn recalculate_balance_tx(
-        tx: &mut Transaction<'_, Postgres>,
-        user_id: Uuid,
-    ) -> Result<f64, sqlx::Error> {
-        let balance = Self::calculate_balance_from_trades_tx(tx, user_id).await?;
-
-        // Update user balance
-        sqlx::query("UPDATE users SET tofu_balance = $2 WHERE id = $1")
-            .bind(user_id)
-            .bind(balance)
-            .execute(&mut **tx)
-            .await?;
-
-        Ok(balance)
-    }
-
-    async fn calculate_balance_from_trades_tx(
+    /// Calculate a user's balance from non-deleted trades within a transaction.
+    pub async fn calculate_balance_from_trades_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
     ) -> Result<f64, sqlx::Error> {

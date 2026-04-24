@@ -1,7 +1,7 @@
 -- Fixture data for tofustash development
 
-INSERT INTO users (id, email, password, premium, theme_preference, tofu_balance) VALUES
-('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto', 150.0);
+INSERT INTO users (id, email, password, premium, theme_preference) VALUES
+('11111111-1111-1111-1111-111111111111', 'alice@example.com', '$argon2id$v=19$m=19456,t=2,p=1$mGgPTifIvQ6giqIgS7u5Bg$+vMH8Y/Zeab+O90RTLo5oYUiIb4NS5e1DInFrXAX9Lc', false, 'auto');
 
 INSERT INTO tags (id, user_id, name, color_hex) VALUES
 ('aaaa1111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Fitness', '#22C55E'),
@@ -29,6 +29,9 @@ INSERT INTO habit_tags (habit_id, tag_id) VALUES
 ('aaaa0007-0000-0000-0000-000000000007', 'aaaa1111-1111-1111-1111-111111111111'),
 ('aaaa0008-0000-0000-0000-000000000008', 'aaaa1111-1111-1111-1111-111111111111'),
 ('aaaa0011-0000-0000-0000-000000000011', 'aaaa1111-1111-1111-1111-111111111111');
+
+INSERT INTO trades (id, user_id, habit_id, reward_id, amount, created_at) VALUES
+('bbbb0001-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'aaaa0001-0000-0000-0000-000000000001', NULL, 150, CURRENT_TIMESTAMP);
 
 INSERT INTO rewards (id, user_id, name, description, max_daily_frequency, damage_tier) VALUES
 ('aaaa1000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Coffee', '', 2.0, 'medium'),
