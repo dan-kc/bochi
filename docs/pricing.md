@@ -1,401 +1,441 @@
 # Pricing
 
-## Purpose
+This document specifies the current iOS pricing equations used in `./ios`.
 
-This document states the current iOS pricing equations used in `./ios`.
+There are two outputs:
 
-There are two related calculations:
+- habit completion reward
+  `habitReward = round(100 · T_h · F_h · D_h · S_h)`
+- reward purchase cost
+  `rewardCost = round(100 · G · T_r · F_r)`
 
-- habit completion reward: how much tofu the user earns
-- reward purchase cost: how much tofu the user spends
+Implemented in:
 
-The two calculations now differ at the top level:
+- shared cadence model: `ios/tofustash/Shared/Models/PricingTiers.swift`
+- habit reward: `ios/tofustash/Habits/Utilities/RewardCalculation.swift`
+- reward cost: `ios/tofustash/Rewards/Utilities/RewardPriceCalculation.swift`
 
-`habitReward = round(100 * T_h * F_h * D_h * S_h)`
+## 1. What The System Is Trying To Do
 
-`rewardCost = round(100 * G * T_r * F_r)`
+The pricing model is trying to enforce two different behaviours:
 
-where:
+- habits should pay more when they are under-done, and less when they are over-done
+- rewards should cost more when they are being bought too often
 
-- `G` is the user-configurable general difficulty
-- `T` is the fixed tier multiplier
-- `F` is the frequency multiplier
+The hard part is that "too often" depends on cadence:
 
-Behaviourally:
+- `3/day` should react on the scale of hours
+- `2/month` should react on the scale of weeks
+- `1/day` and `30/month` should behave identically, because they represent the same rate
 
-- changing general difficulty only changes reward purchase cost
-- changing general difficulty does not change habit completion reward
+So the system first converts user-entered frequency into a canonical internal
+rate:
 
-## Design Goals
+- `f ∈ [1/30, 100]` times/day
+- `τ = 1 / f` days
 
-- The user should pick from a small stable set of tiers instead of maintaining relative rankings.
-- Harder habits should always pay more than easier ones when frequency is equal.
-- More damaging rewards should always cost more than less damaging ones when frequency is equal.
-- The displayed reward price should react quickly enough to match the cap the user entered.
-- Higher-frequency reward caps should tolerate short bursts better than low-frequency caps.
-- Monthly and daily frequencies should both be handled by the same rule.
-- Equivalent rates such as `1/day` and `30/month` should stabilize the same way.
-- Multi-claim and multi-buy totals should reflect each incremental action, not `currentPrice * quantity`.
-- The same pricing rule should be reused everywhere the iOS app previews, displays, and persists prices.
+Interpretation:
 
-## Tier Model
-
-Habit difficulty is stored as:
-
-- `trivial`
-- `light`
-- `medium`
-- `hard`
-- `extreme`
-
-Reward damage is stored as:
-
-- `harmless`
-- `light`
-- `medium`
-- `heavy`
-- `extreme`
-
-These are absolute categories, not relative positions. Adding a new habit or
-reward does not force the user to re-rank existing items.
-
-### Habit Difficulty Multipliers
-
-- `trivial = 0.2`
-- `light = 0.6`
-- `medium = 1.0`
-- `hard = 1.4`
-- `extreme = 2.0`
-
-These values come from taking the previous tier multipliers and scaling each
-tier's distance from the neutral `1.0` baseline by `4x`.
-
-### Reward Damage Multipliers
-
-- `harmless = 0.2`
-- `light = 0.6`
-- `medium = 1.0`
-- `heavy = 1.4`
-- `extreme = 2.0`
-
-As with habits, reward damage uses the same `4x` scaling away from the neutral
-`1.0` baseline, so low-damage rewards get cheaper and high-damage rewards get
-more expensive much faster than before.
-
-## Shared Cadence Model
-
-Implemented in `ios/tofustash/Shared/Models/PricingTiers.swift` via `CadenceDecayPricing`.
-
-Both habits and rewards now use the same recency model.
-
-The app does **not** count actions inside a fixed window such as:
-
-- last 7 days
-- last 24 hours
-
-Instead, every past action contributes a fading amount of recent usage.
-
-### Inputs
-
-Let:
-
-- `f` = configured frequency in times/day
-- `tau = 1 / f`
-  - this is the target spacing in days between actions
-- `t_i` = timestamp of a past completion or purchase
-- `now` = current timestamp
+- `f` is the target rate
+- `τ` is the target spacing between actions
 
 Examples:
 
-- `3/day => tau ~= 0.333 days ~= 8 hours`
-- `1/day => tau = 1 day`
-- `30/month ~= 1/day => tau = 1 day`
-- `2/month ~= 2/30 day^-1 => tau = 15 days`
+- `1/month ⟹   f = 1/30, τ = 30`
+- `1/day ⟹   f = 1, τ = 1`
+- `3/day ⟹   f = 3, τ = 1/3`
+- `30/month ⟹   f = 1, τ = 1`
 
-This is the key normalisation rule:
+So `1/day` and `30/month` collapse to the same internal state.
 
-- if two user-entered frequencies mean the same times/day rate, they get the
-  same `tau`
-- therefore `1/day` and `30/month` behave the same
+## 2. Shared Cadence Model
 
-### Decayed Usage Score
+### 2.1 Goal
 
-For a list of past action timestamps:
+We want a notion of "recent usage" with these properties:
 
-`U = sum over all actions i of exp(-(now - t_i) / tau)`
+- recent actions matter more than old actions
+- old actions do not disappear at a hard cutoff
+- the memory length should scale with cadence
 
-Behaviourally:
+So we use exponential decay instead of a fixed window.
 
-- recent actions matter more than old ones
+### 2.2 Decayed Usage Score
+
+Let:
+
+- `now` be the current timestamp
+- `H = (t₁, …, tₙ)` be the finite list of past action timestamps
+
+Define:
+
+`U(H) = Σᵢ exp(-(now - tᵢ) / τ)`
+
+Each term lies in `(0, 1]`, so:
+
+- `U = 0` iff `H` is empty
+- more recent actions contribute more
+- for fixed action ages, smaller `τ` makes `U` smaller
+- for fixed action ages, larger `τ` makes `U` larger
+
+Interpretation:
+
 - fast-cadence items forget history quickly
 - slow-cadence items remember history longer
 
-### Normalised Usage Ratio
+### 2.3 Why `U` Is Not Enough
 
-If actions happen exactly on schedule forever, the decayed score tends to:
+`U` is a useful raw score, but not yet a ratio.
 
-`1 + e^-1 + e^-2 + ... = 1 / (1 - e^-1) ~= 1.582`
+Its scale depends on cadence. For example, an "on schedule" `3/day` item and an
+"on schedule" `1/week` item should both read as "normal", even though the raw
+history patterns look very different in time.
 
-So the app normalises with:
+So we normalise `U` against the idealised on-schedule limit.
 
-`r_raw = U / 1.582`
+### 2.4 Normalised Usage Ratio
 
-This keeps "on target cadence" near ratio `1`.
+If actions happen exactly every `τ` forever into the past, then:
 
-### Cold-Start Warm-Up
+`U = 1 + e⁻¹ + e⁻² + … = 1 / (1 - e⁻¹) =: C ≈ 1.5819767068693265`
 
-Brand-new habits and rewards should not overreact when history is still sparse.
+Define:
 
-Let:
+`r_raw = U / C`
 
-- `ageDays` = days since the habit or reward was created
-- `warmupDays = 2 * tau`
-- `w = min(1, ageDays / warmupDays)`
+Interpretation:
 
-Then:
+- `r_raw < 1` means below target cadence
+- `r_raw = 1` means on target cadence
+- `r_raw > 1` means above target cadence
 
-`r_eff = w * r_raw + (1 - w) * r_neutral`
+This is the first quantity that has a stable behavioural meaning across
+different cadences.
 
-Important behaviour:
+### 2.5 Why `r_raw` Is Not Enough
 
-- the warm-up depends only on the normalised rate
-- it does **not** depend on whether the user entered day/week/month in the UI
-- equivalent rates therefore stabilize equally fast
-
-The neutral ratio differs by entity type:
-
-- habits use `r_neutral = 1`
-- rewards use `r_neutral = 0`
+`r_raw` is correct but too eager for brand-new items.
 
 Reason:
 
-- a new habit should start near its neutral payout instead of jumping straight
-  to maximum reward
-- a new reward should start near its base price instead of becoming expensive
-  before the user has any real purchase history
+- a new habit with no history has `U = 0`, hence `r_raw = 0`
+- a new reward with no history also has `r_raw = 0`
 
-## 1. Habit Completion Reward
+But those two cases should not behave the same way:
 
-Implemented in `ios/tofustash/Habits/Utilities/RewardCalculation.swift`.
+- a new habit should start near neutral payout, not maximum under-use bonus
+- a new reward should start near base price, which *does* correspond to `0` usage
 
-`Reward = round(100 * T_h * F_h * D_h * S_h)`
+So we introduce a warm-up blend. Early on, we trust history only partially.
 
-### Tier Multiplier
+### 2.6 Warm-Up
 
-`T_h` comes directly from the selected habit difficulty tier.
+Define:
 
-If the habit has no tier yet, iOS calculation code falls back to
-`trivial = 0.2` so blank pricing fields never improve payout.
+- `ageDays ≥ 0`
+- `warmupDays = 2τ`
+- `w = min(1, ageDays / warmupDays)`
 
-### Frequency Multiplier
+Then define:
 
-Let:
+`r_eff = w · r_raw + (1 - w) · r_neutral`
 
-- `f_h` = target habit frequency in times/day
-- `tau_h = 1 / f_h`
-- `r_h_eff` = cadence-adjusted completion ratio from the shared model
-- `alpha = 3.75`
+where:
 
-Then:
+- for habits, `r_neutral = 1`
+- for rewards, `r_neutral = 0`
 
-`F_h = 2 / (1 + (r_h_eff ^ alpha))`
+Properties:
 
-If no frequency is set, iOS prices it as if the habit were configured to the
-highest allowed minimum cadence:
+- `w ∈ [0, 1]`
+- `ageDays = 0 ⟹   w = 0 ⟹   r_eff = r_neutral`
+- `ageDays ≥ 2τ ⟹   w = 1 ⟹   r_eff = r_raw`
+- `r_eff` always lies between `r_raw` and `r_neutral`
 
-`f_h = 100/day`
+Interpretation:
 
-Behaviourally:
+- new habits start near `1`
+- new rewards start near `0`
+- after roughly two target intervals, the model uses the raw cadence ratio directly
 
-- `r_h_eff = 0  =>  F_h = 2`
-- `r_h_eff = 1  =>  F_h = 1`
-- `r_h_eff > 1  =>  F_h < 1`
+So the shared cadence pipeline is:
 
-This means:
+`timestamps → U → r_raw → r_eff`
 
-- under-done habits pay more
-- on-target habits pay the base amount
-- over-done habits pay less
-- compared with the previous curve, pricing now reacts about `50%` more
-  aggressively to the same cadence drift
+## 3. Tier Maps
 
-### Habit Setup Gating
+Before cadence enters, each item has a static severity tier.
 
-Habit pricing fields are optional. Leaving them blank uses the cheapest
-fallbacks instead of blocking the claim flow.
+Habit difficulty map:
 
-### Duration Multiplier
+- `trivial ↦ 0.2`
+- `light ↦ 0.6`
+- `medium ↦ 1.0`
+- `hard ↦ 1.4`
+- `extreme ↦ 2.0`
 
-`D_h` uses the expected effort duration in seconds.
+Reward damage map:
 
-If no duration is set:
+- `harmless ↦ 0.2`
+- `light ↦ 0.6`
+- `medium ↦ 1.0`
+- `heavy ↦ 1.4`
+- `extreme ↦ 2.0`
+
+These are absolute categories, not a relative ranking.
+
+## 4. Habit Reward
+
+### 4.1 Goal
+
+A habit reward should combine four effects:
+
+- harder habits should pay more
+- under-done habits should pay more
+- longer habits should pay more, but with diminishing returns
+- higher skip consequence should pay more
+
+Hence:
+
+`habitReward = round(100 · T_h · F_h · D_h · S_h)`
+
+with:
+
+- `T_h ∈ {0.2, 0.6, 1.0, 1.4, 2.0}`
+- `F_h ∈ (0, 2]`
+- `D_h ∈ [1, 1.35]`
+- `S_h ∈ {1.0, 1.15, 1.3, 1.5, 1.75}`
+
+Fallbacks:
+
+- missing habit tier `⟹   T_h = 0.2`
+- missing habit frequency `⟹   f_h = 100/day`
+- missing duration `⟹   D_h = 1`
+- missing skip consequence `⟹   S_h = 1`
+
+### 4.2 Habit Frequency Multiplier
+
+#### Goal
+
+We want a multiplier that:
+
+- is high when recent completion cadence is low
+- equals `1` at target cadence
+- decays toward `0` as usage becomes very high
+
+So define, with `α = 3.75`:
+
+`F_h = 2 / (1 + r_eff^α)`
+
+Properties:
+
+- `F_h(0) = 2`
+- `F_h(1) = 1`
+- `r_eff < 1 ⟹   F_h > 1`
+- `r_eff > 1 ⟹   F_h < 1`
+- `F_h` is strictly decreasing for `r_eff ≥ 0`
+- `r_eff → ∞ ⟹   F_h → 0`
+
+So:
+
+- under-done habits get a bonus
+- on-target habits get base payout
+- over-done habits get penalised
+
+### 4.3 Duration Multiplier
+
+#### Goal
+
+Longer habits should pay more, but not linearly. A 2-hour habit should pay more
+than a 1-hour habit, but not twice as much purely due to duration.
+
+If duration is unset:
 
 `D_h = 1`
 
-If duration is set:
+Otherwise, for `durationSeconds` an integer in `[0, 43200]`:
 
-`D_h = 1 + 0.35 * (log(1 + durationSeconds) / log(1 + 43200))`
+`D_h = 1 + 0.35 · log(1 + durationSeconds) / log(1 + 43200)`
 
-This makes longer habits pay more, but with diminishing returns up to the
-12-hour maximum.
+Properties:
 
-### Skip Consequence Multiplier
+- `D_h(0) = 1`
+- `D_h(43200) = 1.35`
+- `D_h` is strictly increasing
+- `D_h` is concave
 
-`S_h` comes from the 1...5 skip consequence rank.
+So duration increases reward with diminishing marginal effect.
 
-- `1 => 1.0`
-- `2 => 1.15`
-- `3 => 1.3`
-- `4 => 1.5`
-- `5 => 1.75`
+### 4.4 Skip Consequence Multiplier
 
-If no skip consequence is set:
+#### Goal
 
-`S_h = 1`
+Skipping a more consequential habit should make each completion worth more.
 
-## 2. Reward Purchase Cost
+The map is:
 
-Implemented in `ios/tofustash/Rewards/Utilities/RewardPriceCalculation.swift`.
+- `1 ↦ 1.0`
+- `2 ↦ 1.15`
+- `3 ↦ 1.3`
+- `4 ↦ 1.5`
+- `5 ↦ 1.75`
 
-`Cost = round(100 * G * T_r * F_r)`
+This is strictly increasing.
 
-### Tier Multiplier
+## 5. Reward Cost
 
-`T_r` comes directly from the selected reward damage tier.
+### 5.1 Goal
 
-If the reward has no tier yet, iOS calculation code falls back to
-`extreme = 2.0` so blank pricing fields never make rewards cheaper.
+A reward cost should combine three effects:
 
-### Frequency Multiplier
+- global harshness from user settings
+- intrinsic damage of the reward
+- recent purchase cadence
 
-Let:
+Hence:
 
-- `f_r` = max healthy purchase rate in times/day
-- `tau_r = 1 / f_r`
-- `r_r_eff` = cadence-adjusted purchase ratio from the shared model
-- `b_r = max(1, sqrt(f_r))`
-- `r_r_burst = r_r_eff / b_r`
-- `beta = 2.5`
+`rewardCost = round(100 · G · T_r · F_r)`
+
+with:
+
+- `G > 0`
+- `T_r ∈ {0.2, 0.6, 1.0, 1.4, 2.0}`
+- `F_r ∈ [1, 20]`
+
+Fallbacks:
+
+- missing reward damage tier `⟹   T_r = 2.0`
+- missing reward max frequency `⟹   f_r = 1/month`
+
+Ignoring rounding and cadence, the base cost is:
+
+`baseCost = 100 · G · T_r`
+
+### 5.2 Why Rewards Need An Extra Step
+
+For rewards, there is an extra design constraint that habits do not have:
+
+- high-frequency caps such as `4/day` should tolerate short bursts
+- low-frequency caps such as `1/week` should not
+
+If we priced directly from `r_eff`, then high-frequency rewards would become
+expensive too quickly during short clusters.
+
+So rewards insert a burst-rescaling step before the main frequency curve.
+
+### 5.3 Burst Scaling
+
+Define:
+
+- `b_r = max(1, √f_r)`
+- `r_burst = r_eff / b_r`
+
+Properties:
+
+- `b_r ∈ [1, 10]`
+- `f_r ≤ 1 ⟹   b_r = 1`
+- `f_r > 1 ⟹   b_r = √f_r`
+- `f_r` increasing `⟹   b_r` increasing
+
+Interpretation:
+
+- rewards capped at `≤ 1/day` get no burst slack
+- rewards capped above `1/day` get increasing burst slack
+
+So `r_burst` is the quantity that says how close recent reward buying is to the
+cap *after* accounting for tolerated short bursts.
+
+### 5.4 Reward Frequency Multiplier
+
+#### Goal
+
+We want a multiplier that:
+
+- equals `1` at zero recent usage
+- rises slowly at first
+- becomes very steep near the cap
+- is bounded above in the implementation
+
+With `β = 2.5`, define:
+
+- if `r_burst ≥ 1`, then `F_r = 20`
+- if `0 ≤ r_burst < 1`, then
+  `F_r = min(20, 2 / (1 - r_burst^β) - 1)`
+
+Properties on `0 ≤ r_burst < 1`:
+
+- `F_r(0) = 1`
+- `F_r` is strictly increasing
+- `r_burst → 1⁻ ⟹   F_r → +∞`
+
+Then the implementation clamps that divergence:
+
+- `r_burst ≥ 1 ⟹   F_r = 20`
+
+So:
+
+- low recent reward usage gives near-base price
+- approaching the configured cadence makes price rise sharply
+- reaching or exceeding the cap hits the ceiling multiplier
+
+## 6. Multi-Quantity Semantics
+
+### 6.1 Goal
+
+Buying or claiming `q` units should mean "perform the pricing rule `q` times in
+sequence", not "price one unit once and multiply by `q`".
+
+Otherwise the UI would understate the cost of repeated reward buys and overstate
+the reward of repeated habit claims.
+
+### 6.2 Habit Claims
+
+For claiming `q ≥ 0` times from current history `H`, let `Hₖ` be the history
+after appending the first `k` projected claims one by one.
 
 Then:
 
-If `r_r_burst >= 1`:
+`TotalHabitReward(q) = Σₖ₌₁^q Reward(Hₖ)`
 
-`F_r = 20`
+In general:
 
-If `r_r_burst < 1`:
+`TotalHabitReward(q) ≠ q · Reward(H)`
 
-`F_r = min(20, (2 / (1 - (r_r_burst ^ beta))) - 1)`
+because the frequency multiplier changes after each projected claim.
 
-If no max frequency is set, iOS prices it as if the reward were configured to
-the strictest allowed cap:
+### 6.3 Reward Buys
 
-`f_r = 1/month`
+For buying `q ≥ 0` times from current history `P`, let `Pₖ` be the history
+after appending the first `k` projected buys one by one.
 
-Behaviourally:
+Then:
 
-- buy prices still ramp up as the user approaches the configured cap
-- higher-frequency rewards get burst slack before they hit the steep part of the curve
-- low-frequency rewards such as weekly or monthly caps get little or no extra slack
-- `r_r_eff = 0  =>  F_r = 1`
-- `r_r_burst -> 1 from below  =>  F_r -> +infinity`, but the implementation clamps to `20`
-- `r_r_burst >= 1  =>  F_r = 20`
+`TotalRewardCost(q) = Σₖ₌₁^q Cost(Pₖ)`
 
-This means:
+In general:
 
-- the first purchase of a new or lightly used reward is near base price
-- repeated recent purchases raise the price
-- high-frequency rewards can absorb a short same-day cluster before slamming into the ceiling
-- sustained buying at or above the intended cadence still becomes sharply more
-  expensive, but stays inside a bounded ceiling
+`TotalRewardCost(q) ≠ q · Cost(P)`
 
-### Why This Replaces A Fixed Window
+because the frequency multiplier changes after each projected buy.
 
-The old problem was:
+## 7. Consequences
 
-- short windows work for `3/day`
-- longer windows work for `2/month`
-- no single hard window works well for both
+The formulas imply:
 
-Cadence-scaled decay fixes that because the memory length comes from `tau`.
+- harder habits always pay more than easier habits, all else equal
+- more damaging rewards always cost more than less damaging rewards, all else equal
+- changing `G` changes reward costs but not habit rewards
+- old actions never drop out at a hard cutoff; their weight decays exponentially to `0`
+- `1/day` and `30/month` behave identically because both induce `f = 1` and `τ = 1`
+- for habits, `r_eff → ∞ ⟹ F_h → 0`
+- for rewards, `r_burst → 1⁻ ⟹ F_r → +∞` before clamping, and the implemented value is then `20`
 
-Examples:
+## 8. Current iOS Semantics
 
-- `3/day` uses `tau ~= 8 hours`, so same-day repeat purchases still move price quickly
-- `2/month` uses `tau = 15 days`, so purchases from last week still matter
-- `1/day` and `30/month` both normalise to `tau = 1 day`, so they behave the same
-- `4/day` can now tolerate a short burst better than `1/day` because the burst
-  slack scales from the configured daily rate
-
-## 3. Multi-Quantity Behaviour
-
-### Habit Claim Modal
-
-For claiming `q` times from a habit with current completion timestamps `H`:
-
-`TotalHabitReward(q) = sum of Reward(H with each newly projected claim appended one by one)`
-
-So the total is generally not:
-
-`q * Reward(current state)`
-
-because `F_h` changes after each projected increment.
-
-### Reward Buy Modal
-
-For buying `q` times from a reward with current purchase timestamps `P`:
-
-`TotalRewardCost(q) = sum of Cost(P with each newly projected buy appended one by one)`
-
-So the total is generally not:
-
-`q * Cost(current state)`
-
-because `F_r` changes after each projected increment.
-
-## 4. Where This Rule Is Used
-
-The iOS app uses the same habit reward and reward pricing calculation paths in:
-
-- `HabitsView` for habit reward previews
-- `HabitFormView` for the edit-sheet reward preview
-- `TradeModalView` for multi-claim totals
-- `RewardsView` for reward price previews
-- `RewardFormView` for the edit-sheet price preview
-- `RewardPurchaseModalView` for multi-buy totals
-- `RewardPurchaseService` for the actual trade records and balance deduction
-
-This keeps the visible price, the modal total, and the persisted trades in sync.
-
-## 5. User-Facing Behaviour
-
-- A harder habit tier always pays more than an easier habit tier when the two
-  habits have the same frequency and completion history.
-- A more damaging reward tier always costs more than a less damaging reward
-  tier when the two rewards have the same cap and purchase history.
-- Raising general difficulty makes rewards more expensive without changing
-  habit payouts.
-- Habit rewards fall as the user keeps completing the same habit toward or
-  above its intended cadence.
-- Reward prices rise as the user keeps buying the same reward toward or past
-  its intended cadence.
-- High-frequency reward caps are interpreted as sustained cadence limits, not
-  exact minimum spacing between every pair of purchases.
-- Rewards remain purchasable after the cap, but they become extremely
-  expensive because the frequency multiplier clamps at `20`.
-- Recent actions matter more than old ones, but old actions fade smoothly
-  instead of dropping out at a hard time boundary.
-- Equivalent rates such as `1/day` and `30/month` behave the same because the
-  app normalises everything to times/day before pricing.
-- The same inputs always produce the same price. There is no time-bucket or
-  pseudo-random drift in the current system.
-
-## 6. Notes On Current Semantics
-
-- Habit `frequency` is stored on iOS as times/day.
-- Reward `maxFrequency` is stored on iOS as times/day.
-- Habit and reward frequency inputs are bounded to `1/month ... 100/day`.
-- Habit difficulty is stored as `difficultyTier`.
-- Reward damage is stored as `damageTier`.
-- Habit and reward pricing both use timestamp-based cadence decay.
-- There is no relative ranking and no random multiplier.
+- habit `frequency` is stored as times/day
+- reward `maxFrequency` is stored as times/day
+- allowed frequency range is `1/month ... 100/day`
+- habit difficulty is stored as `difficultyTier`
+- reward damage is stored as `damageTier`
+- both pricing paths use the same timestamp-based cadence decay
+- there is no relative ranking and no random multiplier
