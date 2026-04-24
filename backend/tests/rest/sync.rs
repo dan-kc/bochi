@@ -5,6 +5,7 @@ use crate::common::{
 use crate::generate_email_from_fn;
 use axum::http::StatusCode;
 use serde_json::{json, Value};
+use tofustash_backend::database::Database;
 
 // ============================================================================
 // Sync Pull (GET /api/sync) Tests
@@ -118,6 +119,52 @@ async fn test_sync_pull_with_since_filters_all_entities() {
     // No new trades since timestamp
     let trades = json.get("trades").unwrap().as_array().unwrap();
     assert_eq!(trades.len(), 0);
+}
+
+#[tokio::test]
+async fn test_sync_pull_recomputes_balance_from_trade_history() {
+    let email = generate_email_from_fn!(test_sync_pull_recomputes_balance_from_trade_history);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_body = json!({
+        "name": "Balance Source Habit",
+        "description": "Trade history should be authoritative"
+    });
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
+
+    let sync_body = json!({
+        "trades": [{
+            "id": uuid::Uuid::new_v4().to_string(),
+            "habitId": habit_id,
+            "amount": 282,
+            "createdAt": "2025-01-01T10:00:00"
+        }]
+    });
+    let (push_status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    assert_eq!(push_status, StatusCode::OK);
+    assert_eq!(
+        push_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        282.0
+    );
+
+    let database = Database::new().await;
+    let user = database.get_user_from_email(&email).await.unwrap();
+    database.set_user_balance(user.id, -999.0).await.unwrap();
+
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(pull_status, StatusCode::OK);
+    assert_eq!(pull_json.get("trades").unwrap().as_array().unwrap().len(), 1);
+    assert_eq!(
+        pull_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        282.0
+    );
 }
 
 #[tokio::test]

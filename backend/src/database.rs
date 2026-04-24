@@ -377,12 +377,28 @@ impl Database {
         }
     }
 
-    /// Get user balance
-    pub async fn get_user_balance(&self, user_id: Uuid) -> Result<UserBalanceRow, sqlx::Error> {
-        sqlx::query_as("SELECT tofu_balance FROM users WHERE id = $1")
+    /// Calculate a user's balance directly from non-deleted trades without
+    /// reading or updating the cached users.tofu_balance column.
+    pub async fn calculate_balance_from_trades(&self, user_id: Uuid) -> Result<f64, sqlx::Error> {
+        let (total,): (Option<i64>,) = sqlx::query_as(
+            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(total.unwrap_or(0) as f64)
+    }
+
+    #[allow(dead_code)]
+    pub async fn set_user_balance(&self, user_id: Uuid, balance: f64) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET tofu_balance = $2 WHERE id = $1")
             .bind(user_id)
-            .fetch_one(&self.pool)
-            .await
+            .bind(balance)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     /// Get user profile (email, entitlement state, and general difficulty)
@@ -681,15 +697,7 @@ impl Database {
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
     ) -> Result<f64, sqlx::Error> {
-        // Sum all non-deleted trades
-        let (total,): (Option<i64>,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
-        )
-        .bind(user_id)
-        .fetch_one(&mut **tx)
-        .await?;
-
-        let balance = total.unwrap_or(0) as f64;
+        let balance = Self::calculate_balance_from_trades_tx(tx, user_id).await?;
 
         // Update user balance
         sqlx::query("UPDATE users SET tofu_balance = $2 WHERE id = $1")
@@ -699,6 +707,20 @@ impl Database {
             .await?;
 
         Ok(balance)
+    }
+
+    async fn calculate_balance_from_trades_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+    ) -> Result<f64, sqlx::Error> {
+        let (total,): (Option<i64>,) = sqlx::query_as(
+            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(total.unwrap_or(0) as f64)
     }
 
     /// Upsert a tag within a transaction
@@ -1030,11 +1052,6 @@ pub struct TradeRow {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct UserBalanceRow {
-    pub tofu_balance: f64,
 }
 
 #[derive(sqlx::FromRow)]

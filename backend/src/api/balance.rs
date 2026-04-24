@@ -16,9 +16,9 @@ pub async fn get_balance(
     State(app): State<App>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let balance_row = app
+    let trade_balance = app
         .database
-        .get_user_balance(user.user_id)
+        .calculate_balance_from_trades(user.user_id)
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
@@ -26,6 +26,6 @@ pub async fn get_balance(
         })?;
 
     Ok(Json(BalanceResponse {
-        tofu_balance: balance_row.tofu_balance,
+        tofu_balance: trade_balance,
     }))
 }

@@ -244,9 +244,9 @@ pub async fn get_sync(
             ApiError::Internal
         })?;
 
-    let balance_row = app
+    let trade_balance = app
         .database
-        .get_user_balance(user.user_id)
+        .calculate_balance_from_trades(user.user_id)
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
@@ -387,7 +387,7 @@ pub async fn get_sync(
         rewards,
         reward_tags,
         balance: BalanceOutput {
-            tofu_balance: balance_row.tofu_balance,
+            tofu_balance: trade_balance,
         },
         server_time,
         email: profile_row.email,
