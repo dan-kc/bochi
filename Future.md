@@ -29,4 +29,6 @@ Add some kind of archive
 
 All fields optional, they default to the option that gives the least money
 
+Search
+
 # Todos?
