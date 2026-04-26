@@ -648,7 +648,8 @@ final class TagStore {
         }
 
         let placeholders = Array(repeating: "?", count: dirtyTagIDs.count).joined(separator: ", ")
-        let bindings = [.text(currentOwnerID)] + dirtyTagIDs.sorted { $0.rawValue < $1.rawValue }.map { .text($0.rawValue) }
+        let bindings: [SQLiteValue] = [SQLiteValue.text(currentOwnerID)]
+            + dirtyTagIDs.sorted { $0.rawValue < $1.rawValue }.map { SQLiteValue.text($0.rawValue) }
         try database.execute(
             "DELETE FROM tags WHERE owner_id = ? AND deleted_at IS NOT NULL AND id NOT IN (\(placeholders))",
             bindings: bindings,
