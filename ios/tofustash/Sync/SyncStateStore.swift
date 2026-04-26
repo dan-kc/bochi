@@ -221,7 +221,7 @@ final class SyncStateStore {
                     on: db
                 ) { row in
                     SQLiteColumn.optionalDate(row, index: 0)
-                }
+                } ?? nil
 
                 try self.database.execute(
                     """

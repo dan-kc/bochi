@@ -64,10 +64,7 @@ final class AppDatabase {
         let queue = try connection(at: url)
         do {
             try queue.write { db in
-                try db.inTransaction {
-                    try body(db)
-                    return .commit
-                }
+                try body(db)
             }
         } catch {
             throw AppDatabaseError.transactionFailed(String(describing: error))
