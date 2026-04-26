@@ -85,6 +85,13 @@ enum AppStorageLocation {
         try? FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true, attributes: nil)
         return baseDirectory.appendingPathComponent("\(filename).json")
     }
+
+    static func databaseURL(filename: String = "tofustash") -> URL {
+        let baseDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("tofustash", isDirectory: true)
+        try? FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true, attributes: nil)
+        return baseDirectory.appendingPathComponent("\(filename).sqlite")
+    }
 }
 
 enum JSONFileStore {

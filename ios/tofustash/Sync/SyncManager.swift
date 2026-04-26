@@ -168,7 +168,6 @@ final class SyncManager {
         let migratedRewardIDs = rewardStore.migrateRewards(from: StorageOwner.local, to: userID)
         let migratedTradeIDs = tradeStore.migrateTrades(from: StorageOwner.local, to: userID)
         let migratedTagData = tagStore.migrateData(from: StorageOwner.local, to: userID)
-        balanceStore.migrateBalance(from: StorageOwner.local, to: userID)
         let migratedDifficulty = userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID)
         _ = listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID)
         sanitizeListPreferencesForCurrentOwner()
@@ -341,7 +340,15 @@ final class SyncManager {
             }
 
             let serverTime = AppDateCoding.parseBackendTimestamp(pullResponse.serverTime) ?? Date()
-            syncStateStore.clearAllDirty(userID: currentUserID)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .habits, ids: dirtySnapshot.habits)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .trades, ids: dirtySnapshot.trades)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .tags, ids: dirtySnapshot.tags)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .habitTags, ids: dirtySnapshot.habitTags)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .rewards, ids: dirtySnapshot.rewards)
+            syncStateStore.clearDirty(userID: currentUserID, kind: .rewardTags, ids: dirtySnapshot.rewardTags)
+            if generalDifficultyDirty {
+                syncStateStore.clearFlag(userID: currentUserID, kind: .generalDifficulty)
+            }
             syncStateStore.setLastSync(userID: currentUserID, serverTime: serverTime)
             lastSyncTime = serverTime
 

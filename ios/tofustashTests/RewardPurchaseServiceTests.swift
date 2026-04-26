@@ -1,10 +1,11 @@
+import Foundation
 import Testing
 @testable import tofustash
 
 @MainActor
 struct RewardPurchaseServiceTests {
-    private func makeRewardStore() -> RewardStore {
-        let store = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
+    private func makeRewardStore(storageURL: URL) -> RewardStore {
+        let store = RewardStore(storageURL: storageURL)
         _ = store.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 1.0, damageTier: .medium)
         return store
     }
@@ -12,10 +13,12 @@ struct RewardPurchaseServiceTests {
     // Behaviour: Buying a reward creates a negative trade tied to that reward and reduces the visible balance.
     @Test("purchase records a reward trade and subtracts balance")
     func purchaseMutatesTradeHistoryAndBalance() throws {
-        let rewardStore = makeRewardStore()
-        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
-        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
-        balanceStore.addTofu(2_000)
+        let storageURL = TestHelpers.makeTemporaryFileURL("reward-purchase")
+        let rewardStore = makeRewardStore(storageURL: storageURL)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        tradeStore.addHabitTrade(habitId: "seed-habit", amount: 2_000, shouldNotifySync: false)
+        balanceStore.refresh()
 
         let reward = try #require(rewardStore.activeRewards.first)
         let spent = try RewardPurchaseService.purchase(
@@ -38,11 +41,13 @@ struct RewardPurchaseServiceTests {
     // so future prices still reflect each individual buy.
     @Test("purchase with quantity records multiple reward trades")
     func purchaseQuantityCreatesMultipleTrades() throws {
-        let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
+        let storageURL = TestHelpers.makeTemporaryFileURL("reward-purchase-quantity")
+        let rewardStore = RewardStore(storageURL: storageURL)
         _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageTier: .medium)
-        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
-        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
-        balanceStore.addTofu(10_000)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        tradeStore.addHabitTrade(habitId: "seed-habit", amount: 10_000, shouldNotifySync: false)
+        balanceStore.refresh()
 
         let reward = try #require(rewardStore.activeRewards.first)
         let spent = try RewardPurchaseService.purchase(
@@ -64,12 +69,14 @@ struct RewardPurchaseServiceTests {
     // purchase on the same day should cost more instead of staying flat.
     @Test("second same-day purchase costs more for a 3 per day reward")
     func secondPurchaseCostsMoreAfterFirst() throws {
-        let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
+        let storageURL = TestHelpers.makeTemporaryFileURL("reward-second-purchase")
+        let rewardStore = RewardStore(storageURL: storageURL)
         _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageTier: .medium)
 
-        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
-        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
-        balanceStore.addTofu(10_000)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        tradeStore.addHabitTrade(habitId: "seed-habit", amount: 10_000, shouldNotifySync: false)
+        balanceStore.refresh()
 
         let reward = try #require(rewardStore.activeRewards.first)
         let firstSpent = try RewardPurchaseService.purchase(
@@ -93,9 +100,10 @@ struct RewardPurchaseServiceTests {
     // Behaviour: Trying to buy a reward without enough tofu leaves both balance and history unchanged.
     @Test("purchase blocks when balance is insufficient")
     func purchaseBlocksOnLowBalance() throws {
-        let rewardStore = makeRewardStore()
-        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
-        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
+        let storageURL = TestHelpers.makeTemporaryFileURL("reward-low-balance")
+        let rewardStore = makeRewardStore(storageURL: storageURL)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
         let reward = try #require(rewardStore.activeRewards.first)
 
         do {

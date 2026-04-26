@@ -39,6 +39,7 @@ enum RewardPurchaseService {
             throw RewardPurchaseError.insufficientBalance(required: totalPrice, available: balanceStore.balance)
         }
 
+        var entries: [(id: RecordID, amount: Int)] = []
         for _ in 0..<quantity {
             let price = RewardPriceCalculation.calculatePrice(
                 reward: reward,
@@ -47,11 +48,12 @@ enum RewardPurchaseService {
                 now: purchaseDate,
                 generalDifficulty: generalDifficulty
             )
-            tradeStore.addRewardPurchase(rewardId: reward.id, amount: -price, createdAt: purchaseDate)
+            entries.append((id: RecordID(), amount: -price))
             purchaseDates.append(purchaseDate)
         }
 
-        balanceStore.subtractTofu(totalPrice)
+        tradeStore.addRewardPurchases(entries: entries, rewardId: reward.id, createdAt: purchaseDate)
+        balanceStore.refresh()
         return totalPrice
     }
 }

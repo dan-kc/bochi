@@ -185,6 +185,7 @@ struct TradeModalView: View {
         let claimDate = Date()
         let total = totalPrice
         var projectedCompletionDates = completionDates
+        var entries: [(id: RecordID, amount: Int)] = []
 
         // Create individual trade records for each completion so the
         // trade history accurately reflects each completion event.
@@ -195,12 +196,12 @@ struct TradeModalView: View {
                 completionDates: projectedCompletionDates,
                 now: claimDate
             )
-            tradeStore.addHabitTrade(habitId: habit.id, amount: price, createdAt: claimDate)
+            entries.append((id: RecordID(), amount: price))
             projectedCompletionDates.append(claimDate)
         }
 
-        // Update balance
-        balanceStore.addTofu(total)
+        tradeStore.addHabitTrades(entries: entries, habitId: habit.id, createdAt: claimDate)
+        balanceStore.refresh()
 
         // Show celebration — replaces all form content instantly.
         // The celebration view auto-dismisses the modal after a short delay.

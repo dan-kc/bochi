@@ -9,7 +9,7 @@ enum TestHelpers {
     static func makeTemporaryFileURL(_ name: String = UUID().uuidString) -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            .appendingPathComponent("\(name).json")
+            .appendingPathComponent("\(name).sqlite")
     }
 
     /// Creates a fake JWT token with the given subject and expiration.

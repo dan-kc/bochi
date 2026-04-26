@@ -3,14 +3,10 @@ import Foundation
 @Observable
 @MainActor
 final class RewardStore {
-    private struct PersistedState: Codable {
-        var rewardsByOwner: [String: [Reward]] = [:]
-    }
+    private let databaseURL: URL
+    private let database = AppDatabase.shared
 
-    private let storageURL: URL
     private(set) var currentOwnerID: String
-    private var rewardsByOwner: [String: [Reward]]
-
     private(set) var rewards: [Reward] = []
 
     var activeRewards: [Reward] {
@@ -36,27 +32,34 @@ final class RewardStore {
         storageURL: URL? = nil,
         initialOwnerID: String = "local-device"
     ) {
-        self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "rewards")
+        self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
         self.currentOwnerID = initialOwnerID
-        let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.rewardsByOwner = Self.normalizePersistedRewards(persisted.rewardsByOwner)
-        self.rewards = OwnerScopedRecordSupport.recordsForOwner(self.rewardsByOwner, ownerID: initialOwnerID)
+        _ = try? database.connection(at: databaseURL)
+        self.rewards = loadRewards(ownerID: initialOwnerID)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        rewards = OwnerScopedRecordSupport.recordsForOwner(rewardsByOwner, ownerID: ownerID)
+        rewards = loadRewards(ownerID: ownerID)
     }
 
     func migrateRewards(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
-        let migratedIDs = OwnerScopedRecordSupport.migrateRecords(
-            from: sourceOwnerID,
-            to: destinationOwnerID,
-            recordsByOwner: &rewardsByOwner
-        )
-        persist()
+        guard sourceOwnerID != destinationOwnerID else { return [] }
+        let source = loadRewards(ownerID: sourceOwnerID)
+        let destination = loadRewards(ownerID: destinationOwnerID)
+        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
+
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.replaceRows(ownerID: destinationOwnerID, rewards: merged, on: db)
+                try self.replaceRows(ownerID: sourceOwnerID, rewards: [], on: db)
+            }
+        } catch {
+            assertionFailure("Failed to migrate rewards: \(error)")
+        }
+
         refreshCurrentRewards()
-        return migratedIDs
+        return source.map(\.id)
     }
 
     @discardableResult
@@ -76,7 +79,6 @@ final class RewardStore {
             return nil
         }
         let canonicalID = id ?? RecordID()
-
         let now = Date()
         let reward = Reward(
             id: canonicalID,
@@ -89,15 +91,10 @@ final class RewardStore {
             damageTier: damageTier
         )
 
-        mutateRewards {
-            $0.removeAll { $0.id == reward.id }
-            $0.append(reward)
-        }
-
+        upsert(reward)
         if shouldNotifySync {
             notifySync(ids: [reward.id])
         }
-
         return reward
     }
 
@@ -111,12 +108,7 @@ final class RewardStore {
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
     ) {
-        let canonicalID = id
-        guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
-            return
-        }
-
-        let existing = rewards[index]
+        guard let existing = rewards.first(where: { $0.id == id }) else { return }
 
         let newName: String
         if let name {
@@ -141,20 +133,14 @@ final class RewardStore {
             damageTier: damageTier ?? existing.damageTier
         )
 
-        mutateRewards { $0[index] = updated }
-
+        upsert(updated)
         if shouldNotifySync {
-            notifySync(ids: [canonicalID])
+            notifySync(ids: [id])
         }
     }
 
     func deleteReward(id: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
-        let canonicalID = id
-        guard let index = rewards.firstIndex(where: { $0.id == canonicalID }) else {
-            return
-        }
-
-        let existing = rewards[index]
+        guard let existing = rewards.first(where: { $0.id == id }) else { return }
         let deleted = Reward(
             id: existing.id,
             name: existing.name,
@@ -165,25 +151,27 @@ final class RewardStore {
             maxFrequency: existing.maxFrequency,
             damageTier: existing.damageTier
         )
-
-        mutateRewards { $0[index] = deleted }
-
+        upsert(deleted)
         if shouldNotifySync {
-            notifySync(ids: [canonicalID])
+            notifySync(ids: [id])
         }
     }
 
     func mergeRewards(_ remoteRewards: [Reward]) {
         guard !remoteRewards.isEmpty else { return }
-        mutateRewards {
-            $0 = OwnerScopedRecordSupport.mergeRecords(local: $0, remote: remoteRewards)
-        }
+        replaceRewards(OwnerScopedRecordSupport.mergeRecords(local: rewards, remote: remoteRewards))
     }
 
     func replaceRewards(_ authoritativeRewards: [Reward]) {
-        rewards = OwnerScopedRecordSupport.sorted(authoritativeRewards)
-        rewardsByOwner[currentOwnerID] = rewards
-        persist()
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeRewards)
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.replaceRows(ownerID: self.currentOwnerID, rewards: sorted, on: db)
+            }
+        } catch {
+            assertionFailure("Failed to replace rewards: \(error)")
+        }
+        rewards = sorted
     }
 
     func getDirtyRewards(ids: Set<RecordID>) -> [Reward] {
@@ -191,46 +179,115 @@ final class RewardStore {
     }
 
     func purgeDeletedRewards() {
-        mutateRewards {
-            $0.removeAll { $0.deletedAt != nil }
+        do {
+            try database.execute(
+                "DELETE FROM rewards WHERE owner_id = ? AND deleted_at IS NOT NULL",
+                bindings: [.text(currentOwnerID)],
+                at: databaseURL
+            )
+        } catch {
+            assertionFailure("Failed to purge deleted rewards: \(error)")
         }
+        refreshCurrentRewards()
     }
 
     func allRewardIDs() -> [RecordID] {
         rewards.map(\.id)
     }
 
-    private func mutateRewards(_ mutate: (inout [Reward]) -> Void) {
-        rewards = OwnerScopedRecordSupport.mutateRecords(
-            currentRecords: rewards,
-            ownerID: currentOwnerID,
-            recordsByOwner: &rewardsByOwner,
-            mutate: mutate
-        )
-        persist()
+    private func upsert(_ reward: Reward) {
+        do {
+            try database.execute(
+                """
+                INSERT INTO rewards (
+                    id, owner_id, name, description, created_at, updated_at, deleted_at,
+                    max_daily_frequency, damage_tier
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    owner_id = excluded.owner_id,
+                    name = excluded.name,
+                    description = excluded.description,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at,
+                    deleted_at = excluded.deleted_at,
+                    max_daily_frequency = excluded.max_daily_frequency,
+                    damage_tier = excluded.damage_tier
+                """,
+                bindings: rewardBindings(reward, ownerID: currentOwnerID),
+                at: databaseURL
+            )
+        } catch {
+            assertionFailure("Failed to upsert reward: \(error)")
+        }
+        refreshCurrentRewards()
+    }
+
+    private func loadRewards(ownerID: String) -> [Reward] {
+        let fetched = (try? database.query(
+            """
+            SELECT id, name, description, created_at, updated_at, deleted_at,
+                   max_daily_frequency, damage_tier
+            FROM rewards
+            WHERE owner_id = ?
+            ORDER BY created_at ASC, id ASC
+            """,
+            bindings: [.text(ownerID)],
+            at: databaseURL
+        ) { row in
+            Reward(
+                id: RecordID(SQLiteColumn.text(row, index: 0)),
+                name: SQLiteColumn.text(row, index: 1),
+                description: SQLiteColumn.text(row, index: 2),
+                createdAt: SQLiteColumn.date(row, index: 3),
+                updatedAt: SQLiteColumn.date(row, index: 4),
+                deletedAt: SQLiteColumn.optionalDate(row, index: 5),
+                maxFrequency: SQLiteColumn.optionalDouble(row, index: 6),
+                damageTier: SQLiteColumn.optionalText(row, index: 7).flatMap(RewardDamageTier.init(rawValue:))
+            )
+        }) ?? []
+
+        return OwnerScopedRecordSupport.sorted(fetched)
     }
 
     private func refreshCurrentRewards() {
-        rewards = OwnerScopedRecordSupport.recordsForOwner(rewardsByOwner, ownerID: currentOwnerID)
+        rewards = loadRewards(ownerID: currentOwnerID)
     }
 
-    private func persist() {
-        JSONFileStore.save(PersistedState(rewardsByOwner: rewardsByOwner), to: storageURL)
-    }
+    private func replaceRows(ownerID: String, rewards: [Reward], on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            "DELETE FROM rewards WHERE owner_id = ?",
+            bindings: [.text(ownerID)],
+            on: databaseHandle
+        )
 
-    private static func normalizePersistedRewards(_ rewardsByOwner: [String: [Reward]]) -> [String: [Reward]] {
-        OwnerScopedRecordSupport.normalizePersistedRecords(rewardsByOwner) { reward in
-            Reward(
-                id: RecordID(rawValue: reward.id.rawValue),
-                name: reward.name,
-                description: reward.description,
-                createdAt: reward.createdAt,
-                updatedAt: reward.updatedAt,
-                deletedAt: reward.deletedAt,
-                maxFrequency: reward.maxFrequency,
-                damageTier: reward.damageTier
+        for reward in rewards {
+            try database.execute(
+                """
+                INSERT INTO rewards (
+                    id, owner_id, name, description, created_at, updated_at, deleted_at,
+                    max_daily_frequency, damage_tier
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                bindings: rewardBindings(reward, ownerID: ownerID),
+                on: databaseHandle
             )
         }
+    }
+
+    private func rewardBindings(_ reward: Reward, ownerID: String) -> [SQLiteValue] {
+        [
+            .text(reward.id.rawValue),
+            .text(ownerID),
+            .text(reward.name),
+            .text(reward.description),
+            .double(reward.createdAt.timeIntervalSince1970),
+            .double(reward.updatedAt.timeIntervalSince1970),
+            reward.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null,
+            reward.maxFrequency.map(SQLiteValue.double) ?? .null,
+            reward.damageTier.map { .text($0.rawValue) } ?? .null
+        ]
     }
 
     private func notifySync(ids: [RecordID]) {

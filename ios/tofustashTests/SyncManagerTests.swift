@@ -62,14 +62,15 @@ struct SyncManagerTests {
         )
         try await authManager.login(email: "user@example.com", password: "password123")
 
-        let habitStore = HabitStore(storageURL: TestHelpers.makeTemporaryFileURL("habits"))
-        let rewardStore = RewardStore(storageURL: TestHelpers.makeTemporaryFileURL("rewards"))
-        let tradeStore = TradeStore(storageURL: TestHelpers.makeTemporaryFileURL("trades"))
-        let tagStore = TagStore(storageURL: TestHelpers.makeTemporaryFileURL("tags"))
-        let balanceStore = BalanceStore(storageURL: TestHelpers.makeTemporaryFileURL("balances"))
-        let userSettingsStore = UserSettingsStore(storageURL: TestHelpers.makeTemporaryFileURL("settings"))
-        let listPreferencesStore = ListPreferencesStore(storageURL: TestHelpers.makeTemporaryFileURL("list-preferences"))
-        let syncStateStore = SyncStateStore(storageURL: TestHelpers.makeTemporaryFileURL("sync-state"))
+        let storageURL = TestHelpers.makeTemporaryFileURL("sync-manager")
+        let habitStore = HabitStore(storageURL: storageURL)
+        let rewardStore = RewardStore(storageURL: storageURL)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let tagStore = TagStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        let userSettingsStore = UserSettingsStore(storageURL: storageURL)
+        let listPreferencesStore = ListPreferencesStore(storageURL: storageURL)
+        let syncStateStore = SyncStateStore(storageURL: storageURL)
 
         let syncAPIClient = MockSyncAPIClient(
             pullHandler: { _, _ in pullResponse },

@@ -1,26 +1,17 @@
 import Foundation
 
-// This store is the Swift equivalent of a tiny Zustand slice backed by disk.
-// SwiftUI views read `habitPreferences` / `rewardPreferences` from the
-// environment, and every mutating method writes through to JSON immediately.
 @Observable
 @MainActor
 final class ListPreferencesStore {
-    enum ListScope {
+    enum ListScope: String {
         case habits
         case rewards
     }
 
-    private struct PersistedState: Codable {
-        var habitPreferencesByOwner: [String: EntityListPreferences] = [:]
-        var rewardPreferencesByOwner: [String: EntityListPreferences] = [:]
-    }
+    private let databaseURL: URL
+    private let database = AppDatabase.shared
 
-    private let storageURL: URL
     private(set) var currentOwnerID: String
-    private var habitPreferencesByOwner: [String: EntityListPreferences]
-    private var rewardPreferencesByOwner: [String: EntityListPreferences]
-
     private(set) var habitPreferences: EntityListPreferences
     private(set) var rewardPreferences: EntityListPreferences
 
@@ -28,45 +19,56 @@ final class ListPreferencesStore {
         storageURL: URL? = nil,
         initialOwnerID: String = StorageOwner.local
     ) {
-        self.storageURL = storageURL ?? AppStorageLocation.fileURL(filename: "list-preferences")
+        self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
         self.currentOwnerID = initialOwnerID
-
-        let persisted = JSONFileStore.load(PersistedState.self, from: self.storageURL, defaultValue: PersistedState())
-        self.habitPreferencesByOwner = persisted.habitPreferencesByOwner
-        self.rewardPreferencesByOwner = persisted.rewardPreferencesByOwner
-        self.habitPreferences = persisted.habitPreferencesByOwner[initialOwnerID] ?? EntityListPreferences()
-        self.rewardPreferences = persisted.rewardPreferencesByOwner[initialOwnerID] ?? EntityListPreferences()
+        _ = try? database.connection(at: databaseURL)
+        self.habitPreferences = Self.loadPreferences(scope: .habits, ownerID: initialOwnerID, database: database, url: databaseURL)
+        self.rewardPreferences = Self.loadPreferences(scope: .rewards, ownerID: initialOwnerID, database: database, url: databaseURL)
     }
 
-    // Like swapping which persisted user bucket your selector points at.
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
-        habitPreferences = habitPreferencesByOwner[ownerID] ?? EntityListPreferences()
-        rewardPreferences = rewardPreferencesByOwner[ownerID] ?? EntityListPreferences()
+        habitPreferences = Self.loadPreferences(scope: .habits, ownerID: ownerID, database: database, url: databaseURL)
+        rewardPreferences = Self.loadPreferences(scope: .rewards, ownerID: ownerID, database: database, url: databaseURL)
     }
 
     func migratePreferences(from sourceOwnerID: String, to destinationOwnerID: String) -> Bool {
         guard sourceOwnerID != destinationOwnerID else { return false }
 
+        let sourceHabit = Self.loadPreferences(scope: .habits, ownerID: sourceOwnerID, database: database, url: databaseURL)
+        let sourceReward = Self.loadPreferences(scope: .rewards, ownerID: sourceOwnerID, database: database, url: databaseURL)
+
         var migrated = false
+        do {
+            try database.transaction(at: databaseURL) { db in
+                if self.preferenceRowExists(scope: .habits, ownerID: sourceOwnerID) {
+                    try self.savePreferences(sourceHabit, scope: .habits, ownerID: destinationOwnerID, on: db)
+                    try self.database.execute(
+                        "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
+                        bindings: [.text(sourceOwnerID), .text(ListScope.habits.rawValue)],
+                        on: db
+                    )
+                    migrated = true
+                }
 
-        if let sourceHabitPreferences = habitPreferencesByOwner[sourceOwnerID] {
-            habitPreferencesByOwner[destinationOwnerID] = sourceHabitPreferences
-            habitPreferencesByOwner[sourceOwnerID] = nil
-            migrated = true
-        }
-
-        if let sourceRewardPreferences = rewardPreferencesByOwner[sourceOwnerID] {
-            rewardPreferencesByOwner[destinationOwnerID] = sourceRewardPreferences
-            rewardPreferencesByOwner[sourceOwnerID] = nil
-            migrated = true
+                if self.preferenceRowExists(scope: .rewards, ownerID: sourceOwnerID) {
+                    try self.savePreferences(sourceReward, scope: .rewards, ownerID: destinationOwnerID, on: db)
+                    try self.database.execute(
+                        "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
+                        bindings: [.text(sourceOwnerID), .text(ListScope.rewards.rawValue)],
+                        on: db
+                    )
+                    migrated = true
+                }
+            }
+        } catch {
+            assertionFailure("Failed to migrate list preferences: \(error)")
+            return false
         }
 
         if migrated {
-            persist()
             setCurrentOwner(currentOwnerID)
         }
-
         return migrated
     }
 
@@ -147,14 +149,19 @@ final class ListPreferencesStore {
     }
 
     private func mutatePreferences(for scope: ListScope, _ mutate: (inout EntityListPreferences) -> Void) {
-        // `inout` here is the closest Swift syntax to mutating a draft object
-        // in Immer, then committing the next immutable snapshot to the store.
         let current = preferences(for: scope)
         var next = current
         mutate(&next)
         guard next != current else { return }
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.savePreferences(next, scope: scope, ownerID: self.currentOwnerID, on: db)
+            }
+        } catch {
+            assertionFailure("Failed to save list preferences: \(error)")
+            return
+        }
         setPreferences(next, for: scope)
-        persist()
     }
 
     private func preferences(for scope: ListScope) -> EntityListPreferences {
@@ -170,20 +177,75 @@ final class ListPreferencesStore {
         switch scope {
         case .habits:
             habitPreferences = preferences
-            habitPreferencesByOwner[currentOwnerID] = preferences
         case .rewards:
             rewardPreferences = preferences
-            rewardPreferencesByOwner[currentOwnerID] = preferences
         }
     }
 
-    private func persist() {
-        JSONFileStore.save(
-            PersistedState(
-                habitPreferencesByOwner: habitPreferencesByOwner,
-                rewardPreferencesByOwner: rewardPreferencesByOwner
-            ),
-            to: storageURL
+    private func preferenceRowExists(scope: ListScope, ownerID: String) -> Bool {
+        do {
+            return try database.queryOne(
+                "SELECT 1 FROM list_preferences WHERE owner_id = ? AND scope = ? LIMIT 1",
+                bindings: [.text(ownerID), .text(scope.rawValue)],
+                at: databaseURL
+            ) { _ in
+                true
+            } ?? false
+        } catch {
+            assertionFailure("Failed to check list preference row: \(error)")
+            return false
+        }
+    }
+
+    private func savePreferences(
+        _ preferences: EntityListPreferences,
+        scope: ListScope,
+        ownerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        let selectedTagIDs = (try? String(data: JSONEncoder().encode(preferences.selectedTagIDs), encoding: .utf8)) ?? "[]"
+        try database.execute(
+            """
+            INSERT INTO list_preferences (owner_id, scope, sort, selected_tag_ids_json)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(owner_id, scope) DO UPDATE SET
+                sort = excluded.sort,
+                selected_tag_ids_json = excluded.selected_tag_ids_json
+            """,
+            bindings: [
+                .text(ownerID),
+                .text(scope.rawValue),
+                .text(preferences.sort.rawValue),
+                .text(selectedTagIDs)
+            ],
+            on: databaseHandle
         )
+    }
+
+    private static func loadPreferences(
+        scope: ListScope,
+        ownerID: String,
+        database: AppDatabase,
+        url: URL
+    ) -> EntityListPreferences {
+        do {
+            return try database.queryOne(
+                """
+                SELECT sort, selected_tag_ids_json
+                FROM list_preferences
+                WHERE owner_id = ? AND scope = ?
+                """,
+                bindings: [.text(ownerID), .text(scope.rawValue)],
+                at: url
+            ) { row in
+                let sort = EntityListSortOption(rawValue: SQLiteColumn.text(row, index: 0)) ?? .priceHighToLow
+                let rawJSON = SQLiteColumn.text(row, index: 1)
+                let selectedTagIDs = (try? JSONDecoder().decode([RecordID].self, from: Data(rawJSON.utf8))) ?? []
+                return EntityListPreferences(sort: sort, selectedTagIDs: selectedTagIDs)
+            } ?? EntityListPreferences()
+        } catch {
+            assertionFailure("Failed to load list preferences: \(error)")
+            return EntityListPreferences()
+        }
     }
 }
