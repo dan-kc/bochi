@@ -47,11 +47,13 @@ final class AppDatabase {
         )
 
         do {
-            let queue = try DatabaseQueue(path: url.path)
-            try queue.write { db in
+            var configuration = Configuration()
+            configuration.prepareDatabase { db in
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
                 try db.execute(sql: "PRAGMA journal_mode = WAL")
             }
+
+            let queue = try DatabaseQueue(path: url.path, configuration: configuration)
             try migrate(queue)
             queuesByPath[url.path] = queue
             return queue
