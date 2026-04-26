@@ -186,165 +186,181 @@ We need signed-out data to survive relaunch, and we need signed-in data to remai
 
 ### Why this design?
 
-The app persists JSON files into Application Support and scopes the contents by owner. That allows one physical file to hold multiple logical datasets.
+The app now persists local state in one SQLite database, accessed through GRDB, instead of one JSON file per store. The database lives at:
 
-The local storage root is:
+- `Application Support/tofustash/tofustash.sqlite`
 
-- `Application Support/tofustash/`
+The key idea did not change:
 
-The main files are:
+- the data is still owner-scoped
+- signed-out rows still belong to `local-device`
+- signed-in rows still belong to a backend user id
 
-- `habits.json`
-- `rewards.json`
-- `trades.json`
-- `tags.json`
-- `balances.json`
-- `user-settings.json`
-- `sync-state.json`
-- `list-preferences.json`
+What changed is the storage substrate. Instead of keeping separate owner-grouped JSON blobs, the app stores normalized rows with an explicit `owner_id`.
 
-Not all of these are synced in the same way.
+### 4.1 Which tables are synced domain state?
 
-### 4.1 Which files are synced domain state?
+These tables contain synced entities or synced user settings:
 
-These contain synced domain entities or synced user settings:
+- `habits`
+- `rewards`
+- `trades`
+- `tags`
+- `habit_tags`
+- `reward_tags`
+- `user_settings`
 
-- `habits.json`
-- `rewards.json`
-- `trades.json`
-- `tags.json`
-- `user-settings.json`
+These are the rows that can be pulled from the backend, pushed to the backend, or migrated from `local-device` to an authenticated owner.
 
-`tags.json` also contains the habit-tag and reward-tag association rows.
-
-### 4.2 Which files are local projections or local metadata?
+### 4.2 Which tables are local projections or local metadata?
 
 These are persisted locally but are not first-class synced entities:
 
-- `balances.json`
-- `sync-state.json`
-- `list-preferences.json`
+- `balance_projections`
+- `sync_state`
+- `dirty_records`
+- `dirty_flags`
+- `list_preferences`
 
 That distinction is important:
 
-- `balances.json` is a local cached projection
-- `sync-state.json` is local control data for sync
-- `list-preferences.json` is UI preference state
+- `balance_projections` is a local cached projection
+- `sync_state`, `dirty_records`, and `dirty_flags` are local control data for sync
+- `list_preferences` is UI preference state
 
-### 4.3 Example: `habits.json`
-
-This file is keyed by owner.
+### 4.3 Example: rows in `habits`
 
 ```json
-{
-  "habitsByOwner": {
-    "local-device": [
-      {
-        "id": "local-habit-1",
-        "name": "Walk",
-        "description": "",
-        "createdAt": "2026-04-26T09:00:00.000Z",
-        "updatedAt": "2026-04-26T09:00:00.000Z",
-        "deletedAt": null,
-        "frequency": 1,
-        "difficultyTier": "medium",
-        "durationSeconds": 900,
-        "lockoutDurationSeconds": null,
-        "skipConsequence": null
-      }
-    ],
-    "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111": [
-      {
-        "id": "habit-1",
-        "name": "Deep Work",
-        "description": "45 min",
-        "createdAt": "2026-04-25T08:00:00.000Z",
-        "updatedAt": "2026-04-26T10:29:00.000Z",
-        "deletedAt": null,
-        "frequency": 2,
-        "difficultyTier": "hard",
-        "durationSeconds": 2700,
-        "lockoutDurationSeconds": 3600,
-        "skipConsequence": 1
-      }
-    ]
+[
+  {
+    "id": "local-habit-1",
+    "owner_id": "local-device",
+    "name": "Walk",
+    "description": "",
+    "created_at": 1777194000,
+    "updated_at": 1777194000,
+    "deleted_at": null,
+    "min_daily_frequency": 1,
+    "difficulty_tier": "medium",
+    "duration_seconds": 900,
+    "lockout_duration_seconds": null,
+    "skip_consequence": null
+  },
+  {
+    "id": "habit-1",
+    "owner_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "name": "Deep Work",
+    "description": "45 min",
+    "created_at": 1777104000,
+    "updated_at": 1777199340,
+    "deleted_at": null,
+    "min_daily_frequency": 2,
+    "difficulty_tier": "hard",
+    "duration_seconds": 2700,
+    "lockout_duration_seconds": 3600,
+    "skip_consequence": 1
   }
-}
+]
 ```
 
 Notice what this buys us:
 
 - the same store can serve signed-out and signed-in data
-- switching owners is mostly pointer-switching, not data-model-switching
+- switching owners is mostly a query/filter change, not a data-model change
 
-### 4.4 Example: `trades.json`
+### 4.4 Example: rows in `trades`
 
 ```json
-{
-  "tradesByOwner": {
-    "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111": [
-      {
-        "id": "trade-1",
-        "habitId": "habit-1",
-        "rewardId": null,
-        "amount": 250,
-        "createdAt": "2026-04-26T10:29:30.000Z",
-        "updatedAt": "2026-04-26T10:29:30.000Z",
-        "deletedAt": null
-      },
-      {
-        "id": "trade-2",
-        "habitId": null,
-        "rewardId": "reward-1",
-        "amount": -120,
-        "createdAt": "2026-04-26T10:32:00.000Z",
-        "updatedAt": "2026-04-26T10:32:00.000Z",
-        "deletedAt": null
-      }
-    ]
+[
+  {
+    "id": "trade-1",
+    "owner_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "habit_id": "habit-1",
+    "reward_id": null,
+    "amount": 250,
+    "created_at": 1777199370,
+    "updated_at": 1777199370,
+    "deleted_at": null
+  },
+  {
+    "id": "trade-2",
+    "owner_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "habit_id": null,
+    "reward_id": "reward-1",
+    "amount": -120,
+    "created_at": 1777199520,
+    "updated_at": 1777199520,
+    "deleted_at": null
   }
-}
+]
 ```
 
 Trades are central to the model because they are the actual event history of earning and spending tofu.
 
-### 4.5 Example: `balances.json`
+### 4.5 Example: rows in `balance_projections`
 
 ```json
-{
-  "balanceByOwner": {
-    "local-device": 500,
-    "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111": 130
+[
+  {
+    "owner_id": "local-device",
+    "balance": 500,
+    "updated_at": 1777199520
+  },
+  {
+    "owner_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "balance": 130,
+    "updated_at": 1777199520
   }
-}
+]
 ```
 
-This file is easy to misunderstand.
+This table is easy to misunderstand.
 
 The app absolutely does persist balance locally.
 
-But that does **not** mean balance is a first-class synced entity. It is a cached local projection that is updated optimistically in the app and overwritten by server-derived balance during sync responses.
+But that does **not** mean balance is a first-class synced entity. It is a cached local projection that is recalculated from local trades and also overwritten by server-derived balance during sync responses.
 
-### 4.6 Example: `sync-state.json`
+### 4.6 Example: rows in sync metadata tables
+
+`sync_state`:
 
 ```json
-{
-  "statesByUserID": {
-    "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111": {
-      "lastSync": "2026-04-26T10:30:00.000Z",
-      "lastFullSyncAt": "2026-04-26T10:30:00.000Z",
-      "dirty": {
-        "habits": ["habit-1"],
-        "trades": ["trade-1"],
-        "tags": [],
-        "habitTags": [],
-        "rewards": [],
-        "rewardTags": [],
-        "generalDifficulty": false
-      }
-    }
+[
+  {
+    "user_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "last_sync_server_time": 1777199400,
+    "last_full_sync_at": 1777199400,
+    "full_sync_required": 0
   }
-}
+]
+```
+
+`dirty_records`:
+
+```json
+[
+  {
+    "user_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "entity_kind": "habits",
+    "record_id": "habit-1"
+  },
+  {
+    "user_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "entity_kind": "trades",
+    "record_id": "trade-1"
+  }
+]
+```
+
+`dirty_flags`:
+
+```json
+[
+  {
+    "user_id": "9d6d4c7e-4d0f-4c8b-bb6d-7b4f9d3a1111",
+    "entity_kind": "generalDifficulty"
+  }
+]
 ```
 
 This is not user data. This is sync bookkeeping.
@@ -397,75 +413,73 @@ This solves the product requirement:
 
 ### 5.3 Example: local-to-account migration
 
-Suppose the device has this signed-out data:
+Suppose the device has this signed-out row in `habits`:
 
 ```json
-{
-  "habitsByOwner": {
-    "local-device": [
-      {
-        "id": "local-habit-1",
-        "name": "Stretch",
-        "description": "",
-        "createdAt": "2026-04-26T09:00:00.000Z",
-        "updatedAt": "2026-04-26T09:00:00.000Z",
-        "deletedAt": null,
-        "frequency": 1,
-        "difficultyTier": "light",
-        "durationSeconds": null,
-        "lockoutDurationSeconds": null,
-        "skipConsequence": null
-      }
-    ]
+[
+  {
+    "id": "local-habit-1",
+    "owner_id": "local-device",
+    "name": "Stretch",
+    "description": "",
+    "created_at": 1777194000,
+    "updated_at": 1777194000,
+    "deleted_at": null,
+    "min_daily_frequency": 1,
+    "difficulty_tier": "light",
+    "duration_seconds": null,
+    "lockout_duration_seconds": null,
+    "skip_consequence": null
   }
-}
+]
 ```
 
-After sign-in, the store migrates it into the backend user bucket:
+After sign-in, the store migrates it by changing the owner to the backend user:
 
 ```json
-{
-  "habitsByOwner": {
-    "local-device": [],
-    "user-123": [
-      {
-        "id": "local-habit-1",
-        "name": "Stretch",
-        "description": "",
-        "createdAt": "2026-04-26T09:00:00.000Z",
-        "updatedAt": "2026-04-26T09:00:00.000Z",
-        "deletedAt": null,
-        "frequency": 1,
-        "difficultyTier": "light",
-        "durationSeconds": null,
-        "lockoutDurationSeconds": null,
-        "skipConsequence": null
-      }
-    ]
+[
+  {
+    "id": "local-habit-1",
+    "owner_id": "user-123",
+    "name": "Stretch",
+    "description": "",
+    "created_at": 1777194000,
+    "updated_at": 1777194000,
+    "deleted_at": null,
+    "min_daily_frequency": 1,
+    "difficulty_tier": "light",
+    "duration_seconds": null,
+    "lockout_duration_seconds": null,
+    "skip_consequence": null
   }
-}
+]
 ```
 
-And `sync-state.json` is updated to mark the migrated id dirty:
+And sync metadata is updated to mark the migrated id dirty:
+
+`sync_state`:
 
 ```json
-{
-  "statesByUserID": {
-    "user-123": {
-      "lastSync": null,
-      "lastFullSyncAt": null,
-      "dirty": {
-        "habits": ["local-habit-1"],
-        "trades": [],
-        "tags": [],
-        "habitTags": [],
-        "rewards": [],
-        "rewardTags": [],
-        "generalDifficulty": false
-      }
-    }
+[
+  {
+    "user_id": "user-123",
+    "last_sync_server_time": null,
+    "last_full_sync_at": null,
+    "full_sync_required": 1
   }
-}
+]
+```
+
+`dirty_records`:
+
+```json
+[
+  {
+    "user_id": "user-123",
+    "entity_kind": "habits",
+    "record_id": "local-habit-1"
+  }
+]
 ```
 
 That is the mechanism that turns "local-only work" into "next sync push this to the backend."
@@ -1357,13 +1371,19 @@ The cost is:
 
 For a local-first mobile app this is a reasonable tradeoff, but it is still a tradeoff.
 
-## 18.5 Local JSON decode failure falls back to empty state
+## 18.5 Local database corruption or schema issues still need an operational story
 
-If a persisted JSON file fails to decode, the loader returns a default empty value.
+Moving to SQLite removes the old "decode failed, return empty JSON state" behavior, which is good.
 
-For authenticated users, later sync can often repopulate state.
+But it replaces that failure mode with a different operational concern:
 
-For signed-out-only local data, this can mean apparent data loss with no backend recovery path.
+- database corruption
+- migration bugs
+- schema drift during development
+
+For authenticated users, later sync can often repopulate state after recovery.
+
+For signed-out-only local data, a broken local database can still mean apparent data loss with no backend recovery path.
 
 ## 18.6 Soft delete semantics need to be understood clearly
 
@@ -1392,7 +1412,8 @@ If you want to connect this explanation back to the implementation, read these i
 
 1. [ios/tofustash/Sync/SyncManager.swift](/home/daniel/projects/tofustash/ios/tofustash/Sync/SyncManager.swift)
 2. [ios/tofustash/Sync/SyncStateStore.swift](/home/daniel/projects/tofustash/ios/tofustash/Sync/SyncStateStore.swift)
-3. [ios/tofustash/Shared/Persistence/StorageSupport.swift](/home/daniel/projects/tofustash/ios/tofustash/Shared/Persistence/StorageSupport.swift)
+3. [ios/tofustash/Shared/Persistence/AppDatabase.swift](/home/daniel/projects/tofustash/ios/tofustash/Shared/Persistence/AppDatabase.swift)
+4. [ios/tofustash/Shared/Persistence/StorageSupport.swift](/home/daniel/projects/tofustash/ios/tofustash/Shared/Persistence/StorageSupport.swift)
 4. [ios/tofustash/Habits/HabitStore.swift](/home/daniel/projects/tofustash/ios/tofustash/Habits/HabitStore.swift)
 5. [ios/tofustash/Trades/TradeStore.swift](/home/daniel/projects/tofustash/ios/tofustash/Trades/TradeStore.swift)
 6. [ios/tofustash/Trades/BalanceStore.swift](/home/daniel/projects/tofustash/ios/tofustash/Trades/BalanceStore.swift)

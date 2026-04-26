@@ -37,26 +37,33 @@ but it also lets the app upgrade into sync later without throwing local work awa
 
 ## What Is Persisted
 
-The iOS app now persists these domain collections as JSON in Application Support:
+The iOS app now persists local state in one SQLite database in Application Support:
 
-- habits
-- rewards
-- trades
-- tags
-- habit-tag links
-- reward-tag links
-- balances
-- user gameplay settings
-- sync metadata
+- `Application Support/tofustash/tofustash.sqlite`
 
-The stores are owner-scoped. Each JSON file holds data grouped by owner id instead of only one global array.
-
-That means the same file can contain:
+The database is accessed through GRDB. The tables are owner-scoped by `owner_id`, so the same database can contain:
 
 - the signed-out `local-device` dataset
 - one or more authenticated datasets keyed by backend user id
 
-SwiftUI still reads simple arrays from each store, but each store exposes only the records for its current owner.
+SwiftUI still reads simple arrays and values from each store, but each store exposes only the rows for its current owner.
+
+The main persisted tables are:
+
+- synced domain tables:
+  - `habits`
+  - `rewards`
+  - `trades`
+  - `tags`
+  - `habit_tags`
+  - `reward_tags`
+  - `user_settings`
+- local projection and metadata tables:
+  - `balance_projections`
+  - `sync_state`
+  - `dirty_records`
+  - `dirty_flags`
+  - `list_preferences`
 
 ## Owner Switching
 
@@ -104,7 +111,7 @@ That avoids a split-brain situation where entitlement UI could depend on whichev
 
 ## Sync Metadata
 
-`SyncStateStore` persists metadata per authenticated user id:
+`SyncStateStore` persists metadata per authenticated user id in SQLite:
 
 - `lastSync`
 - `lastFullSyncAt`
@@ -374,8 +381,9 @@ The current implementation is correct for the existing product direction, but th
   - it matches the frontend today
   - battery/network behaviour may justify relaxing it on mobile later
 
-- add a dedicated restore/recovery story for corrupted local JSON
-  - right now the stores fall back to empty/default state if a file cannot be decoded
+- add a dedicated restore/recovery story for local database corruption or schema issues
+  - SQLite removes the old JSON decode failure path
+  - but signed-out-only data still needs a recovery story if the local database breaks
 
 - consider shared store helpers for owner-scoped persistence
   - the current store code is reasonably DRY
