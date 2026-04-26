@@ -48,12 +48,12 @@ final class AppDatabase {
 
         do {
             var configuration = Configuration()
-            configuration.prepareDatabase { db in
-                try db.execute(sql: "PRAGMA foreign_keys = ON")
-                try db.execute(sql: "PRAGMA journal_mode = WAL")
-            }
+            configuration.foreignKeysEnabled = true
 
             let queue = try DatabaseQueue(path: url.path, configuration: configuration)
+            try queue.writeWithoutTransaction { db in
+                try db.execute(sql: "PRAGMA journal_mode = WAL")
+            }
             try migrate(queue)
             queuesByPath[url.path] = queue
             return queue
