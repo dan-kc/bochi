@@ -266,7 +266,7 @@ final class SyncManager {
 
         do {
             let response = try await apiClient.pullSync(cursor: syncState.lastSyncCursor, accessToken: accessToken)
-            applyPullResponse(response, filteringDirtyState: syncState)
+            try applyPullResponse(response, filteringDirtyState: syncState)
         } catch {
             // Background pulls are intentionally silent so passive polling does
             // not surface noisy errors while the user is offline.
