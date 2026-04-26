@@ -6,7 +6,7 @@ enum AppConfiguration {
     // Behaviour: when you run the app on your iPhone during development, it should
     // talk to the server running on this laptop over Wi-Fi instead of the phone's
     // own loopback interface (`localhost` on the phone would point back to the phone).
-    private static let defaultDevelopmentHost = "192.168.1.203"
+    private static let defaultDevelopmentHost = "192.168.1.196"
     private static let defaultScheme = "http"
     private static let defaultPort = 8501
     private static let apiHostOverrideEnvironmentKey = "TOFUSTASH_API_HOST"
