@@ -33,10 +33,10 @@ typealias AppDatabaseHandle = Database
 final class AppDatabase {
     static let shared = AppDatabase()
 
-    private var queuesByPath: [String: DatabaseQueue] = [:]
+    private var poolsByPath: [String: DatabasePool] = [:]
 
-    func connection(at url: URL) throws -> DatabaseQueue {
-        if let existing = queuesByPath[url.path] {
+    func connection(at url: URL) throws -> DatabasePool {
+        if let existing = poolsByPath[url.path] {
             return existing
         }
 
@@ -50,22 +50,19 @@ final class AppDatabase {
             var configuration = Configuration()
             configuration.foreignKeysEnabled = true
 
-            let queue = try DatabaseQueue(path: url.path, configuration: configuration)
-            try queue.writeWithoutTransaction { db in
-                try db.execute(sql: "PRAGMA journal_mode = WAL")
-            }
-            try migrate(queue)
-            queuesByPath[url.path] = queue
-            return queue
+            let pool = try DatabasePool(path: url.path, configuration: configuration)
+            try migrate(pool)
+            poolsByPath[url.path] = pool
+            return pool
         } catch {
             throw AppDatabaseError.openFailed(String(describing: error))
         }
     }
 
     func transaction(at url: URL, _ body: (AppDatabaseHandle) throws -> Void) throws {
-        let queue = try connection(at: url)
+        let pool = try connection(at: url)
         do {
-            try queue.write { db in
+            try pool.write { db in
                 try body(db)
             }
         } catch {
@@ -78,8 +75,8 @@ final class AppDatabase {
         bindings: [SQLiteValue] = [],
         at url: URL
     ) throws {
-        let queue = try connection(at: url)
-        try queue.write { db in
+        let pool = try connection(at: url)
+        try pool.write { db in
             try self.execute(sql, bindings: bindings, on: db)
         }
     }
@@ -102,8 +99,8 @@ final class AppDatabase {
         at url: URL,
         map: (Row) throws -> T
     ) throws -> [T] {
-        let queue = try connection(at: url)
-        return try queue.read { db in
+        let pool = try connection(at: url)
+        return try pool.read { db in
             try self.query(sql, bindings: bindings, on: db, map: map)
         }
     }
@@ -127,8 +124,8 @@ final class AppDatabase {
         at url: URL,
         map: (Row) throws -> T
     ) throws -> T? {
-        let queue = try connection(at: url)
-        return try queue.read { db in
+        let pool = try connection(at: url)
+        return try pool.read { db in
             try self.queryOne(sql, bindings: bindings, on: db, map: map)
         }
     }
@@ -149,7 +146,7 @@ final class AppDatabase {
         }
     }
 
-    private func migrate(_ queue: DatabaseQueue) throws {
+    private func migrate(_ writer: any DatabaseWriter) throws {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1_initial_sqlite_store") { db in
             try db.execute(sql: """
@@ -294,7 +291,7 @@ final class AppDatabase {
                 """)
         }
 
-        try migrator.migrate(queue)
+        try migrator.migrate(writer)
     }
 }
 
