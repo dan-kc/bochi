@@ -390,10 +390,10 @@ struct SyncManagerTests {
                 await withCheckedContinuation { continuation in
                     gate.continuation = continuation
                 }
-                return makeResponse()
+                return await makeResponse()
             },
             pushHandler: { request, _ in
-                makeResponse(habits: request.habits ?? [])
+                await makeResponse(habits: request.habits ?? [])
             }
         )
 
