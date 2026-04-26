@@ -48,7 +48,7 @@ final class SyncStateStore {
     }
 
     func state(for userID: String, on databaseHandle: AppDatabaseHandle) throws -> UserSyncState {
-        let checkpoint = try database.queryOne(
+        let checkpoint: (lastSyncCursor: String?, lastSyncTime: Date?, lastFullSyncAt: Date?) = try database.queryOne(
             """
             SELECT last_sync_cursor, last_sync_server_time, last_full_sync_at
             FROM sync_state
@@ -62,7 +62,7 @@ final class SyncStateStore {
                 lastSyncTime: SQLiteColumn.optionalDate(row, index: 1),
                 lastFullSyncAt: SQLiteColumn.optionalDate(row, index: 2)
             )
-        } ?? (nil, nil, nil)
+        } ?? (lastSyncCursor: nil, lastSyncTime: nil, lastFullSyncAt: nil)
 
         let dirtyRecords = try fetchDirtyRecords(for: userID, on: databaseHandle)
         let dirtyFlags = try fetchDirtyFlags(for: userID, on: databaseHandle)
