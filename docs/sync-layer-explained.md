@@ -114,10 +114,11 @@ If you want to understand the runtime behavior of sync, this is the most importa
 
 This stores sync metadata per authenticated user:
 
-- `lastSync`
+- `lastSyncCursor`
+- `lastSyncTime`
 - `lastFullSyncAt`
-- dirty ids for each synced entity kind
-- a dirty flag for `generalDifficulty`
+- versioned dirty ids for each synced entity kind
+- a versioned dirty flag for `generalDifficulty`
 
 This metadata is local only. It is not itself part of the backend sync payload.
 
@@ -131,7 +132,7 @@ The stores do not call the backend directly. Instead, when a synced thing change
 - entity kind
 - record ids
 
-`SyncManager` listens, marks dirty state, and schedules sync.
+When the current owner is signed in, the store also persists the domain-row mutation and the matching dirty metadata in the same SQLite transaction. `SyncManager` listens only to schedule sync after that durable local commit.
 
 That separation keeps UI and store mutation code simple.
 
@@ -596,7 +597,7 @@ That covers the common mobile case:
 
 ### 7.4 Full sync reset
 
-Every 24 hours, the app forces the next sync to be full by clearing `lastSync`.
+Every 24 hours, the app forces the next sync to be full by clearing `lastSyncCursor`.
 
 This is a safety mechanism against drift. Even if incremental sync misses something, the app periodically re-anchors against the full backend state.
 
@@ -621,16 +622,16 @@ This is the pull endpoint.
 
 It accepts:
 
-- optional `since`
+- optional `cursor`
 
-If `since` is present, the backend returns rows whose `updated_at` is newer than that timestamp.
+If `cursor` is present, the backend returns rows that changed after the acknowledged backend snapshot represented by that opaque cursor.
 
-If `since` is omitted, the backend returns the full current dataset for that user.
+If `cursor` is omitted, the backend returns the full current dataset for that user.
 
 ### Example request
 
 ```http
-GET /api/sync?since=2026-04-26T10:30:00.000000
+GET /api/sync?cursor=eyJ1cHBlcl9ib3VuZF90eF9pZCI6MTIzLCJpbl9wcm9ncmVzc190eF9pZHMiOltdfQ
 Authorization: Bearer <access-token>
 ```
 
@@ -671,6 +672,7 @@ Authorization: Bearer <access-token>
   "balance": {
     "tofuBalance": 250
   },
+  "serverCursor": "eyJ1cHBlcl9ib3VuZF90eF9pZCI6MTI0LCJpbl9wcm9ncmVzc190eF9pZHMiOltdfQ",
   "serverTime": "2026-04-26T10:30:05.000000",
   "email": "user@example.com",
   "isPremium": false,
@@ -775,6 +777,8 @@ The client sends only dirty local entities and settings.
 
 The response gives the client canonical server-written rows and a fresh server-derived balance.
 
+`serverTime` is still useful for UI status, but `serverCursor` is the sync checkpoint.
+
 ## 9. Step-By-Step: What Happens During A Normal Signed-In Sync
 
 ### What are we trying to solve?
@@ -803,9 +807,9 @@ Each step exists for a reason.
 
 ### 9.1 Step 1: decide full vs incremental
 
-If `lastSync` is nil, the next run is full.
+If `lastSyncCursor` is nil, the next run is full.
 
-If the 24-hour reset has forced a full sync, `lastSync` is also nil.
+If the 24-hour reset has forced a full sync, `lastSyncCursor` is also nil.
 
 Otherwise, the run is incremental.
 
@@ -821,20 +825,20 @@ Before pulling from the backend, the client snapshots:
 - dirty habit-tag rows
 - dirty reward rows
 - dirty reward-tag rows
-- whether `generalDifficulty` is dirty
+- the current dirty generation for `generalDifficulty`
 
 Why?
 
 Because the next pull might include stale server rows for ids that the user has already modified locally. If the app looked up dirty rows only after merging the pull, it could accidentally push the stale version instead of the user’s edit.
 
-So the snapshot preserves the exact local values intended for push.
+So the snapshot preserves the exact local values intended for push and the exact dirty generations that are allowed to be cleared if that sync attempt succeeds.
 
 ### 9.3 Step 3: pull remote changes
 
 The app calls:
 
 - full: `GET /api/sync`
-- incremental: `GET /api/sync?since=<lastSync>`
+- incremental: `GET /api/sync?cursor=<lastSyncCursor>`
 
 ### 9.4 Step 4: merge pulled data
 
@@ -869,7 +873,7 @@ The app merges those returned rows and updates local projections such as balance
 
 ### 9.7 Step 7: store the new checkpoint
 
-The client takes the response `serverTime` and records it as the new `lastSync`.
+The client takes the response `serverCursor` and records it as the new incremental checkpoint. `serverTime` is stored separately for status UI.
 
 That becomes the next incremental checkpoint.
 
@@ -899,9 +903,9 @@ The app applies the trade and balance locally first, then syncs afterward.
 
 4. `BalanceStore` immediately increases the visible balance locally.
 
-5. `TradeStore` posts a `SyncMutation` for the created trade ids.
+5. `TradeStore` persists the new trade rows, the balance projection update, and the dirty trade ids in one local SQLite transaction.
 
-6. `SyncManager` marks those trade ids dirty in `SyncStateStore`.
+6. `TradeStore` posts a `SyncMutation` so `SyncManager` can restart the debounce timer.
 
 7. A debounced sync timer starts.
 
@@ -923,9 +927,9 @@ The app applies the trade and balance locally first, then syncs afterward.
 
 16. The client merges returned trades and sets local balance from the server response.
 
-17. Dirty trade ids are cleared.
+17. Only the snapshotted dirty trade generation is cleared.
 
-18. `lastSync` is advanced to `serverTime`.
+18. `lastSyncCursor` is advanced to `serverCursor`, and the displayed sync time is updated from `serverTime`.
 
 ### Local state before sync
 
@@ -959,16 +963,17 @@ The app applies the trade and balance locally first, then syncs afterward.
 {
   "statesByUserID": {
     "user-123": {
-      "lastSync": "2026-04-26T10:29:00.000Z",
+      "lastSyncCursor": "cursor-123",
+      "lastSyncTime": "2026-04-26T10:29:00.000Z",
       "lastFullSyncAt": "2026-04-26T09:00:00.000Z",
       "dirty": {
         "habits": [],
-        "trades": ["trade-100"],
+        "trades": [{ "id": "trade-100", "generation": 41 }],
         "tags": [],
         "habitTags": [],
         "rewards": [],
         "rewardTags": [],
-        "generalDifficulty": false
+        "generalDifficultyGeneration": null
       }
     }
   }
@@ -995,6 +1000,7 @@ The backend stores the trade and returns:
   "balance": {
     "tofuBalance": 250
   },
+  "serverCursor": "cursor-124",
   "serverTime": "2026-04-26T10:29:32.000000",
   "habits": [],
   "tags": [],
@@ -1027,7 +1033,7 @@ The purchase flow writes a negative trade locally and updates local balance imme
 
 4. `BalanceStore` immediately subtracts the spent amount.
 
-5. The new trade ids are marked dirty through mutation notifications.
+5. The new trade ids are marked dirty inside the same local transaction that writes the trades.
 
 6. Debounced sync later pushes those negative trades.
 
@@ -1063,9 +1069,9 @@ The app migrates local-device data into the authenticated owner bucket, then pus
 
 5. Stores migrate data from `local-device` to the authenticated user id.
 
-6. Migrated ids are marked dirty.
+6. Migrated ids are marked dirty in the same local migration transaction.
 
-7. A full sync is forced by clearing `lastSync`.
+7. A full sync is forced by clearing `lastSyncCursor`.
 
 8. `SyncManager` runs a full pull.
 
@@ -1099,9 +1105,9 @@ Background pull is allowed to refresh local state, but not for record ids that a
 
 1. Device A already has `habit-1` marked dirty.
 
-2. Background pull requests `GET /api/sync?since=<lastSync>`.
+2. Background pull requests `GET /api/sync?cursor=<lastSyncCursor>`.
 
-3. The backend returns all changed rows since that checkpoint.
+3. The backend returns all changed rows since that checkpoint cursor.
 
 4. `SyncManager.applyPullResponse(...)` converts those rows to models.
 
@@ -1131,17 +1137,11 @@ The backend takes a unified push payload and processes it transactionally in dep
 
 For `GET /api/sync`, the backend:
 
-1. looks up habits since optional `since`
-2. looks up trades since optional `since`
-3. calculates balance from all active trades
-4. loads user profile fields
-5. looks up tags since optional `since`
-6. looks up habit-tag links since optional `since`
-7. looks up rewards since optional `since`
-8. looks up reward-tag links since optional `since`
-9. returns all of that in one response
-
-The incremental filter is based on `updated_at > since`.
+1. opens one repeatable-read read-only transaction
+2. captures a backend snapshot cursor from the current Postgres transaction snapshot
+3. loads habits, trades, tags, links, rewards, balance, and profile from that same snapshot
+4. when a client cursor is present, filters rows by Postgres transaction id visibility relative to that cursor
+5. returns all of that in one response together with a new `serverCursor`
 
 ## 14.2 Push behavior
 
@@ -1158,7 +1158,7 @@ For `POST /api/sync`, the backend:
 9. recalculates balance from trade history
 10. commits the transaction
 11. loads profile data
-12. returns canonical rows plus balance and `serverTime`
+12. returns canonical rows plus balance, `serverTime`, and a fresh `serverCursor`
 
 The main reason for this order is dependency safety:
 
@@ -1174,7 +1174,7 @@ The backend is authoritative for:
 
 - persisted synced rows
 - `updated_at`
-- server checkpoint time
+- snapshot checkpoint cursor
 - derived balance
 
 The backend is **not** relying on the client’s cached balance as a source of truth.
@@ -1314,7 +1314,7 @@ The implementation does not just "download everything and replace blindly." It c
 
 That hybrid approach is one of the stronger parts of the current design.
 
-## 18. Current Tradeoffs And Edge Cases
+## 18. Reliability Hardening And Remaining Tradeoffs
 
 ### What are we trying to solve?
 
@@ -1326,23 +1326,23 @@ If you only understand the happy path, sync bugs will feel mysterious. If you un
 
 ## 18.1 Dirty changes during an in-flight sync
 
-This is one of the more serious current correctness risks.
+This used to be one of the more serious correctness risks.
 
-`executeSync()` snapshots dirty ids at the start, but later clears all dirty state at the end of a successful run.
+`executeSync()` still snapshots dirty state at the start, but dirty rows now carry a mutation generation.
 
-That means a mutation that happens during the in-flight sync can be marked dirty after the snapshot, then accidentally wiped out by the final `clearAllDirty(...)`.
+The sync completion step clears only the exact generations that were present in the snapshot. If the same record is edited again while sync is still in flight, the row gets a newer generation and survives the older clear.
 
-The local state still looks correct on that device, so the bug can hide until another device fails to see the change.
+That closes the "same id edited twice during one sync" hole.
 
 ## 18.2 Incremental checkpoint safety
 
-The backend returns `serverTime`, and the client stores that as `lastSync`.
+The incremental checkpoint is now `serverCursor`, not `serverTime`.
 
-The backend pull path reads rows first, then generates `serverTime`.
+The backend pull path reads all entities inside one repeatable-read snapshot transaction and returns a cursor derived from that snapshot.
 
-That means there is a timing window where another write could happen after the queried rows were read but before `serverTime` was generated. If that write’s timestamp ends up before or equal to the returned checkpoint, a later incremental pull using `updated_at > lastSync` can miss it.
+That removes the old timing window where rows could be read from one moment and the checkpoint could be generated from a later moment.
 
-The 24-hour full sync mitigates this, but does not eliminate the logical hole.
+The 24-hour full sync still exists as a repair path and account-transition tool, but it is no longer covering for this specific hole.
 
 ## 18.3 Balance can temporarily disagree with local trade history during sync
 

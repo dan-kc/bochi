@@ -5,23 +5,23 @@ import Testing
 @MainActor
 struct SyncManagerTests {
     private final class MockSyncAPIClient: SyncAPIClient, @unchecked Sendable {
-        var pullHandler: @Sendable (Date?, String) async throws -> SyncResponse
+        var pullHandler: @Sendable (String?, String) async throws -> SyncResponse
         var pushHandler: @Sendable (SyncPushRequest, String) async throws -> SyncResponse
 
-        private(set) var pullCalls: [(Date?, String)] = []
+        private(set) var pullCalls: [(String?, String)] = []
         private(set) var pushCalls: [(SyncPushRequest, String)] = []
 
         init(
-            pullHandler: @escaping @Sendable (Date?, String) async throws -> SyncResponse,
+            pullHandler: @escaping @Sendable (String?, String) async throws -> SyncResponse,
             pushHandler: @escaping @Sendable (SyncPushRequest, String) async throws -> SyncResponse
         ) {
             self.pullHandler = pullHandler
             self.pushHandler = pushHandler
         }
 
-        func pullSync(since: Date?, accessToken: String) async throws -> SyncResponse {
-            pullCalls.append((since, accessToken))
-            return try await pullHandler(since, accessToken)
+        func pullSync(cursor: String?, accessToken: String) async throws -> SyncResponse {
+            pullCalls.append((cursor, accessToken))
+            return try await pullHandler(cursor, accessToken)
         }
 
         func pushSync(_ request: SyncPushRequest, accessToken: String) async throws -> SyncResponse {
@@ -46,6 +46,16 @@ struct SyncManagerTests {
     private func makeContext(
         pullResponse: SyncResponse,
         pushResponse: SyncResponse? = nil
+    ) async throws -> TestContext {
+        try await makeContext(
+            pullHandler: { _, _ in pullResponse },
+            pushHandler: { _, _ in pushResponse ?? pullResponse }
+        )
+    }
+
+    private func makeContext(
+        pullHandler: @escaping @Sendable (String?, String) async throws -> SyncResponse,
+        pushHandler: @escaping @Sendable (SyncPushRequest, String) async throws -> SyncResponse
     ) async throws -> TestContext {
         let authAPIClient = MockAuthAPIClient()
         let tokenStorage = MockTokenStorage()
@@ -73,8 +83,8 @@ struct SyncManagerTests {
         let syncStateStore = SyncStateStore(storageURL: storageURL)
 
         let syncAPIClient = MockSyncAPIClient(
-            pullHandler: { _, _ in pullResponse },
-            pushHandler: { request, _ in pushResponse ?? pullResponse }
+            pullHandler: pullHandler,
+            pushHandler: pushHandler
         )
 
         let syncManager = SyncManager(
@@ -124,6 +134,7 @@ struct SyncManagerTests {
             rewards: rewards,
             rewardTags: rewardTags,
             balance: SyncBalanceRecord(tofuBalance: 0),
+            serverCursor: "cursor-123",
             serverTime: "2026-04-18T12:00:00.000000",
             email: "user@example.com",
             isPremium: false,
@@ -362,6 +373,52 @@ struct SyncManagerTests {
         #expect(context.syncAPIClient.pushCalls.count == 1)
         #expect(context.syncAPIClient.pushCalls[0].0.generalDifficulty == 10.0)
         #expect(context.userSettingsStore.generalDifficulty == 10.0)
+
+        context.syncManager.updateSession(userID: nil)
+    }
+
+    // Behaviour: if the user edits the same record again while a sync is in
+    // flight, the newer edit must stay dirty so a follow-up sync pushes it.
+    @Test func syncingSameHabitTwiceKeepsNewerEditDirty() async throws {
+        final class PullGate: @unchecked Sendable {
+            var continuation: CheckedContinuation<Void, Never>?
+        }
+
+        let gate = PullGate()
+        let context = try await makeContext(
+            pullHandler: { _, _ in
+                await withCheckedContinuation { continuation in
+                    gate.continuation = continuation
+                }
+                return makeResponse()
+            },
+            pushHandler: { request, _ in
+                makeResponse(habits: request.habits ?? [])
+            }
+        )
+
+        context.syncManager.updateSession(userID: "user-123")
+        gate.continuation?.resume()
+        gate.continuation = nil
+
+        let created = try #require(context.habitStore.addHabit(name: "Original"))
+        context.habitStore.updateHabit(id: created.id, name: "First Edit")
+
+        let firstSync = Task { await context.syncManager.syncNow() }
+        while gate.continuation == nil {
+            await Task.yield()
+        }
+
+        context.habitStore.updateHabit(id: created.id, name: "Second Edit")
+        gate.continuation?.resume()
+        gate.continuation = nil
+        await firstSync.value
+
+        await context.syncManager.syncNow()
+
+        #expect(context.syncAPIClient.pushCalls.count >= 2)
+        let followUpPush = try #require(context.syncAPIClient.pushCalls.last?.0.habits)
+        #expect(followUpPush.contains { $0.id == created.id.rawValue && $0.name == "Second Edit" })
 
         context.syncManager.updateSession(userID: nil)
     }

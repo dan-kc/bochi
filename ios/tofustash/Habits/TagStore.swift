@@ -10,6 +10,7 @@ enum EntityListTagScope {
 final class TagStore {
     private let databaseURL: URL
     private let database = AppDatabase.shared
+    private let syncStateStore: SyncStateStore
 
     private(set) var currentOwnerID: String
     private(set) var tags: [Tag] = []
@@ -29,6 +30,7 @@ final class TagStore {
         initialOwnerID: String = "local-device"
     ) {
         self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
+        self.syncStateStore = SyncStateStore(storageURL: self.databaseURL)
         self.currentOwnerID = initialOwnerID
         _ = try? database.connection(at: databaseURL)
         refreshAll()
@@ -43,40 +45,16 @@ final class TagStore {
         guard sourceOwnerID != destinationOwnerID else {
             return ([], [], [])
         }
-
-        let sourceTags = loadTags(ownerID: sourceOwnerID)
-        let sourceHabitTags = loadHabitTags(ownerID: sourceOwnerID)
-        let sourceRewardTags = loadRewardTags(ownerID: sourceOwnerID)
-
-        let destinationTags = loadTags(ownerID: destinationOwnerID)
-        let destinationHabitTags = loadHabitTags(ownerID: destinationOwnerID)
-        let destinationRewardTags = loadRewardTags(ownerID: destinationOwnerID)
-
-        let mergedTags = OwnerScopedRecordSupport.mergeRecords(local: destinationTags, remote: sourceTags)
-        let mergedHabitTags = OwnerScopedRecordSupport.mergeRecords(local: destinationHabitTags, remote: sourceHabitTags)
-        let mergedRewardTags = OwnerScopedRecordSupport.mergeRecords(local: destinationRewardTags, remote: sourceRewardTags)
-
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceTagRows(ownerID: destinationOwnerID, tags: mergedTags, on: db)
-                try self.replaceHabitTagRows(ownerID: destinationOwnerID, rows: mergedHabitTags, on: db)
-                try self.replaceRewardTagRows(ownerID: destinationOwnerID, rows: mergedRewardTags, on: db)
-
-                try self.replaceTagRows(ownerID: sourceOwnerID, tags: [], on: db)
-                try self.replaceHabitTagRows(ownerID: sourceOwnerID, rows: [], on: db)
-                try self.replaceRewardTagRows(ownerID: sourceOwnerID, rows: [], on: db)
+            let result = try database.transaction(at: databaseURL) { db in
+                try self.migrateData(from: sourceOwnerID, to: destinationOwnerID, on: db)
             }
+            refreshAll()
+            return result
         } catch {
             assertionFailure("Failed to migrate tag data: \(error)")
+            return ([], [], [])
         }
-
-        refreshAll()
-
-        return (
-            sourceTags.map(\.id),
-            sourceHabitTags.map(\.id),
-            sourceRewardTags.map(\.id)
-        )
     }
 
     @discardableResult
@@ -102,7 +80,7 @@ final class TagStore {
             deletedAt: deletedAt
         )
 
-        upsertTag(tag)
+        upsertTag(tag, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .tags, ids: [tag.id])
         }
@@ -137,7 +115,7 @@ final class TagStore {
             deletedAt: deletedAt ?? existing.deletedAt
         )
 
-        upsertTag(updated)
+        upsertTag(updated, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .tags, ids: [id])
         }
@@ -164,7 +142,7 @@ final class TagStore {
             deletedAt: deletedAt
         )
 
-        upsertHabitTag(association)
+        upsertHabitTag(association, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .habitTags, ids: [association.id])
         }
@@ -183,7 +161,7 @@ final class TagStore {
             deletedAt: deletedAt
         )
 
-        upsertHabitTag(deleted)
+        upsertHabitTag(deleted, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .habitTags, ids: [deleted.id])
         }
@@ -215,7 +193,7 @@ final class TagStore {
             deletedAt: deletedAt
         )
 
-        upsertRewardTag(association)
+        upsertRewardTag(association, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .rewardTags, ids: [association.id])
         }
@@ -234,7 +212,7 @@ final class TagStore {
             deletedAt: deletedAt
         )
 
-        upsertRewardTag(deleted)
+        upsertRewardTag(deleted, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(kind: .rewardTags, ids: [deleted.id])
         }
@@ -313,18 +291,11 @@ final class TagStore {
         let sortedRewardTags = OwnerScopedRecordSupport.sorted(authoritativeRewardTags)
 
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceTagRows(ownerID: self.currentOwnerID, tags: sortedTags, on: db)
-                try self.replaceHabitTagRows(ownerID: self.currentOwnerID, rows: sortedHabitTags, on: db)
-                try self.replaceRewardTagRows(ownerID: self.currentOwnerID, rows: sortedRewardTags, on: db)
-            }
+            try persistReplacedAll(tags: sortedTags, habitTags: sortedHabitTags, rewardTags: sortedRewardTags)
         } catch {
             assertionFailure("Failed to replace tag data: \(error)")
+            return
         }
-
-        tags = sortedTags
-        habitTags = sortedHabitTags
-        rewardTags = sortedRewardTags
     }
 
     func getDirtyTags(ids: Set<RecordID>) -> [Tag] {
@@ -339,17 +310,21 @@ final class TagStore {
         rewardTags.filter { ids.contains($0.id) }
     }
 
-    func purgeDeleted() {
+    func purgeDeleted(
+        excludingTagIDs dirtyTagIDs: Set<RecordID> = [],
+        habitTagIDs dirtyHabitTagIDs: Set<RecordID> = [],
+        rewardTagIDs dirtyRewardTagIDs: Set<RecordID> = []
+    ) {
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.database.execute("DELETE FROM tags WHERE owner_id = ? AND deleted_at IS NOT NULL", bindings: [.text(self.currentOwnerID)], on: db)
-                try self.database.execute("DELETE FROM habit_tags WHERE owner_id = ? AND deleted_at IS NOT NULL", bindings: [.text(self.currentOwnerID)], on: db)
-                try self.database.execute("DELETE FROM reward_tags WHERE owner_id = ? AND deleted_at IS NOT NULL", bindings: [.text(self.currentOwnerID)], on: db)
-            }
+            try persistDeletedPurge(
+                excludingTagIDs: dirtyTagIDs,
+                habitTagIDs: dirtyHabitTagIDs,
+                rewardTagIDs: dirtyRewardTagIDs
+            )
         } catch {
             assertionFailure("Failed to purge deleted tag data: \(error)")
+            return
         }
-        refreshAll()
     }
 
     func allTagIDs() -> [RecordID] {
@@ -364,67 +339,191 @@ final class TagStore {
         rewardTags.map(\.id)
     }
 
-    private func upsertTag(_ tag: Tag) {
-        do {
-            try database.execute(
-                """
-                INSERT INTO tags (id, owner_id, name, color_hex, created_at, updated_at, deleted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    owner_id = excluded.owner_id,
-                    name = excluded.name,
-                    color_hex = excluded.color_hex,
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    deleted_at = excluded.deleted_at
-                """,
-                bindings: tagBindings(tag, ownerID: currentOwnerID),
-                at: databaseURL
+    func migrateData(
+        from sourceOwnerID: String,
+        to destinationOwnerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> (tagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
+        guard sourceOwnerID != destinationOwnerID else {
+            return ([], [], [])
+        }
+
+        let sourceTags = loadTags(ownerID: sourceOwnerID)
+        let sourceHabitTags = loadHabitTags(ownerID: sourceOwnerID)
+        let sourceRewardTags = loadRewardTags(ownerID: sourceOwnerID)
+
+        let destinationTags = loadTags(ownerID: destinationOwnerID)
+        let destinationHabitTags = loadHabitTags(ownerID: destinationOwnerID)
+        let destinationRewardTags = loadRewardTags(ownerID: destinationOwnerID)
+
+        let mergedTags = OwnerScopedRecordSupport.mergeRecords(local: destinationTags, remote: sourceTags)
+        let mergedHabitTags = OwnerScopedRecordSupport.mergeRecords(local: destinationHabitTags, remote: sourceHabitTags)
+        let mergedRewardTags = OwnerScopedRecordSupport.mergeRecords(local: destinationRewardTags, remote: sourceRewardTags)
+
+        try replaceTagRows(ownerID: destinationOwnerID, tags: mergedTags, on: databaseHandle)
+        try replaceHabitTagRows(ownerID: destinationOwnerID, rows: mergedHabitTags, on: databaseHandle)
+        try replaceRewardTagRows(ownerID: destinationOwnerID, rows: mergedRewardTags, on: databaseHandle)
+
+        try replaceTagRows(ownerID: sourceOwnerID, tags: [], on: databaseHandle)
+        try replaceHabitTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
+        try replaceRewardTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
+
+        return (
+            sourceTags.map(\.id),
+            sourceHabitTags.map(\.id),
+            sourceRewardTags.map(\.id)
+        )
+    }
+
+    func persistReplacedAll(
+        tags authoritativeTags: [Tag],
+        habitTags authoritativeHabitTags: [HabitTag],
+        rewardTags authoritativeRewardTags: [RewardTag]
+    ) throws {
+        let sortedTags = OwnerScopedRecordSupport.sorted(authoritativeTags)
+        let sortedHabitTags = OwnerScopedRecordSupport.sorted(authoritativeHabitTags)
+        let sortedRewardTags = OwnerScopedRecordSupport.sorted(authoritativeRewardTags)
+
+        try database.transaction(at: databaseURL) { db in
+            try self.replaceTagRows(ownerID: self.currentOwnerID, tags: sortedTags, on: db)
+            try self.replaceHabitTagRows(ownerID: self.currentOwnerID, rows: sortedHabitTags, on: db)
+            try self.replaceRewardTagRows(ownerID: self.currentOwnerID, rows: sortedRewardTags, on: db)
+        }
+
+        tags = sortedTags
+        habitTags = sortedHabitTags
+        rewardTags = sortedRewardTags
+    }
+
+    func replaceAll(
+        tags authoritativeTags: [Tag],
+        habitTags authoritativeHabitTags: [HabitTag],
+        rewardTags authoritativeRewardTags: [RewardTag],
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        try replaceTagRows(ownerID: currentOwnerID, tags: OwnerScopedRecordSupport.sorted(authoritativeTags), on: databaseHandle)
+        try replaceHabitTagRows(ownerID: currentOwnerID, rows: OwnerScopedRecordSupport.sorted(authoritativeHabitTags), on: databaseHandle)
+        try replaceRewardTagRows(ownerID: currentOwnerID, rows: OwnerScopedRecordSupport.sorted(authoritativeRewardTags), on: databaseHandle)
+    }
+
+    func persistDeletedPurge(
+        excludingTagIDs dirtyTagIDs: Set<RecordID>,
+        habitTagIDs dirtyHabitTagIDs: Set<RecordID>,
+        rewardTagIDs dirtyRewardTagIDs: Set<RecordID>
+    ) throws {
+        try database.transaction(at: databaseURL) { db in
+            try self.purgeDeleted(
+                excludingTagIDs: dirtyTagIDs,
+                habitTagIDs: dirtyHabitTagIDs,
+                rewardTagIDs: dirtyRewardTagIDs,
+                on: db
             )
+        }
+        refreshAll()
+    }
+
+    func purgeDeleted(
+        excludingTagIDs dirtyTagIDs: Set<RecordID>,
+        habitTagIDs dirtyHabitTagIDs: Set<RecordID>,
+        rewardTagIDs dirtyRewardTagIDs: Set<RecordID>,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        try purgeDeletedTags(dirtyTagIDs, on: databaseHandle)
+        try purgeDeletedHabitTags(dirtyHabitTagIDs, on: databaseHandle)
+        try purgeDeletedRewardTags(dirtyRewardTagIDs, on: databaseHandle)
+    }
+
+    private func upsertTag(_ tag: Tag, markDirty: Bool) {
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.upsertTag(tag, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .tags, ids: [tag.id], on: db)
+                }
+            }
         } catch {
             assertionFailure("Failed to upsert tag: \(error)")
+            return
         }
         refreshAll()
     }
 
-    private func upsertHabitTag(_ row: HabitTag) {
+    private func upsertHabitTag(_ row: HabitTag, markDirty: Bool) {
         do {
-            try database.execute(
-                """
-                INSERT INTO habit_tags (owner_id, habit_id, tag_id, created_at, updated_at, deleted_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(owner_id, habit_id, tag_id) DO UPDATE SET
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    deleted_at = excluded.deleted_at
-                """,
-                bindings: habitTagBindings(row, ownerID: currentOwnerID),
-                at: databaseURL
-            )
+            try database.transaction(at: databaseURL) { db in
+                try self.upsertHabitTag(row, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .habitTags, ids: [row.id], on: db)
+                }
+            }
         } catch {
             assertionFailure("Failed to upsert habit tag: \(error)")
+            return
         }
         refreshAll()
     }
 
-    private func upsertRewardTag(_ row: RewardTag) {
+    private func upsertRewardTag(_ row: RewardTag, markDirty: Bool) {
         do {
-            try database.execute(
-                """
-                INSERT INTO reward_tags (owner_id, reward_id, tag_id, created_at, updated_at, deleted_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(owner_id, reward_id, tag_id) DO UPDATE SET
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    deleted_at = excluded.deleted_at
-                """,
-                bindings: rewardTagBindings(row, ownerID: currentOwnerID),
-                at: databaseURL
-            )
+            try database.transaction(at: databaseURL) { db in
+                try self.upsertRewardTag(row, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .rewardTags, ids: [row.id], on: db)
+                }
+            }
         } catch {
             assertionFailure("Failed to upsert reward tag: \(error)")
+            return
         }
         refreshAll()
+    }
+
+    private func upsertTag(_ tag: Tag, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO tags (id, owner_id, name, color_hex, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                owner_id = excluded.owner_id,
+                name = excluded.name,
+                color_hex = excluded.color_hex,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            """,
+            bindings: tagBindings(tag, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
+    }
+
+    private func upsertHabitTag(_ row: HabitTag, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO habit_tags (owner_id, habit_id, tag_id, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_id, habit_id, tag_id) DO UPDATE SET
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            """,
+            bindings: habitTagBindings(row, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
+    }
+
+    private func upsertRewardTag(_ row: RewardTag, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO reward_tags (owner_id, reward_id, tag_id, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_id, reward_id, tag_id) DO UPDATE SET
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            """,
+            bindings: rewardTagBindings(row, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
     }
 
     private func loadTags(ownerID: String) -> [Tag] {
@@ -540,6 +639,75 @@ final class TagStore {
                 on: databaseHandle
             )
         }
+    }
+
+    private func purgeDeletedTags(_ dirtyTagIDs: Set<RecordID>, on databaseHandle: AppDatabaseHandle) throws {
+        if dirtyTagIDs.isEmpty {
+            try database.execute("DELETE FROM tags WHERE owner_id = ? AND deleted_at IS NOT NULL", bindings: [.text(currentOwnerID)], on: databaseHandle)
+            return
+        }
+
+        let placeholders = Array(repeating: "?", count: dirtyTagIDs.count).joined(separator: ", ")
+        let bindings = [.text(currentOwnerID)] + dirtyTagIDs.sorted { $0.rawValue < $1.rawValue }.map { .text($0.rawValue) }
+        try database.execute(
+            "DELETE FROM tags WHERE owner_id = ? AND deleted_at IS NOT NULL AND id NOT IN (\(placeholders))",
+            bindings: bindings,
+            on: databaseHandle
+        )
+    }
+
+    private func purgeDeletedHabitTags(_ dirtyHabitTagIDs: Set<RecordID>, on databaseHandle: AppDatabaseHandle) throws {
+        try purgeDeletedAssociations(
+            tableName: "habit_tags",
+            keyColumnA: "habit_id",
+            keyColumnB: "tag_id",
+            dirtyIDs: dirtyHabitTagIDs,
+            on: databaseHandle
+        )
+    }
+
+    private func purgeDeletedRewardTags(_ dirtyRewardTagIDs: Set<RecordID>, on databaseHandle: AppDatabaseHandle) throws {
+        try purgeDeletedAssociations(
+            tableName: "reward_tags",
+            keyColumnA: "reward_id",
+            keyColumnB: "tag_id",
+            dirtyIDs: dirtyRewardTagIDs,
+            on: databaseHandle
+        )
+    }
+
+    private func purgeDeletedAssociations(
+        tableName: String,
+        keyColumnA: String,
+        keyColumnB: String,
+        dirtyIDs: Set<RecordID>,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        if dirtyIDs.isEmpty {
+            try database.execute(
+                "DELETE FROM \(tableName) WHERE owner_id = ? AND deleted_at IS NOT NULL",
+                bindings: [.text(currentOwnerID)],
+                on: databaseHandle
+            )
+            return
+        }
+
+        let excludedClauses = dirtyIDs
+            .sorted { $0.rawValue < $1.rawValue }
+            .map { id -> [SQLiteValue] in
+                let parts = id.rawValue.split(separator: ":").map(String.init)
+                return [.text(parts[0]), .text(parts[1])]
+            }
+
+        var sql = "DELETE FROM \(tableName) WHERE owner_id = ? AND deleted_at IS NOT NULL"
+        var bindings: [SQLiteValue] = [.text(currentOwnerID)]
+
+        for pair in excludedClauses {
+            sql += " AND NOT (\(keyColumnA) = ? AND \(keyColumnB) = ?)"
+            bindings.append(contentsOf: pair)
+        }
+
+        try database.execute(sql, bindings: bindings, on: databaseHandle)
     }
 
     private func tagBindings(_ tag: Tag, ownerID: String) -> [SQLiteValue] {

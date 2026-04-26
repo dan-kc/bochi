@@ -3,8 +3,10 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{Postgres, Transaction};
 use tracing::error;
 use uuid::Uuid;
 
@@ -24,6 +26,14 @@ use super::ApiError;
 #[derive(Deserialize)]
 pub struct SyncQueryParams {
     pub since: Option<NaiveDateTime>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncCursor {
+    upper_bound_tx_id: i64,
+    in_progress_tx_ids: Vec<i64>,
 }
 
 #[derive(Deserialize, Default)]
@@ -124,6 +134,7 @@ pub struct SyncResponse {
     pub rewards: Vec<RewardOutput>,
     pub reward_tags: Vec<RewardTagOutput>,
     pub balance: BalanceOutput,
+    pub server_cursor: String,
     pub server_time: NaiveDateTime,
     pub email: Option<String>,
     pub is_premium: bool,
@@ -226,77 +237,89 @@ pub async fn get_sync(
     Extension(user): Extension<AuthenticatedUser>,
     Query(params): Query<SyncQueryParams>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let habit_rows = app
-        .database
-        .get_habits_since(user.user_id, params.since)
+    let requested_cursor = params
+        .cursor
+        .as_deref()
+        .map(SyncCursor::decode)
+        .transpose()
+        .map_err(|_| ApiError::Validation("Invalid sync cursor".to_string()))?;
+
+    let mut tx = app.database.begin_transaction().await.map_err(|e| {
+        error!("Failed to begin snapshot transaction: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            error!("Failed to configure snapshot transaction: {:?}", e);
+            ApiError::Internal
+        })?;
+
+    let response_cursor = load_snapshot_cursor(&mut tx).await.map_err(|e| {
+        error!("Failed to capture sync snapshot cursor: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    let habit_rows = load_habits_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
             ApiError::Internal
         })?;
 
-    let trade_rows = app
-        .database
-        .get_trades_since(user.user_id, params.since)
+    let trade_rows = load_trades_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
             ApiError::Internal
         })?;
 
-    let trade_balance = app
-        .database
-        .calculate_balance_from_trades(user.user_id)
+    let trade_balance = load_balance_for_sync(&mut tx, user.user_id)
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
             ApiError::Internal
         })?;
 
-    let profile_row = app
-        .database
-        .get_user_profile(user.user_id)
+    let profile_row = load_profile_for_sync(&mut tx, user.user_id)
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
             ApiError::Internal
         })?;
 
-    let tag_rows = app
-        .database
-        .get_tags_since(user.user_id, params.since)
+    let tag_rows = load_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
         .await
         .map_err(|e| {
             error!("Database Error: {:?}", e);
             ApiError::Internal
         })?;
 
-    let habit_tag_rows = app
-        .database
-        .get_habit_tags_since(user.user_id, params.since)
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let habit_tag_rows =
+        load_habit_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
 
-    let reward_rows = app
-        .database
-        .get_rewards_since(user.user_id, params.since)
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let reward_rows =
+        load_rewards_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
 
-    let reward_tag_rows = app
-        .database
-        .get_reward_tags_since(user.user_id, params.since)
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let reward_tag_rows =
+        load_reward_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
 
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
@@ -378,6 +401,15 @@ pub async fn get_sync(
 
     let server_time = Utc::now().naive_utc();
     let is_premium = profile_is_entitled(&profile_row);
+    let server_cursor = response_cursor.encode().map_err(|e| {
+        error!("Failed to encode sync cursor: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    tx.commit().await.map_err(|e| {
+        error!("Failed to commit snapshot transaction: {:?}", e);
+        ApiError::Internal
+    })?;
 
     Ok(Json(SyncResponse {
         habits,
@@ -389,6 +421,7 @@ pub async fn get_sync(
         balance: BalanceOutput {
             tofu_balance: trade_balance,
         },
+        server_cursor,
         server_time,
         email: profile_row.email,
         is_premium,
@@ -755,8 +788,34 @@ pub async fn post_sync(
         .await
         .map_err(|e| {
             error!("Database Error getting profile: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    let mut snapshot_tx = app.database.begin_transaction().await.map_err(|e| {
+        error!("Failed to begin push snapshot transaction: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        .execute(&mut *snapshot_tx)
+        .await
+        .map_err(|e| {
+            error!("Failed to configure push snapshot transaction: {:?}", e);
             ApiError::Internal
         })?;
+
+    let server_cursor = load_snapshot_cursor(&mut snapshot_tx)
+        .await
+        .and_then(|cursor| cursor.encode().map_err(|e| sqlx::Error::Protocol(e.to_string())))
+        .map_err(|e| {
+            error!("Failed to capture push sync cursor: {:?}", e);
+            ApiError::Internal
+        })?;
+
+    snapshot_tx.commit().await.map_err(|e| {
+        error!("Failed to commit push snapshot transaction: {:?}", e);
+        ApiError::Internal
+    })?;
 
     let server_time = Utc::now().naive_utc();
     let is_premium = profile_is_entitled(&profile_row);
@@ -771,9 +830,386 @@ pub async fn post_sync(
         balance: BalanceOutput {
             tofu_balance: new_balance,
         },
+        server_cursor,
         server_time,
         email: profile_row.email,
         is_premium,
         general_difficulty: profile_row.general_difficulty,
     }))
+}
+
+impl SyncCursor {
+    fn decode(raw: &str) -> Result<Self, String> {
+        let bytes = URL_SAFE_NO_PAD.decode(raw).map_err(|error| error.to_string())?;
+        serde_json::from_slice(&bytes).map_err(|error| error.to_string())
+    }
+
+    fn encode(&self) -> Result<String, String> {
+        let json = serde_json::to_vec(self).map_err(|error| error.to_string())?;
+        Ok(URL_SAFE_NO_PAD.encode(json))
+    }
+}
+
+async fn load_snapshot_cursor(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<SyncCursor, sqlx::Error> {
+    let (snapshot,): (String,) = sqlx::query_as("SELECT txid_current_snapshot()::text")
+        .fetch_one(&mut **tx)
+        .await?;
+
+    let parts: Vec<&str> = snapshot.split(':').collect();
+    if parts.len() != 3 {
+        return Err(sqlx::Error::Protocol(
+            format!("Unexpected txid snapshot format: {snapshot}").into(),
+        ));
+    }
+
+    let upper_bound_tx_id = parts[1]
+        .parse::<i64>()
+        .map_err(|error| sqlx::Error::Protocol(error.to_string().into()))?;
+    let in_progress_tx_ids = if parts[2].is_empty() {
+        Vec::new()
+    } else {
+        parts[2]
+            .split(',')
+            .map(|part| part.parse::<i64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| sqlx::Error::Protocol(error.to_string().into()))?
+    };
+
+    Ok(SyncCursor {
+        upper_bound_tx_id,
+        in_progress_tx_ids,
+    })
+}
+
+async fn load_habits_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::HabitRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                 FROM habits
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                     FROM habits
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                     FROM habits
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_trades_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TradeRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                 FROM trades
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                     FROM trades
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                     FROM trades
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_tags_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TagRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, name, color_hex, created_at, updated_at, deleted_at
+                 FROM tags
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, color_hex, created_at, updated_at, deleted_at
+                     FROM tags
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, color_hex, created_at, updated_at, deleted_at
+                     FROM tags
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_habit_tags_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::HabitTagRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT ht.habit_id, ht.tag_id, ht.created_at, ht.updated_at, ht.deleted_at
+                 FROM habit_tags ht
+                 JOIN habits h ON ht.habit_id = h.id
+                 WHERE h.user_id = $1
+                   AND (((ht.xmin)::text)::bigint >= $2 OR ((ht.xmin)::text)::bigint = ANY($3))
+                 ORDER BY ht.updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT ht.habit_id, ht.tag_id, ht.created_at, ht.updated_at, ht.deleted_at
+                     FROM habit_tags ht
+                     JOIN habits h ON ht.habit_id = h.id
+                     WHERE h.user_id = $1 AND ht.updated_at > $2
+                     ORDER BY ht.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT ht.habit_id, ht.tag_id, ht.created_at, ht.updated_at, ht.deleted_at
+                     FROM habit_tags ht
+                     JOIN habits h ON ht.habit_id = h.id
+                     WHERE h.user_id = $1
+                     ORDER BY ht.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_rewards_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::RewardRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier
+                 FROM rewards
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier
+                     FROM rewards
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, max_daily_frequency, damage_tier
+                     FROM rewards
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_reward_tags_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::RewardTagRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
+                 FROM reward_tags rt
+                 JOIN rewards r ON rt.reward_id = r.id
+                 WHERE r.user_id = $1
+                   AND (((rt.xmin)::text)::bigint >= $2 OR ((rt.xmin)::text)::bigint = ANY($3))
+                 ORDER BY rt.updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
+                     FROM reward_tags rt
+                     JOIN rewards r ON rt.reward_id = r.id
+                     WHERE r.user_id = $1 AND rt.updated_at > $2
+                     ORDER BY rt.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
+                     FROM reward_tags rt
+                     JOIN rewards r ON rt.reward_id = r.id
+                     WHERE r.user_id = $1
+                     ORDER BY rt.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_balance_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<f64, sqlx::Error> {
+    let (total,): (Option<i64>,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(user_id)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(total.unwrap_or(0) as f64)
+}
+
+async fn load_profile_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<database::UserProfileRow, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT
+            email,
+            general_difficulty,
+            subscription_status
+         FROM users
+         WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_one(&mut **tx)
+    .await
 }

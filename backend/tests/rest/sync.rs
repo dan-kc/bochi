@@ -61,7 +61,9 @@ async fn test_sync_pull_returns_all_entity_types() {
     let balance = json.get("balance").unwrap();
     assert_eq!(balance.get("tofuBalance").unwrap(), 500.0);
 
-    // Check serverTime
+    // Check sync cursor and serverTime
+    assert!(json.get("serverCursor").is_some());
+    assert!(json.get("serverCursor").unwrap().is_string());
     assert!(json.get("serverTime").is_some());
     assert!(json.get("serverTime").unwrap().is_string());
 
@@ -86,10 +88,10 @@ async fn test_sync_pull_with_since_filters_all_entities() {
     });
     make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
 
-    // Get current server time
+    // Get current sync cursor
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    let server_time = pull_json
-        .get("serverTime")
+    let server_cursor = pull_json
+        .get("serverCursor")
         .unwrap()
         .as_str()
         .unwrap()
@@ -104,8 +106,8 @@ async fn test_sync_pull_with_since_filters_all_entities() {
         make_authenticated_post_request(&access_token, "/api/habits", habit_body_2).await;
     let new_habit_id = new_habit_json.get("id").unwrap().as_str().unwrap();
 
-    // Pull since the timestamp - should only get the new habit
-    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    // Pull since the cursor - should only get the new habit
+    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -648,8 +650,8 @@ async fn test_sync_incremental_after_push() {
     });
 
     let (_, json1) = make_authenticated_post_request(&access_token, "/api/sync", push1_body).await;
-    let server_time = json1
-        .get("serverTime")
+    let server_cursor = json1
+        .get("serverCursor")
         .unwrap()
         .as_str()
         .unwrap()
@@ -669,13 +671,13 @@ async fn test_sync_incremental_after_push() {
 
     make_authenticated_post_request(&access_token, "/api/sync", push2_body).await;
 
-    // Incremental pull using server_time from first push
-    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    // Incremental pull using the server cursor from first push
+    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
     assert_eq!(status, StatusCode::OK);
 
     let habits = json.get("habits").unwrap().as_array().unwrap();
-    // Should only get the second habit (created after server_time)
+    // Should only get the second habit (created after the first cursor)
     assert_eq!(habits.len(), 1);
     assert_eq!(habits[0].get("id").unwrap(), &habit2_id);
     assert_eq!(habits[0].get("name").unwrap(), "Second Habit");
@@ -839,8 +841,8 @@ async fn test_sync_pull_tags_filtered_by_since() {
     });
     let (_, push_json) =
         make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json
-        .get("serverTime")
+    let server_cursor = push_json
+        .get("serverCursor")
         .unwrap()
         .as_str()
         .unwrap()
@@ -859,8 +861,8 @@ async fn test_sync_pull_tags_filtered_by_since() {
     });
     make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
 
-    // Pull since timestamp - should only get new tag
-    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    // Pull since cursor - should only get new tag
+    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -917,8 +919,8 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
     });
     let (_, push_json) =
         make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json
-        .get("serverTime")
+    let server_cursor = push_json
+        .get("serverCursor")
         .unwrap()
         .as_str()
         .unwrap()
@@ -935,8 +937,8 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
     });
     make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
 
-    // Pull since timestamp - should only get new association
-    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    // Pull since cursor - should only get new association
+    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -1526,8 +1528,8 @@ async fn test_sync_pull_rewards_filtered_by_since() {
     });
     let (_, push_json) =
         make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
-    let server_time = push_json
-        .get("serverTime")
+    let server_cursor = push_json
+        .get("serverCursor")
         .unwrap()
         .as_str()
         .unwrap()
@@ -1546,8 +1548,8 @@ async fn test_sync_pull_rewards_filtered_by_since() {
     });
     make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
 
-    // Pull since timestamp - should only get new reward
-    let url = format!("/api/sync?since={}", urlencoding::encode(&server_time));
+    // Pull since cursor - should only get new reward
+    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);

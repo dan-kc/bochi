@@ -113,42 +113,40 @@ That avoids a split-brain situation where entitlement UI could depend on whichev
 
 `SyncStateStore` persists metadata per authenticated user id in SQLite:
 
-- `lastSync`
+- `lastSyncCursor`
+- `lastSyncTime`
 - `lastFullSyncAt`
-- dirty ids for:
+- versioned dirty ids for:
   - habits
   - trades
   - tags
   - habitTags
   - rewards
   - rewardTags
-- dirty flag for:
+- versioned dirty flag for:
   - `generalDifficulty`
 
 Signed-out local mode does not use sync metadata because signed-out data is not pushed.
 
 ## Dirty Tracking
 
-Stores do not know about the backend directly.
+Stores still do not know about the backend directly, but signed-in mutations now write two kinds of local state in the same SQLite transaction:
 
-Instead, store mutations post `SyncMutationCenter` notifications containing:
+1. the domain row change
+2. the matching dirty metadata in `SyncStateStore`
+
+After that commit, store mutations post `SyncMutationCenter` notifications containing:
 
 - owner id
 - entity kind
 - affected ids
 
-`SyncManager` listens for those notifications.
-
-If the mutation belongs to the currently signed-in owner:
-
-1. the matching ids are marked dirty in `SyncStateStore`
-2. a 2-second debounce timer is restarted
-3. when the user stops editing, sync runs
+`SyncManager` listens for those notifications only to restart the debounce timer and schedule sync.
 
 This keeps the view code simple:
 
 - views keep calling store methods
-- sync is added once at the store boundary
+- sync durability is enforced once at the store boundary
 
 ## Sync Triggers
 
@@ -176,7 +174,7 @@ This is only for passive freshness. It should not surface noisy offline errors.
 
 ### Forced Full Sync Reset
 
-- Every 24 hours, the app clears `lastSync` for the signed-in user.
+- Every 24 hours, the app clears `lastSyncCursor` for the signed-in user.
 - The next sync becomes a full sync.
 
 This protects against drift where local storage may have missed older records.
@@ -202,7 +200,7 @@ The native flow mirrors the frontend sync order.
 A full sync is forced if:
 
 - there has never been a sync for this user
-- the 24-hour reset timer cleared `lastSync`
+- the 24-hour reset timer cleared `lastSyncCursor`
 - the signed-in account changed
 
 ### 2. Snapshot Dirty Local State Before Pull
@@ -217,13 +215,14 @@ Before pulling from the backend, the app snapshots:
 - dirty habit tags
 - dirty rewards
 - dirty reward tags
-- whether `generalDifficulty` is dirty
+- the dirty generation for `generalDifficulty`
 
 Why this matters:
 
 - a stale server record can still be pulled
 - pull merge can temporarily overwrite the in-memory copy
 - if the app looked up dirty records after merge, it could push the wrong value back
+- if the same id is edited again while sync is in flight, the newer generation must survive the older sync attempt
 
 The snapshot guarantees the push uses the user’s original local edit.
 
@@ -232,8 +231,10 @@ The snapshot guarantees the push uses the user’s original local edit.
 The app calls:
 
 - `GET /api/sync`
-- with `?since=<lastSync>` when incremental
-- with no `since` when full
+- with `?cursor=<lastSyncCursor>` when incremental
+- with no `cursor` when full
+
+The backend serves all pulled rows from one repeatable-read database snapshot and returns a new opaque `serverCursor` for the next incremental pull.
 
 ### 4. Merge Pulled Data
 
@@ -279,8 +280,9 @@ This is important because the backend is still authoritative for:
 
 After a successful sync:
 
-- all dirty markers are cleared
-- `lastSync` is updated to `serverTime`
+- only the exact dirty generations included in that sync attempt are cleared
+- `lastSyncCursor` is updated to `serverCursor`
+- `lastSyncTime` is updated to `serverTime`
 - soft-deleted records are purged from local stores
 
 Purging happens only after a successful sync so deletes are not lost before they reach the backend.

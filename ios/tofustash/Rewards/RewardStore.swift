@@ -5,6 +5,7 @@ import Foundation
 final class RewardStore {
     private let databaseURL: URL
     private let database = AppDatabase.shared
+    private let syncStateStore: SyncStateStore
 
     private(set) var currentOwnerID: String
     private(set) var rewards: [Reward] = []
@@ -33,6 +34,7 @@ final class RewardStore {
         initialOwnerID: String = "local-device"
     ) {
         self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
+        self.syncStateStore = SyncStateStore(storageURL: self.databaseURL)
         self.currentOwnerID = initialOwnerID
         _ = try? database.connection(at: databaseURL)
         self.rewards = loadRewards(ownerID: initialOwnerID)
@@ -45,21 +47,16 @@ final class RewardStore {
 
     func migrateRewards(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
-        let source = loadRewards(ownerID: sourceOwnerID)
-        let destination = loadRewards(ownerID: destinationOwnerID)
-        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
-
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: destinationOwnerID, rewards: merged, on: db)
-                try self.replaceRows(ownerID: sourceOwnerID, rewards: [], on: db)
+            let migratedIDs = try database.transaction(at: databaseURL) { db in
+                try self.migrateRewards(from: sourceOwnerID, to: destinationOwnerID, on: db)
             }
+            refreshCurrentRewards()
+            return migratedIDs
         } catch {
             assertionFailure("Failed to migrate rewards: \(error)")
+            return []
         }
-
-        refreshCurrentRewards()
-        return source.map(\.id)
     }
 
     @discardableResult
@@ -91,7 +88,7 @@ final class RewardStore {
             damageTier: damageTier
         )
 
-        upsert(reward)
+        upsert(reward, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [reward.id])
         }
@@ -133,7 +130,7 @@ final class RewardStore {
             damageTier: damageTier ?? existing.damageTier
         )
 
-        upsert(updated)
+        upsert(updated, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [id])
         }
@@ -151,7 +148,7 @@ final class RewardStore {
             maxFrequency: existing.maxFrequency,
             damageTier: existing.damageTier
         )
-        upsert(deleted)
+        upsert(deleted, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [id])
         }
@@ -165,62 +162,129 @@ final class RewardStore {
     func replaceRewards(_ authoritativeRewards: [Reward]) {
         let sorted = OwnerScopedRecordSupport.sorted(authoritativeRewards)
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: self.currentOwnerID, rewards: sorted, on: db)
-            }
+            try persistReplacedRewards(sorted)
         } catch {
             assertionFailure("Failed to replace rewards: \(error)")
+            return
         }
-        rewards = sorted
     }
 
     func getDirtyRewards(ids: Set<RecordID>) -> [Reward] {
         rewards.filter { ids.contains($0.id) }
     }
 
-    func purgeDeletedRewards() {
+    func purgeDeletedRewards(excluding dirtyIDs: Set<RecordID> = []) {
         do {
-            try database.execute(
-                "DELETE FROM rewards WHERE owner_id = ? AND deleted_at IS NOT NULL",
-                bindings: [.text(currentOwnerID)],
-                at: databaseURL
-            )
+            try persistDeletedRewardPurge(excluding: dirtyIDs)
         } catch {
             assertionFailure("Failed to purge deleted rewards: \(error)")
+            return
         }
-        refreshCurrentRewards()
     }
 
     func allRewardIDs() -> [RecordID] {
         rewards.map(\.id)
     }
 
-    private func upsert(_ reward: Reward) {
-        do {
-            try database.execute(
-                """
-                INSERT INTO rewards (
-                    id, owner_id, name, description, created_at, updated_at, deleted_at,
-                    max_daily_frequency, damage_tier
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    owner_id = excluded.owner_id,
-                    name = excluded.name,
-                    description = excluded.description,
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    deleted_at = excluded.deleted_at,
-                    max_daily_frequency = excluded.max_daily_frequency,
-                    damage_tier = excluded.damage_tier
-                """,
-                bindings: rewardBindings(reward, ownerID: currentOwnerID),
-                at: databaseURL
-            )
-        } catch {
-            assertionFailure("Failed to upsert reward: \(error)")
+    func migrateRewards(
+        from sourceOwnerID: String,
+        to destinationOwnerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> [RecordID] {
+        guard sourceOwnerID != destinationOwnerID else { return [] }
+        let source = loadRewards(ownerID: sourceOwnerID)
+        let destination = loadRewards(ownerID: destinationOwnerID)
+        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
+
+        try replaceRows(ownerID: destinationOwnerID, rewards: merged, on: databaseHandle)
+        try replaceRows(ownerID: sourceOwnerID, rewards: [], on: databaseHandle)
+        return source.map(\.id)
+    }
+
+    func persistReplacedRewards(_ authoritativeRewards: [Reward]) throws {
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeRewards)
+        try database.transaction(at: databaseURL) { db in
+            try self.replaceRows(ownerID: self.currentOwnerID, rewards: sorted, on: db)
+        }
+        rewards = sorted
+    }
+
+    func replaceRewards(
+        _ authoritativeRewards: [Reward],
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        try replaceRows(
+            ownerID: currentOwnerID,
+            rewards: OwnerScopedRecordSupport.sorted(authoritativeRewards),
+            on: databaseHandle
+        )
+    }
+
+    func persistDeletedRewardPurge(excluding dirtyIDs: Set<RecordID>) throws {
+        try database.transaction(at: databaseURL) { db in
+            try self.purgeDeletedRewards(excluding: dirtyIDs, on: db)
         }
         refreshCurrentRewards()
+    }
+
+    func purgeDeletedRewards(
+        excluding dirtyIDs: Set<RecordID>,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        if dirtyIDs.isEmpty {
+            try database.execute(
+                "DELETE FROM rewards WHERE owner_id = ? AND deleted_at IS NOT NULL",
+                bindings: [.text(currentOwnerID)],
+                on: databaseHandle
+            )
+            return
+        }
+
+        let placeholders = Array(repeating: "?", count: dirtyIDs.count).joined(separator: ", ")
+        let bindings = [.text(currentOwnerID)] + dirtyIDs.sorted { $0.rawValue < $1.rawValue }.map { .text($0.rawValue) }
+        try database.execute(
+            "DELETE FROM rewards WHERE owner_id = ? AND deleted_at IS NOT NULL AND id NOT IN (\(placeholders))",
+            bindings: bindings,
+            on: databaseHandle
+        )
+    }
+
+    private func upsert(_ reward: Reward, markDirty: Bool) {
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.upsert(reward, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .rewards, ids: [reward.id], on: db)
+                }
+            }
+        } catch {
+            assertionFailure("Failed to upsert reward: \(error)")
+            return
+        }
+        refreshCurrentRewards()
+    }
+
+    private func upsert(_ reward: Reward, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO rewards (
+                id, owner_id, name, description, created_at, updated_at, deleted_at,
+                max_daily_frequency, damage_tier
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                owner_id = excluded.owner_id,
+                name = excluded.name,
+                description = excluded.description,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at,
+                max_daily_frequency = excluded.max_daily_frequency,
+                damage_tier = excluded.damage_tier
+            """,
+            bindings: rewardBindings(reward, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
     }
 
     private func loadRewards(ownerID: String) -> [Reward] {

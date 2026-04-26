@@ -34,25 +34,11 @@ final class BalanceStore {
 
     func setBalance(_ value: Int) {
         do {
-            try database.execute(
-                """
-                INSERT INTO balance_projections (owner_id, balance, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(owner_id) DO UPDATE SET
-                    balance = excluded.balance,
-                    updated_at = excluded.updated_at
-                """,
-                bindings: [
-                    .text(currentOwnerID),
-                    .int(Int64(value)),
-                    .double(Date().timeIntervalSince1970)
-                ],
-                at: databaseURL
-            )
+            try persistBalance(value)
         } catch {
             assertionFailure("Failed to set balance: \(error)")
+            return
         }
-        balance = value
     }
 
     func refresh() {
@@ -72,5 +58,42 @@ final class BalanceStore {
             assertionFailure("Failed to load balance: \(error)")
             return 0
         }
+    }
+
+    func persistBalance(_ value: Int) throws {
+        try database.execute(
+            """
+            INSERT INTO balance_projections (owner_id, balance, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(owner_id) DO UPDATE SET
+                balance = excluded.balance,
+                updated_at = excluded.updated_at
+            """,
+            bindings: [
+                .text(currentOwnerID),
+                .int(Int64(value)),
+                .double(Date().timeIntervalSince1970)
+            ],
+            at: databaseURL
+        )
+        balance = value
+    }
+
+    func persistBalance(_ value: Int, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO balance_projections (owner_id, balance, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(owner_id) DO UPDATE SET
+                balance = excluded.balance,
+                updated_at = excluded.updated_at
+            """,
+            bindings: [
+                .text(currentOwnerID),
+                .int(Int64(value)),
+                .double(Date().timeIntervalSince1970)
+            ],
+            on: databaseHandle
+        )
     }
 }

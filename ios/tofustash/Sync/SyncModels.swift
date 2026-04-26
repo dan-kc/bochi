@@ -15,6 +15,7 @@ struct SyncResponse: Decodable {
     let rewards: [SyncRewardRecord]
     let rewardTags: [SyncRewardTagRecord]
     let balance: SyncBalanceRecord
+    let serverCursor: String
     let serverTime: String
     let email: String?
     let isPremium: Bool

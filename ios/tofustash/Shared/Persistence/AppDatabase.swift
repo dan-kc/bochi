@@ -59,10 +59,10 @@ final class AppDatabase {
         }
     }
 
-    func transaction(at url: URL, _ body: (AppDatabaseHandle) throws -> Void) throws {
+    func transaction<T>(at url: URL, _ body: (AppDatabaseHandle) throws -> T) throws -> T {
         let pool = try connection(at: url)
         do {
-            try pool.write { db in
+            return try pool.write { db in
                 try body(db)
             }
         } catch {
@@ -289,6 +289,17 @@ final class AppDatabase {
                     PRIMARY KEY(user_id, entity_kind)
                 );
                 """)
+        }
+
+        migrator.registerMigration("v2_sync_atomicity") { db in
+            try db.execute(sql: """
+                ALTER TABLE sync_state ADD COLUMN last_sync_cursor TEXT;
+                ALTER TABLE sync_state ADD COLUMN last_mutation_generation INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE dirty_records ADD COLUMN mutation_generation INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE dirty_flags ADD COLUMN mutation_generation INTEGER NOT NULL DEFAULT 0;
+                CREATE INDEX IF NOT EXISTS idx_dirty_records_user_kind_generation
+                ON dirty_records(user_id, entity_kind, mutation_generation);
+            """)
         }
 
         try migrator.migrate(writer)

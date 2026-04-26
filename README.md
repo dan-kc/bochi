@@ -16,10 +16,17 @@ The app uses a unified sync system for offline-first operation:
 - **Atomic transactions**: Push operations process all entities in a single database transaction
 - **Dependency ordering**: Habits are processed before trades to handle foreign key constraints
 - **Conflict resolution**: Last-write-wins based on `updated_at` timestamps
-- **Incremental sync**: Uses `since` parameter to fetch only changes after last sync
+- **Snapshot pull cursor**: `GET /api/sync` reads from one repeatable-read snapshot and returns an opaque `serverCursor`
+- **Incremental sync**: Uses `cursor` to fetch only changes after the last acknowledged snapshot
 - **Full sync**: Automatically triggered every 24 hours to ensure consistency
 
-Client-side state is stored in a single `tofustash_sync_state` JSON blob containing the last sync timestamp and dirty entity IDs.
+Client-side sync metadata now lives in SQLite tables:
+
+- `sync_state` for per-user checkpoints and full-sync flags
+- `dirty_records` for versioned dirty row ids
+- `dirty_flags` for versioned dirty singleton settings
+
+Signed-in local writes persist domain rows and dirty metadata in the same SQLite transaction so a crash cannot leave a durable row behind without a matching sync marker.
 
 ## Development
 

@@ -124,6 +124,7 @@ struct SyncModelMappingTests {
           "balance": {
             "tofuBalance": 0
           },
+          "serverCursor": "cursor-123",
           "serverTime": "2026-04-23T12:00:00.000000",
           "email": "user@example.com",
           "isPremium": false,

@@ -5,6 +5,7 @@ import Foundation
 final class HabitStore {
     private let databaseURL: URL
     private let database = AppDatabase.shared
+    private let syncStateStore: SyncStateStore
 
     private(set) var currentOwnerID: String
     private(set) var habits: [Habit] = []
@@ -18,6 +19,7 @@ final class HabitStore {
         initialOwnerID: String = "local-device"
     ) {
         self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
+        self.syncStateStore = SyncStateStore(storageURL: self.databaseURL)
         self.currentOwnerID = initialOwnerID
         _ = try? database.connection(at: databaseURL)
         self.habits = loadHabits(ownerID: initialOwnerID)
@@ -30,21 +32,16 @@ final class HabitStore {
 
     func migrateHabits(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
-        let source = loadHabits(ownerID: sourceOwnerID)
-        let destination = loadHabits(ownerID: destinationOwnerID)
-        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
-
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: destinationOwnerID, habits: merged, on: db)
-                try self.replaceRows(ownerID: sourceOwnerID, habits: [], on: db)
+            let migratedIDs = try database.transaction(at: databaseURL) { db in
+                try self.migrateHabits(from: sourceOwnerID, to: destinationOwnerID, on: db)
             }
+            refreshCurrentHabits()
+            return migratedIDs
         } catch {
             assertionFailure("Failed to migrate habits: \(error)")
+            return []
         }
-
-        refreshCurrentHabits()
-        return source.map(\.id)
     }
 
     @discardableResult
@@ -83,7 +80,7 @@ final class HabitStore {
             skipConsequence: skipConsequence
         )
 
-        upsert(habit)
+        upsert(habit, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [habit.id])
         }
@@ -106,7 +103,7 @@ final class HabitStore {
             skipConsequence: existing.skipConsequence
         )
 
-        upsert(deleted)
+        upsert(deleted, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [id])
         }
@@ -153,7 +150,7 @@ final class HabitStore {
             skipConsequence: skipConsequence ?? existing.skipConsequence
         )
 
-        upsert(updated)
+        upsert(updated, markDirty: shouldNotifySync)
         if shouldNotifySync {
             notifySync(ids: [id])
         }
@@ -168,66 +165,130 @@ final class HabitStore {
     func replaceHabits(_ authoritativeHabits: [Habit]) {
         let sorted = OwnerScopedRecordSupport.sorted(authoritativeHabits)
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: self.currentOwnerID, habits: sorted, on: db)
-            }
+            try persistReplacedHabits(sorted)
         } catch {
             assertionFailure("Failed to replace habits: \(error)")
+            return
         }
-        habits = sorted
     }
 
     func getDirtyHabits(ids: Set<RecordID>) -> [Habit] {
         habits.filter { ids.contains($0.id) }
     }
 
-    func purgeDeletedHabits() {
+    func purgeDeletedHabits(excluding dirtyIDs: Set<RecordID> = []) {
         do {
-            try database.execute(
-                "DELETE FROM habits WHERE owner_id = ? AND deleted_at IS NOT NULL",
-                bindings: [.text(currentOwnerID)],
-                at: databaseURL
-            )
+            try persistDeletedHabitPurge(excluding: dirtyIDs)
         } catch {
             assertionFailure("Failed to purge deleted habits: \(error)")
+            return
         }
-        refreshCurrentHabits()
     }
 
     func allHabitIDs() -> [RecordID] {
         habits.map(\.id)
     }
 
-    private func upsert(_ habit: Habit) {
-        do {
-            try database.execute(
-                """
-                INSERT INTO habits (
-                    id, owner_id, name, description, created_at, updated_at, deleted_at,
-                    min_daily_frequency, difficulty_tier, duration_seconds,
-                    lockout_duration_seconds, skip_consequence
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    owner_id = excluded.owner_id,
-                    name = excluded.name,
-                    description = excluded.description,
-                    created_at = excluded.created_at,
-                    updated_at = excluded.updated_at,
-                    deleted_at = excluded.deleted_at,
-                    min_daily_frequency = excluded.min_daily_frequency,
-                    difficulty_tier = excluded.difficulty_tier,
-                    duration_seconds = excluded.duration_seconds,
-                    lockout_duration_seconds = excluded.lockout_duration_seconds,
-                    skip_consequence = excluded.skip_consequence
-                """,
-                bindings: habitBindings(habit, ownerID: currentOwnerID),
-                at: databaseURL
-            )
-        } catch {
-            assertionFailure("Failed to upsert habit: \(error)")
+    func migrateHabits(
+        from sourceOwnerID: String,
+        to destinationOwnerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> [RecordID] {
+        guard sourceOwnerID != destinationOwnerID else { return [] }
+        let source = loadHabits(ownerID: sourceOwnerID)
+        let destination = loadHabits(ownerID: destinationOwnerID)
+        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
+
+        try replaceRows(ownerID: destinationOwnerID, habits: merged, on: databaseHandle)
+        try replaceRows(ownerID: sourceOwnerID, habits: [], on: databaseHandle)
+        return source.map(\.id)
+    }
+
+    func persistReplacedHabits(_ authoritativeHabits: [Habit]) throws {
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeHabits)
+        try database.transaction(at: databaseURL) { db in
+            try self.replaceRows(ownerID: self.currentOwnerID, habits: sorted, on: db)
+        }
+        habits = sorted
+    }
+
+    func replaceHabits(
+        _ authoritativeHabits: [Habit],
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeHabits)
+        try replaceRows(ownerID: currentOwnerID, habits: sorted, on: databaseHandle)
+    }
+
+    func persistDeletedHabitPurge(excluding dirtyIDs: Set<RecordID>) throws {
+        try database.transaction(at: databaseURL) { db in
+            try self.purgeDeletedHabits(excluding: dirtyIDs, on: db)
         }
         refreshCurrentHabits()
+    }
+
+    func purgeDeletedHabits(
+        excluding dirtyIDs: Set<RecordID>,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        if dirtyIDs.isEmpty {
+            try database.execute(
+                "DELETE FROM habits WHERE owner_id = ? AND deleted_at IS NOT NULL",
+                bindings: [.text(currentOwnerID)],
+                on: databaseHandle
+            )
+            return
+        }
+
+        let placeholders = Array(repeating: "?", count: dirtyIDs.count).joined(separator: ", ")
+        let bindings = [.text(currentOwnerID)] + dirtyIDs.sorted { $0.rawValue < $1.rawValue }.map { .text($0.rawValue) }
+        try database.execute(
+            "DELETE FROM habits WHERE owner_id = ? AND deleted_at IS NOT NULL AND id NOT IN (\(placeholders))",
+            bindings: bindings,
+            on: databaseHandle
+        )
+    }
+
+    private func upsert(_ habit: Habit, markDirty: Bool) {
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.upsert(habit, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .habits, ids: [habit.id], on: db)
+                }
+            }
+        } catch {
+            assertionFailure("Failed to upsert habit: \(error)")
+            return
+        }
+        refreshCurrentHabits()
+    }
+
+    private func upsert(_ habit: Habit, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO habits (
+                id, owner_id, name, description, created_at, updated_at, deleted_at,
+                min_daily_frequency, difficulty_tier, duration_seconds,
+                lockout_duration_seconds, skip_consequence
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                owner_id = excluded.owner_id,
+                name = excluded.name,
+                description = excluded.description,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at,
+                min_daily_frequency = excluded.min_daily_frequency,
+                difficulty_tier = excluded.difficulty_tier,
+                duration_seconds = excluded.duration_seconds,
+                lockout_duration_seconds = excluded.lockout_duration_seconds,
+                skip_consequence = excluded.skip_consequence
+            """,
+            bindings: habitBindings(habit, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
     }
 
     private func loadHabits(ownerID: String) -> [Habit] {

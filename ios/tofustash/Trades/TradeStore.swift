@@ -5,6 +5,7 @@ import Foundation
 final class TradeStore {
     private let databaseURL: URL
     private let database = AppDatabase.shared
+    private let syncStateStore: SyncStateStore
 
     private(set) var currentOwnerID: String
     private(set) var trades: [Trade] = []
@@ -14,6 +15,7 @@ final class TradeStore {
         initialOwnerID: String = "local-device"
     ) {
         self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
+        self.syncStateStore = SyncStateStore(storageURL: self.databaseURL)
         self.currentOwnerID = initialOwnerID
         _ = try? database.connection(at: databaseURL)
         self.trades = loadTrades(ownerID: initialOwnerID)
@@ -28,23 +30,16 @@ final class TradeStore {
 
     func migrateTrades(from sourceOwnerID: String, to destinationOwnerID: String) -> [RecordID] {
         guard sourceOwnerID != destinationOwnerID else { return [] }
-        let source = loadTrades(ownerID: sourceOwnerID)
-        let destination = loadTrades(ownerID: destinationOwnerID)
-        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
-
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: destinationOwnerID, trades: merged, on: db)
-                try self.replaceRows(ownerID: sourceOwnerID, trades: [], on: db)
-                try self.recalculateBalance(ownerID: destinationOwnerID, on: db)
-                try self.recalculateBalance(ownerID: sourceOwnerID, on: db)
+            let migratedIDs = try database.transaction(at: databaseURL) { db in
+                try self.migrateTrades(from: sourceOwnerID, to: destinationOwnerID, on: db)
             }
+            refreshCurrentTrades()
+            return migratedIDs
         } catch {
             assertionFailure("Failed to migrate trades: \(error)")
+            return []
         }
-
-        refreshCurrentTrades()
-        return source.map(\.id)
     }
 
     func addHabitTrade(
@@ -107,7 +102,7 @@ final class TradeStore {
             )
         }
 
-        upsertTrades(rows)
+        upsertTrades(rows, markDirty: shouldNotifySync)
         if shouldNotifySync {
             SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
         }
@@ -135,7 +130,7 @@ final class TradeStore {
             )
         }
 
-        upsertTrades(rows)
+        upsertTrades(rows, markDirty: shouldNotifySync)
         if shouldNotifySync {
             SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
         }
@@ -185,62 +180,108 @@ final class TradeStore {
     func replaceTrades(_ authoritativeTrades: [Trade]) {
         let sorted = OwnerScopedRecordSupport.sorted(authoritativeTrades)
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.replaceRows(ownerID: self.currentOwnerID, trades: sorted, on: db)
-                try self.recalculateBalance(ownerID: self.currentOwnerID, on: db)
-            }
+            try persistReplacedTrades(sorted)
         } catch {
             assertionFailure("Failed to replace trades: \(error)")
+            return
         }
-        trades = sorted
     }
 
     func getDirtyTrades(ids: Set<RecordID>) -> [Trade] {
         trades.filter { ids.contains($0.id) }
     }
 
-    func purgeDeletedTrades() {
+    func purgeDeletedTrades(excluding dirtyIDs: Set<RecordID> = []) {
         do {
-            try database.transaction(at: databaseURL) { db in
-                try self.database.execute(
-                    "DELETE FROM trades WHERE owner_id = ? AND deleted_at IS NOT NULL",
-                    bindings: [.text(self.currentOwnerID)],
-                    on: db
-                )
-                try self.recalculateBalance(ownerID: self.currentOwnerID, on: db)
-            }
+            try persistDeletedTradePurge(excluding: dirtyIDs)
         } catch {
             assertionFailure("Failed to purge deleted trades: \(error)")
+            return
         }
-        refreshCurrentTrades()
     }
 
     func allTradeIDs() -> [RecordID] {
         trades.map(\.id)
     }
 
-    private func upsertTrades(_ newTrades: [Trade]) {
+    func migrateTrades(
+        from sourceOwnerID: String,
+        to destinationOwnerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> [RecordID] {
+        guard sourceOwnerID != destinationOwnerID else { return [] }
+        let source = loadTrades(ownerID: sourceOwnerID)
+        let destination = loadTrades(ownerID: destinationOwnerID)
+        let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
+
+        try replaceRows(ownerID: destinationOwnerID, trades: merged, on: databaseHandle)
+        try replaceRows(ownerID: sourceOwnerID, trades: [], on: databaseHandle)
+        try recalculateBalance(ownerID: destinationOwnerID, on: databaseHandle)
+        try recalculateBalance(ownerID: sourceOwnerID, on: databaseHandle)
+        return source.map(\.id)
+    }
+
+    func persistReplacedTrades(_ authoritativeTrades: [Trade]) throws {
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeTrades)
+        try database.transaction(at: databaseURL) { db in
+            try self.replaceRows(ownerID: self.currentOwnerID, trades: sorted, on: db)
+            try self.recalculateBalance(ownerID: self.currentOwnerID, on: db)
+        }
+        trades = sorted
+    }
+
+    func replaceTrades(
+        _ authoritativeTrades: [Trade],
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        let sorted = OwnerScopedRecordSupport.sorted(authoritativeTrades)
+        try replaceRows(ownerID: currentOwnerID, trades: sorted, on: databaseHandle)
+        try recalculateBalance(ownerID: currentOwnerID, on: databaseHandle)
+    }
+
+    func persistDeletedTradePurge(excluding dirtyIDs: Set<RecordID>) throws {
+        try database.transaction(at: databaseURL) { db in
+            try self.purgeDeletedTrades(excluding: dirtyIDs, on: db)
+        }
+        refreshCurrentTrades()
+    }
+
+    func purgeDeletedTrades(
+        excluding dirtyIDs: Set<RecordID>,
+        on databaseHandle: AppDatabaseHandle
+    ) throws {
+        if dirtyIDs.isEmpty {
+            try database.execute(
+                "DELETE FROM trades WHERE owner_id = ? AND deleted_at IS NOT NULL",
+                bindings: [.text(currentOwnerID)],
+                on: databaseHandle
+            )
+        } else {
+            let placeholders = Array(repeating: "?", count: dirtyIDs.count).joined(separator: ", ")
+            let bindings = [.text(currentOwnerID)] + dirtyIDs.sorted { $0.rawValue < $1.rawValue }.map { .text($0.rawValue) }
+            try database.execute(
+                "DELETE FROM trades WHERE owner_id = ? AND deleted_at IS NOT NULL AND id NOT IN (\(placeholders))",
+                bindings: bindings,
+                on: databaseHandle
+            )
+        }
+
+        try recalculateBalance(ownerID: currentOwnerID, on: databaseHandle)
+    }
+
+    private func upsertTrades(_ newTrades: [Trade], markDirty: Bool) {
         guard !newTrades.isEmpty else { return }
 
         do {
             try database.transaction(at: databaseURL) { db in
                 for trade in newTrades {
-                    try self.database.execute(
-                        """
-                        INSERT INTO trades (
-                            id, owner_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET
-                            owner_id = excluded.owner_id,
-                            habit_id = excluded.habit_id,
-                            reward_id = excluded.reward_id,
-                            amount = excluded.amount,
-                            created_at = excluded.created_at,
-                            updated_at = excluded.updated_at,
-                            deleted_at = excluded.deleted_at
-                        """,
-                        bindings: self.tradeBindings(trade, ownerID: self.currentOwnerID),
+                    try self.upsertTrade(trade, on: db)
+                }
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(
+                        userID: self.currentOwnerID,
+                        kind: .trades,
+                        ids: newTrades.map(\.id),
                         on: db
                     )
                 }
@@ -248,9 +289,31 @@ final class TradeStore {
             }
         } catch {
             assertionFailure("Failed to upsert trades: \(error)")
+            return
         }
 
         refreshCurrentTrades()
+    }
+
+    private func upsertTrade(_ trade: Trade, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO trades (
+                id, owner_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                owner_id = excluded.owner_id,
+                habit_id = excluded.habit_id,
+                reward_id = excluded.reward_id,
+                amount = excluded.amount,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            """,
+            bindings: tradeBindings(trade, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
     }
 
     private func loadTrades(ownerID: String) -> [Trade] {

@@ -1,7 +1,7 @@
 import Foundation
 
 protocol SyncAPIClient: Sendable {
-    func pullSync(since: Date?, accessToken: String) async throws -> SyncResponse
+    func pullSync(cursor: String?, accessToken: String) async throws -> SyncResponse
     func pushSync(_ request: SyncPushRequest, accessToken: String) async throws -> SyncResponse
 }
 
@@ -16,11 +16,11 @@ struct LiveSyncAPIClient: SyncAPIClient {
         self.decoder = AppDateCoding.makeDecoder()
     }
 
-    func pullSync(since: Date?, accessToken: String) async throws -> SyncResponse {
+    func pullSync(cursor: String?, accessToken: String) async throws -> SyncResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("/api/sync"), resolvingAgainstBaseURL: false)
-        if let since {
+        if let cursor {
             components?.queryItems = [
-                URLQueryItem(name: "since", value: AppDateCoding.backendTimestamp(from: since))
+                URLQueryItem(name: "cursor", value: cursor)
             ]
         }
 

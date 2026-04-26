@@ -34,42 +34,18 @@ final class ListPreferencesStore {
 
     func migratePreferences(from sourceOwnerID: String, to destinationOwnerID: String) -> Bool {
         guard sourceOwnerID != destinationOwnerID else { return false }
-
-        let sourceHabit = Self.loadPreferences(scope: .habits, ownerID: sourceOwnerID, database: database, url: databaseURL)
-        let sourceReward = Self.loadPreferences(scope: .rewards, ownerID: sourceOwnerID, database: database, url: databaseURL)
-
-        var migrated = false
         do {
-            try database.transaction(at: databaseURL) { db in
-                if self.preferenceRowExists(scope: .habits, ownerID: sourceOwnerID) {
-                    try self.savePreferences(sourceHabit, scope: .habits, ownerID: destinationOwnerID, on: db)
-                    try self.database.execute(
-                        "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
-                        bindings: [.text(sourceOwnerID), .text(ListScope.habits.rawValue)],
-                        on: db
-                    )
-                    migrated = true
-                }
-
-                if self.preferenceRowExists(scope: .rewards, ownerID: sourceOwnerID) {
-                    try self.savePreferences(sourceReward, scope: .rewards, ownerID: destinationOwnerID, on: db)
-                    try self.database.execute(
-                        "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
-                        bindings: [.text(sourceOwnerID), .text(ListScope.rewards.rawValue)],
-                        on: db
-                    )
-                    migrated = true
-                }
+            let migrated = try database.transaction(at: databaseURL) { db in
+                try self.migratePreferences(from: sourceOwnerID, to: destinationOwnerID, on: db)
             }
+            if migrated {
+                setCurrentOwner(currentOwnerID)
+            }
+            return migrated
         } catch {
             assertionFailure("Failed to migrate list preferences: \(error)")
             return false
         }
-
-        if migrated {
-            setCurrentOwner(currentOwnerID)
-        }
-        return migrated
     }
 
     func setHabitSort(_ sort: EntityListSortOption) {
@@ -197,6 +173,20 @@ final class ListPreferencesStore {
         }
     }
 
+    private func preferenceRowExists(
+        scope: ListScope,
+        ownerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> Bool {
+        try database.queryOne(
+            "SELECT 1 FROM list_preferences WHERE owner_id = ? AND scope = ? LIMIT 1",
+            bindings: [.text(ownerID), .text(scope.rawValue)],
+            on: databaseHandle
+        ) { _ in
+            true
+        } ?? false
+    }
+
     private func savePreferences(
         _ preferences: EntityListPreferences,
         scope: ListScope,
@@ -220,6 +210,50 @@ final class ListPreferencesStore {
             ],
             on: databaseHandle
         )
+    }
+
+    func migratePreferences(
+        from sourceOwnerID: String,
+        to destinationOwnerID: String,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> Bool {
+        guard sourceOwnerID != destinationOwnerID else { return false }
+
+        let sourceHabit = try Self.loadPreferences(
+            scope: .habits,
+            ownerID: sourceOwnerID,
+            database: database,
+            on: databaseHandle
+        ) ?? EntityListPreferences()
+        let sourceReward = try Self.loadPreferences(
+            scope: .rewards,
+            ownerID: sourceOwnerID,
+            database: database,
+            on: databaseHandle
+        ) ?? EntityListPreferences()
+
+        var migrated = false
+        if try preferenceRowExists(scope: .habits, ownerID: sourceOwnerID, on: databaseHandle) {
+            try savePreferences(sourceHabit, scope: .habits, ownerID: destinationOwnerID, on: databaseHandle)
+            try database.execute(
+                "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
+                bindings: [.text(sourceOwnerID), .text(ListScope.habits.rawValue)],
+                on: databaseHandle
+            )
+            migrated = true
+        }
+
+        if try preferenceRowExists(scope: .rewards, ownerID: sourceOwnerID, on: databaseHandle) {
+            try savePreferences(sourceReward, scope: .rewards, ownerID: destinationOwnerID, on: databaseHandle)
+            try database.execute(
+                "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
+                bindings: [.text(sourceOwnerID), .text(ListScope.rewards.rawValue)],
+                on: databaseHandle
+            )
+            migrated = true
+        }
+
+        return migrated
     }
 
     private static func loadPreferences(
@@ -246,6 +280,28 @@ final class ListPreferencesStore {
         } catch {
             assertionFailure("Failed to load list preferences: \(error)")
             return EntityListPreferences()
+        }
+    }
+
+    private static func loadPreferences(
+        scope: ListScope,
+        ownerID: String,
+        database: AppDatabase,
+        on databaseHandle: AppDatabaseHandle
+    ) throws -> EntityListPreferences? {
+        try database.queryOne(
+            """
+            SELECT sort, selected_tag_ids_json
+            FROM list_preferences
+            WHERE owner_id = ? AND scope = ?
+            """,
+            bindings: [.text(ownerID), .text(scope.rawValue)],
+            on: databaseHandle
+        ) { row in
+            let sort = EntityListSortOption(rawValue: SQLiteColumn.text(row, index: 0)) ?? .priceHighToLow
+            let rawJSON = SQLiteColumn.text(row, index: 1)
+            let selectedTagIDs = (try? JSONDecoder().decode([RecordID].self, from: Data(rawJSON.utf8))) ?? []
+            return EntityListPreferences(sort: sort, selectedTagIDs: selectedTagIDs)
         }
     }
 }

@@ -125,14 +125,13 @@ final class SyncManager {
         if previousUserID != userID {
             cancelLifecycleTasks()
             migrateLocalDataIfNeeded(to: userID)
-            syncStateStore.forceFullSyncOnNextRun(userID: userID)
         }
 
         currentUserID = userID
         setOwnerAcrossStores(userID)
 
         let syncState = syncStateStore.state(for: userID)
-        lastSyncTime = syncState.lastSync
+        lastSyncTime = syncState.lastSyncTime
         if case .error = status {
             // Keep the last error visible until the next sync attempt updates it.
         } else {
@@ -164,34 +163,41 @@ final class SyncManager {
     }
 
     private func migrateLocalDataIfNeeded(to userID: String) {
-        let migratedHabitIDs = habitStore.migrateHabits(from: StorageOwner.local, to: userID)
-        let migratedRewardIDs = rewardStore.migrateRewards(from: StorageOwner.local, to: userID)
-        let migratedTradeIDs = tradeStore.migrateTrades(from: StorageOwner.local, to: userID)
-        let migratedTagData = tagStore.migrateData(from: StorageOwner.local, to: userID)
-        let migratedDifficulty = userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID)
-        _ = listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID)
-        sanitizeListPreferencesForCurrentOwner()
+        do {
+            try AppDatabase.shared.transaction(at: syncStateStore.databaseURL) { db in
+                let migratedHabitIDs = try habitStore.migrateHabits(from: StorageOwner.local, to: userID, on: db)
+                let migratedRewardIDs = try rewardStore.migrateRewards(from: StorageOwner.local, to: userID, on: db)
+                let migratedTradeIDs = try tradeStore.migrateTrades(from: StorageOwner.local, to: userID, on: db)
+                let migratedTagData = try tagStore.migrateData(from: StorageOwner.local, to: userID, on: db)
+                let migratedDifficulty = try userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID, on: db)
+                _ = try listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID, on: db)
 
-        if !migratedHabitIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .habits, ids: migratedHabitIDs)
-        }
-        if !migratedRewardIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .rewards, ids: migratedRewardIDs)
-        }
-        if !migratedTradeIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .trades, ids: migratedTradeIDs)
-        }
-        if !migratedTagData.tagIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .tags, ids: migratedTagData.tagIDs)
-        }
-        if !migratedTagData.habitTagIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .habitTags, ids: migratedTagData.habitTagIDs)
-        }
-        if !migratedTagData.rewardTagIDs.isEmpty {
-            syncStateStore.markDirty(userID: userID, kind: .rewardTags, ids: migratedTagData.rewardTagIDs)
-        }
-        if migratedDifficulty {
-            syncStateStore.markDirty(userID: userID, kind: .generalDifficulty, ids: [])
+                if !migratedHabitIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .habits, ids: migratedHabitIDs, on: db)
+                }
+                if !migratedRewardIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .rewards, ids: migratedRewardIDs, on: db)
+                }
+                if !migratedTradeIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .trades, ids: migratedTradeIDs, on: db)
+                }
+                if !migratedTagData.tagIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .tags, ids: migratedTagData.tagIDs, on: db)
+                }
+                if !migratedTagData.habitTagIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .habitTags, ids: migratedTagData.habitTagIDs, on: db)
+                }
+                if !migratedTagData.rewardTagIDs.isEmpty {
+                    try syncStateStore.markDirty(userID: userID, kind: .rewardTags, ids: migratedTagData.rewardTagIDs, on: db)
+                }
+                if migratedDifficulty {
+                    try syncStateStore.markDirty(userID: userID, kind: .generalDifficulty, ids: [], on: db)
+                }
+                try syncStateStore.forceFullSyncOnNextRun(userID: userID, on: db)
+            }
+            setOwnerAcrossStores(userID)
+        } catch {
+            assertionFailure("Failed to migrate local data for sync: \(error)")
         }
     }
 
@@ -228,7 +234,6 @@ final class SyncManager {
 
     private func handleMutation(_ mutation: SyncMutation) {
         guard let currentUserID, mutation.ownerID == currentUserID else { return }
-        syncStateStore.markDirty(userID: currentUserID, kind: mutation.entityKind, ids: mutation.recordIDs)
         scheduleDebouncedSync()
     }
 
@@ -260,7 +265,7 @@ final class SyncManager {
         let syncState = syncStateStore.state(for: currentUserID)
 
         do {
-            let response = try await apiClient.pullSync(since: syncState.lastSync, accessToken: accessToken)
+            let response = try await apiClient.pullSync(cursor: syncState.lastSyncCursor, accessToken: accessToken)
             applyPullResponse(response, filteringDirtyState: syncState)
         } catch {
             // Background pulls are intentionally silent so passive polling does
@@ -284,19 +289,19 @@ final class SyncManager {
         let syncState = syncStateStore.state(for: currentUserID)
         let dirtySnapshot = makeDirtyIDSnapshot(from: syncState)
 
-        let dirtyHabits = habitStore.getDirtyHabits(ids: dirtySnapshot.habits)
-        let dirtyTrades = tradeStore.getDirtyTrades(ids: dirtySnapshot.trades)
-        let dirtyTags = tagStore.getDirtyTags(ids: dirtySnapshot.tags)
-        let dirtyHabitTags = tagStore.getDirtyHabitTags(ids: dirtySnapshot.habitTags)
-        let dirtyRewards = rewardStore.getDirtyRewards(ids: dirtySnapshot.rewards)
-        let dirtyRewardTags = tagStore.getDirtyRewardTags(ids: dirtySnapshot.rewardTags)
+        let dirtyHabits = habitStore.getDirtyHabits(ids: Set(dirtySnapshot.habits.keys))
+        let dirtyTrades = tradeStore.getDirtyTrades(ids: Set(dirtySnapshot.trades.keys))
+        let dirtyTags = tagStore.getDirtyTags(ids: Set(dirtySnapshot.tags.keys))
+        let dirtyHabitTags = tagStore.getDirtyHabitTags(ids: Set(dirtySnapshot.habitTags.keys))
+        let dirtyRewards = rewardStore.getDirtyRewards(ids: Set(dirtySnapshot.rewards.keys))
+        let dirtyRewardTags = tagStore.getDirtyRewardTags(ids: Set(dirtySnapshot.rewardTags.keys))
         let generalDifficultyDirty = syncState.dirty.generalDifficulty
-        let isFullSync = syncState.lastSync == nil
+        let isFullSync = syncState.lastSyncCursor == nil
 
         do {
-            let pullResponse = try await apiClient.pullSync(since: syncState.lastSync, accessToken: accessToken)
+            let pullResponse = try await apiClient.pullSync(cursor: syncState.lastSyncCursor, accessToken: accessToken)
             if isFullSync {
-                replaceCurrentOwnerStateFromFullPull(
+                try replaceCurrentOwnerStateFromFullPull(
                     pullResponse: pullResponse,
                     dirtyHabits: dirtyHabits,
                     dirtyTrades: dirtyTrades,
@@ -307,7 +312,7 @@ final class SyncManager {
                     generalDifficultyDirty: generalDifficultyDirty
                 )
             } else {
-                applyPullResponse(pullResponse, filteringDirtyState: syncState)
+                try applyPullResponse(pullResponse, filteringDirtyState: syncState)
             }
 
             if !dirtyHabits.isEmpty
@@ -336,32 +341,42 @@ final class SyncManager {
                 )
 
                 let response = try await apiClient.pushSync(pushRequest, accessToken: accessToken)
-                applyPushResponse(response)
+                try applyPushResponse(response)
             }
 
             let serverTime = AppDateCoding.parseBackendTimestamp(pullResponse.serverTime) ?? Date()
-            syncStateStore.clearDirty(userID: currentUserID, kind: .habits, ids: dirtySnapshot.habits)
-            syncStateStore.clearDirty(userID: currentUserID, kind: .trades, ids: dirtySnapshot.trades)
-            syncStateStore.clearDirty(userID: currentUserID, kind: .tags, ids: dirtySnapshot.tags)
-            syncStateStore.clearDirty(userID: currentUserID, kind: .habitTags, ids: dirtySnapshot.habitTags)
-            syncStateStore.clearDirty(userID: currentUserID, kind: .rewards, ids: dirtySnapshot.rewards)
-            syncStateStore.clearDirty(userID: currentUserID, kind: .rewardTags, ids: dirtySnapshot.rewardTags)
-            if generalDifficultyDirty {
-                syncStateStore.clearFlag(userID: currentUserID, kind: .generalDifficulty)
-            }
-            syncStateStore.setLastSync(userID: currentUserID, serverTime: serverTime)
-            lastSyncTime = serverTime
+            let completedFullSync = isFullSync
+            try AppDatabase.shared.transaction(at: syncStateStore.databaseURL) { db in
+                try self.syncStateStore.completeSync(
+                    userID: currentUserID,
+                    snapshot: syncState,
+                    serverCursor: pullResponse.serverCursor,
+                    serverTime: serverTime,
+                    completedFullSync: completedFullSync,
+                    on: db
+                )
 
-            habitStore.purgeDeletedHabits()
-            tradeStore.purgeDeletedTrades()
-            tagStore.purgeDeleted()
-            rewardStore.purgeDeletedRewards()
+                let remainingDirty = try self.syncStateStore.state(for: currentUserID, on: db)
+                try self.habitStore.purgeDeletedHabits(excluding: Set(remainingDirty.dirty.habits.map(\.id)), on: db)
+                try self.tradeStore.purgeDeletedTrades(excluding: Set(remainingDirty.dirty.trades.map(\.id)), on: db)
+                try self.tagStore.purgeDeleted(
+                    excludingTagIDs: Set(remainingDirty.dirty.tags.map(\.id)),
+                    habitTagIDs: Set(remainingDirty.dirty.habitTags.map(\.id)),
+                    rewardTagIDs: Set(remainingDirty.dirty.rewardTags.map(\.id)),
+                    on: db
+                )
+                try self.rewardStore.purgeDeletedRewards(excluding: Set(remainingDirty.dirty.rewards.map(\.id)), on: db)
+            }
+            lastSyncTime = serverTime
+            habitStore.setCurrentOwner(currentUserID)
+            tradeStore.setCurrentOwner(currentUserID)
+            tagStore.setCurrentOwner(currentUserID)
+            rewardStore.setCurrentOwner(currentUserID)
+            balanceStore.setCurrentOwner(currentUserID)
+            userSettingsStore.setCurrentOwner(currentUserID)
+            listPreferencesStore.setCurrentOwner(currentUserID)
 
             status = .synced
-
-            if syncState.lastSync == nil || syncStateStore.shouldPerformFullSync(userID: currentUserID, now: serverTime) {
-                syncStateStore.recordFullSync(userID: currentUserID, completedAt: serverTime)
-            }
         } catch {
             let message = (error as? ApiError)?.userFacingMessage
                 ?? (error as? LocalizedError)?.errorDescription
@@ -382,7 +397,7 @@ final class SyncManager {
         dirtyRewards: [Reward],
         dirtyRewardTags: [RewardTag],
         generalDifficultyDirty: Bool
-    ) {
+    ) throws {
         let authoritativeHabits = OwnerScopedRecordSupport.mergeRecords(
             local: pullResponse.habits.compactMap { $0.toModel() },
             remote: dirtyHabits
@@ -408,22 +423,26 @@ final class SyncManager {
             remote: dirtyRewardTags
         )
 
-        habitStore.replaceHabits(authoritativeHabits)
-        tradeStore.replaceTrades(authoritativeTrades)
-        tagStore.replaceAll(
+        try habitStore.persistReplacedHabits(authoritativeHabits)
+        try tradeStore.persistReplacedTrades(authoritativeTrades)
+        try tagStore.persistReplacedAll(
             tags: authoritativeTags,
             habitTags: authoritativeHabitTags,
             rewardTags: authoritativeRewardTags
         )
-        rewardStore.replaceRewards(authoritativeRewards)
-        balanceStore.setBalance(Int(pullResponse.balance.tofuBalance.rounded()))
+        try rewardStore.persistReplacedRewards(authoritativeRewards)
+        if !dirtyTrades.isEmpty {
+            balanceStore.refresh()
+        } else {
+            try balanceStore.persistBalance(Int(pullResponse.balance.tofuBalance.rounded()))
+        }
         if !generalDifficultyDirty {
-            userSettingsStore.setGeneralDifficulty(pullResponse.generalDifficulty, shouldNotifySync: false)
+            try userSettingsStore.persistGeneralDifficulty(pullResponse.generalDifficulty)
         }
         sanitizeListPreferencesForCurrentOwner()
     }
 
-    private func applyPullResponse(_ response: SyncResponse, filteringDirtyState dirtyState: SyncStateStore.UserSyncState?) {
+    private func applyPullResponse(_ response: SyncResponse, filteringDirtyState dirtyState: SyncStateStore.UserSyncState?) throws {
         let dirtyIDs: DirtyIDSnapshot
         if let dirtyState {
             dirtyIDs = makeDirtyIDSnapshot(from: dirtyState)
@@ -434,78 +453,86 @@ final class SyncManager {
         let habits: [Habit] = response.habits.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.habits.contains(model.id) else { return nil }
+            guard dirtyIDs.habits[model.id] == nil else { return nil }
             return model
         }
 
         let trades: [Trade] = response.trades.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.trades.contains(model.id) else { return nil }
+            guard dirtyIDs.trades[model.id] == nil else { return nil }
             return model
         }
 
         let tags: [Tag] = response.tags.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.tags.contains(model.id) else { return nil }
+            guard dirtyIDs.tags[model.id] == nil else { return nil }
             return model
         }
 
         let habitTags: [HabitTag] = response.habitTags.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.habitTags.contains(model.id) else { return nil }
+            guard dirtyIDs.habitTags[model.id] == nil else { return nil }
             return model
         }
 
         let rewards: [Reward] = response.rewards.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.rewards.contains(model.id) else { return nil }
+            guard dirtyIDs.rewards[model.id] == nil else { return nil }
             return model
         }
 
         let rewardTags: [RewardTag] = response.rewardTags.compactMap { record in
             let model = record.toModel()
             guard let model else { return nil }
-            guard !dirtyIDs.rewardTags.contains(model.id) else { return nil }
+            guard dirtyIDs.rewardTags[model.id] == nil else { return nil }
             return model
         }
 
-        if !habits.isEmpty {
-            habitStore.mergeHabits(habits)
-        }
-        if !trades.isEmpty {
-            tradeStore.mergeTrades(trades)
-        }
-        if !tags.isEmpty {
-            tagStore.mergeTags(tags)
-        }
-        if !habitTags.isEmpty {
-            tagStore.mergeHabitTags(habitTags)
-        }
-        if !rewards.isEmpty {
-            rewardStore.mergeRewards(rewards)
-        }
-        if !rewardTags.isEmpty {
-            tagStore.mergeRewardTags(rewardTags)
-        }
+        let mergedHabits = habits.isEmpty ? habitStore.habits : OwnerScopedRecordSupport.mergeRecords(local: habitStore.habits, remote: habits)
+        let mergedTrades = trades.isEmpty ? tradeStore.trades : OwnerScopedRecordSupport.mergeRecords(local: tradeStore.trades, remote: trades)
+        let mergedTags = tags.isEmpty ? tagStore.tags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.tags, remote: tags)
+        let mergedHabitTags = habitTags.isEmpty ? tagStore.habitTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.habitTags, remote: habitTags)
+        let mergedRewards = rewards.isEmpty ? rewardStore.rewards : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: rewards)
+        let mergedRewardTags = rewardTags.isEmpty ? tagStore.rewardTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: rewardTags)
+
+        try habitStore.persistReplacedHabits(mergedHabits)
+        try tradeStore.persistReplacedTrades(mergedTrades)
+        try tagStore.persistReplacedAll(tags: mergedTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
+        try rewardStore.persistReplacedRewards(mergedRewards)
         sanitizeListPreferencesForCurrentOwner()
 
-        balanceStore.setBalance(Int(response.balance.tofuBalance.rounded()))
-
-        if !(dirtyState?.dirty.generalDifficulty ?? false) {
-            userSettingsStore.setGeneralDifficulty(response.generalDifficulty, shouldNotifySync: false)
+        if dirtyIDs.trades.isEmpty {
+            try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
+        } else {
+            balanceStore.refresh()
         }
 
-        if let serverTime = AppDateCoding.parseBackendTimestamp(response.serverTime), let currentUserID {
-            syncStateStore.setLastSync(userID: currentUserID, serverTime: serverTime)
+        if !(dirtyState?.dirty.generalDifficulty ?? false) {
+            try userSettingsStore.persistGeneralDifficulty(response.generalDifficulty)
+        }
+
+        if
+            let serverTime = AppDateCoding.parseBackendTimestamp(response.serverTime),
+            let currentUserID
+        {
+            try AppDatabase.shared.transaction(at: syncStateStore.databaseURL) { db in
+                try self.syncStateStore.updateCheckpoint(
+                    userID: currentUserID,
+                    serverCursor: response.serverCursor,
+                    serverTime: serverTime,
+                    completedFullSync: false,
+                    on: db
+                )
+            }
             lastSyncTime = serverTime
         }
     }
 
-    private func applyPushResponse(_ response: SyncResponse) {
+    private func applyPushResponse(_ response: SyncResponse) throws {
         let habits: [Habit] = response.habits.compactMap { $0.toModel() }
         let trades: [Trade] = response.trades.compactMap { $0.toModel() }
         let tags: [Tag] = response.tags.compactMap { $0.toModel() }
@@ -513,28 +540,21 @@ final class SyncManager {
         let rewards: [Reward] = response.rewards.compactMap { $0.toModel() }
         let rewardTags: [RewardTag] = response.rewardTags.compactMap { $0.toModel() }
 
-        if !habits.isEmpty {
-            habitStore.mergeHabits(habits)
-        }
-        if !trades.isEmpty {
-            tradeStore.mergeTrades(trades)
-        }
-        if !tags.isEmpty {
-            tagStore.mergeTags(tags)
-        }
-        if !habitTags.isEmpty {
-            tagStore.mergeHabitTags(habitTags)
-        }
-        if !rewards.isEmpty {
-            rewardStore.mergeRewards(rewards)
-        }
-        if !rewardTags.isEmpty {
-            tagStore.mergeRewardTags(rewardTags)
-        }
+        let mergedHabits = habits.isEmpty ? habitStore.habits : OwnerScopedRecordSupport.mergeRecords(local: habitStore.habits, remote: habits)
+        let mergedTrades = trades.isEmpty ? tradeStore.trades : OwnerScopedRecordSupport.mergeRecords(local: tradeStore.trades, remote: trades)
+        let mergedTags = tags.isEmpty ? tagStore.tags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.tags, remote: tags)
+        let mergedHabitTags = habitTags.isEmpty ? tagStore.habitTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.habitTags, remote: habitTags)
+        let mergedRewards = rewards.isEmpty ? rewardStore.rewards : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: rewards)
+        let mergedRewardTags = rewardTags.isEmpty ? tagStore.rewardTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: rewardTags)
+
+        try habitStore.persistReplacedHabits(mergedHabits)
+        try tradeStore.persistReplacedTrades(mergedTrades)
+        try tagStore.persistReplacedAll(tags: mergedTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
+        try rewardStore.persistReplacedRewards(mergedRewards)
         sanitizeListPreferencesForCurrentOwner()
 
-        balanceStore.setBalance(Int(response.balance.tofuBalance.rounded()))
-        userSettingsStore.setGeneralDifficulty(response.generalDifficulty, shouldNotifySync: false)
+        try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
+        try userSettingsStore.persistGeneralDifficulty(response.generalDifficulty)
     }
 
     private func sanitizeListPreferencesForCurrentOwner() {
@@ -548,22 +568,22 @@ final class SyncManager {
     }
 
     private struct DirtyIDSnapshot {
-        var habits = Set<RecordID>()
-        var trades = Set<RecordID>()
-        var tags = Set<RecordID>()
-        var habitTags = Set<RecordID>()
-        var rewards = Set<RecordID>()
-        var rewardTags = Set<RecordID>()
+        var habits: [RecordID: Int64] = [:]
+        var trades: [RecordID: Int64] = [:]
+        var tags: [RecordID: Int64] = [:]
+        var habitTags: [RecordID: Int64] = [:]
+        var rewards: [RecordID: Int64] = [:]
+        var rewardTags: [RecordID: Int64] = [:]
     }
 
     private func makeDirtyIDSnapshot(from state: SyncStateStore.UserSyncState) -> DirtyIDSnapshot {
         DirtyIDSnapshot(
-            habits: Set(state.dirty.habits),
-            trades: Set(state.dirty.trades),
-            tags: Set(state.dirty.tags),
-            habitTags: Set(state.dirty.habitTags),
-            rewards: Set(state.dirty.rewards),
-            rewardTags: Set(state.dirty.rewardTags)
+            habits: Dictionary(uniqueKeysWithValues: state.dirty.habits.map { ($0.id, $0.generation) }),
+            trades: Dictionary(uniqueKeysWithValues: state.dirty.trades.map { ($0.id, $0.generation) }),
+            tags: Dictionary(uniqueKeysWithValues: state.dirty.tags.map { ($0.id, $0.generation) }),
+            habitTags: Dictionary(uniqueKeysWithValues: state.dirty.habitTags.map { ($0.id, $0.generation) }),
+            rewards: Dictionary(uniqueKeysWithValues: state.dirty.rewards.map { ($0.id, $0.generation) }),
+            rewardTags: Dictionary(uniqueKeysWithValues: state.dirty.rewardTags.map { ($0.id, $0.generation) })
         )
     }
 }
