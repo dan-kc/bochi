@@ -1,5 +1,3 @@
-E2E tests
-
 Per entry trade history
 
 Reminders, push notifications
