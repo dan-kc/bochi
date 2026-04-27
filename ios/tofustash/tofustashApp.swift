@@ -37,10 +37,16 @@ struct tofustashApp: App {
     @State private var syncManager: SyncManager
 
     init() {
+        let tokenStorage: TokenStorage = AppRuntimeEnvironment.isUITesting
+            ? InMemoryTokenStorage()
+            : KeychainTokenStorage()
+        let appleEntitlementClient: AppleEntitlementClient = AppRuntimeEnvironment.isUITesting
+            ? StaticAppleEntitlementClient(entitlement: .inactive)
+            : StoreKitAppleEntitlementClient()
         let authManager = AuthManager(
             apiClient: AppConfiguration.makeAuthAPIClient(),
-            tokenStorage: KeychainTokenStorage(),
-            appleEntitlementClient: StoreKitAppleEntitlementClient()
+            tokenStorage: tokenStorage,
+            appleEntitlementClient: appleEntitlementClient
         )
         let habitStore = HabitStore()
         let tagStore = TagStore()

@@ -1,5 +1,26 @@
 { pkgs, env }:
 let
+  sanitizedXcodeEnvironment = ''
+    env -i \
+      HOME="$HOME" \
+      USER="$USER" \
+      SHELL="/bin/bash" \
+      TERM="$TERM" \
+      LANG="en_US.UTF-8" \
+      PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin" \
+      DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
+  '';
+
+  resolveConcreteSimulator = ''
+    DEVICE_ID=$(xcrun simctl list devices available | grep -E "^[[:space:]]+$DEVICE \\(" | grep -oE '[A-F0-9-]{36}' | tail -1)
+    if [ -z "$DEVICE_ID" ]; then
+      echo "Error: Could not find simulator device: $DEVICE"
+      echo "Available devices:"
+      xcrun simctl list devices available
+      exit 1
+    fi
+  '';
+
   scripts = rec {
     # Whipes all tables in the provided database.
     clean = pkgs.writeShellScriptBin "clean" ''
@@ -389,7 +410,7 @@ let
   darwinScripts =
     if pkgs.stdenv.isDarwin then
       {
-        # Run iOS unit tests on macOS.
+        # Run Swift Testing unit tests on macOS.
         ios-test = pkgs.writeShellScriptBin "ios-test" ''
           set -e -o pipefail
           ROOT="$PWD"
@@ -400,48 +421,81 @@ let
 
           echo "Running unit tests for $SCHEME on $DEVICE..."
 
-          env -i \
-            HOME="$HOME" \
-            USER="$USER" \
-            SHELL="/bin/bash" \
-            TERM="$TERM" \
-            LANG="en_US.UTF-8" \
-            PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin" \
-            DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
-            bash -c "
-              set -e -o pipefail
-              # Resolve one concrete simulator so Xcode reuses a single device
-              # instead of fanning out across clones with name-based matching.
-              DEVICE_ID=\$(xcrun simctl list devices available | grep -E \"^[[:space:]]+$DEVICE \\(\" | grep -oE '[A-F0-9-]{36}' | tail -1)
-              if [ -z \"\$DEVICE_ID\" ]; then
-                echo 'Error: Could not find simulator device: $DEVICE'
-                echo 'Available devices:'
-                xcrun simctl list devices available
-                exit 1
-              fi
+          ${sanitizedXcodeEnvironment} \
+            PROJECT="$PROJECT" \
+            SCHEME="$SCHEME" \
+            BUILD_DIR="$BUILD_DIR" \
+            DEVICE="$DEVICE" \
+            bash <<'EOF'
+          set -e -o pipefail
+          ${resolveConcreteSimulator}
 
-              cleanup() {
-                xcrun simctl shutdown \"\$DEVICE_ID\" 2>/dev/null || true
-              }
-              trap cleanup EXIT
+          cleanup() {
+            xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
 
-              xcrun simctl shutdown \"\$DEVICE_ID\" 2>/dev/null || true
-              xcrun simctl boot \"\$DEVICE_ID\" 2>/dev/null || true
-              xcrun simctl bootstatus \"\$DEVICE_ID\" -b
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
 
-              # Run one suite process at a time so a Debug trap reports the
-              # real failing test instead of cascading through cloned runners.
-              xcodebuild \
-                -project '$PROJECT' \
-                -scheme '$SCHEME' \
-                -configuration Debug \
-                -destination \"platform=iOS Simulator,id=\$DEVICE_ID\" \
-                -parallel-testing-enabled NO \
-                -parallel-testing-worker-count 1 \
-                -maximum-concurrent-test-simulator-destinations 1 \
-                -derivedDataPath '$BUILD_DIR' \
-                test 2>&1 | ${pkgs.xcbeautify}/bin/xcbeautify
-            "
+          # Run one suite process at a time so a Debug trap reports the
+          # real failing test instead of cascading through cloned runners.
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -parallel-testing-enabled NO \
+            -parallel-testing-worker-count 1 \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -derivedDataPath "$BUILD_DIR" \
+            -only-testing:tofustashTests \
+            test 2>&1 | ${pkgs.xcbeautify}/bin/xcbeautify
+          EOF
+        '';
+
+        # Run XCTest UI tests on macOS.
+        ios-xctest = pkgs.writeShellScriptBin "ios-xctest" ''
+          set -e -o pipefail
+          ROOT="$PWD"
+          PROJECT="$ROOT/ios/tofustash.xcodeproj"
+          SCHEME="tofustash"
+          BUILD_DIR="$ROOT/ios/build"
+          DEVICE="''${1:-iPhone 17 Pro}"
+
+          echo "Running XCTest UI tests for $SCHEME on $DEVICE..."
+
+          ${sanitizedXcodeEnvironment} \
+            PROJECT="$PROJECT" \
+            SCHEME="$SCHEME" \
+            BUILD_DIR="$BUILD_DIR" \
+            DEVICE="$DEVICE" \
+            bash <<'EOF'
+          set -e -o pipefail
+          ${resolveConcreteSimulator}
+
+          cleanup() {
+            xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -parallel-testing-enabled NO \
+            -parallel-testing-worker-count 1 \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -derivedDataPath "$BUILD_DIR" \
+            -only-testing:tofustashUITests \
+            test 2>&1 | ${pkgs.xcbeautify}/bin/xcbeautify
+          EOF
         '';
       }
     else

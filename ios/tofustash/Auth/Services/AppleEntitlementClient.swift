@@ -20,6 +20,18 @@ protocol AppleEntitlementClient: Sendable {
     func restorePurchases() async throws -> AppleEntitlementStatus
 }
 
+struct StaticAppleEntitlementClient: AppleEntitlementClient {
+    let entitlement: AppleEntitlementStatus
+
+    func currentEntitlement() async -> AppleEntitlementStatus {
+        entitlement
+    }
+
+    func restorePurchases() async throws -> AppleEntitlementStatus {
+        entitlement
+    }
+}
+
 struct StoreKitAppleEntitlementClient: AppleEntitlementClient {
     // Behaviour: app launch should reflect any already-active App Store
     // subscription without forcing the user to tap Restore every time.

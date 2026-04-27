@@ -9,6 +9,22 @@ protocol TokenStorage: Sendable {
     func clear() async
 }
 
+actor InMemoryTokenStorage: TokenStorage {
+    private var tokens: AuthTokens?
+
+    func getTokens() async -> AuthTokens? {
+        tokens
+    }
+
+    func storeTokens(_ tokens: AuthTokens) async {
+        self.tokens = tokens
+    }
+
+    func clear() async {
+        tokens = nil
+    }
+}
+
 // final class = reference type that can't be subclassed (like a sealed class in Kotlin, or Rust's non-dyn struct).
 // class vs struct: class = reference type (like JS objects, passed by reference), struct = value type (copied on assign).
 // Using class here because it conforms to Sendable and manages shared Keychain state.

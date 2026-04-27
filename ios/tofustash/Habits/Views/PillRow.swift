@@ -41,6 +41,7 @@ private struct PillButton: View {
                 .font(.subheadline)
                 .contentTransition(.identity)
         }
+        .accessibilityIdentifier("pill.\(pill.id)")
         .buttonStyle(.bordered)
         .tint(tintColor)
     }

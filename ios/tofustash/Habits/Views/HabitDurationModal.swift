@@ -32,6 +32,7 @@ struct HabitDurationModal: View {
                 Section {
                     TextField("Duration", text: $valueText)
                         .keyboardType(.numberPad)
+                        .accessibilityIdentifier("habit-duration.value")
 
                     Picker("Unit", selection: $unit) {
                         ForEach(DurationUnit.allCases, id: \.self) { unit in
@@ -121,4 +122,3 @@ struct HabitDurationModal: View {
         dismiss()
     }
 }
-

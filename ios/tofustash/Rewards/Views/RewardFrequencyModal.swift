@@ -22,6 +22,7 @@ struct RewardFrequencyModal: View {
                 Section {
                     TextField("Times per period", text: $valueText)
                         .keyboardType(.numberPad)
+                        .accessibilityIdentifier("reward-frequency.value")
 
                     Picker("Period", selection: $period) {
                         ForEach(FrequencyPeriod.allCases, id: \.self) { option in

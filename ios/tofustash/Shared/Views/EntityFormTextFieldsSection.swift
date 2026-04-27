@@ -19,6 +19,7 @@ struct EntityFormTextFieldsSection<FieldFocus: Hashable>: View {
                 .lineLimit(1)
                 .padding(.vertical, 6)
                 .focused(focusedField, equals: nameFocus)
+                .accessibilityIdentifier("entity-form.name")
 
             Divider()
 
@@ -28,6 +29,7 @@ struct EntityFormTextFieldsSection<FieldFocus: Hashable>: View {
                 .multilineTextAlignment(.leading)
                 .padding(.vertical, 6)
                 .focused(focusedField, equals: descriptionFocus)
+                .accessibilityIdentifier("entity-form.description")
         }
     }
 }

@@ -32,6 +32,7 @@ struct FrequencyModal: View {
                 Section {
                     TextField("Times per period", text: $valueText)
                         .keyboardType(.numberPad)
+                        .accessibilityIdentifier("habit-frequency.value")
 
                     // Picker with .segmented style renders as a segmented control —
                     // like a SegmentedControl in React Native or radio buttons in a row.

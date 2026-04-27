@@ -15,6 +15,7 @@ struct EntityFloatingAddButton: View {
                 .background(.blue, in: .circle)
                 .shadow(radius: 4)
         }
+        .accessibilityIdentifier("entity.add")
         .padding()
     }
 }

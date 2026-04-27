@@ -33,6 +33,7 @@ struct HabitLockoutDurationModal: View {
                 Section {
                     TextField("Lockout", text: $valueText)
                         .keyboardType(.numberPad)
+                        .accessibilityIdentifier("habit-lockout.value")
 
                     Picker("Unit", selection: $unit) {
                         ForEach(DurationUnit.allCases, id: \.self) { unit in
