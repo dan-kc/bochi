@@ -100,7 +100,7 @@ struct TradeHistoryBuilderTests {
             updatedAt: older,
             deletedAt: nil,
             frequency: 1,
-            difficultyTier: .easy
+            difficultyTier: .light
         )
 
         let reward = Reward(
@@ -129,8 +129,8 @@ struct TradeHistoryBuilderTests {
             formatDate: { _ in "date" }
         )
 
-        #expect(entries.map(\.id) == [RecordID("habit-match-new"), RecordID("habit-match-old")])
-        #expect(entries.map(\.title) == ["Morning Run", "Morning Run"])
+        #expect(entries.map { $0.id } == [RecordID("habit-match-new"), RecordID("habit-match-old")])
+        #expect(entries.map { $0.title } == ["Morning Run", "Morning Run"])
     }
 
     // Behaviour: opening history from a reward should ignore unrelated trades
