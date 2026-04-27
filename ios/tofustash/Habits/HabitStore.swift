@@ -199,8 +199,10 @@ final class HabitStore {
         let destination = loadHabits(ownerID: destinationOwnerID)
         let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
 
-        try replaceRows(ownerID: destinationOwnerID, habits: merged, on: databaseHandle)
+        // Remove the local-owner rows before re-inserting the merged account view
+        // so a sign-in migration does not trip the global habit-id uniqueness rule.
         try replaceRows(ownerID: sourceOwnerID, habits: [], on: databaseHandle)
+        try replaceRows(ownerID: destinationOwnerID, habits: merged, on: databaseHandle)
         return source.map(\.id)
     }
 

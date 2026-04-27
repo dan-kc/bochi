@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import tofustash
 
+@MainActor
 struct SyncModelMappingTests {
     // Behaviour: when the backend sends the lowest allowed habit frequency,
     // the sync layer should keep the exact daily-rate value the pricing logic uses.

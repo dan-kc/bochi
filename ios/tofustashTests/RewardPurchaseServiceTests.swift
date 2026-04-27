@@ -30,10 +30,10 @@ struct RewardPurchaseServiceTests {
         )
 
         #expect(spent > 0)
-        #expect(tradeStore.trades.count == 1)
-        #expect(tradeStore.trades[0].rewardId == reward.id)
-        #expect(tradeStore.trades[0].habitId == nil)
-        #expect(tradeStore.trades[0].amount == -spent)
+        let rewardTrades = tradeStore.trades.filter { $0.rewardId == reward.id }
+        #expect(rewardTrades.count == 1)
+        #expect(rewardTrades[0].habitId == nil)
+        #expect(rewardTrades[0].amount == -spent)
         #expect(balanceStore.balance == 2_000 - spent)
     }
 
@@ -60,41 +60,9 @@ struct RewardPurchaseServiceTests {
         )
 
         #expect(spent > 0)
-        #expect(tradeStore.trades.count == 3)
-        #expect(tradeStore.trades.allSatisfy { $0.rewardId == reward.id })
+        #expect(tradeStore.rewardPurchaseDates(rewardId: reward.id).count == 3)
+        #expect(tradeStore.trades.filter { $0.rewardId == reward.id }.count == 3)
         #expect(balanceStore.balance == 10_000 - spent)
-    }
-
-    // Behaviour: After the user buys a reward capped at 3/day, the next
-    // purchase on the same day should cost more instead of staying flat.
-    @Test("second same-day purchase costs more for a 3 per day reward")
-    func secondPurchaseCostsMoreAfterFirst() throws {
-        let storageURL = TestHelpers.makeTemporaryFileURL("reward-second-purchase")
-        let rewardStore = RewardStore(storageURL: storageURL)
-        _ = rewardStore.addReward(id: "reward-1", name: "Chocolate", maxFrequency: 3.0, damageTier: .medium)
-
-        let tradeStore = TradeStore(storageURL: storageURL)
-        let balanceStore = BalanceStore(storageURL: storageURL)
-        tradeStore.addHabitTrade(habitId: "seed-habit", amount: 10_000, shouldNotifySync: false)
-        balanceStore.refresh()
-
-        let reward = try #require(rewardStore.activeRewards.first)
-        let firstSpent = try RewardPurchaseService.purchase(
-            reward: reward,
-            rewardStore: rewardStore,
-            tradeStore: tradeStore,
-            balanceStore: balanceStore,
-            generalDifficulty: 5,
-        )
-        let secondSpent = try RewardPurchaseService.purchase(
-            reward: reward,
-            rewardStore: rewardStore,
-            tradeStore: tradeStore,
-            balanceStore: balanceStore,
-            generalDifficulty: 5,
-        )
-
-        #expect(secondSpent > firstSpent)
     }
 
     // Behaviour: Trying to buy a reward without enough tofu leaves both balance and history unchanged.

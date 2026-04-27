@@ -214,8 +214,10 @@ final class TradeStore {
         let destination = loadTrades(ownerID: destinationOwnerID)
         let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
 
-        try replaceRows(ownerID: destinationOwnerID, trades: merged, on: databaseHandle)
+        // Remove the local-owner rows before re-inserting the merged account view
+        // so a sign-in migration does not trip the global trade-id uniqueness rule.
         try replaceRows(ownerID: sourceOwnerID, trades: [], on: databaseHandle)
+        try replaceRows(ownerID: destinationOwnerID, trades: merged, on: databaseHandle)
         try recalculateBalance(ownerID: destinationOwnerID, on: databaseHandle)
         try recalculateBalance(ownerID: sourceOwnerID, on: databaseHandle)
         return source.map(\.id)

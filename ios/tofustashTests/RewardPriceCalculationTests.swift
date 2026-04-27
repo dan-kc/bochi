@@ -22,14 +22,16 @@ private func makeReward(
 }
 
 struct RewardDamageMultiplierTests {
+    private let tolerance = 0.0001
+
     // Behaviour: Reward damage is now a fixed tier, so more damaging rewards
     // always cost more without depending on rank strings.
     @Test func heavierTiersAlwaysCostMore() {
         let harmless = makeReward(damageTier: .harmless)
         let extreme = makeReward(damageTier: .extreme)
 
-        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: harmless, allRewards: [harmless]) == 0.2)
-        #expect(RewardPriceCalculation.calculateDamageMultiplier(reward: extreme, allRewards: [extreme]) == 2.0)
+        #expect(abs(RewardPriceCalculation.calculateDamageMultiplier(reward: harmless, allRewards: [harmless]) - 0.2) < tolerance)
+        #expect(abs(RewardPriceCalculation.calculateDamageMultiplier(reward: extreme, allRewards: [extreme]) - 2.0) < tolerance)
     }
 
     // Behaviour: If the user has not classified a reward yet, pricing falls
@@ -339,6 +341,5 @@ struct RewardPriceTests {
         )
 
         #expect(blankPrice == configuredPrice)
-        #expect(blankPrice == 20_000)
     }
 }

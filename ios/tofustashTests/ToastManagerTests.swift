@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import tofustash
 
+@MainActor
 struct ToastManagerTests {
 
     private func makeSUT() -> ToastManager {

@@ -196,8 +196,10 @@ final class RewardStore {
         let destination = loadRewards(ownerID: destinationOwnerID)
         let merged = OwnerScopedRecordSupport.mergeRecords(local: destination, remote: source)
 
-        try replaceRows(ownerID: destinationOwnerID, rewards: merged, on: databaseHandle)
+        // Remove the local-owner rows before re-inserting the merged account view
+        // so a sign-in migration does not trip the global reward-id uniqueness rule.
         try replaceRows(ownerID: sourceOwnerID, rewards: [], on: databaseHandle)
+        try replaceRows(ownerID: destinationOwnerID, rewards: merged, on: databaseHandle)
         return source.map(\.id)
     }
 

@@ -360,13 +360,15 @@ final class TagStore {
         let mergedHabitTags = OwnerScopedRecordSupport.mergeRecords(local: destinationHabitTags, remote: sourceHabitTags)
         let mergedRewardTags = OwnerScopedRecordSupport.mergeRecords(local: destinationRewardTags, remote: sourceRewardTags)
 
-        try replaceTagRows(ownerID: destinationOwnerID, tags: mergedTags, on: databaseHandle)
-        try replaceHabitTagRows(ownerID: destinationOwnerID, rows: mergedHabitTags, on: databaseHandle)
-        try replaceRewardTagRows(ownerID: destinationOwnerID, rows: mergedRewardTags, on: databaseHandle)
-
+        // Clear the local-owner rows first so sign-in migration can rebuild the
+        // account-owned tag graph without colliding on globally unique tag ids.
         try replaceTagRows(ownerID: sourceOwnerID, tags: [], on: databaseHandle)
         try replaceHabitTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
         try replaceRewardTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
+
+        try replaceTagRows(ownerID: destinationOwnerID, tags: mergedTags, on: databaseHandle)
+        try replaceHabitTagRows(ownerID: destinationOwnerID, rows: mergedHabitTags, on: databaseHandle)
+        try replaceRewardTagRows(ownerID: destinationOwnerID, rows: mergedRewardTags, on: databaseHandle)
 
         return (
             sourceTags.map(\.id),

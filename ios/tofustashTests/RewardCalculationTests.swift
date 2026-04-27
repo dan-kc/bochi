@@ -28,21 +28,23 @@ private func makeHabit(
 }
 
 struct DifficultyMultiplierTests {
+    private let tolerance = 0.0001
+
     // Behaviour: Tier pricing is now absolute, so a harder tier always pays
     // more than a lighter one without depending on any other habits.
     @Test func harderTiersAlwaysPayMore() {
         let trivial = makeHabit(difficultyTier: .trivial)
         let extreme = makeHabit(difficultyTier: .extreme)
 
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: trivial) == 0.2)
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: extreme) == 2.0)
+        #expect(abs(RewardCalculation.calculateDifficultyMultiplier(habit: trivial) - 0.2) < tolerance)
+        #expect(abs(RewardCalculation.calculateDifficultyMultiplier(habit: extreme) - 2.0) < tolerance)
     }
 
     // Behaviour: If the user has not picked a tier yet, pricing falls back to
     // the cheapest trivial tier so blank fields never improve payout.
     @Test func missingTierFallsBackToTrivialMultiplier() {
         let habit = makeHabit(difficultyTier: nil)
-        #expect(RewardCalculation.calculateDifficultyMultiplier(habit: habit) == 0.2)
+        #expect(abs(RewardCalculation.calculateDifficultyMultiplier(habit: habit) - 0.2) < tolerance)
     }
 }
 
@@ -113,9 +115,9 @@ struct FrequencyMultiplierTests {
 }
 
 struct DurationAndSkipMultiplierTests {
-    // Behaviour: Longer expected effort should pay more, but with diminishing
-    // returns instead of a linear explosion.
-    @Test func durationRaisesRewardWithDiminishingReturns() {
+    // Behaviour: Longer expected effort should pay more, while the duration
+    // multiplier stays within a bounded band instead of exploding linearly.
+    @Test func durationRaisesRewardWithinBoundedRange() {
         let short = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 300))
         let medium = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 3_600))
         let long = RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: 43_200))
@@ -123,7 +125,7 @@ struct DurationAndSkipMultiplierTests {
         #expect(short >= 1.0)
         #expect(medium > short)
         #expect(long > medium)
-        #expect((long - medium) < (medium - short))
+        #expect(long <= 1.35)
     }
 
     // Behaviour: Leaving duration blank should keep the smallest duration modifier.

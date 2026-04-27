@@ -187,6 +187,7 @@ struct HabitStoreTests {
     // (description, frequency, difficulty, createdAt) remain untouched.
     @Test func updateHabitPreservesUnchangedFields() {
         let sut = makeSUT()
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
         let habit = sut.addHabit(
             name: "Exercise",
             description: "Daily",
@@ -194,7 +195,9 @@ struct HabitStoreTests {
             difficultyTier: .medium,
             durationSeconds: 300,
             lockoutDurationSeconds: 1800,
-            skipConsequence: 2
+            skipConsequence: 2,
+            createdAt: createdAt,
+            updatedAt: createdAt
         )!
 
         // Only update the name — all other fields should stay the same

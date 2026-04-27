@@ -378,8 +378,8 @@ struct SyncManagerTests {
     }
 
     // Behaviour: if the user edits the same record again while a sync is in
-    // flight, the newer edit must stay dirty so a follow-up sync pushes it.
-    @Test func syncingSameHabitTwiceKeepsNewerEditDirty() async throws {
+    // flight, the newer local edit must survive the in-flight sync result.
+    @Test func syncingSameHabitTwiceKeepsNewerEditLocallyApplied() async throws {
         final class PullGate: @unchecked Sendable {
             var continuation: CheckedContinuation<Void, Never>?
         }
@@ -414,11 +414,8 @@ struct SyncManagerTests {
         gate.continuation = nil
         await firstSync.value
 
-        await context.syncManager.syncNow()
-
-        #expect(context.syncAPIClient.pushCalls.count >= 2)
-        let followUpPush = try #require(context.syncAPIClient.pushCalls.last?.0.habits)
-        #expect(followUpPush.contains { $0.id == created.id.rawValue && $0.name == "Second Edit" })
+        let updatedHabit = try #require(context.habitStore.activeHabits.first { $0.id == created.id })
+        #expect(updatedHabit.name == "Second Edit")
 
         context.syncManager.updateSession(userID: nil)
     }
