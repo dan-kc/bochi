@@ -47,6 +47,7 @@ struct RewardFormView: View {
     @State private var showingDamage = false
     @State private var showingTags = false
     @State private var purchasingReward: Reward? = nil
+    @State private var showingHistory = false
     @State private var showingDeleteConfirmation = false
 
     @State private var hasInitialized = false
@@ -179,6 +180,10 @@ struct RewardFormView: View {
                         }
                     } else if case .change = mode {
                         Menu {
+                            Button("History") {
+                                showingHistory = true
+                            }
+
                             Button("Delete Reward", role: .destructive) {
                                 showingDeleteConfirmation = true
                             }
@@ -228,6 +233,12 @@ struct RewardFormView: View {
             RewardPurchaseModalView(reward: reward) {
                 dismiss()
             }
+        }
+        .sheet(isPresented: $showingHistory) {
+            TradeHistorySheetView(
+                filter: .reward(rewardId),
+                detents: [.large]
+            )
         }
         .alert("Delete Reward?", isPresented: $showingDeleteConfirmation) {
             if case .change(let reward) = mode {

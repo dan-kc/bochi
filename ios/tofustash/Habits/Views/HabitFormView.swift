@@ -65,6 +65,7 @@ struct HabitFormView: View {
     @State private var showingSkipConsequence = false
     @State private var showingTags = false
     @State private var tradingHabit: Habit? = nil
+    @State private var showingHistory = false
     @State private var showingDeleteConfirmation = false
 
     @State private var hasInitialized = false
@@ -230,6 +231,10 @@ struct HabitFormView: View {
                         }
                     } else if case .change = mode {
                         Menu {
+                            Button("History") {
+                                showingHistory = true
+                            }
+
                             Button("Delete Habit", role: .destructive) {
                                 showingDeleteConfirmation = true
                             }
@@ -293,6 +298,12 @@ struct HabitFormView: View {
             TradeModalView(habit: habit) {
                 dismiss()
             }
+        }
+        .sheet(isPresented: $showingHistory) {
+            TradeHistorySheetView(
+                filter: .habit(draftHabit.id),
+                detents: [.large]
+            )
         }
         .alert("Delete Habit?", isPresented: $showingDeleteConfirmation) {
             if case .change(let habit) = mode {

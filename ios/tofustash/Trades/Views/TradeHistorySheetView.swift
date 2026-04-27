@@ -1,10 +1,24 @@
 import SwiftUI
 
 struct TradeHistorySheetView: View {
+    let filter: TradeHistoryFilter
+    let title: String
+    let detents: Set<PresentationDetent>
+
     @Environment(\.dismiss) private var dismiss
     @Environment(TradeStore.self) private var tradeStore
     @Environment(HabitStore.self) private var habitStore
     @Environment(RewardStore.self) private var rewardStore
+
+    init(
+        filter: TradeHistoryFilter = .all,
+        title: String = "Trades",
+        detents: Set<PresentationDetent> = [.medium, .large]
+    ) {
+        self.filter = filter
+        self.title = title
+        self.detents = detents
+    }
 
     // Computed property — like deriving `const rows = useMemo(...)` from store
     // state in React. Swift recalculates it on access, and SwiftUI refreshes
@@ -13,8 +27,31 @@ struct TradeHistorySheetView: View {
         TradeHistoryBuilder.buildEntries(
             trades: tradeStore.trades,
             habits: habitStore.habits,
-            rewards: rewardStore.rewards
+            rewards: rewardStore.rewards,
+            filter: filter
         )
+    }
+
+    private var emptyStateTitle: String {
+        switch filter {
+        case .all:
+            return "No Trades Yet"
+        case .habit:
+            return "No Habit Trades Yet"
+        case .reward:
+            return "No Reward Trades Yet"
+        }
+    }
+
+    private var emptyStateDescription: String {
+        switch filter {
+        case .all:
+            return "Habit claims and reward purchases will appear here."
+        case .habit:
+            return "Claims for this habit will appear here."
+        case .reward:
+            return "Purchases for this reward will appear here."
+        }
     }
 
     var body: some View {
@@ -22,9 +59,9 @@ struct TradeHistorySheetView: View {
             Group {
                 if entries.isEmpty {
                     ContentUnavailableView(
-                        "No Trades Yet",
+                        emptyStateTitle,
                         systemImage: "arrow.left.arrow.right",
-                        description: Text("Habit claims and reward purchases will appear here.")
+                        description: Text(emptyStateDescription)
                     )
                 } else {
                     List(entries) { entry in
@@ -33,7 +70,7 @@ struct TradeHistorySheetView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Trades")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -45,7 +82,7 @@ struct TradeHistorySheetView: View {
         }
         // Behaviour: the sheet opens at medium height for a quick glance, but
         // the user can drag it to full-screen when they want to browse deeper.
-        .presentationDetents([.medium, .large])
+        .presentationDetents(detents)
         .presentationBackground(.thinMaterial)
         .presentationContentInteraction(.scrolls)
     }

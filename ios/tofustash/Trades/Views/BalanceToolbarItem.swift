@@ -35,7 +35,7 @@ struct BalanceOverlay: View {
         .buttonBorderShape(.capsule)
         .animation(.easeInOut(duration: 2.0), value: balanceStore.balance)
         .sheet(isPresented: $showingTradeHistory) {
-            TradeHistorySheetView()
+            TradeHistorySheetView(filter: .all)
         }
     }
 }
