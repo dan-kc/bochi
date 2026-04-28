@@ -8,6 +8,7 @@ import SwiftUI
 struct PillRow: View {
     let pills: [PillItem]
     var leadingInset: CGFloat = 0
+    var trailingInset: CGFloat = 0
 
     var body: some View {
         // ScrollView(.horizontal) is like overflow-x: auto with flex-direction: row.
@@ -20,6 +21,7 @@ struct PillRow: View {
                 }
             }
             .padding(.leading, leadingInset)
+            .padding(.trailing, trailingInset)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

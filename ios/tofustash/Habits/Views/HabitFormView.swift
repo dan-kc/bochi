@@ -201,7 +201,7 @@ struct HabitFormView: View {
                                 .allowsHitTesting(!isEditingText)
                         }
 
-                        PillRow(pills: buildPills(), leadingInset: 16)
+                        PillRow(pills: buildPills(), leadingInset: 16, trailingInset: 16)
                             .opacity(isEditingText ? 0 : 1)
                             .allowsHitTesting(!isEditingText)
 
