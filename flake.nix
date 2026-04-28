@@ -88,7 +88,7 @@
               php83Extensions.pgsql
               nil
               openssl
-              nixfmt-rfc-style
+              nixfmt
               taplo
               flyway
               opentofu
