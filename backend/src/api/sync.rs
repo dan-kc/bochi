@@ -17,6 +17,7 @@ use crate::{
 
 use super::habits::validate_habit_fields;
 use super::rewards::validate_reward_fields;
+use super::tasks::validate_task_fields;
 use super::ApiError;
 
 // ============================================================================
@@ -39,13 +40,32 @@ struct SyncCursor {
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPushRequest {
+    pub tasks: Option<Vec<SyncTaskInput>>,
     pub habits: Option<Vec<SyncHabitInput>>,
     pub trades: Option<Vec<SyncTradeInput>>,
     pub tags: Option<Vec<SyncTagInput>>,
+    pub task_tags: Option<Vec<SyncTaskTagInput>>,
     pub habit_tags: Option<Vec<SyncHabitTagInput>>,
     pub rewards: Option<Vec<SyncRewardInput>>,
     pub reward_tags: Option<Vec<SyncRewardTagInput>>,
     pub general_difficulty: Option<f64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTaskInput {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
+    pub due_date: Option<NaiveDateTime>,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +89,7 @@ pub struct SyncHabitInput {
 #[serde(rename_all = "camelCase")]
 pub struct SyncTradeInput {
     pub id: String,
+    pub task_id: Option<String>,
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
     pub amount: i32,
@@ -82,6 +103,17 @@ pub struct SyncTagInput {
     pub id: String,
     pub name: String,
     pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTaskTagInput {
+    pub task_id: String,
+    pub tag_id: String,
     pub created_at: NaiveDateTime,
     #[allow(dead_code)]
     pub updated_at: NaiveDateTime,
@@ -127,9 +159,11 @@ pub struct SyncRewardTagInput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResponse {
+    pub tasks: Vec<TaskOutput>,
     pub habits: Vec<HabitOutput>,
     pub trades: Vec<TradeOutput>,
     pub tags: Vec<TagOutput>,
+    pub task_tags: Vec<TaskTagOutput>,
     pub habit_tags: Vec<HabitTagOutput>,
     pub rewards: Vec<RewardOutput>,
     pub reward_tags: Vec<RewardTagOutput>,
@@ -159,8 +193,25 @@ pub struct HabitOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TaskOutput {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
+    pub due_date: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TradeOutput {
     pub id: String,
+    pub task_id: Option<String>,
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
     pub amount: i32,
@@ -175,6 +226,16 @@ pub struct TagOutput {
     pub id: String,
     pub name: String,
     pub color_hex: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskTagOutput {
+    pub task_id: String,
+    pub tag_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -262,19 +323,41 @@ pub async fn get_sync(
         ApiError::Internal
     })?;
 
-    let habit_rows = load_habits_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let habit_rows = load_habits_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
-    let trade_rows = load_trades_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let task_rows = load_tasks_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    let trade_rows = load_trades_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
     let trade_balance = load_balance_for_sync(&mut tx, user.user_id)
         .await
@@ -290,36 +373,65 @@ pub async fn get_sync(
             ApiError::Internal
         })?;
 
-    let tag_rows = load_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-        .await
-        .map_err(|e| {
-            error!("Database Error: {:?}", e);
-            ApiError::Internal
-        })?;
+    let tag_rows = load_tags_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
-    let habit_tag_rows =
-        load_habit_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-            .await
-            .map_err(|e| {
-                error!("Database Error: {:?}", e);
-                ApiError::Internal
-            })?;
+    let task_tag_rows = load_task_tags_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
-    let reward_rows =
-        load_rewards_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-            .await
-            .map_err(|e| {
-                error!("Database Error: {:?}", e);
-                ApiError::Internal
-            })?;
+    let habit_tag_rows = load_habit_tags_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
-    let reward_tag_rows =
-        load_reward_tags_for_sync(&mut tx, user.user_id, params.since, requested_cursor.as_ref())
-            .await
-            .map_err(|e| {
-                error!("Database Error: {:?}", e);
-                ApiError::Internal
-            })?;
+    let reward_rows = load_rewards_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    let reward_tag_rows = load_reward_tags_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
 
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
@@ -338,10 +450,28 @@ pub async fn get_sync(
         })
         .collect();
 
+    let tasks: Vec<TaskOutput> = task_rows
+        .into_iter()
+        .map(|row| TaskOutput {
+            id: row.id.to_string(),
+            name: row.name,
+            description: row.description,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            completed_at: row.completed_at,
+            difficulty_tier: row.difficulty_tier,
+            duration_seconds: row.duration_seconds,
+            skip_consequence: row.skip_consequence,
+            due_date: row.due_date,
+        })
+        .collect();
+
     let trades: Vec<TradeOutput> = trade_rows
         .into_iter()
         .map(|row| TradeOutput {
             id: row.id.to_string(),
+            task_id: row.task_id.map(|id| id.to_string()),
             habit_id: row.habit_id.map(|id| id.to_string()),
             reward_id: row.reward_id.map(|id| id.to_string()),
             amount: row.amount,
@@ -357,6 +487,17 @@ pub async fn get_sync(
             id: row.id.to_string(),
             name: row.name,
             color_hex: row.color_hex.trim().to_string(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
+    let task_tags: Vec<TaskTagOutput> = task_tag_rows
+        .into_iter()
+        .map(|row| TaskTagOutput {
+            task_id: row.task_id.to_string(),
+            tag_id: row.tag_id.to_string(),
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
@@ -412,9 +553,11 @@ pub async fn get_sync(
     })?;
 
     Ok(Json(SyncResponse {
+        tasks,
         habits,
         trades,
         tags,
+        task_tags,
         habit_tags,
         rewards,
         reward_tags,
@@ -442,8 +585,10 @@ pub async fn post_sync(
     })?;
 
     let mut result_habits = Vec::new();
+    let mut result_tasks = Vec::new();
     let mut result_trades = Vec::new();
     let mut result_tags = Vec::new();
+    let mut result_task_tags = Vec::new();
     let mut result_habit_tags = Vec::new();
     let mut result_rewards = Vec::new();
     let mut result_reward_tags = Vec::new();
@@ -501,7 +646,57 @@ pub async fn post_sync(
         }
     }
 
-    // Process rewards second (trades may reference these)
+    // Process tasks second (trades may reference these)
+    if let Some(tasks) = input.tasks {
+        for task_input in tasks {
+            let task_id = task_input.id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!("Invalid task id format: {}", task_input.id))
+            })?;
+
+            validate_task_fields(
+                &task_input.name,
+                &task_input.description,
+                task_input.duration_seconds,
+                task_input.skip_consequence,
+            )?;
+
+            let upsert_opts = database::UpsertTaskOptions {
+                id: task_id,
+                name: task_input.name,
+                description: task_input.description,
+                created_at: task_input.created_at,
+                deleted_at: task_input.deleted_at,
+                completed_at: task_input.completed_at,
+                difficulty_tier: task_input.difficulty_tier,
+                duration_seconds: task_input.duration_seconds,
+                skip_consequence: task_input.skip_consequence,
+                due_date: task_input.due_date,
+            };
+
+            let task_row = Database::upsert_task_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting task: {:?}", e);
+                    ApiError::Internal
+                })?;
+
+            result_tasks.push(TaskOutput {
+                id: task_row.id.to_string(),
+                name: task_row.name,
+                description: task_row.description,
+                created_at: task_row.created_at,
+                updated_at: task_row.updated_at,
+                deleted_at: task_row.deleted_at,
+                completed_at: task_row.completed_at,
+                difficulty_tier: task_row.difficulty_tier,
+                duration_seconds: task_row.duration_seconds,
+                skip_consequence: task_row.skip_consequence,
+                due_date: task_row.due_date,
+            });
+        }
+    }
+
+    // Process rewards third (trades may reference these)
     if let Some(rewards) = input.rewards {
         for reward_input in rewards {
             // Validate reward ID is a valid UUID
@@ -545,13 +740,21 @@ pub async fn post_sync(
         }
     }
 
-    // Process trades third (they may reference habits or rewards created above)
+    // Process trades fourth (they may reference tasks, habits, or rewards created above)
     if let Some(trades) = input.trades {
         for trade_input in trades {
             // Validate trade ID is a valid UUID
             let trade_id = trade_input.id.parse::<Uuid>().map_err(|_| {
                 ApiError::Validation(format!("Invalid trade id format: {}", trade_input.id))
             })?;
+
+            let task_id = if let Some(task_id_str) = &trade_input.task_id {
+                Some(task_id_str.parse::<Uuid>().map_err(|_| {
+                    ApiError::Validation(format!("Invalid task_id format: {}", task_id_str))
+                })?)
+            } else {
+                None
+            };
 
             // Validate habit_id if provided
             let habit_id = if let Some(habit_id_str) = &trade_input.habit_id {
@@ -571,14 +774,18 @@ pub async fn post_sync(
                 None
             };
 
-            // Trade must have either habit_id or reward_id
-            if habit_id.is_none() && reward_id.is_none() {
-                let msg = "Trade must have a habit_id or reward_id".to_string();
+            let source_count = usize::from(task_id.is_some())
+                + usize::from(habit_id.is_some())
+                + usize::from(reward_id.is_some());
+            if source_count != 1 {
+                let msg =
+                    "Trade must have exactly one of task_id, habit_id, or reward_id".to_string();
                 return Err(ApiError::Validation(msg));
             }
 
             let upsert_opts = database::UpsertTradeOptions {
                 id: trade_id,
+                task_id,
                 habit_id,
                 reward_id,
                 amount: trade_input.amount,
@@ -595,6 +802,7 @@ pub async fn post_sync(
 
             result_trades.push(TradeOutput {
                 id: trade_row.id.to_string(),
+                task_id: trade_row.task_id.map(|id| id.to_string()),
                 habit_id: trade_row.habit_id.map(|id| id.to_string()),
                 reward_id: trade_row.reward_id.map(|id| id.to_string()),
                 amount: trade_row.amount,
@@ -605,7 +813,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process tags third (habit_tags may reference these)
+    // Process tags fifth (entity-tag links may reference these)
     if let Some(tags) = input.tags {
         for tag_input in tags {
             // Validate tag ID is a valid UUID
@@ -662,7 +870,48 @@ pub async fn post_sync(
         }
     }
 
-    // Process habit_tags fourth (they reference habits and tags)
+    // Process task_tags sixth (they reference tasks and tags)
+    if let Some(task_tags) = input.task_tags {
+        for task_tag_input in task_tags {
+            let task_id = task_tag_input.task_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid task_id format: {}",
+                    task_tag_input.task_id
+                ))
+            })?;
+
+            let tag_id = task_tag_input.tag_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!("Invalid tag_id format: {}", task_tag_input.tag_id))
+            })?;
+
+            let upsert_opts = database::UpsertTaskTagOptions {
+                task_id,
+                tag_id,
+                created_at: task_tag_input.created_at,
+                deleted_at: task_tag_input.deleted_at,
+            };
+
+            let task_tag_row = Database::upsert_task_tag_tx(&mut tx, user.user_id, &upsert_opts)
+                .await
+                .map_err(|e| {
+                    error!("Database Error upserting task_tag: {:?}", e);
+                    ApiError::Validation(format!(
+                        "Invalid task or tag reference for task_id: {}, tag_id: {}",
+                        task_id, tag_id
+                    ))
+                })?;
+
+            result_task_tags.push(TaskTagOutput {
+                task_id: task_tag_row.task_id.to_string(),
+                tag_id: task_tag_row.tag_id.to_string(),
+                created_at: task_tag_row.created_at,
+                updated_at: task_tag_row.updated_at,
+                deleted_at: task_tag_row.deleted_at,
+            });
+        }
+    }
+
+    // Process habit_tags seventh (they reference habits and tags)
     if let Some(habit_tags) = input.habit_tags {
         for habit_tag_input in habit_tags {
             // Validate habit_id is a valid UUID
@@ -705,7 +954,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process reward_tags sixth (they reference rewards and tags)
+    // Process reward_tags eighth (they reference rewards and tags)
     if let Some(reward_tags) = input.reward_tags {
         for reward_tag_input in reward_tags {
             // Validate reward_id is a valid UUID
@@ -788,8 +1037,8 @@ pub async fn post_sync(
         .await
         .map_err(|e| {
             error!("Database Error getting profile: {:?}", e);
-        ApiError::Internal
-    })?;
+            ApiError::Internal
+        })?;
 
     let mut snapshot_tx = app.database.begin_transaction().await.map_err(|e| {
         error!("Failed to begin push snapshot transaction: {:?}", e);
@@ -806,7 +1055,11 @@ pub async fn post_sync(
 
     let server_cursor = load_snapshot_cursor(&mut snapshot_tx)
         .await
-        .and_then(|cursor| cursor.encode().map_err(|e| sqlx::Error::Protocol(e.to_string())))
+        .and_then(|cursor| {
+            cursor
+                .encode()
+                .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+        })
         .map_err(|e| {
             error!("Failed to capture push sync cursor: {:?}", e);
             ApiError::Internal
@@ -821,9 +1074,11 @@ pub async fn post_sync(
     let is_premium = profile_is_entitled(&profile_row);
 
     Ok(Json(SyncResponse {
+        tasks: result_tasks,
         habits: result_habits,
         trades: result_trades,
         tags: result_tags,
+        task_tags: result_task_tags,
         habit_tags: result_habit_tags,
         rewards: result_rewards,
         reward_tags: result_reward_tags,
@@ -840,7 +1095,9 @@ pub async fn post_sync(
 
 impl SyncCursor {
     fn decode(raw: &str) -> Result<Self, String> {
-        let bytes = URL_SAFE_NO_PAD.decode(raw).map_err(|error| error.to_string())?;
+        let bytes = URL_SAFE_NO_PAD
+            .decode(raw)
+            .map_err(|error| error.to_string())?;
         serde_json::from_slice(&bytes).map_err(|error| error.to_string())
     }
 
@@ -881,6 +1138,55 @@ async fn load_snapshot_cursor(
         upper_bound_tx_id,
         in_progress_tx_ids,
     })
+}
+
+async fn load_tasks_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TaskRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                 FROM tasks
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                     FROM tasks
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                     FROM tasks
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
 }
 
 async fn load_habits_for_sync(
@@ -941,7 +1247,7 @@ async fn load_trades_for_sync(
     match cursor {
         Some(cursor) => {
             sqlx::query_as(
-                "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                  FROM trades
                  WHERE user_id = $1
                    AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
@@ -956,7 +1262,7 @@ async fn load_trades_for_sync(
         None => match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -968,7 +1274,7 @@ async fn load_trades_for_sync(
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -1021,6 +1327,58 @@ async fn load_tags_for_sync(
                      FROM tags
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_task_tags_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TaskTagRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT tt.task_id, tt.tag_id, tt.created_at, tt.updated_at, tt.deleted_at
+                 FROM task_tags tt
+                 JOIN tasks t ON tt.task_id = t.id
+                 WHERE t.user_id = $1
+                   AND (((tt.xmin)::text)::bigint >= $2 OR ((tt.xmin)::text)::bigint = ANY($3))
+                 ORDER BY tt.updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT tt.task_id, tt.tag_id, tt.created_at, tt.updated_at, tt.deleted_at
+                     FROM task_tags tt
+                     JOIN tasks t ON tt.task_id = t.id
+                     WHERE t.user_id = $1 AND tt.updated_at > $2
+                     ORDER BY tt.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT tt.task_id, tt.tag_id, tt.created_at, tt.updated_at, tt.deleted_at
+                     FROM task_tags tt
+                     JOIN tasks t ON tt.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY tt.updated_at ASC",
                 )
                 .bind(user_id)
                 .fetch_all(&mut **tx)
@@ -1153,9 +1511,9 @@ async fn load_reward_tags_for_sync(
             .fetch_all(&mut **tx)
             .await
         }
-        None => match since {
-            Some(since_time) => {
-                sqlx::query_as(
+        None => {
+            match since {
+                Some(since_time) => sqlx::query_as(
                     "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
                      FROM reward_tags rt
                      JOIN rewards r ON rt.reward_id = r.id
@@ -1165,10 +1523,8 @@ async fn load_reward_tags_for_sync(
                 .bind(user_id)
                 .bind(since_time)
                 .fetch_all(&mut **tx)
-                .await
-            }
-            None => {
-                sqlx::query_as(
+                .await,
+                None => sqlx::query_as(
                     "SELECT rt.reward_id, rt.tag_id, rt.created_at, rt.updated_at, rt.deleted_at
                      FROM reward_tags rt
                      JOIN rewards r ON rt.reward_id = r.id
@@ -1177,9 +1533,9 @@ async fn load_reward_tags_for_sync(
                 )
                 .bind(user_id)
                 .fetch_all(&mut **tx)
-                .await
+                .await,
             }
-        },
+        }
     }
 }
 

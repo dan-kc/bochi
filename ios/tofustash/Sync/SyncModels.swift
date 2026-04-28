@@ -8,9 +8,11 @@ enum SyncStatus: Equatable {
 }
 
 struct SyncResponse: Decodable {
+    let tasks: [SyncTaskRecord]
     let habits: [SyncHabitRecord]
     let trades: [SyncTradeRecord]
     let tags: [SyncTagRecord]
+    let taskTags: [SyncTaskTagRecord]
     let habitTags: [SyncHabitTagRecord]
     let rewards: [SyncRewardRecord]
     let rewardTags: [SyncRewardTagRecord]
@@ -24,6 +26,59 @@ struct SyncResponse: Decodable {
 
 struct SyncBalanceRecord: Decodable {
     let tofuBalance: Double
+}
+
+struct SyncTaskRecord: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+    let completedAt: String?
+    let difficultyTier: HabitDifficultyTier?
+    let durationSeconds: Int?
+    let skipConsequence: Int?
+    let dueDate: String?
+
+    func toModel() -> TaskItem? {
+        guard
+            let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),
+            let updatedAt = AppDateCoding.parseBackendTimestamp(updatedAt)
+        else {
+            return nil
+        }
+
+        return TaskItem(
+            id: RecordID(id),
+            name: name,
+            description: description,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
+            completedAt: AppDateCoding.parseBackendTimestamp(completedAt),
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            skipConsequence: skipConsequence,
+            dueDate: AppDateCoding.parseBackendTimestamp(dueDate)
+        )
+    }
+
+    static func from(_ task: TaskItem) -> SyncTaskRecord {
+        SyncTaskRecord(
+            id: task.id.rawValue,
+            name: task.name,
+            description: task.description,
+            createdAt: AppDateCoding.backendTimestamp(from: task.createdAt),
+            updatedAt: AppDateCoding.backendTimestamp(from: task.updatedAt),
+            deletedAt: task.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
+            completedAt: task.completedAt.map { AppDateCoding.backendTimestamp(from: $0) },
+            difficultyTier: task.difficultyTier,
+            durationSeconds: task.durationSeconds,
+            skipConsequence: task.skipConsequence,
+            dueDate: task.dueDate.map { AppDateCoding.backendTimestamp(from: $0) }
+        )
+    }
 }
 
 struct SyncHabitRecord: Codable {
@@ -107,6 +162,7 @@ struct SyncHabitRecord: Codable {
 
 struct SyncTradeRecord: Codable {
     let id: String
+    let taskId: String?
     let habitId: String?
     let rewardId: String?
     let amount: Int
@@ -121,6 +177,7 @@ struct SyncTradeRecord: Codable {
 
         return Trade(
             id: RecordID(id),
+            taskId: taskId.map { RecordID($0) },
             habitId: habitId.map { RecordID($0) },
             rewardId: rewardId.map { RecordID($0) },
             amount: amount,
@@ -133,6 +190,7 @@ struct SyncTradeRecord: Codable {
     static func from(_ trade: Trade) -> SyncTradeRecord {
         SyncTradeRecord(
             id: trade.id.rawValue,
+            taskId: trade.taskId?.rawValue,
             habitId: trade.habitId?.rawValue,
             rewardId: trade.rewardId?.rawValue,
             amount: trade.amount,
@@ -177,6 +235,41 @@ struct SyncTagRecord: Codable {
             createdAt: AppDateCoding.backendTimestamp(from: tag.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: tag.updatedAt),
             deletedAt: tag.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
+        )
+    }
+}
+
+struct SyncTaskTagRecord: Codable {
+    let taskId: String
+    let tagId: String
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    func toModel() -> TaskTag? {
+        guard
+            let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),
+            let updatedAt = AppDateCoding.parseBackendTimestamp(updatedAt)
+        else {
+            return nil
+        }
+
+        return TaskTag(
+            taskId: RecordID(taskId),
+            tagId: RecordID(tagId),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
+        )
+    }
+
+    static func from(_ taskTag: TaskTag) -> SyncTaskTagRecord {
+        SyncTaskTagRecord(
+            taskId: taskTag.taskId.rawValue,
+            tagId: taskTag.tagId.rawValue,
+            createdAt: AppDateCoding.backendTimestamp(from: taskTag.createdAt),
+            updatedAt: AppDateCoding.backendTimestamp(from: taskTag.updatedAt),
+            deletedAt: taskTag.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }
@@ -296,9 +389,11 @@ struct SyncRewardTagRecord: Codable {
 }
 
 struct SyncPushRequest: Encodable {
+    let tasks: [SyncTaskRecord]?
     let habits: [SyncHabitRecord]?
     let trades: [SyncTradeRecord]?
     let tags: [SyncTagRecord]?
+    let taskTags: [SyncTaskTagRecord]?
     let habitTags: [SyncHabitTagRecord]?
     let rewards: [SyncRewardRecord]?
     let rewardTags: [SyncRewardTagRecord]?

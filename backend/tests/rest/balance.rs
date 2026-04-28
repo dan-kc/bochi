@@ -54,7 +54,8 @@ async fn test_get_balance_sums_active_trade_history() {
             }
         ]
     });
-    let (push_status, _) = make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    let (push_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
     assert_eq!(push_status, StatusCode::OK);
 
     let (status, json) = make_authenticated_get_request(&access_token, "/api/balance").await;

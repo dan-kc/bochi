@@ -18,6 +18,10 @@ async fn test_sync_pull_returns_all_entity_types() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let task_trade_id = uuid::Uuid::new_v4().to_string();
+
     // Create a habit first
     let habit_body = json!({
         "name": "Test Habit",
@@ -30,11 +34,40 @@ async fn test_sync_pull_returns_all_entity_types() {
     // Create a trade for that habit using POST /api/sync
     let trade_id = uuid::Uuid::new_v4().to_string();
     let sync_body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Submit report",
+            "description": "Finish the monthly report",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00",
+            "difficultyTier": "light",
+            "durationSeconds": 600,
+            "skipConsequence": 2,
+            "dueDate": "2025-01-02T09:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Work",
+            "colorHex": "#112233",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }],
+        "taskTags": [{
+            "taskId": task_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }],
         "trades": [{
             "id": trade_id,
             "habitId": habit_id,
             "amount": 500,
             "createdAt": "2025-01-01T10:00:00"
+        }, {
+            "id": task_trade_id,
+            "taskId": task_id,
+            "amount": 20,
+            "createdAt": "2025-01-01T11:00:00"
         }]
     });
     make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
@@ -50,16 +83,29 @@ async fn test_sync_pull_returns_all_entity_types() {
     assert_eq!(habits[0].get("id").unwrap(), habit_id);
     assert_eq!(habits[0].get("name").unwrap(), "Test Habit");
 
+    let tasks = json.get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].get("id").unwrap(), &task_id);
+    assert_eq!(tasks[0].get("dueDate").unwrap(), "2025-01-02T09:00:00");
+
     // Check trades
     let trades = json.get("trades").unwrap().as_array().unwrap();
-    assert_eq!(trades.len(), 1);
+    assert_eq!(trades.len(), 2);
     assert_eq!(trades[0].get("id").unwrap(), &trade_id);
     assert_eq!(trades[0].get("habitId").unwrap(), habit_id);
     assert_eq!(trades[0].get("amount").unwrap(), 500);
+    assert_eq!(trades[1].get("id").unwrap(), &task_trade_id);
+    assert_eq!(trades[1].get("taskId").unwrap(), &task_id);
+    assert_eq!(trades[1].get("amount").unwrap(), 20);
+
+    let task_tags = json.get("taskTags").unwrap().as_array().unwrap();
+    assert_eq!(task_tags.len(), 1);
+    assert_eq!(task_tags[0].get("taskId").unwrap(), &task_id);
+    assert_eq!(task_tags[0].get("tagId").unwrap(), &tag_id);
 
     // Check balance
     let balance = json.get("balance").unwrap();
-    assert_eq!(balance.get("tofuBalance").unwrap(), 500.0);
+    assert_eq!(balance.get("tofuBalance").unwrap(), 520.0);
 
     // Check sync cursor and serverTime
     assert!(json.get("serverCursor").is_some());
@@ -159,16 +205,27 @@ async fn test_sync_pull_balance_sums_only_active_trade_history() {
         make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
     assert_eq!(push_status, StatusCode::OK);
     assert_eq!(
-        push_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        push_json
+            .get("balance")
+            .unwrap()
+            .get("tofuBalance")
+            .unwrap(),
         282.0
     );
 
     let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
-    assert_eq!(pull_json.get("trades").unwrap().as_array().unwrap().len(), 2);
     assert_eq!(
-        pull_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        pull_json.get("trades").unwrap().as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(
+        pull_json
+            .get("balance")
+            .unwrap()
+            .get("tofuBalance")
+            .unwrap(),
         282.0
     );
 }
@@ -184,8 +241,10 @@ async fn test_sync_pull_empty_for_new_user() {
     let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
+    assert_eq!(json.get("taskTags").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(
         json.get("balance").unwrap().get("tofuBalance").unwrap(),
         0.0
@@ -255,6 +314,156 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
     assert_eq!(
         json.get("balance").unwrap().get("tofuBalance").unwrap(),
         500.0
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
+    let email = generate_email_from_fn!(test_sync_push_creates_task_task_tag_and_trade_atomically);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let tag_id = uuid::Uuid::new_v4().to_string();
+    let trade_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Renew passport",
+            "description": "Book the appointment",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "difficultyTier": "medium",
+            "durationSeconds": 1200,
+            "skipConsequence": 3,
+            "dueDate": "2025-02-01T10:00:00"
+        }],
+        "tags": [{
+            "id": tag_id,
+            "name": "Admin",
+            "colorHex": "#445566",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "taskTags": [{
+            "taskId": task_id,
+            "tagId": tag_id,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "trades": [{
+            "id": trade_id,
+            "taskId": task_id,
+            "amount": 151,
+            "createdAt": "2025-01-01T11:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    let tasks = json.get("tasks").unwrap().as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].get("id").unwrap(), &task_id);
+    assert_eq!(tasks[0].get("completedAt").unwrap(), &Value::Null);
+
+    let task_tags = json.get("taskTags").unwrap().as_array().unwrap();
+    assert_eq!(task_tags.len(), 1);
+    assert_eq!(task_tags[0].get("taskId").unwrap(), &task_id);
+    assert_eq!(task_tags[0].get("tagId").unwrap(), &tag_id);
+
+    let trades = json.get("trades").unwrap().as_array().unwrap();
+    assert_eq!(trades.len(), 1);
+    assert_eq!(trades[0].get("id").unwrap(), &trade_id);
+    assert_eq!(trades[0].get("taskId").unwrap(), &task_id);
+
+    assert_eq!(
+        json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        151.0
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_updates_existing_task_due_date() {
+    let email = generate_email_from_fn!(test_sync_push_updates_existing_task_due_date);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+
+    let initial_body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Renew passport",
+            "description": "Book the appointment",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "difficultyTier": "medium",
+            "durationSeconds": 1200,
+            "skipConsequence": 3
+        }]
+    });
+
+    let (initial_status, initial_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", initial_body).await;
+    assert_eq!(initial_status, StatusCode::OK);
+    assert_eq!(
+        initial_json
+            .get("tasks")
+            .unwrap()
+            .as_array()
+            .unwrap()[0]
+            .get("dueDate")
+            .unwrap(),
+        &Value::Null
+    );
+
+    let update_body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Renew passport",
+            "description": "Book the appointment",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-02T10:00:00",
+            "difficultyTier": "medium",
+            "durationSeconds": 1200,
+            "skipConsequence": 3,
+            "dueDate": "2025-02-01T10:00:00"
+        }]
+    });
+
+    let (update_status, update_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", update_body).await;
+
+    assert_eq!(update_status, StatusCode::OK);
+    assert_eq!(
+        update_json
+            .get("tasks")
+            .unwrap()
+            .as_array()
+            .unwrap()[0]
+            .get("dueDate")
+            .unwrap(),
+        "2025-02-01T10:00:00"
+    );
+
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_status, StatusCode::OK);
+    assert_eq!(
+        pull_json
+            .get("tasks")
+            .unwrap()
+            .as_array()
+            .unwrap()[0]
+            .get("dueDate")
+            .unwrap(),
+        "2025-02-01T10:00:00"
     );
 }
 

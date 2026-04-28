@@ -299,6 +299,7 @@ struct SettingsView: View {
         tokenStorage: KeychainTokenStorage(),
         appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
+    let previewTaskStore = TaskStore()
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()
     let previewListPreferencesStore = ListPreferencesStore()
@@ -313,6 +314,7 @@ struct SettingsView: View {
                 apiClient: AppConfiguration.makeSyncAPIClient(),
                 authManager: previewAuthManager,
                 syncStateStore: SyncStateStore(),
+                taskStore: previewTaskStore,
                 habitStore: HabitStore(),
                 rewardStore: RewardStore(),
                 tradeStore: TradeStore(),

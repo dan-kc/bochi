@@ -348,6 +348,33 @@ struct AuthManagerTests {
         #expect(manager.user?.subscriptionExpiresAt != nil)
     }
 
+    // Behaviour: account bootstrap should accept backend subscription expiry
+    // timestamps with fractional seconds so premium state survives unchanged.
+    @Test func bootstrapLoadsLapsedAccountStateWithFractionalExpiry() async {
+        let api = MockAuthAPIClient()
+        let storage = MockTokenStorage()
+        let tokens = TestHelpers.makeTokens(userId: "lapsed-user")
+        storage.storedTokens = tokens
+        api.refreshTokensResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(
+                email: "lapsed@example.com",
+                subscriptionSource: .apple,
+                subscriptionStatus: .expired,
+                isEntitled: false,
+                subscriptionExpiresAt: "2026-04-18T09:00:00.123456"
+            )
+        )
+
+        let (manager, _, _, _) = makeSUT(apiClient: api, storage: storage)
+        await manager.bootstrap()
+
+        #expect(manager.sessionState == .signedInLapsed)
+        #expect(manager.canSync == true)
+        #expect(manager.isPremiumEntitled == false)
+        #expect(manager.user?.subscriptionExpiresAt != nil)
+    }
+
     // MARK: - Account Settings Actions
 
     // Behaviour: changing password uses the current signed-in backend session.

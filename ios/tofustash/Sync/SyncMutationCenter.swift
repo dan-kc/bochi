@@ -1,9 +1,11 @@
 import Foundation
 
 enum SyncEntityKind: String, Codable, CaseIterable {
+    case tasks
     case habits
     case trades
     case tags
+    case taskTags
     case habitTags
     case rewards
     case rewardTags

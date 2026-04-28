@@ -61,6 +61,25 @@ final class TradeStore {
         )
     }
 
+    func addTaskTrade(
+        id: RecordID? = nil,
+        taskId: RecordID,
+        amount: Int,
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        shouldNotifySync: Bool = true
+    ) {
+        addTaskTrades(
+            entries: [(id: id ?? RecordID(), amount: amount)],
+            taskId: taskId,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt,
+            shouldNotifySync: shouldNotifySync
+        )
+    }
+
     func addRewardPurchase(
         id: RecordID? = nil,
         rewardId: RecordID,
@@ -93,7 +112,37 @@ final class TradeStore {
         let rows = entries.map { entry in
             Trade(
                 id: entry.id,
+                taskId: nil,
                 habitId: habitId,
+                rewardId: nil,
+                amount: entry.amount,
+                createdAt: createdAt,
+                updatedAt: updatedAt ?? createdAt,
+                deletedAt: deletedAt
+            )
+        }
+
+        upsertTrades(rows, markDirty: shouldNotifySync)
+        if shouldNotifySync {
+            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
+        }
+    }
+
+    func addTaskTrades(
+        entries: [(id: RecordID, amount: Int)],
+        taskId: RecordID,
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        shouldNotifySync: Bool = true
+    ) {
+        guard !entries.isEmpty else { return }
+
+        let rows = entries.map { entry in
+            Trade(
+                id: entry.id,
+                taskId: taskId,
+                habitId: nil,
                 rewardId: nil,
                 amount: entry.amount,
                 createdAt: createdAt,
@@ -121,6 +170,7 @@ final class TradeStore {
         let rows = entries.map { entry in
             Trade(
                 id: entry.id,
+                taskId: nil,
                 habitId: nil,
                 rewardId: rewardId,
                 amount: entry.amount,
@@ -138,6 +188,10 @@ final class TradeStore {
 
     func addHabitTradeWithDate(habitId: RecordID, amount: Int, createdAt: Date) {
         addHabitTrade(habitId: habitId, amount: amount, createdAt: createdAt)
+    }
+
+    func addTaskTradeWithDate(taskId: RecordID, amount: Int, createdAt: Date) {
+        addTaskTrade(taskId: taskId, amount: amount, createdAt: createdAt)
     }
 
     func addRewardPurchaseWithDate(rewardId: RecordID, amount: Int, createdAt: Date) {
@@ -302,11 +356,12 @@ final class TradeStore {
         try database.execute(
             """
             INSERT INTO trades (
-                id, owner_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 owner_id = excluded.owner_id,
+                task_id = excluded.task_id,
                 habit_id = excluded.habit_id,
                 reward_id = excluded.reward_id,
                 amount = excluded.amount,
@@ -322,7 +377,7 @@ final class TradeStore {
     private func loadTrades(ownerID: String) -> [Trade] {
         let fetched = (try? database.query(
             """
-            SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+            SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
             FROM trades
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -332,12 +387,13 @@ final class TradeStore {
         ) { row in
             Trade(
                 id: RecordID(SQLiteColumn.text(row, index: 0)),
-                habitId: SQLiteColumn.optionalText(row, index: 1).map(RecordID.init),
-                rewardId: SQLiteColumn.optionalText(row, index: 2).map(RecordID.init),
-                amount: SQLiteColumn.int(row, index: 3),
-                createdAt: SQLiteColumn.date(row, index: 4),
-                updatedAt: SQLiteColumn.date(row, index: 5),
-                deletedAt: SQLiteColumn.optionalDate(row, index: 6)
+                taskId: SQLiteColumn.optionalText(row, index: 1).map { RecordID(rawValue: $0) },
+                habitId: SQLiteColumn.optionalText(row, index: 2).map { RecordID(rawValue: $0) },
+                rewardId: SQLiteColumn.optionalText(row, index: 3).map { RecordID(rawValue: $0) },
+                amount: SQLiteColumn.int(row, index: 4),
+                createdAt: SQLiteColumn.date(row, index: 5),
+                updatedAt: SQLiteColumn.date(row, index: 6),
+                deletedAt: SQLiteColumn.optionalDate(row, index: 7)
             )
         }) ?? []
 
@@ -359,9 +415,9 @@ final class TradeStore {
             try database.execute(
                 """
                 INSERT INTO trades (
-                    id, owner_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bindings: tradeBindings(trade, ownerID: ownerID),
                 on: databaseHandle
@@ -409,6 +465,7 @@ final class TradeStore {
         [
             .text(trade.id.rawValue),
             .text(ownerID),
+            trade.taskId.map { .text($0.rawValue) } ?? .null,
             trade.habitId.map { .text($0.rawValue) } ?? .null,
             trade.rewardId.map { .text($0.rawValue) } ?? .null,
             .int(Int64(trade.amount)),

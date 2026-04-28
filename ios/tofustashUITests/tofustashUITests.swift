@@ -149,6 +149,59 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Chips"].waitForExistence(timeout: 2))
     }
 
+    // Behaviour: the task edit form should not expose history browsing or
+    // reopening controls yet, even after the task has been completed.
+    func testTaskFormOmitsHistoryAndMarkIncompleteControls() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["Name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText("Submit report")
+        finishEditingFormIfNeeded(app)
+        app.buttons["Save"].tap()
+
+        let taskText = app.staticTexts["Submit report"]
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2))
+        taskText.tap()
+        XCTAssertFalse(app.buttons["View Trade History"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.buttons["Mark Incomplete"].waitForExistence(timeout: 1))
+        app.buttons["Cancel"].tap()
+
+        let claimButton = app.buttons["task.claim"].firstMatch
+        XCTAssertTrue(claimButton.waitForExistence(timeout: 2))
+        claimButton.tap()
+
+        taskText.tap()
+        XCTAssertFalse(app.buttons["View Trade History"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.buttons["Mark Incomplete"].waitForExistence(timeout: 1))
+    }
+
+    // Behaviour: tasks should delete with the same swipe-to-confirm gesture
+    // already used by habits and rewards.
+    func testTaskCanBeDeletedFromListWithSwipeGesture() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["Name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText("Inbox zero")
+        finishEditingFormIfNeeded(app)
+        app.buttons["Save"].tap()
+
+        let taskText = app.staticTexts["Inbox zero"]
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2))
+        taskText.swipeLeft()
+        app.buttons["Delete"].tap()
+        app.alerts.buttons["Delete"].tap()
+
+        XCTAssertFalse(taskText.waitForExistence(timeout: 1))
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         let storageDirectory = FileManager.default.temporaryDirectory

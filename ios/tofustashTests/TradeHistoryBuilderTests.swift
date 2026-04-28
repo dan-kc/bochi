@@ -35,12 +35,13 @@ struct TradeHistoryBuilderTests {
         )
 
         let trades = [
-            Trade(id: "older", habitId: "habit-1", rewardId: nil, amount: 50, createdAt: oldDate, updatedAt: oldDate, deletedAt: nil),
-            Trade(id: "newer", habitId: nil, rewardId: "reward-1", amount: -120, createdAt: newDate, updatedAt: newDate, deletedAt: nil)
+            Trade(id: "older", taskId: nil, habitId: "habit-1", rewardId: nil, amount: 50, createdAt: oldDate, updatedAt: oldDate, deletedAt: nil),
+            Trade(id: "newer", taskId: nil, habitId: nil, rewardId: "reward-1", amount: -120, createdAt: newDate, updatedAt: newDate, deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [habit],
             rewards: [reward],
             formatDate: { date in date == newDate ? "new" : "old" }
@@ -59,12 +60,13 @@ struct TradeHistoryBuilderTests {
     func buildsDeletedFallbackLabels() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trades = [
-            Trade(id: "habit-trade", habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
-            Trade(id: "reward-trade", habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now.addingTimeInterval(-1), updatedAt: now.addingTimeInterval(-1), deletedAt: nil)
+            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
+            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now.addingTimeInterval(-1), updatedAt: now.addingTimeInterval(-1), deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [],
             rewards: [],
             formatDate: { _ in "date" }
@@ -115,14 +117,15 @@ struct TradeHistoryBuilderTests {
         )
 
         let trades = [
-            Trade(id: "habit-match-new", habitId: "habit-1", rewardId: nil, amount: 75, createdAt: newer, updatedAt: newer, deletedAt: nil),
-            Trade(id: "habit-other", habitId: "habit-2", rewardId: nil, amount: 40, createdAt: older.addingTimeInterval(100), updatedAt: older.addingTimeInterval(100), deletedAt: nil),
-            Trade(id: "reward-trade", habitId: nil, rewardId: "reward-1", amount: -20, createdAt: older.addingTimeInterval(50), updatedAt: older.addingTimeInterval(50), deletedAt: nil),
-            Trade(id: "habit-match-old", habitId: "habit-1", rewardId: nil, amount: 50, createdAt: older, updatedAt: older, deletedAt: nil)
+            Trade(id: "habit-match-new", taskId: nil, habitId: "habit-1", rewardId: nil, amount: 75, createdAt: newer, updatedAt: newer, deletedAt: nil),
+            Trade(id: "habit-other", taskId: nil, habitId: "habit-2", rewardId: nil, amount: 40, createdAt: older.addingTimeInterval(100), updatedAt: older.addingTimeInterval(100), deletedAt: nil),
+            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "reward-1", amount: -20, createdAt: older.addingTimeInterval(50), updatedAt: older.addingTimeInterval(50), deletedAt: nil),
+            Trade(id: "habit-match-old", taskId: nil, habitId: "habit-1", rewardId: nil, amount: 50, createdAt: older, updatedAt: older, deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [habit, otherHabit],
             rewards: [reward],
             filter: .habit("habit-1"),
@@ -163,14 +166,15 @@ struct TradeHistoryBuilderTests {
         )
 
         let trades = [
-            Trade(id: "reward-match-new", habitId: nil, rewardId: "reward-1", amount: -25, createdAt: newer, updatedAt: newer, deletedAt: nil),
-            Trade(id: "reward-match-deleted", habitId: nil, rewardId: "reward-1", amount: -30, createdAt: newer.addingTimeInterval(-10), updatedAt: newer.addingTimeInterval(-10), deletedAt: newer),
-            Trade(id: "habit-other", habitId: "habit-1", rewardId: nil, amount: 60, createdAt: older.addingTimeInterval(50), updatedAt: older.addingTimeInterval(50), deletedAt: nil),
-            Trade(id: "reward-match-old", habitId: nil, rewardId: "reward-1", amount: -15, createdAt: older, updatedAt: older, deletedAt: nil)
+            Trade(id: "reward-match-new", taskId: nil, habitId: nil, rewardId: "reward-1", amount: -25, createdAt: newer, updatedAt: newer, deletedAt: nil),
+            Trade(id: "reward-match-deleted", taskId: nil, habitId: nil, rewardId: "reward-1", amount: -30, createdAt: newer.addingTimeInterval(-10), updatedAt: newer.addingTimeInterval(-10), deletedAt: newer),
+            Trade(id: "habit-other", taskId: nil, habitId: "habit-1", rewardId: nil, amount: 60, createdAt: older.addingTimeInterval(50), updatedAt: older.addingTimeInterval(50), deletedAt: nil),
+            Trade(id: "reward-match-old", taskId: nil, habitId: nil, rewardId: "reward-1", amount: -15, createdAt: older, updatedAt: older, deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [habit],
             rewards: [reward],
             filter: .reward("reward-1"),
@@ -188,12 +192,13 @@ struct TradeHistoryBuilderTests {
     func keepsDeletedFallbackLabelsWhenFiltering() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trades = [
-            Trade(id: "habit-trade", habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
-            Trade(id: "reward-trade", habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now, updatedAt: now, deletedAt: nil)
+            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
+            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now, updatedAt: now, deletedAt: nil)
         ]
 
         let habitEntries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [],
             rewards: [],
             filter: .habit("missing-habit"),
@@ -202,6 +207,7 @@ struct TradeHistoryBuilderTests {
 
         let rewardEntries = TradeHistoryBuilder.buildEntries(
             trades: trades,
+            tasks: [],
             habits: [],
             rewards: [],
             filter: .reward("missing-reward"),
@@ -210,5 +216,45 @@ struct TradeHistoryBuilderTests {
 
         #expect(habitEntries.map(\.title) == ["Deleted habit"])
         #expect(rewardEntries.map(\.title) == ["Deleted reward"])
+    }
+
+    // Behaviour: task trades should resolve task names and keep completed items
+    // readable in the same shared history UI as habits and rewards.
+    @Test("buildEntries resolves task names and filters task history")
+    func buildsTaskHistoryEntries() {
+        let oldDate = Date(timeIntervalSince1970: 1_000)
+        let newDate = Date(timeIntervalSince1970: 2_000)
+
+        let task = TaskItem(
+            id: "task-1",
+            name: "Submit report",
+            description: "",
+            createdAt: oldDate,
+            updatedAt: oldDate,
+            deletedAt: nil,
+            completedAt: newDate,
+            difficultyTier: .medium,
+            durationSeconds: 900,
+            skipConsequence: 3,
+            dueDate: nil
+        )
+
+        let trades = [
+            Trade(id: "task-new", taskId: "task-1", habitId: nil, rewardId: nil, amount: 80, createdAt: newDate, updatedAt: newDate, deletedAt: nil),
+            Trade(id: "task-old", taskId: "task-1", habitId: nil, rewardId: nil, amount: 60, createdAt: oldDate, updatedAt: oldDate, deletedAt: nil)
+        ]
+
+        let entries = TradeHistoryBuilder.buildEntries(
+            trades: trades,
+            tasks: [task],
+            habits: [],
+            rewards: [],
+            filter: .task("task-1"),
+            formatDate: { _ in "date" }
+        )
+
+        #expect(entries.map(\.id) == [RecordID("task-new"), RecordID("task-old")])
+        #expect(entries.map(\.title) == ["Submit report", "Submit report"])
+        #expect(entries.map(\.amountText) == ["+80", "+60"])
     }
 }

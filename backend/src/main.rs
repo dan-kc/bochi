@@ -2,6 +2,7 @@ use tracing::info;
 mod api;
 mod database;
 mod observability;
+mod pricing;
 mod router;
 mod routes;
 mod security;

@@ -14,6 +14,15 @@ enum AppDateCoding {
         return formatter
     }()
 
+    private static let backendFormatterWithoutFractionalSeconds: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter
+    }()
+
     private static let isoFormatterWithFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -56,6 +65,10 @@ enum AppDateCoding {
                 return date
             }
 
+            if let date = backendFormatterWithoutFractionalSeconds.date(from: rawValue) {
+                return date
+            }
+
             throw DecodingError.dataCorruptedError(
                 in: container,
                 debugDescription: "Unsupported date value: \(rawValue)"
@@ -73,6 +86,7 @@ enum AppDateCoding {
     static func parseBackendTimestamp(_ rawValue: String?) -> Date? {
         guard let rawValue, !rawValue.isEmpty else { return nil }
         return backendFormatter.date(from: rawValue)
+            ?? backendFormatterWithoutFractionalSeconds.date(from: rawValue)
             ?? isoFormatterWithFractionalSeconds.date(from: rawValue)
             ?? isoFormatter.date(from: rawValue)
     }

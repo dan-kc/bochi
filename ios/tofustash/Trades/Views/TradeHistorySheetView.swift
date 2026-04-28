@@ -7,6 +7,7 @@ struct TradeHistorySheetView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(TaskStore.self) private var taskStore
     @Environment(HabitStore.self) private var habitStore
     @Environment(RewardStore.self) private var rewardStore
 
@@ -26,6 +27,7 @@ struct TradeHistorySheetView: View {
     private var entries: [TradeHistoryEntry] {
         TradeHistoryBuilder.buildEntries(
             trades: tradeStore.trades,
+            tasks: taskStore.tasks,
             habits: habitStore.habits,
             rewards: rewardStore.rewards,
             filter: filter
@@ -36,6 +38,8 @@ struct TradeHistorySheetView: View {
         switch filter {
         case .all:
             return "No Trades Yet"
+        case .task:
+            return "No Task Trades Yet"
         case .habit:
             return "No Habit Trades Yet"
         case .reward:
@@ -47,6 +51,8 @@ struct TradeHistorySheetView: View {
         switch filter {
         case .all:
             return "Habit claims and reward purchases will appear here."
+        case .task:
+            return "Completions for this task will appear here."
         case .habit:
             return "Claims for this habit will appear here."
         case .reward:
@@ -122,6 +128,7 @@ private struct TradeHistoryRow: View {
 #Preview {
     TradeHistorySheetView()
         .environment(TradeStore())
+        .environment(TaskStore())
         .environment(HabitStore())
         .environment(RewardStore())
 }

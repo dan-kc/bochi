@@ -11,6 +11,9 @@ struct ContentView: View {
         // Like a fixed-position element in CSS above the router outlet.
         ZStack(alignment: .topTrailing) {
             TabView {
+                Tab("Tasks", systemImage: "checkmark.square") {
+                    TasksView()
+                }
                 Tab("Habits", systemImage: "checkmark.circle") {
                     HabitsView()
                 }
@@ -39,6 +42,7 @@ struct ContentView: View {
         tokenStorage: KeychainTokenStorage(),
         appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
+    let previewTaskStore = TaskStore()
     let previewHabitStore = HabitStore()
     let previewTagStore = TagStore()
     let previewTradeStore = TradeStore()
@@ -50,6 +54,7 @@ struct ContentView: View {
     ContentView()
         // .environment() — injects into SwiftUI's environment (exactly like React Context Provider)
         .environment(previewAuthManager)
+        .environment(previewTaskStore)
         .environment(previewHabitStore)
         .environment(previewTagStore)
         .environment(previewTradeStore)
@@ -62,6 +67,7 @@ struct ContentView: View {
                 apiClient: AppConfiguration.makeSyncAPIClient(),
                 authManager: previewAuthManager,
                 syncStateStore: SyncStateStore(),
+                taskStore: previewTaskStore,
                 habitStore: previewHabitStore,
                 rewardStore: previewRewardStore,
                 tradeStore: previewTradeStore,

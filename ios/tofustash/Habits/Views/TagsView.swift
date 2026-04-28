@@ -30,6 +30,8 @@ struct TagsView: View {
             Set(tagStore.tags(for: target).map(\.id))
         case .listFilter(let scope):
             switch scope {
+            case .tasks:
+                Set(listPreferencesStore.taskPreferences.selectedTagIDs)
             case .habits:
                 Set(listPreferencesStore.habitPreferences.selectedTagIDs)
             case .rewards:
@@ -245,6 +247,8 @@ struct TagsView: View {
             }
         case .listFilter(let scope):
             switch scope {
+            case .tasks:
+                listPreferencesStore.toggleTaskTag(tag.id)
             case .habits:
                 listPreferencesStore.toggleHabitTag(tag.id)
             case .rewards:
@@ -265,6 +269,8 @@ struct TagsView: View {
                 tagStore.addTag(tagId: tag.id, to: target)
             case .listFilter(let scope):
                 switch scope {
+                case .tasks:
+                    listPreferencesStore.toggleTaskTag(tag.id)
                 case .habits:
                     listPreferencesStore.toggleHabitTag(tag.id)
                 case .rewards:
@@ -298,6 +304,7 @@ struct TagsView: View {
         // at that tag should be removed right away so reopening the list never
         // lands on a stale hidden-results state.
         listPreferencesStore.sanitizeSelectedTags(
+            validTaskTagIDs: tagStore.activeTagIDs,
             validHabitTagIDs: tagStore.activeTagIDs,
             validRewardTagIDs: tagStore.activeTagIDs
         )

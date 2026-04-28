@@ -4,6 +4,53 @@ import Testing
 
 @MainActor
 struct SyncModelMappingTests {
+    // Behaviour: task sync payloads should preserve due date and completion
+    // state exactly so the local task list matches the server snapshot.
+    @Test func syncTaskRecordRoundTripsTaskFields() throws {
+        let record = SyncTaskRecord(
+            id: "task-1",
+            name: "Submit report",
+            description: "",
+            createdAt: "2026-04-23T12:00:00.000000",
+            updatedAt: "2026-04-23T12:00:00.000000",
+            deletedAt: nil,
+            completedAt: "2026-04-24T08:00:00.000000",
+            difficultyTier: .hard,
+            durationSeconds: 900,
+            skipConsequence: 4,
+            dueDate: "2026-04-25T09:00:00.000000"
+        )
+
+        let model = try #require(record.toModel())
+        #expect(model.completedAt == AppDateCoding.parseBackendTimestamp("2026-04-24T08:00:00.000000"))
+        #expect(model.dueDate == AppDateCoding.parseBackendTimestamp("2026-04-25T09:00:00.000000"))
+
+        let encoded = SyncTaskRecord.from(model)
+        #expect(encoded.completedAt == "2026-04-24T08:00:00.000000")
+        #expect(encoded.dueDate == "2026-04-25T09:00:00.000000")
+    }
+
+    // Behaviour: sync task payloads should also accept backend timestamps
+    // that omit fractional seconds, because the server sends NaiveDateTime values in that shape too.
+    @Test func syncTaskRecordParsesDueDateWithoutFractionalSeconds() throws {
+        let record = SyncTaskRecord(
+            id: "task-1",
+            name: "Submit report",
+            description: "",
+            createdAt: "2026-04-23T12:00:00.000000",
+            updatedAt: "2026-04-23T12:00:00.000000",
+            deletedAt: nil,
+            completedAt: nil,
+            difficultyTier: .hard,
+            durationSeconds: 900,
+            skipConsequence: 4,
+            dueDate: "2026-04-25T09:00:00"
+        )
+
+        let model = try #require(record.toModel())
+        #expect(model.dueDate == AppDateCoding.parseBackendTimestamp("2026-04-25T09:00:00"))
+    }
+
     // Behaviour: when the backend sends the lowest allowed habit frequency,
     // the sync layer should keep the exact daily-rate value the pricing logic uses.
     @Test func syncHabitRecordPreservesOnePerMonthFrequency() throws {
@@ -91,6 +138,21 @@ struct SyncModelMappingTests {
         let rate = 1.0 / 30.0
         let json = """
         {
+          "tasks": [
+            {
+              "id": "task-1",
+              "name": "Submit report",
+              "description": "",
+              "createdAt": "2026-04-23T12:00:00.000000",
+              "updatedAt": "2026-04-23T12:00:00.000000",
+              "deletedAt": null,
+              "completedAt": null,
+              "difficultyTier": "light",
+              "durationSeconds": 600,
+              "skipConsequence": 2,
+              "dueDate": "2026-04-24T09:00:00.000000"
+            }
+          ],
           "habits": [
             {
               "id": "habit-1",
@@ -108,6 +170,15 @@ struct SyncModelMappingTests {
           ],
           "trades": [],
           "tags": [],
+          "taskTags": [
+            {
+              "taskId": "task-1",
+              "tagId": "tag-1",
+              "createdAt": "2026-04-23T12:00:00.000000",
+              "updatedAt": "2026-04-23T12:00:00.000000",
+              "deletedAt": null
+            }
+          ],
           "habitTags": [],
           "rewards": [
             {
@@ -134,6 +205,8 @@ struct SyncModelMappingTests {
         """
 
         let response = try AppDateCoding.makeDecoder().decode(SyncResponse.self, from: Data(json.utf8))
+        #expect(response.tasks.first?.dueDate == "2026-04-24T09:00:00.000000")
+        #expect(response.taskTags.first?.taskId == "task-1")
         #expect(response.habits.first?.minDailyFrequency == rate)
         #expect(response.rewards.first?.maxDailyFrequency == rate)
     }

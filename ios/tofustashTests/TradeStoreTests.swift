@@ -87,4 +87,17 @@ struct TradeStoreTests {
 
         #expect(sut.rewardPurchaseDates(rewardId: "reward-1").count == 2)
     }
+
+    // Behaviour: Completing a task should create trade history tied to that
+    // task, without pretending it came from a habit or reward.
+    @Test("addTaskTrade stores a task-linked trade")
+    func addTaskTradeStoresTaskSource() {
+        let sut = makeSUT()
+        sut.addTaskTrade(taskId: "task-1", amount: 120)
+
+        #expect(sut.trades.count == 1)
+        #expect(sut.trades[0].taskId == "task-1")
+        #expect(sut.trades[0].habitId == nil)
+        #expect(sut.trades[0].rewardId == nil)
+    }
 }

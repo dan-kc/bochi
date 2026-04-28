@@ -11,6 +11,7 @@ import Foundation
 // - Sendable: safe to pass across threads
 struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let id: RecordID
+    let taskId: RecordID?
     let habitId: RecordID?
     let rewardId: RecordID?
     let amount: Int

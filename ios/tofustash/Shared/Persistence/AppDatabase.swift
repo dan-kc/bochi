@@ -302,6 +302,79 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v3_tasks") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    completed_at REAL,
+                    difficulty_tier TEXT,
+                    duration_seconds INTEGER,
+                    skip_consequence INTEGER,
+                    due_date REAL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_tasks_owner_created
+                ON tasks(owner_id, created_at, id);
+                CREATE INDEX IF NOT EXISTS idx_tasks_owner_updated
+                ON tasks(owner_id, updated_at);
+
+                CREATE TABLE IF NOT EXISTS task_tags (
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    tag_id TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    PRIMARY KEY(owner_id, task_id, tag_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_task_tags_owner_updated
+                ON task_tags(owner_id, updated_at);
+
+                ALTER TABLE trades ADD COLUMN task_id TEXT;
+
+                CREATE TABLE trades_v3 (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT,
+                    habit_id TEXT,
+                    reward_id TEXT,
+                    amount INTEGER NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    CHECK (
+                        (CASE WHEN task_id IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN habit_id IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN reward_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+                    )
+                );
+
+                INSERT INTO trades_v3 (
+                    id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                )
+                SELECT
+                    id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                FROM trades;
+
+                DROP TABLE trades;
+                ALTER TABLE trades_v3 RENAME TO trades;
+
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_created
+                ON trades(owner_id, created_at, id);
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_updated
+                ON trades(owner_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_deleted
+                ON trades(owner_id, deleted_at);
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

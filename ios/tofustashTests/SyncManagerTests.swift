@@ -33,6 +33,8 @@ struct SyncManagerTests {
     private struct TestContext {
         let authManager: AuthManager
         let syncManager: SyncManager
+        let syncStateStore: SyncStateStore
+        let taskStore: TaskStore
         let habitStore: HabitStore
         let rewardStore: RewardStore
         let tradeStore: TradeStore
@@ -73,6 +75,7 @@ struct SyncManagerTests {
         try await authManager.login(email: "user@example.com", password: "password123")
 
         let storageURL = TestHelpers.makeTemporaryFileURL("sync-manager")
+        let taskStore = TaskStore(storageURL: storageURL)
         let habitStore = HabitStore(storageURL: storageURL)
         let rewardStore = RewardStore(storageURL: storageURL)
         let tradeStore = TradeStore(storageURL: storageURL)
@@ -91,6 +94,7 @@ struct SyncManagerTests {
             apiClient: syncAPIClient,
             authManager: authManager,
             syncStateStore: syncStateStore,
+            taskStore: taskStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
             tradeStore: tradeStore,
@@ -106,6 +110,8 @@ struct SyncManagerTests {
         return TestContext(
             authManager: authManager,
             syncManager: syncManager,
+            syncStateStore: syncStateStore,
+            taskStore: taskStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
             tradeStore: tradeStore,
@@ -118,18 +124,22 @@ struct SyncManagerTests {
     }
 
     private func makeResponse(
+        tasks: [SyncTaskRecord] = [],
         habits: [SyncHabitRecord] = [],
         trades: [SyncTradeRecord] = [],
         tags: [SyncTagRecord] = [],
+        taskTags: [SyncTaskTagRecord] = [],
         habitTags: [SyncHabitTagRecord] = [],
         rewards: [SyncRewardRecord] = [],
         rewardTags: [SyncRewardTagRecord] = [],
         generalDifficulty: Double = 5.0
     ) -> SyncResponse {
         SyncResponse(
+            tasks: tasks,
             habits: habits,
             trades: trades,
             tags: tags,
+            taskTags: taskTags,
             habitTags: habitTags,
             rewards: rewards,
             rewardTags: rewardTags,
@@ -206,6 +216,164 @@ struct SyncManagerTests {
         })
 
         context.syncManager.updateSession(userID: String?.none)
+    }
+
+    // Behaviour: if the device adds a due date locally, sync should keep it by
+    // round-tripping the saved value through the server's push response.
+    @Test func dirtyTaskDueDateRoundTripsThroughPushEcho() async throws {
+        let taskID = RecordID("task-123")
+        let expectedDueDate = "2026-04-25T09:00:00"
+        let initialTask = SyncTaskRecord(
+            id: taskID.rawValue,
+            name: "Submit report",
+            description: "",
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T10:00:00.000000",
+            deletedAt: nil,
+            completedAt: nil,
+            difficultyTier: .light,
+            durationSeconds: 600,
+            skipConsequence: 2,
+            dueDate: nil
+        )
+        let pullResponse = makeResponse(tasks: [initialTask])
+        let echoedTask = SyncTaskRecord(
+            id: taskID.rawValue,
+            name: "Submit report",
+            description: "",
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T12:00:00.000000",
+            deletedAt: nil,
+            completedAt: nil,
+            difficultyTier: .light,
+            durationSeconds: 600,
+            skipConsequence: 2,
+            dueDate: expectedDueDate
+        )
+        let pushResponse = makeResponse(tasks: [echoedTask])
+
+        let context = try await makeContext(
+            pullHandler: { _, _ in pullResponse },
+            pushHandler: { _, _ in pushResponse }
+        )
+
+        context.syncManager.updateSession(userID: "user-123")
+        await context.syncManager.syncNow()
+
+        context.taskStore.updateTask(
+            id: taskID,
+            dueDate: .some(AppDateCoding.parseBackendTimestamp(expectedDueDate))
+        )
+
+        await context.syncManager.syncNow()
+
+        #expect(
+            context.syncAPIClient.pushCalls.last?.0.tasks?.first?.dueDate
+                == AppDateCoding.backendTimestamp(
+                    from: try #require(AppDateCoding.parseBackendTimestamp(expectedDueDate))
+                )
+        )
+
+        let syncedTask = try #require(context.taskStore.tasks.first(where: { $0.id == taskID }))
+        #expect(syncedTask.dueDate == AppDateCoding.parseBackendTimestamp(expectedDueDate))
+
+        context.syncManager.updateSession(userID: nil)
+    }
+
+    // Behaviour: if an existing task is edited while a pull is already in
+    // flight, the stale pull response must not wipe the new due date.
+    @Test func editingExistingTaskDuringInFlightPullKeepsDueDateForNextSync() async throws {
+        final class PullGate: @unchecked Sendable {
+            var continuation: CheckedContinuation<Void, Never>?
+        }
+
+        let taskID = RecordID("task-123")
+        let expectedDueDate = "2026-04-25T09:00:00.000000"
+        let staleServerTask = SyncTaskRecord(
+            id: taskID.rawValue,
+            name: "Submit report",
+            description: "",
+            createdAt: "2026-04-18T10:00:00.000000",
+            updatedAt: "2026-04-18T10:00:00.000000",
+            deletedAt: nil,
+            completedAt: nil,
+            difficultyTier: .light,
+            durationSeconds: 600,
+            skipConsequence: 2,
+            dueDate: nil
+        )
+
+        let context = try await makeContext(
+            pullResponse: makeResponse(tasks: [staleServerTask]),
+            pushResponse: makeResponse(tasks: [staleServerTask])
+        )
+
+        context.syncManager.updateSession(userID: "user-123")
+        await context.syncManager.syncNow()
+
+        let gate = PullGate()
+        context.syncAPIClient.pullHandler = { _, _ in
+            await withCheckedContinuation { continuation in
+                gate.continuation = continuation
+            }
+            return SyncResponse(
+                tasks: [staleServerTask],
+                habits: [],
+                trades: [],
+                tags: [],
+                taskTags: [],
+                habitTags: [],
+                rewards: [],
+                rewardTags: [],
+                balance: SyncBalanceRecord(tofuBalance: 0),
+                serverCursor: "cursor-456",
+                serverTime: "2026-04-18T12:00:00.000000",
+                email: "user@example.com",
+                isPremium: false,
+                generalDifficulty: 5.0
+            )
+        }
+        context.syncAPIClient.pushHandler = { request, _ in
+            let echoedTasks = await MainActor.run { request.tasks ?? [] }
+            return SyncResponse(
+                tasks: echoedTasks,
+                habits: [],
+                trades: [],
+                tags: [],
+                taskTags: [],
+                habitTags: [],
+                rewards: [],
+                rewardTags: [],
+                balance: SyncBalanceRecord(tofuBalance: 0),
+                serverCursor: "cursor-789",
+                serverTime: "2026-04-18T12:05:00.000000",
+                email: "user@example.com",
+                isPremium: false,
+                generalDifficulty: 5.0
+            )
+        }
+
+        let syncTask = Task { await context.syncManager.syncNow() }
+        while gate.continuation == nil {
+            await Task.yield()
+        }
+
+        context.taskStore.updateTask(
+            id: taskID,
+            dueDate: .some(AppDateCoding.parseBackendTimestamp(expectedDueDate))
+        )
+        #expect(context.taskStore.tasks.first(where: { $0.id == taskID })?.dueDate == AppDateCoding.parseBackendTimestamp(expectedDueDate))
+        #expect(context.syncStateStore.state(for: "user-123").dirty.tasks.contains { $0.id == taskID })
+
+        gate.continuation?.resume()
+        gate.continuation = nil
+        await syncTask.value
+
+        let syncedTask = try #require(context.taskStore.tasks.first(where: { $0.id == taskID }))
+        #expect(syncedTask.dueDate == AppDateCoding.parseBackendTimestamp(expectedDueDate))
+        #expect(context.syncStateStore.state(for: "user-123").dirty.tasks.contains { $0.id == taskID })
+
+        context.syncManager.updateSession(userID: nil)
     }
 
     // Behaviour: If the device carries a saved habit filter for a tag that is no

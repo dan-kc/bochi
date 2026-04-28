@@ -2,6 +2,7 @@
 pub mod api;
 pub mod database;
 pub mod observability;
+pub mod pricing;
 pub mod router;
 pub mod routes;
 pub mod security;

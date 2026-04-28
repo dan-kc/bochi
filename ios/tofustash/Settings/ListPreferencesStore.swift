@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ListPreferencesStore {
     enum ListScope: String {
+        case tasks
         case habits
         case rewards
     }
@@ -12,6 +13,7 @@ final class ListPreferencesStore {
     private let database = AppDatabase.shared
 
     private(set) var currentOwnerID: String
+    private(set) var taskPreferences: EntityListPreferences
     private(set) var habitPreferences: EntityListPreferences
     private(set) var rewardPreferences: EntityListPreferences
 
@@ -22,12 +24,14 @@ final class ListPreferencesStore {
         self.databaseURL = storageURL ?? AppStorageLocation.databaseURL()
         self.currentOwnerID = initialOwnerID
         _ = try? database.connection(at: databaseURL)
+        self.taskPreferences = Self.loadPreferences(scope: .tasks, ownerID: initialOwnerID, database: database, url: databaseURL)
         self.habitPreferences = Self.loadPreferences(scope: .habits, ownerID: initialOwnerID, database: database, url: databaseURL)
         self.rewardPreferences = Self.loadPreferences(scope: .rewards, ownerID: initialOwnerID, database: database, url: databaseURL)
     }
 
     func setCurrentOwner(_ ownerID: String) {
         currentOwnerID = ownerID
+        taskPreferences = Self.loadPreferences(scope: .tasks, ownerID: ownerID, database: database, url: databaseURL)
         habitPreferences = Self.loadPreferences(scope: .habits, ownerID: ownerID, database: database, url: databaseURL)
         rewardPreferences = Self.loadPreferences(scope: .rewards, ownerID: ownerID, database: database, url: databaseURL)
     }
@@ -52,8 +56,18 @@ final class ListPreferencesStore {
         mutatePreferences(for: .habits) { $0.sort = sort }
     }
 
+    func setTaskSort(_ sort: EntityListSortOption) {
+        mutatePreferences(for: .tasks) { $0.sort = sort }
+    }
+
     func setRewardSort(_ sort: EntityListSortOption) {
         mutatePreferences(for: .rewards) { $0.sort = sort }
+    }
+
+    func toggleTaskTag(_ tagID: RecordID) {
+        mutatePreferences(for: .tasks) { preferences in
+            toggleTag(tagID, in: &preferences)
+        }
     }
 
     func toggleHabitTag(_ tagID: RecordID) {
@@ -72,8 +86,17 @@ final class ListPreferencesStore {
         clearFilters(for: .habits)
     }
 
+    func clearTaskFilters() {
+        clearFilters(for: .tasks)
+    }
+
     func clearRewardFilters() {
         clearFilters(for: .rewards)
+    }
+
+    @discardableResult
+    func sanitizeTaskSelectedTags(validTagIDs: Set<RecordID>) -> Bool {
+        sanitizeSelectedTags(for: .tasks, validTagIDs: validTagIDs)
     }
 
     @discardableResult
@@ -88,12 +111,14 @@ final class ListPreferencesStore {
 
     @discardableResult
     func sanitizeSelectedTags(
+        validTaskTagIDs: Set<RecordID>,
         validHabitTagIDs: Set<RecordID>,
         validRewardTagIDs: Set<RecordID>
     ) -> Bool {
+        let tasksChanged = sanitizeTaskSelectedTags(validTagIDs: validTaskTagIDs)
         let habitsChanged = sanitizeHabitSelectedTags(validTagIDs: validHabitTagIDs)
         let rewardsChanged = sanitizeRewardSelectedTags(validTagIDs: validRewardTagIDs)
-        return habitsChanged || rewardsChanged
+        return tasksChanged || habitsChanged || rewardsChanged
     }
 
     private func toggleTag(_ tagID: RecordID, in preferences: inout EntityListPreferences) {
@@ -142,6 +167,8 @@ final class ListPreferencesStore {
 
     private func preferences(for scope: ListScope) -> EntityListPreferences {
         switch scope {
+        case .tasks:
+            taskPreferences
         case .habits:
             habitPreferences
         case .rewards:
@@ -151,6 +178,8 @@ final class ListPreferencesStore {
 
     private func setPreferences(_ preferences: EntityListPreferences, for scope: ListScope) {
         switch scope {
+        case .tasks:
+            taskPreferences = preferences
         case .habits:
             habitPreferences = preferences
         case .rewards:
@@ -225,6 +254,12 @@ final class ListPreferencesStore {
             database: database,
             on: databaseHandle
         ) ?? EntityListPreferences()
+        let sourceTask = try Self.loadPreferences(
+            scope: .tasks,
+            ownerID: sourceOwnerID,
+            database: database,
+            on: databaseHandle
+        ) ?? EntityListPreferences()
         let sourceReward = try Self.loadPreferences(
             scope: .rewards,
             ownerID: sourceOwnerID,
@@ -233,6 +268,16 @@ final class ListPreferencesStore {
         ) ?? EntityListPreferences()
 
         var migrated = false
+        if try preferenceRowExists(scope: .tasks, ownerID: sourceOwnerID, on: databaseHandle) {
+            try savePreferences(sourceTask, scope: .tasks, ownerID: destinationOwnerID, on: databaseHandle)
+            try database.execute(
+                "DELETE FROM list_preferences WHERE owner_id = ? AND scope = ?",
+                bindings: [.text(sourceOwnerID), .text(ListScope.tasks.rawValue)],
+                on: databaseHandle
+            )
+            migrated = true
+        }
+
         if try preferenceRowExists(scope: .habits, ownerID: sourceOwnerID, on: databaseHandle) {
             try savePreferences(sourceHabit, scope: .habits, ownerID: destinationOwnerID, on: databaseHandle)
             try database.execute(

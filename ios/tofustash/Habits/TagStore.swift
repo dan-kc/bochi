@@ -1,6 +1,7 @@
 import Foundation
 
 enum EntityListTagScope {
+    case tasks
     case habits
     case rewards
 }
@@ -14,6 +15,7 @@ final class TagStore {
 
     private(set) var currentOwnerID: String
     private(set) var tags: [Tag] = []
+    private(set) var taskTags: [TaskTag] = []
     private(set) var habitTags: [HabitTag] = []
     private(set) var rewardTags: [RewardTag] = []
 
@@ -41,9 +43,9 @@ final class TagStore {
         refreshAll()
     }
 
-    func migrateData(from sourceOwnerID: String, to destinationOwnerID: String) -> (tagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
+    func migrateData(from sourceOwnerID: String, to destinationOwnerID: String) -> (tagIDs: [RecordID], taskTagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
         guard sourceOwnerID != destinationOwnerID else {
-            return ([], [], [])
+            return ([], [], [], [])
         }
         do {
             let result = try database.transaction(at: databaseURL) { db in
@@ -53,7 +55,7 @@ final class TagStore {
             return result
         } catch {
             assertionFailure("Failed to migrate tag data: \(error)")
-            return ([], [], [])
+            return ([], [], [], [])
         }
     }
 
@@ -148,6 +150,57 @@ final class TagStore {
         }
     }
 
+    func addTagToTask(
+        tagId: RecordID,
+        taskId: RecordID,
+        createdAt: Date? = nil,
+        updatedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        shouldNotifySync: Bool = true
+    ) {
+        let now = Date()
+        let association = TaskTag(
+            taskId: taskId,
+            tagId: tagId,
+            createdAt: createdAt ?? now,
+            updatedAt: updatedAt ?? now,
+            deletedAt: deletedAt
+        )
+
+        upsertTaskTag(association, markDirty: shouldNotifySync)
+        if shouldNotifySync {
+            notifySync(kind: .taskTags, ids: [association.id])
+        }
+    }
+
+    func removeTagFromTask(tagId: RecordID, taskId: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
+        guard let existing = taskTags.first(where: {
+            $0.tagId == tagId && $0.taskId == taskId && $0.deletedAt == nil
+        }) else { return }
+
+        let deleted = TaskTag(
+            taskId: existing.taskId,
+            tagId: existing.tagId,
+            createdAt: existing.createdAt,
+            updatedAt: deletedAt,
+            deletedAt: deletedAt
+        )
+
+        upsertTaskTag(deleted, markDirty: shouldNotifySync)
+        if shouldNotifySync {
+            notifySync(kind: .taskTags, ids: [deleted.id])
+        }
+    }
+
+    func tagsForTask(taskId: RecordID) -> [Tag] {
+        let activeAssociationTagIDs = Set(
+            taskTags
+                .filter { $0.taskId == taskId && $0.deletedAt == nil }
+                .map(\.tagId)
+        )
+        return activeTags.filter { activeAssociationTagIDs.contains($0.id) }
+    }
+
     func removeTagFromHabit(tagId: RecordID, habitId: RecordID, deletedAt: Date = Date(), shouldNotifySync: Bool = true) {
         guard let existing = habitTags.first(where: {
             $0.tagId == tagId && $0.habitId == habitId && $0.deletedAt == nil
@@ -229,6 +282,8 @@ final class TagStore {
 
     func tags(for target: TagAssignmentTarget) -> [Tag] {
         switch target {
+        case .task(let taskId):
+            return tagsForTask(taskId: taskId)
         case .habit(let habitId):
             return tagsForHabit(habitId: habitId)
         case .reward(let rewardId):
@@ -238,6 +293,8 @@ final class TagStore {
 
     func addTag(tagId: RecordID, to target: TagAssignmentTarget) {
         switch target {
+        case .task(let taskId):
+            addTagToTask(tagId: tagId, taskId: taskId)
         case .habit(let habitId):
             addTagToHabit(tagId: tagId, habitId: habitId)
         case .reward(let rewardId):
@@ -247,6 +304,8 @@ final class TagStore {
 
     func removeTag(tagId: RecordID, from target: TagAssignmentTarget) {
         switch target {
+        case .task(let taskId):
+            removeTagFromTask(tagId: tagId, taskId: taskId)
         case .habit(let habitId):
             removeTagFromHabit(tagId: tagId, habitId: habitId)
         case .reward(let rewardId):
@@ -258,6 +317,17 @@ final class TagStore {
         guard !remoteTags.isEmpty else { return }
         replaceAll(
             tags: OwnerScopedRecordSupport.mergeRecords(local: tags, remote: remoteTags),
+            taskTags: taskTags,
+            habitTags: habitTags,
+            rewardTags: rewardTags
+        )
+    }
+
+    func mergeTaskTags(_ remoteTaskTags: [TaskTag]) {
+        guard !remoteTaskTags.isEmpty else { return }
+        replaceAll(
+            tags: tags,
+            taskTags: OwnerScopedRecordSupport.mergeRecords(local: taskTags, remote: remoteTaskTags),
             habitTags: habitTags,
             rewardTags: rewardTags
         )
@@ -267,6 +337,7 @@ final class TagStore {
         guard !remoteHabitTags.isEmpty else { return }
         replaceAll(
             tags: tags,
+            taskTags: taskTags,
             habitTags: OwnerScopedRecordSupport.mergeRecords(local: habitTags, remote: remoteHabitTags),
             rewardTags: rewardTags
         )
@@ -276,6 +347,7 @@ final class TagStore {
         guard !remoteRewardTags.isEmpty else { return }
         replaceAll(
             tags: tags,
+            taskTags: taskTags,
             habitTags: habitTags,
             rewardTags: OwnerScopedRecordSupport.mergeRecords(local: rewardTags, remote: remoteRewardTags)
         )
@@ -283,15 +355,17 @@ final class TagStore {
 
     func replaceAll(
         tags authoritativeTags: [Tag],
+        taskTags authoritativeTaskTags: [TaskTag],
         habitTags authoritativeHabitTags: [HabitTag],
         rewardTags authoritativeRewardTags: [RewardTag]
     ) {
         let sortedTags = OwnerScopedRecordSupport.sorted(authoritativeTags)
+        let sortedTaskTags = OwnerScopedRecordSupport.sorted(authoritativeTaskTags)
         let sortedHabitTags = OwnerScopedRecordSupport.sorted(authoritativeHabitTags)
         let sortedRewardTags = OwnerScopedRecordSupport.sorted(authoritativeRewardTags)
 
         do {
-            try persistReplacedAll(tags: sortedTags, habitTags: sortedHabitTags, rewardTags: sortedRewardTags)
+            try persistReplacedAll(tags: sortedTags, taskTags: sortedTaskTags, habitTags: sortedHabitTags, rewardTags: sortedRewardTags)
         } catch {
             assertionFailure("Failed to replace tag data: \(error)")
             return
@@ -300,6 +374,10 @@ final class TagStore {
 
     func getDirtyTags(ids: Set<RecordID>) -> [Tag] {
         tags.filter { ids.contains($0.id) }
+    }
+
+    func getDirtyTaskTags(ids: Set<RecordID>) -> [TaskTag] {
+        taskTags.filter { ids.contains($0.id) }
     }
 
     func getDirtyHabitTags(ids: Set<RecordID>) -> [HabitTag] {
@@ -312,12 +390,14 @@ final class TagStore {
 
     func purgeDeleted(
         excludingTagIDs dirtyTagIDs: Set<RecordID> = [],
+        taskTagIDs dirtyTaskTagIDs: Set<RecordID> = [],
         habitTagIDs dirtyHabitTagIDs: Set<RecordID> = [],
         rewardTagIDs dirtyRewardTagIDs: Set<RecordID> = []
     ) {
         do {
             try persistDeletedPurge(
                 excludingTagIDs: dirtyTagIDs,
+                taskTagIDs: dirtyTaskTagIDs,
                 habitTagIDs: dirtyHabitTagIDs,
                 rewardTagIDs: dirtyRewardTagIDs
             )
@@ -329,6 +409,10 @@ final class TagStore {
 
     func allTagIDs() -> [RecordID] {
         tags.map(\.id)
+    }
+
+    func allTaskTagIDs() -> [RecordID] {
+        taskTags.map(\.id)
     }
 
     func allHabitTagIDs() -> [RecordID] {
@@ -343,35 +427,41 @@ final class TagStore {
         from sourceOwnerID: String,
         to destinationOwnerID: String,
         on databaseHandle: AppDatabaseHandle
-    ) throws -> (tagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
+    ) throws -> (tagIDs: [RecordID], taskTagIDs: [RecordID], habitTagIDs: [RecordID], rewardTagIDs: [RecordID]) {
         guard sourceOwnerID != destinationOwnerID else {
-            return ([], [], [])
+            return ([], [], [], [])
         }
 
         let sourceTags = loadTags(ownerID: sourceOwnerID)
+        let sourceTaskTags = loadTaskTags(ownerID: sourceOwnerID)
         let sourceHabitTags = loadHabitTags(ownerID: sourceOwnerID)
         let sourceRewardTags = loadRewardTags(ownerID: sourceOwnerID)
 
         let destinationTags = loadTags(ownerID: destinationOwnerID)
+        let destinationTaskTags = loadTaskTags(ownerID: destinationOwnerID)
         let destinationHabitTags = loadHabitTags(ownerID: destinationOwnerID)
         let destinationRewardTags = loadRewardTags(ownerID: destinationOwnerID)
 
         let mergedTags = OwnerScopedRecordSupport.mergeRecords(local: destinationTags, remote: sourceTags)
+        let mergedTaskTags = OwnerScopedRecordSupport.mergeRecords(local: destinationTaskTags, remote: sourceTaskTags)
         let mergedHabitTags = OwnerScopedRecordSupport.mergeRecords(local: destinationHabitTags, remote: sourceHabitTags)
         let mergedRewardTags = OwnerScopedRecordSupport.mergeRecords(local: destinationRewardTags, remote: sourceRewardTags)
 
         // Clear the local-owner rows first so sign-in migration can rebuild the
         // account-owned tag graph without colliding on globally unique tag ids.
         try replaceTagRows(ownerID: sourceOwnerID, tags: [], on: databaseHandle)
+        try replaceTaskTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
         try replaceHabitTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
         try replaceRewardTagRows(ownerID: sourceOwnerID, rows: [], on: databaseHandle)
 
         try replaceTagRows(ownerID: destinationOwnerID, tags: mergedTags, on: databaseHandle)
+        try replaceTaskTagRows(ownerID: destinationOwnerID, rows: mergedTaskTags, on: databaseHandle)
         try replaceHabitTagRows(ownerID: destinationOwnerID, rows: mergedHabitTags, on: databaseHandle)
         try replaceRewardTagRows(ownerID: destinationOwnerID, rows: mergedRewardTags, on: databaseHandle)
 
         return (
             sourceTags.map(\.id),
+            sourceTaskTags.map(\.id),
             sourceHabitTags.map(\.id),
             sourceRewardTags.map(\.id)
         )
@@ -379,43 +469,51 @@ final class TagStore {
 
     func persistReplacedAll(
         tags authoritativeTags: [Tag],
+        taskTags authoritativeTaskTags: [TaskTag],
         habitTags authoritativeHabitTags: [HabitTag],
         rewardTags authoritativeRewardTags: [RewardTag]
     ) throws {
         let sortedTags = OwnerScopedRecordSupport.sorted(authoritativeTags)
+        let sortedTaskTags = OwnerScopedRecordSupport.sorted(authoritativeTaskTags)
         let sortedHabitTags = OwnerScopedRecordSupport.sorted(authoritativeHabitTags)
         let sortedRewardTags = OwnerScopedRecordSupport.sorted(authoritativeRewardTags)
 
         try database.transaction(at: databaseURL) { db in
             try self.replaceTagRows(ownerID: self.currentOwnerID, tags: sortedTags, on: db)
+            try self.replaceTaskTagRows(ownerID: self.currentOwnerID, rows: sortedTaskTags, on: db)
             try self.replaceHabitTagRows(ownerID: self.currentOwnerID, rows: sortedHabitTags, on: db)
             try self.replaceRewardTagRows(ownerID: self.currentOwnerID, rows: sortedRewardTags, on: db)
         }
 
         tags = sortedTags
+        taskTags = sortedTaskTags
         habitTags = sortedHabitTags
         rewardTags = sortedRewardTags
     }
 
     func replaceAll(
         tags authoritativeTags: [Tag],
+        taskTags authoritativeTaskTags: [TaskTag],
         habitTags authoritativeHabitTags: [HabitTag],
         rewardTags authoritativeRewardTags: [RewardTag],
         on databaseHandle: AppDatabaseHandle
     ) throws {
         try replaceTagRows(ownerID: currentOwnerID, tags: OwnerScopedRecordSupport.sorted(authoritativeTags), on: databaseHandle)
+        try replaceTaskTagRows(ownerID: currentOwnerID, rows: OwnerScopedRecordSupport.sorted(authoritativeTaskTags), on: databaseHandle)
         try replaceHabitTagRows(ownerID: currentOwnerID, rows: OwnerScopedRecordSupport.sorted(authoritativeHabitTags), on: databaseHandle)
         try replaceRewardTagRows(ownerID: currentOwnerID, rows: OwnerScopedRecordSupport.sorted(authoritativeRewardTags), on: databaseHandle)
     }
 
     func persistDeletedPurge(
         excludingTagIDs dirtyTagIDs: Set<RecordID>,
+        taskTagIDs dirtyTaskTagIDs: Set<RecordID>,
         habitTagIDs dirtyHabitTagIDs: Set<RecordID>,
         rewardTagIDs dirtyRewardTagIDs: Set<RecordID>
     ) throws {
         try database.transaction(at: databaseURL) { db in
             try self.purgeDeleted(
                 excludingTagIDs: dirtyTagIDs,
+                taskTagIDs: dirtyTaskTagIDs,
                 habitTagIDs: dirtyHabitTagIDs,
                 rewardTagIDs: dirtyRewardTagIDs,
                 on: db
@@ -426,11 +524,13 @@ final class TagStore {
 
     func purgeDeleted(
         excludingTagIDs dirtyTagIDs: Set<RecordID>,
+        taskTagIDs dirtyTaskTagIDs: Set<RecordID>,
         habitTagIDs dirtyHabitTagIDs: Set<RecordID>,
         rewardTagIDs dirtyRewardTagIDs: Set<RecordID>,
         on databaseHandle: AppDatabaseHandle
     ) throws {
         try purgeDeletedTags(dirtyTagIDs, on: databaseHandle)
+        try purgeDeletedTaskTags(dirtyTaskTagIDs, on: databaseHandle)
         try purgeDeletedHabitTags(dirtyHabitTagIDs, on: databaseHandle)
         try purgeDeletedRewardTags(dirtyRewardTagIDs, on: databaseHandle)
     }
@@ -460,6 +560,21 @@ final class TagStore {
             }
         } catch {
             assertionFailure("Failed to upsert habit tag: \(error)")
+            return
+        }
+        refreshAll()
+    }
+
+    private func upsertTaskTag(_ row: TaskTag, markDirty: Bool) {
+        do {
+            try database.transaction(at: databaseURL) { db in
+                try self.upsertTaskTag(row, on: db)
+                if markDirty, self.currentOwnerID != StorageOwner.local {
+                    try self.syncStateStore.markDirty(userID: self.currentOwnerID, kind: .taskTags, ids: [row.id], on: db)
+                }
+            }
+        } catch {
+            assertionFailure("Failed to upsert task tag: \(error)")
             return
         }
         refreshAll()
@@ -509,6 +624,21 @@ final class TagStore {
                 deleted_at = excluded.deleted_at
             """,
             bindings: habitTagBindings(row, ownerID: currentOwnerID),
+            on: databaseHandle
+        )
+    }
+
+    private func upsertTaskTag(_ row: TaskTag, on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute(
+            """
+            INSERT INTO task_tags (owner_id, task_id, tag_id, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_id, task_id, tag_id) DO UPDATE SET
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            """,
+            bindings: taskTagBindings(row, ownerID: currentOwnerID),
             on: databaseHandle
         )
     }
@@ -573,6 +703,28 @@ final class TagStore {
         return OwnerScopedRecordSupport.sorted(fetched)
     }
 
+    private func loadTaskTags(ownerID: String) -> [TaskTag] {
+        let fetched = (try? database.query(
+            """
+            SELECT task_id, tag_id, created_at, updated_at, deleted_at
+            FROM task_tags
+            WHERE owner_id = ?
+            ORDER BY created_at ASC, task_id ASC, tag_id ASC
+            """,
+            bindings: [.text(ownerID)],
+            at: databaseURL
+        ) { row in
+            TaskTag(
+                taskId: RecordID(SQLiteColumn.text(row, index: 0)),
+                tagId: RecordID(SQLiteColumn.text(row, index: 1)),
+                createdAt: SQLiteColumn.date(row, index: 2),
+                updatedAt: SQLiteColumn.date(row, index: 3),
+                deletedAt: SQLiteColumn.optionalDate(row, index: 4)
+            )
+        }) ?? []
+        return OwnerScopedRecordSupport.sorted(fetched)
+    }
+
     private func loadRewardTags(ownerID: String) -> [RewardTag] {
         let fetched = (try? database.query(
             """
@@ -597,6 +749,7 @@ final class TagStore {
 
     private func refreshAll() {
         tags = loadTags(ownerID: currentOwnerID)
+        taskTags = loadTaskTags(ownerID: currentOwnerID)
         habitTags = loadHabitTags(ownerID: currentOwnerID)
         rewardTags = loadRewardTags(ownerID: currentOwnerID)
     }
@@ -610,6 +763,20 @@ final class TagStore {
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 bindings: tagBindings(tag, ownerID: ownerID),
+                on: databaseHandle
+            )
+        }
+    }
+
+    private func replaceTaskTagRows(ownerID: String, rows: [TaskTag], on databaseHandle: AppDatabaseHandle) throws {
+        try database.execute("DELETE FROM task_tags WHERE owner_id = ?", bindings: [.text(ownerID)], on: databaseHandle)
+        for row in rows {
+            try database.execute(
+                """
+                INSERT INTO task_tags (owner_id, task_id, tag_id, created_at, updated_at, deleted_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                bindings: taskTagBindings(row, ownerID: ownerID),
                 on: databaseHandle
             )
         }
@@ -665,6 +832,16 @@ final class TagStore {
             keyColumnA: "habit_id",
             keyColumnB: "tag_id",
             dirtyIDs: dirtyHabitTagIDs,
+            on: databaseHandle
+        )
+    }
+
+    private func purgeDeletedTaskTags(_ dirtyTaskTagIDs: Set<RecordID>, on databaseHandle: AppDatabaseHandle) throws {
+        try purgeDeletedAssociations(
+            tableName: "task_tags",
+            keyColumnA: "task_id",
+            keyColumnB: "tag_id",
+            dirtyIDs: dirtyTaskTagIDs,
             on: databaseHandle
         )
     }
@@ -729,6 +906,17 @@ final class TagStore {
         [
             .text(ownerID),
             .text(row.habitId.rawValue),
+            .text(row.tagId.rawValue),
+            .double(row.createdAt.timeIntervalSince1970),
+            .double(row.updatedAt.timeIntervalSince1970),
+            row.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null
+        ]
+    }
+
+    private func taskTagBindings(_ row: TaskTag, ownerID: String) -> [SQLiteValue] {
+        [
+            .text(ownerID),
+            .text(row.taskId.rawValue),
             .text(row.tagId.rawValue),
             .double(row.createdAt.timeIntervalSince1970),
             .double(row.updatedAt.timeIntervalSince1970),

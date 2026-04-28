@@ -225,6 +225,30 @@ struct TagStoreTests {
         #expect(tags.isEmpty)
     }
 
+    // Behaviour: When a user assigns a tag to a task, the association is created.
+    @Test func addTagToTaskCreatesTaskTag() {
+        let sut = makeSUT()
+
+        sut.addTagToTask(tagId: "tag-1", taskId: "task-1")
+
+        #expect(sut.taskTags.count == 1)
+        #expect(sut.taskTags.first?.tagId == "tag-1")
+        #expect(sut.taskTags.first?.taskId == "task-1")
+    }
+
+    // Behaviour: Task details should show only the tags currently assigned to that task.
+    @Test func tagsForTaskReturnsCorrectTags() {
+        let sut = makeSUT()
+        let urgent = sut.addTag(name: "Urgent")!
+        let admin = sut.addTag(name: "Admin")!
+
+        sut.addTagToTask(tagId: urgent.id, taskId: "task-1")
+        sut.addTagToTask(tagId: admin.id, taskId: "task-1")
+
+        let tags = sut.tagsForTask(taskId: "task-1")
+        #expect(tags.map(\.id) == [urgent.id, admin.id])
+    }
+
     // Behaviour: When a user assigns a shared tag to a reward, the reward gets
     // the same tag chip style and catalog entry as habits.
     @Test func addTagToRewardCreatesRewardTag() {

@@ -5,6 +5,7 @@ import Foundation
 // view-friendly rows come out.
 enum TradeHistoryFilter: Equatable {
     case all
+    case task(RecordID)
     case habit(RecordID)
     case reward(RecordID)
 }
@@ -23,11 +24,13 @@ enum TradeHistoryBuilder {
     // and gives us a stable place to write behaviour-focused tests.
     static func buildEntries(
         trades: [Trade],
+        tasks: [TaskItem],
         habits: [Habit],
         rewards: [Reward],
         filter: TradeHistoryFilter = .all,
         formatDate: (Date) -> String = Self.formatDate
     ) -> [TradeHistoryEntry] {
+        let taskNames = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.name) })
         let habitNames = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0.name) })
         let rewardNames = Dictionary(uniqueKeysWithValues: rewards.map { ($0.id, $0.name) })
 
@@ -38,6 +41,8 @@ enum TradeHistoryBuilder {
                 switch filter {
                 case .all:
                     return true
+                case .task(let taskID):
+                    return trade.taskId == taskID
                 case .habit(let habitID):
                     return trade.habitId == habitID
                 case .reward(let rewardID):
@@ -48,7 +53,9 @@ enum TradeHistoryBuilder {
             .map { trade in
                 let itemName: String
 
-                if let habitId = trade.habitId {
+                if let taskId = trade.taskId {
+                    itemName = taskNames[taskId] ?? "Deleted task"
+                } else if let habitId = trade.habitId {
                     itemName = habitNames[habitId] ?? "Deleted habit"
                 } else if let rewardId = trade.rewardId {
                     itemName = rewardNames[rewardId] ?? "Deleted reward"

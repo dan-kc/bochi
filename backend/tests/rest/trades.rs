@@ -7,6 +7,44 @@ use axum::http::StatusCode;
 use serde_json::{json, Value};
 
 #[tokio::test]
+async fn test_create_trade_with_task_success() {
+    let email = generate_email_from_fn!(test_create_trade_with_task_success);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_body = json!({
+        "name": "File taxes",
+        "description": "Finish and submit",
+        "difficultyTier": "trivial"
+    });
+
+    let (status, task_json) =
+        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let task_id = task_json.get("id").unwrap().as_str().unwrap();
+
+    let trade_body = json!({
+        "taskId": task_id
+    });
+
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+
+    assert_eq!(status, StatusCode::CREATED);
+    assert!(json.get("id").is_some());
+    assert_eq!(json.get("amount").unwrap(), 20);
+    assert!(json.get("createdAt").is_some());
+
+    let tradable_item = json.get("tradableItem").unwrap();
+    assert_eq!(tradable_item.get("type").unwrap(), "Task");
+    assert_eq!(tradable_item.get("id").unwrap(), task_id);
+    assert_eq!(tradable_item.get("name").unwrap(), "File taxes");
+    assert_eq!(tradable_item.get("completedAt").unwrap().is_string(), true);
+}
+
+#[tokio::test]
 async fn test_create_trade_with_habit_success() {
     let email = generate_email_from_fn!(test_create_trade_with_habit_success);
     let password = "password123";
@@ -93,12 +131,20 @@ async fn test_create_trade_with_reward_success() {
 }
 
 #[tokio::test]
-async fn test_create_trade_with_both_habit_and_reward() {
-    let email = generate_email_from_fn!(test_create_trade_with_both_habit_and_reward);
+async fn test_create_trade_with_multiple_sources() {
+    let email = generate_email_from_fn!(test_create_trade_with_multiple_sources);
     let password = "password123";
 
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_body = json!({
+        "name": "Test Task",
+        "description": "A test task"
+    });
+    let (_, task_json) =
+        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+    let task_id = task_json.get("id").unwrap().as_str().unwrap();
 
     // Create a habit
     let habit_body = json!({
@@ -118,8 +164,9 @@ async fn test_create_trade_with_both_habit_and_reward() {
         make_authenticated_post_request(&access_token, "/api/rewards", reward_body).await;
     let reward_id = reward_json.get("id").unwrap().as_str().unwrap();
 
-    // Try to create a trade with both
+    // Try to create a trade with multiple sources
     let trade_body = json!({
+        "taskId": task_id,
         "habitId": habit_id,
         "rewardId": reward_id
     });
@@ -137,7 +184,7 @@ async fn test_create_trade_with_both_habit_and_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`"
+            "Validation Error: Must have exactly one of `task_id`, `habit_id`, or `reward_id`"
                 .to_string()
         )
     );
@@ -171,7 +218,7 @@ async fn test_create_trade_with_neither_habit_nor_reward() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: Must have exactly one of either `habit_id` or `reward_id`"
+            "Validation Error: Must have exactly one of `task_id`, `habit_id`, or `reward_id`"
                 .to_string()
         )
     );
@@ -189,6 +236,30 @@ async fn test_create_trade_without_authentication() {
 
     let (status, _) = make_unauthenticated_post_request("/api/trades", trade_body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_create_trade_with_nonexistent_task() {
+    let email = generate_email_from_fn!(test_create_trade_with_nonexistent_task);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let trade_body = json!({
+        "taskId": "2d452d8f-f87a-4d6b-b16a-acdfcbea1aaa"
+    });
+
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(
+        errors[0].get("message").unwrap(),
+        &Value::String("An unexpected internal server error occurred.".to_string())
+    );
 }
 
 #[tokio::test]

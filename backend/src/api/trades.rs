@@ -6,9 +6,10 @@ use uuid::Uuid;
 
 use crate::{
     database::{
-        CreateTradeWithHabitOptions, CreateTradeWithRewardOptions, HabitDifficultyTier,
-        RewardDamageTier,
+        CreateTradeWithHabitOptions, CreateTradeWithRewardOptions, CreateTradeWithTaskOptions,
+        HabitDifficultyTier, RewardDamageTier,
     },
+    pricing::calculate_task_reward,
     router::{App, AuthenticatedUser},
 };
 
@@ -17,6 +18,7 @@ use super::ApiError;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTradeRequest {
+    pub task_id: Option<String>,
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
 }
@@ -41,6 +43,8 @@ pub struct TradableItem {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<NaiveDateTime>,
     // Habit fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_daily_frequency: Option<f64>,
@@ -57,6 +61,8 @@ pub struct TradableItem {
     pub max_daily_frequency: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage_tier: Option<RewardDamageTier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<NaiveDateTime>,
 }
 
 pub async fn create_trade(
@@ -64,15 +70,71 @@ pub async fn create_trade(
     Extension(user): Extension<AuthenticatedUser>,
     Json(input): Json<CreateTradeRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    // Validate: must have exactly one of habit_id or reward_id
-    if (input.habit_id.is_some() && input.reward_id.is_some())
-        || (input.habit_id.is_none() && input.reward_id.is_none())
-    {
-        let msg = "Must have exactly one of either `habit_id` or `reward_id`".to_string();
+    let source_count = usize::from(input.task_id.is_some())
+        + usize::from(input.habit_id.is_some())
+        + usize::from(input.reward_id.is_some());
+    if source_count != 1 {
+        let msg = "Must have exactly one of `task_id`, `habit_id`, or `reward_id`".to_string();
         return Err(ApiError::Validation(msg));
     }
 
-    if let Some(habit_id_str) = input.habit_id {
+    if let Some(task_id_str) = input.task_id {
+        let task_id = task_id_str
+            .parse::<Uuid>()
+            .map_err(|_| ApiError::Validation("Invalid task_id format".to_string()))?;
+
+        let task = app
+            .database
+            .get_task_for_user(user.user_id, task_id)
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
+
+        let amount = calculate_task_reward(
+            task.difficulty_tier,
+            task.duration_seconds,
+            task.skip_consequence,
+        );
+
+        let opts = CreateTradeWithTaskOptions::new(user.user_id, task_id, amount);
+        let trade_row = app
+            .database
+            .create_trade_with_task(opts)
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
+
+        Ok((
+            StatusCode::CREATED,
+            Json(TradeResponse {
+                id: trade_row.id.to_string(),
+                amount: trade_row.amount,
+                created_at: trade_row.created_at,
+                tradable_item: TradableItem {
+                    item_type: "Task".to_string(),
+                    id: trade_row.task_id.to_string(),
+                    name: trade_row.task_name,
+                    description: trade_row.task_description,
+                    created_at: trade_row.task_created_at,
+                    updated_at: trade_row.task_updated_at,
+                    deleted_at: trade_row.task_deleted_at,
+                    completed_at: trade_row.task_completed_at,
+                    min_daily_frequency: None,
+                    difficulty_tier: trade_row.task_difficulty_tier,
+                    duration_seconds: trade_row.task_duration_seconds,
+                    lockout_duration_seconds: None,
+                    skip_consequence: trade_row.task_skip_consequence,
+                    max_daily_frequency: None,
+                    damage_tier: None,
+                    due_date: trade_row.task_due_date,
+                },
+            }),
+        ))
+    } else if let Some(habit_id_str) = input.habit_id {
         let habit_id = habit_id_str
             .parse::<Uuid>()
             .map_err(|_| ApiError::Validation("Invalid habit_id format".to_string()))?;
@@ -101,6 +163,7 @@ pub async fn create_trade(
                     created_at: trade_row.habit_created_at,
                     updated_at: trade_row.habit_updated_at,
                     deleted_at: trade_row.habit_deleted_at,
+                    completed_at: None,
                     min_daily_frequency: trade_row.habit_min_daily_frequency,
                     difficulty_tier: trade_row.habit_difficulty_tier,
                     duration_seconds: trade_row.habit_duration_seconds,
@@ -108,6 +171,7 @@ pub async fn create_trade(
                     skip_consequence: trade_row.habit_skip_consequence,
                     max_daily_frequency: None,
                     damage_tier: None,
+                    due_date: None,
                 },
             }),
         ))
@@ -141,6 +205,7 @@ pub async fn create_trade(
                     created_at: trade_row.reward_created_at,
                     updated_at: trade_row.reward_updated_at,
                     deleted_at: trade_row.reward_deleted_at,
+                    completed_at: None,
                     min_daily_frequency: None,
                     difficulty_tier: None,
                     duration_seconds: None,
@@ -148,6 +213,7 @@ pub async fn create_trade(
                     skip_consequence: None,
                     max_daily_frequency: trade_row.reward_max_daily_frequency,
                     damage_tier: trade_row.reward_damage_tier,
+                    due_date: None,
                 },
             }),
         ))

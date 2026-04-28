@@ -97,6 +97,43 @@ impl Database {
         .await
     }
 
+    pub async fn create_task(
+        &self,
+        create_task_options: CreateTaskOptions,
+    ) -> Result<TaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO tasks
+            (user_id, name, description, difficulty_tier, duration_seconds, skip_consequence, due_date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date",
+        )
+        .bind(create_task_options.user_id)
+        .bind(create_task_options.name)
+        .bind(create_task_options.description)
+        .bind(create_task_options.difficulty_tier)
+        .bind(create_task_options.duration_seconds)
+        .bind(create_task_options.skip_consequence)
+        .bind(create_task_options.due_date)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn get_task_for_user(
+        &self,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<TaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+             FROM tasks
+             WHERE id = $1 AND user_id = $2",
+        )
+        .bind(task_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
     pub async fn create_reward(
         &self,
         create_reward_options: CreateRewardOptions,
@@ -138,6 +175,51 @@ impl Database {
             JOIN habits h ON nt.habit_id = h.id",
         )
         .bind(create_trade_options.habit_id)
+        .bind(create_trade_options.amount)
+        .bind(create_trade_options.user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn create_trade_with_task(
+        &self,
+        create_trade_options: CreateTradeWithTaskOptions,
+    ) -> Result<TradeWithTaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "WITH updated_task AS (
+                UPDATE tasks
+                SET completed_at = CURRENT_TIMESTAMP
+                WHERE tasks.id = $1
+                  AND tasks.user_id = $3
+                  AND tasks.deleted_at IS NULL
+                  AND tasks.completed_at IS NULL
+                RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+            ),
+            new_trade AS (
+                INSERT INTO trades (task_id, amount, user_id)
+                SELECT id, $2, $3
+                FROM updated_task
+                RETURNING id, task_id, habit_id, reward_id, amount, created_at
+            )
+            SELECT
+                nt.id,
+                nt.created_at,
+                nt.amount,
+                nt.task_id,
+                t.name AS task_name,
+                t.description AS task_description,
+                t.created_at AS task_created_at,
+                t.updated_at AS task_updated_at,
+                t.deleted_at AS task_deleted_at,
+                t.completed_at AS task_completed_at,
+                t.difficulty_tier AS task_difficulty_tier,
+                t.duration_seconds AS task_duration_seconds,
+                t.skip_consequence AS task_skip_consequence,
+                t.due_date AS task_due_date
+            FROM new_trade nt
+            JOIN updated_task t ON nt.task_id = t.id",
+        )
+        .bind(create_trade_options.task_id)
         .bind(create_trade_options.amount)
         .bind(create_trade_options.user_id)
         .fetch_one(&self.pool)
@@ -307,6 +389,39 @@ impl Database {
     // Sync Operations
     // ============================================================================
 
+    /// Get all tasks for a user, optionally filtered by updated_at > since
+    pub async fn get_tasks_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TaskRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                     FROM tasks
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                     FROM tasks
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
     /// Get all habits for a user, optionally filtered by updated_at > since
     pub async fn get_habits_since(
         &self,
@@ -353,7 +468,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -365,7 +480,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -552,6 +667,41 @@ impl Database {
         }
     }
 
+    /// Get all task_tags for a user's tasks, optionally filtered by updated_at > since
+    pub async fn get_task_tags_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TaskTagRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT tt.task_id, tt.tag_id, tt.created_at, tt.updated_at, tt.deleted_at
+                     FROM task_tags tt
+                     JOIN tasks t ON tt.task_id = t.id
+                     WHERE t.user_id = $1 AND tt.updated_at > $2
+                     ORDER BY tt.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT tt.task_id, tt.tag_id, tt.created_at, tt.updated_at, tt.deleted_at
+                     FROM task_tags tt
+                     JOIN tasks t ON tt.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY tt.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
     // ============================================================================
     // Transaction Support for Unified Sync
     // ============================================================================
@@ -625,12 +775,72 @@ impl Database {
         .await
     }
 
+    /// Upsert a task within a transaction
+    pub async fn upsert_task_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task: &UpsertTaskOptions,
+    ) -> Result<TaskRow, sqlx::Error> {
+        sqlx::query_as(
+            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (id) DO UPDATE SET
+                name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
+                description = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.description ELSE tasks.description END,
+                deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
+                completed_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.completed_at ELSE tasks.completed_at END,
+                difficulty_tier = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.difficulty_tier ELSE tasks.difficulty_tier END,
+                duration_seconds = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.duration_seconds ELSE tasks.duration_seconds END,
+                skip_consequence = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.skip_consequence ELSE tasks.skip_consequence END,
+                due_date = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.due_date ELSE tasks.due_date END
+             RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date",
+        )
+        .bind(task.id)
+        .bind(user_id)
+        .bind(&task.name)
+        .bind(&task.description)
+        .bind(task.created_at)
+        .bind(task.deleted_at)
+        .bind(task.completed_at)
+        .bind(task.difficulty_tier)
+        .bind(task.duration_seconds)
+        .bind(task.skip_consequence)
+        .bind(task.due_date)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
     /// Upsert a trade within a transaction.
     pub async fn upsert_trade_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
         trade: &UpsertTradeOptions,
     ) -> Result<TradeRow, sqlx::Error> {
+        let source_count = usize::from(trade.task_id.is_some())
+            + usize::from(trade.habit_id.is_some())
+            + usize::from(trade.reward_id.is_some());
+        if source_count != 1 {
+            return Err(sqlx::Error::Protocol(
+                "Trade must reference exactly one source entity".into(),
+            ));
+        }
+
+        // Validate task belongs to user if task_id is provided
+        if let Some(task_id) = trade.task_id {
+            let task_valid: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM tasks
+                 WHERE id = $1 AND user_id = $2",
+            )
+            .bind(task_id)
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+            if task_valid.is_none() {
+                return Err(sqlx::Error::RowNotFound);
+            }
+        }
+
         // Validate habit belongs to user if habit_id is provided
         if let Some(habit_id) = trade.habit_id {
             let habit_valid: Option<(Uuid,)> = sqlx::query_as(
@@ -663,19 +873,63 @@ impl Database {
 
         // Upsert the trade
         sqlx::query_as(
-            "INSERT INTO trades (id, user_id, habit_id, reward_id, amount, created_at, deleted_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "INSERT INTO trades (id, user_id, task_id, habit_id, reward_id, amount, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
                 deleted_at = EXCLUDED.deleted_at
-             RETURNING id, habit_id, reward_id, amount, created_at, updated_at, deleted_at",
+             RETURNING id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at",
         )
         .bind(trade.id)
         .bind(user_id)
+        .bind(trade.task_id)
         .bind(trade.habit_id)
         .bind(trade.reward_id)
         .bind(trade.amount)
         .bind(trade.created_at)
         .bind(trade.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    /// Upsert a task_tag association within a transaction
+    pub async fn upsert_task_tag_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task_tag: &UpsertTaskTagOptions,
+    ) -> Result<TaskTagRow, sqlx::Error> {
+        let task_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tasks WHERE id = $1 AND user_id = $2")
+                .bind(task_tag.task_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if task_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        let tag_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tags WHERE id = $1 AND user_id = $2")
+                .bind(task_tag.tag_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if tag_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        sqlx::query_as(
+            "INSERT INTO task_tags (task_id, tag_id, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (task_id, tag_id) DO UPDATE SET
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING task_id, tag_id, created_at, updated_at, deleted_at",
+        )
+        .bind(task_tag.task_id)
+        .bind(task_tag.tag_id)
+        .bind(task_tag.created_at)
+        .bind(task_tag.deleted_at)
         .fetch_one(&mut **tx)
         .await
     }
@@ -912,6 +1166,16 @@ impl Database {
     }
 }
 
+pub struct CreateTaskOptions {
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
+    pub due_date: Option<NaiveDateTime>,
+}
+
 pub struct CreateHabitOptions {
     pub user_id: Uuid,
     pub name: String,
@@ -921,6 +1185,21 @@ pub struct CreateHabitOptions {
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
     pub skip_consequence: Option<i16>,
+}
+
+pub struct CreateTradeWithTaskOptions {
+    user_id: Uuid,
+    task_id: Uuid,
+    amount: i32,
+}
+impl CreateTradeWithTaskOptions {
+    pub fn new(user_id: Uuid, task_id: Uuid, amount: i32) -> Self {
+        Self {
+            user_id,
+            task_id,
+            amount,
+        }
+    }
 }
 
 pub struct CreateTradeWithHabitOptions {
@@ -961,6 +1240,19 @@ pub struct CreateRewardOptions {
     pub damage_tier: Option<RewardDamageTier>,
 }
 
+pub struct UpsertTaskOptions {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
+    pub due_date: Option<NaiveDateTime>,
+}
+
 pub struct UpsertHabitOptions {
     pub id: Uuid,
     pub name: String,
@@ -976,6 +1268,7 @@ pub struct UpsertHabitOptions {
 
 pub struct UpsertTradeOptions {
     pub id: Uuid,
+    pub task_id: Option<Uuid>,
     pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
     pub amount: i32,
@@ -993,6 +1286,13 @@ pub struct UpsertTagOptions {
 
 pub struct UpsertHabitTagOptions {
     pub habit_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+pub struct UpsertTaskTagOptions {
+    pub task_id: Uuid,
     pub tag_id: Uuid,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -1018,6 +1318,7 @@ pub struct UpsertRewardTagOptions {
 #[derive(sqlx::FromRow)]
 pub struct TradeRow {
     pub id: Uuid,
+    pub task_id: Option<Uuid>,
     pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
     pub amount: i32,
@@ -1057,6 +1358,21 @@ pub struct RefreshTokenRow {
 }
 
 #[derive(sqlx::FromRow)]
+pub struct TaskRow {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
+    pub difficulty_tier: Option<HabitDifficultyTier>,
+    pub duration_seconds: Option<i32>,
+    pub skip_consequence: Option<i16>,
+    pub due_date: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
 pub struct HabitRow {
     pub id: Uuid,
     pub name: String,
@@ -1084,12 +1400,40 @@ pub struct RewardRow {
 }
 
 #[derive(sqlx::FromRow)]
+pub struct TaskTagRow {
+    pub task_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
 pub struct RewardTagRow {
     pub reward_id: Uuid,
     pub tag_id: Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TradeWithTaskRow {
+    pub id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub amount: i32,
+    pub task_id: Uuid,
+
+    pub task_name: String,
+    pub task_created_at: NaiveDateTime,
+    pub task_updated_at: NaiveDateTime,
+    pub task_deleted_at: Option<NaiveDateTime>,
+    pub task_completed_at: Option<NaiveDateTime>,
+    pub task_description: String,
+    pub task_difficulty_tier: Option<HabitDifficultyTier>,
+    pub task_duration_seconds: Option<i32>,
+    pub task_skip_consequence: Option<i16>,
+    pub task_due_date: Option<NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow)]
