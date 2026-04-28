@@ -497,6 +497,98 @@ let
             test 2>&1 | ${pkgs.xcbeautify}/bin/xcbeautify
           EOF
         '';
+
+        # Build, install, and launch the app on a connected iPhone.
+        ios-device = pkgs.writeShellScriptBin "ios-device" ''
+          set -e -o pipefail
+          ROOT="$PWD"
+          PROJECT="$ROOT/ios/tofustash.xcodeproj"
+          SCHEME="tofustash"
+          BUNDLE_ID="dev.keone.tofustash"
+          BUILD_DIR="$ROOT/ios/build"
+          DEVICE="''${1:-iPhone rass}"
+
+          mkdir -p "$ROOT/logs"
+
+          echo "Building $SCHEME for $DEVICE..."
+
+          unset AR
+          unset CC
+          unset CXX
+          unset LD
+          unset NM
+          unset RANLIB
+          unset SDKROOT
+          unset TOOLCHAINS
+          unset LIBRARY_PATH
+          unset CPATH
+          unset C_INCLUDE_PATH
+          unset CPLUS_INCLUDE_PATH
+          unset OBJC_INCLUDE_PATH
+          unset OBJCPLUS_INCLUDE_PATH
+          unset NIX_CFLAGS_COMPILE
+          unset NIX_CFLAGS_LINK
+          unset NIX_LDFLAGS
+          unset NIX_CC
+          unset NIX_BINTOOLS
+          unset DEVELOPER_DIR
+
+          PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:$PATH" \
+          DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer" \
+          PROJECT="$PROJECT" \
+          SCHEME="$SCHEME" \
+          BUNDLE_ID="$BUNDLE_ID" \
+          BUILD_DIR="$BUILD_DIR" \
+          ROOT="$ROOT" \
+          DEVICE="$DEVICE" \
+          bash <<'EOF'
+          set -e -o pipefail
+
+          echo "==> Starting Xcode build"
+          NSUnbufferedIO=YES xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination "platform=iOS,name=$DEVICE" \
+            -destination-timeout 60 \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -derivedDataPath "$BUILD_DIR" \
+            build 2>&1 \
+            | tee "$ROOT/logs/ios-device-xcodebuild.log" \
+            | ${pkgs.xcbeautify}/bin/xcbeautify
+
+          echo "==> Build finished"
+
+          APP_PATH=$(xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphoneos \
+            -showBuildSettings -json \
+            | /usr/bin/jq -r '.[0].buildSettings.TARGET_BUILD_DIR + "/" + .[0].buildSettings.FULL_PRODUCT_NAME')
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Could not resolve built .app bundle path"
+            exit 1
+          fi
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Error: Built .app bundle does not exist at: $APP_PATH"
+            exit 1
+          fi
+
+          echo "==> Built app: $APP_PATH"
+          echo "Installing on $DEVICE..."
+          xcrun devicectl device install app --device "$DEVICE" "$APP_PATH"
+
+          echo "==> Install finished"
+          echo "Launching on $DEVICE..."
+          echo "==> Attaching to device console; output is also saved to $ROOT/logs/ios-device.log"
+          xcrun devicectl device process launch --device "$DEVICE" --console --terminate-existing "$BUNDLE_ID" \
+            | tee "$ROOT/logs/ios-device.log"
+          EOF
+        '';
       }
     else
       { };

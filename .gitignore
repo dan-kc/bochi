@@ -39,3 +39,4 @@ app-example
 # builds
 ios/build/
 ios/.derived/
+ios/build-direct/
