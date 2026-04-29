@@ -12,7 +12,7 @@
 - Comment user behaviors, not obvious syntax.
 - Keep code DRY where reasonable.
 - Write iOS unit and ui tests only when they cover user behavior; keep them BDD-style and add a behavior comment to each test.
-- Do not run iOS tests; the user will.
+- Run unit tests with `ios-test` and UI tests with `ios-xctest`. Always run these command sequentially.
 
 ## Backend
 
