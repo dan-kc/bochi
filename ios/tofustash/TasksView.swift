@@ -2,7 +2,9 @@ import SwiftUI
 
 private struct TaskFormRoute: Identifiable {
     let id = UUID()
-    let task: TaskItem?
+    let mode: TaskFormMode
+    let initialFocus: TaskFormFocus?
+    let prefill: TaskFormSnapshot?
 }
 
 struct TasksView: View {
@@ -65,13 +67,26 @@ struct TasksView: View {
             .navigationTitle("Tasks")
             .overlay(alignment: .bottomTrailing) {
                 EntityFloatingAddButton {
-                    formRoute = TaskFormRoute(task: nil)
+                    formRoute = TaskFormRoute(
+                        mode: .new,
+                        initialFocus: nil,
+                        prefill: nil
+                    )
                 }
             }
             .sheet(item: $formRoute) { route in
-                TaskFormView(task: route.task) { clearedReminderCount in
-                    showReminderClearToast(clearedReminderCount)
-                }
+                TaskFormView(
+                    mode: route.mode,
+                    initialFocus: route.initialFocus,
+                    prefill: route.prefill,
+                    onDiscard: route.mode.isNew ? { snapshot in
+                        showDiscardToast(snapshot: snapshot)
+                    } : nil,
+                    onDelete: { task in
+                        taskToDelete = task
+                    },
+                    onTaskCompleted: { _ in }
+                )
             }
             .alert(
                 "Delete Task?",
@@ -154,7 +169,7 @@ struct TasksView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture {
-                formRoute = TaskFormRoute(task: task)
+                openChangeForm(task, focus: nil)
             }
 
             if task.canTrade {
@@ -181,19 +196,20 @@ struct TasksView: View {
     private func completeTask(_ task: TaskItem, reward: Int) {
         guard task.canTrade else { return }
         let claimDate = Date()
-        let clearedReminderCount = reminderStore.cancelFutureReminders(forTaskID: task.id)
         tradeStore.addTaskTrade(taskId: task.id, amount: reward, createdAt: claimDate)
         taskStore.completeTask(id: task.id, completedAt: claimDate)
         balanceStore.refresh()
-        showReminderClearToast(clearedReminderCount)
     }
 
-    private func showReminderClearToast(_ clearedReminderCount: Int) {
-        if clearedReminderCount > 0 {
-            toastManager.show(
-                message: clearedReminderCount == 1
-                    ? "Task reminder cleared"
-                    : "\(clearedReminderCount) task reminders cleared"
+    private func showDiscardToast(snapshot: TaskFormSnapshot) {
+        toastManager.show(
+            message: "Task Discarded",
+            actionLabel: "Recover"
+        ) {
+            formRoute = TaskFormRoute(
+                mode: .new,
+                initialFocus: nil,
+                prefill: snapshot
             )
         }
     }
@@ -205,7 +221,7 @@ struct TasksView: View {
         guard case .task(let taskID) = request.route else { return }
         guard let task = taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil }) else { return }
         guard formRoute == nil else { return }
-        formRoute = TaskFormRoute(task: task)
+        openChangeForm(task, focus: nil)
         appNavigationStore.clearPendingEntityFormRequest(id: request.id)
     }
 
@@ -226,6 +242,14 @@ struct TasksView: View {
             return "\(hours)h"
         }
         return "\(hours)h \(minutes % 60)m"
+    }
+
+    private func openChangeForm(_ task: TaskItem, focus: TaskFormFocus?) {
+        formRoute = TaskFormRoute(
+            mode: .change(task),
+            initialFocus: focus,
+            prefill: nil
+        )
     }
 }
 

@@ -1,16 +1,46 @@
 import SwiftUI
 
-struct TaskFormView: View {
-    private static let durationOptions: [(label: String, value: Int?)] = [
-        ("Not set", nil),
-        ("5 min", 300),
-        ("15 min", 900),
-        ("30 min", 1_800),
-        ("1 hour", 3_600),
-        ("2 hours", 7_200)
-    ]
+enum TaskFormMode: Equatable {
+    case new
+    case change(TaskItem)
 
-    let task: TaskItem?
+    var isNew: Bool {
+        if case .new = self { return true }
+        return false
+    }
+
+    var task: TaskItem? {
+        if case .change(let task) = self { return task }
+        return nil
+    }
+}
+
+enum TaskFormFocus: Equatable {
+    case difficulty
+    case duration
+    case dueDate
+    case reminders
+    case skipConsequence
+    case tags
+}
+
+struct TaskFormSnapshot {
+    let name: String
+    let description: String
+    let difficultyTier: HabitDifficultyTier?
+    let durationSeconds: Int?
+    let skipConsequence: Int?
+    let dueDate: Date?
+    let reminderDrafts: [ReminderDraft]
+    let taskId: RecordID
+}
+
+struct TaskFormView: View {
+    let mode: TaskFormMode
+    let initialFocus: TaskFormFocus?
+    let prefill: TaskFormSnapshot?
+    let onDiscard: ((TaskFormSnapshot) -> Void)?
+    let onDelete: ((TaskItem) -> Void)?
     let onTaskCompleted: ((Int) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -20,88 +50,132 @@ struct TaskFormView: View {
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(ReminderStore.self) private var reminderStore
 
-    @State private var draftTaskID: RecordID
-    @State private var name: String
-    @State private var description: String
-    @State private var difficultyTier: HabitDifficultyTier?
-    @State private var durationSeconds: Int?
-    @State private var skipConsequence: Int?
-    @State private var hasDueDate: Bool
-    @State private var dueDate: Date
-    @State private var completedAt: Date?
+    @State private var taskID = RecordID()
+    @State private var name = ""
+    @State private var description = ""
+    @State private var difficultyTier: HabitDifficultyTier? = nil
+    @State private var durationSeconds: Int? = nil
+    @State private var skipConsequence: Int? = nil
+    @State private var dueDate: Date? = nil
+    @State private var completedAt: Date? = nil
     @State private var reminderDrafts: [ReminderDraft] = []
+
     @State private var showingTags = false
     @State private var showingReminders = false
+    @State private var showingDifficulty = false
+    @State private var showingDuration = false
+    @State private var showingSkipConsequence = false
+    @State private var showingDueDate = false
     @State private var showingDeleteConfirmation = false
     @State private var claimed = false
     @State private var claimedAmount = 0
-    @State private var clearedReminderCountAfterClaim = 0
 
-    init(task: TaskItem?, onTaskCompleted: ((Int) -> Void)? = nil) {
-        self.task = task
+    @State private var hasInitialized = false
+    @State private var hasAppliedInitialLoad = false
+    @State private var didPersist = false
+    @FocusState private var focusedField: FieldFocus?
+
+    enum FieldFocus: Hashable {
+        case name
+        case description
+    }
+
+    init(
+        mode: TaskFormMode = .new,
+        initialFocus: TaskFormFocus? = nil,
+        prefill: TaskFormSnapshot? = nil,
+        onDiscard: ((TaskFormSnapshot) -> Void)? = nil,
+        onDelete: ((TaskItem) -> Void)? = nil,
+        onTaskCompleted: ((Int) -> Void)? = nil
+    ) {
+        self.mode = mode
+        self.initialFocus = initialFocus
+        self.prefill = prefill
+        self.onDiscard = onDiscard
+        self.onDelete = onDelete
         self.onTaskCompleted = onTaskCompleted
-        _draftTaskID = State(initialValue: task?.id ?? RecordID())
-        _name = State(initialValue: task?.name ?? "")
-        _description = State(initialValue: task?.description ?? "")
-        _difficultyTier = State(initialValue: task?.difficultyTier)
-        _durationSeconds = State(initialValue: task?.durationSeconds)
-        _skipConsequence = State(initialValue: task?.skipConsequence)
-        _hasDueDate = State(initialValue: task?.dueDate != nil)
-        _dueDate = State(initialValue: task?.dueDate ?? Date())
-        _completedAt = State(initialValue: task?.completedAt)
     }
 
-    private var isNewMode: Bool { task == nil }
-
-    private var taskID: RecordID {
-        task?.id ?? draftTaskID
-    }
-
-    private var rewardPreview: Int {
-        TaskRewardCalculation.calculateReward(
-            task: TaskItem(
-                id: taskID,
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Task" : name,
-                description: description,
-                createdAt: task?.createdAt ?? Date(),
-                updatedAt: Date(),
-                deletedAt: task?.deletedAt,
-                completedAt: completedAt,
-                difficultyTier: difficultyTier,
-                durationSeconds: durationSeconds,
-                skipConsequence: skipConsequence,
-                dueDate: hasDueDate ? dueDate : nil
-            )
-        )
-    }
-
-    private var existingTags: [Tag] {
-        guard !isNewMode else { return [] }
-        return tagStore.tagsForTask(taskId: taskID)
-    }
-
-    private var activeReminderDrafts: [ReminderDraft] {
-        ReminderDraftSupport.active(reminderDrafts, now: reminderStore.referenceDate)
+    private var isNewMode: Bool {
+        mode.isNew
     }
 
     private var isCompleted: Bool {
         completedAt != nil
     }
 
+    private var isEditingText: Bool {
+        focusedField != nil
+    }
+
+    private var taskTags: [Tag] {
+        tagStore.tagsForTask(taskId: taskID)
+    }
+
+    private var activeReminderDrafts: [ReminderDraft] {
+        ReminderDraftSupport.active(reminderDrafts, now: reminderStore.referenceDate)
+    }
+
+    private var trimmedName: String {
+        EntityFormSupport.trimmedName(name)
+    }
+
+    private var trimmedDescription: String {
+        description.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var draftTask: TaskItem {
+        let existingTask = mode.task
+        let persistedName = trimmedName.isEmpty ? (existingTask?.name ?? "Task") : trimmedName
+
+        return TaskItem(
+            id: taskID,
+            name: persistedName,
+            description: description,
+            createdAt: existingTask?.createdAt ?? Date(),
+            updatedAt: Date(),
+            deletedAt: existingTask?.deletedAt,
+            completedAt: completedAt,
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            skipConsequence: skipConsequence,
+            dueDate: dueDate
+        )
+    }
+
+    private var rewardPreview: Int {
+        TaskRewardCalculation.calculateReward(task: draftTask)
+    }
+
+    private var hasContent: Bool {
+        Self.hasContent(
+            name: trimmedName,
+            description: trimmedDescription,
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            skipConsequence: skipConsequence,
+            dueDate: dueDate,
+            reminderCount: activeReminderDrafts.count,
+            tagCount: taskTags.count
+        )
+    }
+
+    private var showsCompleteButton: Bool {
+        !isNewMode && !isCompleted && !claimed
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                if !claimed {
-                    formContent
-                        .transition(.opacity)
-                }
-
                 if claimed {
                     ClaimCelebrationView(amount: claimedAmount) {
                         dismiss()
-                        onTaskCompleted?(clearedReminderCountAfterClaim)
+                        onTaskCompleted?(0)
                     }
                     .transition(.opacity)
+                } else {
+                    editorContent
+                        .transition(.opacity)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: claimed)
@@ -110,232 +184,448 @@ struct TaskFormView: View {
             .toolbar {
                 if !claimed {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
+                        if isNewMode {
+                            Button("Cancel") {
+                                dismiss()
+                            }
+                        } else if mode.task != nil {
+                            Menu {
+                                Button("Delete Task", role: .destructive) {
+                                    showingDeleteConfirmation = true
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .accessibilityIdentifier("task.form.menu")
+                        }
+                    }
+
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isEditingText ? "Done" : (isNewMode ? "Add" : "Done")) {
+                            if isEditingText {
+                                focusedField = nil
+                                return
+                            }
+
+                            if isNewMode {
+                                guard !trimmedName.isEmpty else { return }
+                                guard persistTask() else { return }
+                                didPersist = true
+                            }
+
                             dismiss()
                         }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            persistTask()
-                        }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(!isEditingText && isNewMode && trimmedName.isEmpty)
                     }
                 }
             }
-            .sheet(isPresented: $showingTags) {
-                TagsView(selectionMode: .assignment(.task(taskID)))
-            }
-            .sheet(isPresented: $showingReminders) {
-                ReminderModalView(
-                    reminders: $reminderDrafts,
-                    dueDate: hasDueDate ? dueDate : nil,
-                    referenceDate: reminderStore.referenceDate
-                )
-            }
-            .alert("Delete Task?", isPresented: $showingDeleteConfirmation) {
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.thinMaterial)
+        .presentationContentInteraction(.scrolls)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.easeInOut(duration: 0.18), value: isEditingText)
+        .sheet(isPresented: $showingDifficulty) {
+            TierSelectionSheet(
+                title: "Set Difficulty",
+                currentSelection: difficultyTier,
+                onSave: { difficultyTier = $0 },
+                onUnset: difficultyTier != nil ? { difficultyTier = nil } : nil
+            )
+        }
+        .sheet(isPresented: $showingDuration) {
+            HabitDurationModal(durationSeconds: $durationSeconds)
+        }
+        .sheet(isPresented: $showingSkipConsequence) {
+            TierSelectionSheet(
+                title: "Set Skip Consequence",
+                currentSelection: SkipConsequenceTier.from(skipConsequence),
+                onSave: { skipConsequence = $0?.rawValue },
+                onUnset: skipConsequence != nil ? { skipConsequence = nil } : nil
+            )
+        }
+        .sheet(isPresented: $showingDueDate) {
+            TaskDueDateModal(dueDate: $dueDate)
+        }
+        .sheet(isPresented: $showingReminders) {
+            ReminderModalView(
+                reminders: $reminderDrafts,
+                dueDate: dueDate,
+                referenceDate: reminderStore.referenceDate
+            )
+        }
+        .sheet(isPresented: $showingTags) {
+            TagsView(selectionMode: .assignment(.task(taskID)))
+        }
+        .alert("Delete Task?", isPresented: $showingDeleteConfirmation) {
+            if let task = mode.task {
                 Button("Delete", role: .destructive) {
-                    reminderStore.deleteAllReminders(for: .task(taskID))
-                    taskStore.deleteTask(id: taskID)
                     dismiss()
+                    onDelete?(task)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This action cannot be undone.")
             }
-            .task {
-                initializeReminders()
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        .task {
+            initializeIfNeeded()
+        }
+        .onChange(of: name) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: description) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: difficultyTier) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: durationSeconds) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: skipConsequence) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: dueDate) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onChange(of: reminderDrafts) { _, _ in
+            autoSaveIfNeeded()
+        }
+        .onDisappear {
+            if isNewMode && !didPersist && hasContent {
+                onDiscard?(TaskFormSnapshot(
+                    name: name,
+                    description: description,
+                    difficultyTier: difficultyTier,
+                    durationSeconds: durationSeconds,
+                    skipConsequence: skipConsequence,
+                    dueDate: dueDate,
+                    reminderDrafts: reminderDrafts,
+                    taskId: taskID
+                ))
             }
         }
     }
 
-    private var formContent: some View {
-        Form {
-            Section("Details") {
-                TextField("Name", text: $name)
-                TextField("Description", text: $description, axis: .vertical)
-                    .lineLimit(3...6)
+    private var editorContent: some View {
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    textFieldsSection
+                        .padding(.horizontal, 16)
+
+                    if !taskTags.isEmpty {
+                        TagPillsRow(tags: taskTags, size: .form, leadingInset: 16)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                showingTags = true
+                            }
+                            .opacity(isEditingText ? 0 : 1)
+                            .allowsHitTesting(!isEditingText)
+                    }
+
+                    PillRow(pills: buildPills(), leadingInset: 16, trailingInset: 16)
+                        .opacity(isEditingText ? 0 : 1)
+                        .allowsHitTesting(!isEditingText)
+
+                    if let completedAt, isCompleted {
+                        Text("Completed \(completedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                            .opacity(isEditingText ? 0 : 1)
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Color.clear.frame(height: showsCompleteButton ? 94 : 16)
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 16)
             }
+            .scrollDismissesKeyboard(.interactively)
 
-            Section("Reward") {
-                Picker("Difficulty", selection: $difficultyTier) {
-                    Text("Not set").tag(HabitDifficultyTier?.none)
-                    ForEach(HabitDifficultyTier.allCases, id: \.self) { tier in
-                        Text(tier.displayName).tag(HabitDifficultyTier?.some(tier))
-                    }
-                }
+            floatingControls
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .opacity(isEditingText ? 0 : 1)
+                .allowsHitTesting(!isEditingText)
+        }
+    }
 
-                Picker("Duration", selection: $durationSeconds) {
-                    ForEach(Self.durationOptions, id: \.label) { option in
-                        Text(option.label).tag(option.value)
-                    }
-                }
+    private var textFieldsSection: some View {
+        EntityFormTextFieldsSection(
+            name: $name,
+            description: $description,
+            focusedField: $focusedField,
+            nameFocus: .name,
+            descriptionFocus: .description
+        )
+    }
 
-                Picker("Skip Consequence", selection: $skipConsequence) {
-                    Text("Not set").tag(Int?.none)
-                    ForEach(Array(SkipConsequenceTier.allCases), id: \.self) { tier in
-                        Text(tier.displayName).tag(Int?.some(tier.rawValue))
-                    }
+    private var floatingControls: some View {
+        VStack(spacing: 10) {
+            if showsCompleteButton {
+                TofuActionButton(amount: rewardPreview, polarity: .earning, layout: .expanded(title: "Complete Task")) {
+                    completeTaskFromForm()
                 }
-
-                HStack {
-                    Text("Reward")
-                    Spacer()
-                    Label("+\(rewardPreview)", systemImage: "cube.fill")
-                        .fontWeight(.semibold)
-                }
+                .accessibilityIdentifier("task.complete")
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            Section("Schedule") {
-                Toggle("Due Date", isOn: $hasDueDate.animation())
+    static func hasContent(
+        name: String,
+        description: String,
+        difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int?,
+        skipConsequence: Int?,
+        dueDate: Date?,
+        reminderCount: Int,
+        tagCount: Int
+    ) -> Bool {
+        !name.isEmpty
+            || !description.isEmpty
+            || difficultyTier != nil
+            || durationSeconds != nil
+            || skipConsequence != nil
+            || dueDate != nil
+            || reminderCount > 0
+            || tagCount > 0
+    }
 
-                if hasDueDate {
-                    DatePicker(
-                        "Due",
-                        selection: $dueDate,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                }
-            }
+    static func buildPillData(
+        hasTagsApplied: Bool,
+        difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int?,
+        skipConsequence: Int?,
+        dueDate: Date?,
+        reminderSummary: String,
+        hasReminders: Bool
+    ) -> [EntityFormPillConfig] {
+        [
+            EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
+            EntityFormPillConfig(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
+            EntityFormPillConfig(id: "reminders", label: reminderSummary, icon: "bell", isSet: hasReminders),
+            EntityFormPillConfig(id: "duration", label: DurationFormatting.summary(seconds: durationSeconds) ?? "Duration", icon: "timer", isSet: durationSeconds != nil),
+            EntityFormPillConfig(id: "dueDate", label: dueDate.map(Self.dueDateSummary) ?? "Due Date", icon: "calendar", isSet: dueDate != nil),
+            EntityFormPillConfig(id: "skip", label: SkipConsequenceTier.from(skipConsequence)?.displayName ?? "Skip", icon: "exclamationmark.triangle", isSet: skipConsequence != nil)
+        ]
+    }
 
-            Section("Reminders") {
-                if isCompleted {
-                    Text("Reminders are void for completed tasks.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button {
-                        showingReminders = true
-                    } label: {
-                        HStack {
-                            Text("Manage Reminders")
-                            Spacer()
-                            Text(ReminderDraftSupport.summary(for: reminderDrafts, now: reminderStore.referenceDate))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+    private func buildPills() -> [PillItem] {
+        let configs = Self.buildPillData(
+            hasTagsApplied: !taskTags.isEmpty,
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            skipConsequence: skipConsequence,
+            dueDate: dueDate,
+            reminderSummary: ReminderDraftSupport.summary(for: reminderDrafts, now: reminderStore.referenceDate),
+            hasReminders: !activeReminderDrafts.isEmpty
+        )
+        let actions: [String: () -> Void] = [
+            "tags": { showingTags = true },
+            "difficulty": { showingDifficulty = true },
+            "duration": { showingDuration = true },
+            "dueDate": { showingDueDate = true },
+            "skip": { showingSkipConsequence = true },
+            "reminders": { showingReminders = true }
+        ]
 
-                    if !activeReminderDrafts.isEmpty {
-                        ForEach(activeReminderDrafts) { reminder in
-                            Text(reminder.scheduledAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+        return EntityFormSupport.buildPills(configs: configs, actions: actions)
+    }
 
-            Section("Tags") {
-                if isNewMode {
-                    Text("Save the task before assigning tags.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button("Manage Tags") {
-                        showingTags = true
-                    }
+    private func initializeIfNeeded() {
+        guard !hasInitialized else { return }
+        hasInitialized = true
 
-                    if !existingTags.isEmpty {
-                        TagPillsRow(tags: existingTags, size: .form)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    }
-                }
-            }
+        if let prefill, isNewMode {
+            taskID = prefill.taskId
+            name = prefill.name
+            description = prefill.description
+            difficultyTier = prefill.difficultyTier
+            durationSeconds = prefill.durationSeconds
+            skipConsequence = prefill.skipConsequence
+            dueDate = prefill.dueDate
+            reminderDrafts = prefill.reminderDrafts
+        } else if let task = mode.task {
+            taskID = task.id
+            name = task.name
+            description = task.description
+            difficultyTier = task.difficultyTier
+            durationSeconds = task.durationSeconds
+            skipConsequence = task.skipConsequence
+            dueDate = task.dueDate
+            completedAt = task.completedAt
+            reminderDrafts = reminderStore.reminderDrafts(for: .task(task.id))
+        }
 
-            if !isNewMode && !isCompleted {
-                Section {
-                    TofuActionButton(
-                        amount: rewardPreview,
-                        polarity: .earning,
-                        layout: .expanded(title: "Complete Task")
-                    ) {
-                        completeTaskFromForm()
-                    }
-                    .accessibilityIdentifier("task.complete")
-                }
-            }
+        hasAppliedInitialLoad = true
 
-            if let completedAt {
-                Section("Status") {
-                    LabeledContent("Completed", value: completedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                }
+        guard let initialFocus else { return }
 
-                Section {
-                    Button("Delete Task", role: .destructive) {
-                        showingDeleteConfirmation = true
-                    }
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            switch initialFocus {
+            case .difficulty:
+                showingDifficulty = true
+            case .duration:
+                showingDuration = true
+            case .dueDate:
+                showingDueDate = true
+            case .reminders:
+                showingReminders = true
+            case .skipConsequence:
+                showingSkipConsequence = true
+            case .tags:
+                showingTags = true
             }
         }
     }
 
-    private func persistTask() {
-        let didPersist = TaskFormPersistenceSupport.persistTask(
-            task: task,
+    private func autoSaveIfNeeded() {
+        guard !isNewMode, hasAppliedInitialLoad else { return }
+        _ = persistTask()
+    }
+
+    @discardableResult
+    private func persistTask() -> Bool {
+        TaskFormPersistenceSupport.persistTask(
+            task: mode.task,
             taskID: taskID,
             name: name,
             description: description,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
             skipConsequence: skipConsequence,
-            dueDate: hasDueDate ? dueDate : nil,
+            dueDate: dueDate,
             completedAt: completedAt,
             reminderDrafts: reminderDrafts,
             taskStore: taskStore,
             reminderStore: reminderStore
         )
-        guard didPersist else {
-            return
-        }
-        dismiss()
-    }
-
-    private func persistDraftFields() {
-        if isNewMode {
-            _ = taskStore.addTask(
-                id: taskID,
-                name: name,
-                description: description,
-                difficultyTier: difficultyTier,
-                durationSeconds: durationSeconds,
-                skipConsequence: skipConsequence,
-                dueDate: hasDueDate ? dueDate : nil,
-                completedAt: completedAt
-            )
-        } else {
-            taskStore.updateTask(
-                id: taskID,
-                name: name,
-                description: description,
-                difficultyTier: .some(difficultyTier),
-                durationSeconds: .some(durationSeconds),
-                skipConsequence: .some(skipConsequence),
-                dueDate: .some(hasDueDate ? dueDate : nil),
-                completedAt: .some(completedAt)
-            )
-        }
     }
 
     private func completeTaskFromForm() {
         guard !isNewMode, !isCompleted else { return }
+        guard persistTask() else { return }
+
         let claimDate = Date()
-
-        persistDraftFields()
-
-        let clearedReminderCount = reminderStore.cancelFutureReminders(forTaskID: taskID)
         tradeStore.addTaskTrade(taskId: taskID, amount: rewardPreview, createdAt: claimDate)
         taskStore.completeTask(id: taskID, completedAt: claimDate)
         balanceStore.refresh()
 
         completedAt = claimDate
+        didPersist = true
         claimedAmount = rewardPreview
-        clearedReminderCountAfterClaim = clearedReminderCount
         claimed = true
     }
 
-    private func initializeReminders() {
-        reminderDrafts = reminderStore.reminderDrafts(for: .task(taskID))
+    nonisolated fileprivate static func dueDateSummary(_ dueDate: Date) -> String {
+        if Calendar.current.isDateInToday(dueDate) {
+            return "Today \(dueDate.formatted(.dateTime.hour().minute()))"
+        }
+        if Calendar.current.isDateInTomorrow(dueDate) {
+            return "Tomorrow \(dueDate.formatted(.dateTime.hour().minute()))"
+        }
+        return dueDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 }
 
-#Preview {
-    TaskFormView(task: nil)
+private struct TaskDueDateModal: View {
+    @Binding var dueDate: Date?
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var draftDate: Date = Self.defaultDate()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Set when this task should be due so reminder timing and list context stay aligned.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Quick Set") {
+                    Button("Today at 9:00 AM") {
+                        draftDate = Self.dateAtHour(9, dayOffset: 0)
+                    }
+                    .accessibilityIdentifier("task-due-date.quick.today")
+
+                    Button("Tomorrow at 9:00 AM") {
+                        draftDate = Self.dateAtHour(9, dayOffset: 1)
+                    }
+                }
+
+                Section {
+                    DatePicker(
+                        "Due",
+                        selection: $draftDate,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                }
+
+                if let dueDate {
+                    Section {
+                        HStack {
+                            Text("Current")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(TaskFormView.dueDateSummary(dueDate))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+
+                if dueDate != nil {
+                    Section {
+                        Button("Clear Due Date", role: .destructive) {
+                            dueDate = nil
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.large])
+            .presentationBackground(.thinMaterial)
+            .presentationContentInteraction(.scrolls)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dueDate = draftDate
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                draftDate = dueDate ?? Self.defaultDate()
+            }
+        }
+    }
+
+    private static func defaultDate() -> Date {
+        dateAtHour(9, dayOffset: 0)
+    }
+
+    private static func dateAtHour(_ hour: Int, dayOffset: Int) -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfDay = calendar.startOfDay(for: now)
+        let offsetDay = calendar.date(byAdding: .day, value: dayOffset, to: startOfDay) ?? startOfDay
+        return calendar.date(bySettingHour: hour, minute: 0, second: 0, of: offsetDay) ?? now
+    }
+}
+
+#Preview("New Task") {
+    TaskFormView(mode: .new)
         .environment(TaskStore())
         .environment(TagStore())
         .environment(TradeStore())

@@ -42,11 +42,7 @@ enum TaskFormPersistenceSupport {
             )
         }
 
-        if completedAt != nil {
-            reminderStore.deleteAllReminders(for: .task(taskID))
-        } else {
-            reminderStore.replaceReminders(for: .task(taskID), with: reminderDrafts)
-        }
+        reminderStore.replaceReminders(for: .task(taskID), with: reminderDrafts)
         return true
     }
 }

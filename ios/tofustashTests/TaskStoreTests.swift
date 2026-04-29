@@ -62,6 +62,26 @@ struct TaskStoreTests {
         #expect(sut.tasks.first?.completedAt == completedAt)
     }
 
+    // Behaviour: task auto-save should keep the last valid name while still
+    // persisting other edits when the user temporarily clears the name field.
+    @Test func updateTaskWithEmptyNamePreservesExistingNameAndAppliesOtherFields() throws {
+        let sut = makeSUT()
+        let task = try #require(sut.addTask(name: "Book appointment"))
+        let dueDate = Date(timeIntervalSince1970: 1_800_000_000)
+
+        sut.updateTask(
+            id: task.id,
+            name: "",
+            difficultyTier: .some(.hard),
+            dueDate: .some(dueDate)
+        )
+
+        let updated = try #require(sut.tasks.first(where: { $0.id == task.id }))
+        #expect(updated.name == "Book appointment")
+        #expect(updated.difficultyTier == .hard)
+        #expect(updated.dueDate == dueDate)
+    }
+
     // Behaviour: deleting a task should mark it deleted without removing the
     // record identity that sync still needs to reference.
     @Test func deleteTaskSetsDeletedAt() throws {
