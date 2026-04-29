@@ -41,7 +41,6 @@ struct TaskFormView: View {
     let prefill: TaskFormSnapshot?
     let onDiscard: ((TaskFormSnapshot) -> Void)?
     let onDelete: ((TaskItem) -> Void)?
-    let onTaskCompleted: ((Int) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(TaskStore.self) private var taskStore
@@ -85,15 +84,13 @@ struct TaskFormView: View {
         initialFocus: TaskFormFocus? = nil,
         prefill: TaskFormSnapshot? = nil,
         onDiscard: ((TaskFormSnapshot) -> Void)? = nil,
-        onDelete: ((TaskItem) -> Void)? = nil,
-        onTaskCompleted: ((Int) -> Void)? = nil
+        onDelete: ((TaskItem) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
         self.onDiscard = onDiscard
         self.onDelete = onDelete
-        self.onTaskCompleted = onTaskCompleted
     }
 
     private var isNewMode: Bool {
@@ -170,7 +167,6 @@ struct TaskFormView: View {
                 if claimed {
                     ClaimCelebrationView(amount: claimedAmount) {
                         dismiss()
-                        onTaskCompleted?(0)
                     }
                     .transition(.opacity)
                 } else {
@@ -513,18 +509,19 @@ struct TaskFormView: View {
         guard !isNewMode, !isCompleted else { return }
         guard persistTask() else { return }
 
-        let claimDate = Date()
-        tradeStore.addTaskTrade(taskId: taskID, amount: rewardPreview, createdAt: claimDate)
-        taskStore.completeTask(id: taskID, completedAt: claimDate)
-        balanceStore.refresh()
-
-        completedAt = claimDate
+        completedAt = TaskCompletionSupport.completeTask(
+            taskID: taskID,
+            reward: rewardPreview,
+            tradeStore: tradeStore,
+            taskStore: taskStore,
+            balanceStore: balanceStore
+        )
         didPersist = true
         claimedAmount = rewardPreview
         claimed = true
     }
 
-    nonisolated fileprivate static func dueDateSummary(_ dueDate: Date) -> String {
+    nonisolated static func dueDateSummary(_ dueDate: Date) -> String {
         if Calendar.current.isDateInToday(dueDate) {
             return "Today \(dueDate.formatted(.dateTime.hour().minute()))"
         }
@@ -532,95 +529,6 @@ struct TaskFormView: View {
             return "Tomorrow \(dueDate.formatted(.dateTime.hour().minute()))"
         }
         return dueDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())
-    }
-}
-
-private struct TaskDueDateModal: View {
-    @Binding var dueDate: Date?
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var draftDate: Date = Self.defaultDate()
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("Set when this task should be due so reminder timing and list context stay aligned.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Quick Set") {
-                    Button("Today at 9:00 AM") {
-                        draftDate = Self.dateAtHour(9, dayOffset: 0)
-                    }
-                    .accessibilityIdentifier("task-due-date.quick.today")
-
-                    Button("Tomorrow at 9:00 AM") {
-                        draftDate = Self.dateAtHour(9, dayOffset: 1)
-                    }
-                }
-
-                Section {
-                    DatePicker(
-                        "Due",
-                        selection: $draftDate,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                }
-
-                if let dueDate {
-                    Section {
-                        HStack {
-                            Text("Current")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(TaskFormView.dueDateSummary(dueDate))
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
-
-                if dueDate != nil {
-                    Section {
-                        Button("Clear Due Date", role: .destructive) {
-                            dueDate = nil
-                            dismiss()
-                        }
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Due Date")
-            .navigationBarTitleDisplayMode(.inline)
-            .presentationDetents([.large])
-            .presentationBackground(.thinMaterial)
-            .presentationContentInteraction(.scrolls)
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dueDate = draftDate
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear {
-                draftDate = dueDate ?? Self.defaultDate()
-            }
-        }
-    }
-
-    private static func defaultDate() -> Date {
-        dateAtHour(9, dayOffset: 0)
-    }
-
-    private static func dateAtHour(_ hour: Int, dayOffset: Int) -> Date {
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfDay = calendar.startOfDay(for: now)
-        let offsetDay = calendar.date(byAdding: .day, value: dayOffset, to: startOfDay) ?? startOfDay
-        return calendar.date(bySettingHour: hour, minute: 0, second: 0, of: offsetDay) ?? now
     }
 }
 

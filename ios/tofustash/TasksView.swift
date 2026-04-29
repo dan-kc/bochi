@@ -84,8 +84,7 @@ struct TasksView: View {
                     } : nil,
                     onDelete: { task in
                         taskToDelete = task
-                    },
-                    onTaskCompleted: { _ in }
+                    }
                 )
             }
             .alert(
@@ -195,10 +194,13 @@ struct TasksView: View {
 
     private func completeTask(_ task: TaskItem, reward: Int) {
         guard task.canTrade else { return }
-        let claimDate = Date()
-        tradeStore.addTaskTrade(taskId: task.id, amount: reward, createdAt: claimDate)
-        taskStore.completeTask(id: task.id, completedAt: claimDate)
-        balanceStore.refresh()
+        _ = TaskCompletionSupport.completeTask(
+            taskID: task.id,
+            reward: reward,
+            tradeStore: tradeStore,
+            taskStore: taskStore,
+            balanceStore: balanceStore
+        )
     }
 
     private func showDiscardToast(snapshot: TaskFormSnapshot) {
