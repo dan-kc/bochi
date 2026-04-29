@@ -24,11 +24,13 @@ struct ToastView: View {
 
             Spacer()
 
-            // Action button (e.g. "Recover") — tapping this triggers recovery.
-            Button(toast.actionLabel) {
-                onAction()
+            if let actionLabel = toast.actionLabel {
+                // Action button (e.g. "Recover") — tapping this triggers recovery.
+                Button(actionLabel) {
+                    onAction()
+                }
+                .font(.subheadline.weight(.semibold))
             }
-            .font(.subheadline.weight(.semibold))
 
             // Close button with countdown — shows remaining seconds inside.
             // Tapping dismisses the toast immediately.

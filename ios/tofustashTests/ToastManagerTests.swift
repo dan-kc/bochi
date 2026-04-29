@@ -111,4 +111,13 @@ struct ToastManagerTests {
         try await Task.sleep(for: .milliseconds(1100))
         #expect(sut.remainingSeconds[id] == 2)
     }
+
+    // Behaviour: some toasts are informational only, like telling the user
+    // that completed-task reminders were cleared, so an action button is optional.
+    @Test func informationalToastDoesNotRequireActionButton() {
+        let sut = makeSUT()
+        sut.show(message: "Task reminders cleared", duration: 5)
+        #expect(sut.toasts.count == 1)
+        #expect(sut.toasts[0].actionLabel == nil)
+    }
 }

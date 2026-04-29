@@ -60,6 +60,26 @@ final class tofustashUITests: XCTestCase {
         XCTAssertEqual(app.buttons["pill.frequency"].label, "3/week")
     }
 
+    // Behaviour: the habit reminders control should live in the pill row and
+    // allow the user to add a recurring reminder without leaving the form.
+    func testHabitReminderPillCanAddRecurringReminder() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Habits"].tap()
+        app.buttons["entity.add"].tap()
+
+        let remindersPill = app.buttons["pill.reminders"]
+        XCTAssertTrue(remindersPill.waitForExistence(timeout: 2))
+        remindersPill.tap()
+
+        XCTAssertTrue(app.buttons["Recurring"].waitForExistence(timeout: 2))
+        app.buttons["Recurring"].tap()
+        app.buttons["reminder.add"].tap()
+        app.buttons["Done"].tap()
+
+        XCTAssertEqual(remindersPill.label, "1 reminder")
+    }
+
     // Behaviour: saving a new habit should trim accidental outer whitespace so
     // the list shows the intentional name instead of the raw typed padding.
     func testSavedHabitNameIsTrimmed() {
@@ -149,8 +169,8 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Chips"].waitForExistence(timeout: 2))
     }
 
-    // Behaviour: the task edit form should not expose history browsing or
-    // reopening controls yet, even after the task has been completed.
+    // Behaviour: the task edit form should let the user complete the task in
+    // place, then reopen in a completed state without reminder editing.
     func testTaskFormOmitsHistoryAndMarkIncompleteControls() {
         let app = launchApp()
 
@@ -166,17 +186,56 @@ final class tofustashUITests: XCTestCase {
         let taskText = app.staticTexts["Submit report"]
         XCTAssertTrue(taskText.waitForExistence(timeout: 2))
         taskText.tap()
+        let completeButton = app.buttons["task.complete"]
+        if !completeButton.waitForExistence(timeout: 1) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(completeButton.waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["View Trade History"].waitForExistence(timeout: 1))
         XCTAssertFalse(app.buttons["Mark Incomplete"].waitForExistence(timeout: 1))
-        app.buttons["Cancel"].tap()
+        completeButton.tap()
 
-        let claimButton = app.buttons["task.claim"].firstMatch
-        XCTAssertTrue(claimButton.waitForExistence(timeout: 2))
-        claimButton.tap()
-
+        XCTAssertFalse(app.buttons["task.claim"].firstMatch.waitForExistence(timeout: 2))
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2))
         taskText.tap()
         XCTAssertFalse(app.buttons["View Trade History"].waitForExistence(timeout: 1))
         XCTAssertFalse(app.buttons["Mark Incomplete"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.buttons["Manage Reminders"].waitForExistence(timeout: 1))
+        XCTAssertTrue(app.staticTexts["Reminders are void for completed tasks."].waitForExistence(timeout: 1))
+    }
+
+    // Behaviour: task reminder edits should only commit on Save, so cancelling
+    // the edit sheet must leave the previously saved reminder list untouched.
+    func testTaskReminderEditsAreDiscardedOnCancel() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["Name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2), "step: new-task name field")
+        nameField.tap()
+        nameField.typeText("Plan trip")
+        finishEditingFormIfNeeded(app)
+        app.buttons["Save"].tap()
+
+        let taskText = app.staticTexts["Plan trip"]
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2), "step: saved task row visible")
+        openTaskEditor(taskText, in: app)
+        let firstManageRemindersButton = taskRemindersButton(in: app)
+        scrollToTaskRemindersButton(firstManageRemindersButton, in: app)
+        XCTAssertTrue(firstManageRemindersButton.waitForExistence(timeout: 2), "step: manage reminders button visible on first open")
+        firstManageRemindersButton.tap()
+        XCTAssertTrue(app.buttons["reminder.add"].waitForExistence(timeout: 2), "step: reminder modal add button visible")
+        app.buttons["reminder.add"].tap()
+        app.buttons["Done"].tap()
+        app.buttons["Cancel"].tap()
+
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2), "step: task row visible after cancel")
+        openTaskEditor(taskText, in: app)
+        let manageRemindersButton = taskRemindersButton(in: app)
+        scrollToTaskRemindersButton(manageRemindersButton, in: app)
+        XCTAssertTrue(manageRemindersButton.waitForExistence(timeout: 2), "step: manage reminders button visible on reopen")
+        XCTAssertTrue(manageRemindersButton.label.contains("Not set"), "step: reminder summary reset after cancel")
     }
 
     // Behaviour: tasks should delete with the same swipe-to-confirm gesture
@@ -219,5 +278,31 @@ final class tofustashUITests: XCTestCase {
         if doneButton.waitForExistence(timeout: 1) {
             doneButton.tap()
         }
+    }
+
+    private func openTaskEditor(_ taskText: XCUIElement, in app: XCUIApplication) {
+        let editTaskTitle = app.navigationBars["Edit Task"]
+        if editTaskTitle.waitForExistence(timeout: 1) {
+            return
+        }
+
+        for _ in 0..<3 {
+            taskText.tap()
+            if editTaskTitle.waitForExistence(timeout: 1) {
+                return
+            }
+        }
+
+        XCTFail("step: edit task sheet opened")
+    }
+
+    private func scrollToTaskRemindersButton(_ button: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<3 where !button.exists {
+            app.swipeUp()
+        }
+    }
+
+    private func taskRemindersButton(in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Manage Reminders")).firstMatch
     }
 }

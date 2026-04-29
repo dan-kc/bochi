@@ -41,6 +41,7 @@ struct SyncManagerTests {
         let tagStore: TagStore
         let balanceStore: BalanceStore
         let userSettingsStore: UserSettingsStore
+        let reminderStore: ReminderStore
         let listPreferencesStore: ListPreferencesStore
         let syncAPIClient: MockSyncAPIClient
     }
@@ -82,6 +83,12 @@ struct SyncManagerTests {
         let tagStore = TagStore(storageURL: storageURL)
         let balanceStore = BalanceStore(storageURL: storageURL)
         let userSettingsStore = UserSettingsStore(storageURL: storageURL)
+        let reminderStore = ReminderStore(
+            storageURL: storageURL,
+            taskStore: taskStore,
+            habitStore: habitStore,
+            notificationScheduler: NoOpReminderNotificationScheduler()
+        )
         let listPreferencesStore = ListPreferencesStore(storageURL: storageURL)
         let syncStateStore = SyncStateStore(storageURL: storageURL)
 
@@ -101,6 +108,7 @@ struct SyncManagerTests {
             tagStore: tagStore,
             balanceStore: balanceStore,
             userSettingsStore: userSettingsStore,
+            reminderStore: reminderStore,
             listPreferencesStore: listPreferencesStore,
             debounceDuration: .seconds(60),
             backgroundPullDuration: .seconds(60),
@@ -118,6 +126,7 @@ struct SyncManagerTests {
             tagStore: tagStore,
             balanceStore: balanceStore,
             userSettingsStore: userSettingsStore,
+            reminderStore: reminderStore,
             listPreferencesStore: listPreferencesStore,
             syncAPIClient: syncAPIClient
         )

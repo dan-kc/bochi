@@ -13,6 +13,7 @@ final class SyncManager {
     private let tagStore: TagStore
     private let balanceStore: BalanceStore
     private let userSettingsStore: UserSettingsStore
+    private let reminderStore: ReminderStore
     private let listPreferencesStore: ListPreferencesStore
 
     private var mutationObserver: NSObjectProtocol?
@@ -41,6 +42,7 @@ final class SyncManager {
         tagStore: TagStore,
         balanceStore: BalanceStore,
         userSettingsStore: UserSettingsStore,
+        reminderStore: ReminderStore,
         listPreferencesStore: ListPreferencesStore,
         debounceDuration: Duration = .seconds(2),
         backgroundPullDuration: Duration = .seconds(5),
@@ -56,6 +58,7 @@ final class SyncManager {
         self.tagStore = tagStore
         self.balanceStore = balanceStore
         self.userSettingsStore = userSettingsStore
+        self.reminderStore = reminderStore
         self.listPreferencesStore = listPreferencesStore
         self.debounceDuration = debounceDuration
         self.backgroundPullDuration = backgroundPullDuration
@@ -162,6 +165,7 @@ final class SyncManager {
         tagStore.setCurrentOwner(ownerID)
         balanceStore.setCurrentOwner(ownerID)
         userSettingsStore.setCurrentOwner(ownerID)
+        reminderStore.setCurrentOwner(ownerID)
         listPreferencesStore.setCurrentOwner(ownerID)
         sanitizeListPreferencesForCurrentOwner()
     }
@@ -175,6 +179,7 @@ final class SyncManager {
                 let migratedTradeIDs = try tradeStore.migrateTrades(from: StorageOwner.local, to: userID, on: db)
                 let migratedTagData = try tagStore.migrateData(from: StorageOwner.local, to: userID, on: db)
                 let migratedDifficulty = try userSettingsStore.migrateSettings(from: StorageOwner.local, to: userID, on: db)
+                try reminderStore.migrateReminders(from: StorageOwner.local, to: userID, on: db)
                 _ = try listPreferencesStore.migratePreferences(from: StorageOwner.local, to: userID, on: db)
 
                 if !migratedTaskIDs.isEmpty {
@@ -402,7 +407,9 @@ final class SyncManager {
             rewardStore.setCurrentOwner(currentUserID)
             balanceStore.setCurrentOwner(currentUserID)
             userSettingsStore.setCurrentOwner(currentUserID)
+            reminderStore.setCurrentOwner(currentUserID)
             listPreferencesStore.setCurrentOwner(currentUserID)
+            reminderStore.reconcileNotifications()
 
             status = .synced
         } catch {
@@ -480,6 +487,7 @@ final class SyncManager {
             try userSettingsStore.persistGeneralDifficulty(pullResponse.generalDifficulty)
         }
         sanitizeListPreferencesForCurrentOwner()
+        reminderStore.reconcileNotifications()
     }
 
     private func applyPullResponse(_ response: SyncResponse, filteringDirtyState dirtyState: SyncStateStore.UserSyncState?) throws {
@@ -559,6 +567,7 @@ final class SyncManager {
         try tagStore.persistReplacedAll(tags: mergedTags, taskTags: mergedTaskTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
         try rewardStore.persistReplacedRewards(mergedRewards)
         sanitizeListPreferencesForCurrentOwner()
+        reminderStore.reconcileNotifications()
 
         if dirtyIDs.trades.isEmpty {
             try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
@@ -612,6 +621,7 @@ final class SyncManager {
         try tagStore.persistReplacedAll(tags: mergedTags, taskTags: mergedTaskTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
         try rewardStore.persistReplacedRewards(mergedRewards)
         sanitizeListPreferencesForCurrentOwner()
+        reminderStore.reconcileNotifications()
 
         try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
         try userSettingsStore.persistGeneralDifficulty(response.generalDifficulty)

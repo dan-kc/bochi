@@ -2,6 +2,8 @@ import SwiftUI
 
 // `struct ... : View` — a SwiftUI view. Think of it as a React FC. `View` is a protocol (like a TS interface / Rust trait).
 struct ContentView: View {
+    @Environment(AppNavigationStore.self) private var appNavigationStore
+
     // `body` — the render method. `some View` is an opaque return type (like Rust's `impl View` — the compiler infers the concrete type)
     var body: some View {
         // SwiftUI uses declarative builder syntax — each nested block is like JSX children
@@ -10,17 +12,20 @@ struct ContentView: View {
         // no destroy/recreate cycle, so no re-render animations.
         // Like a fixed-position element in CSS above the router outlet.
         ZStack(alignment: .topTrailing) {
-            TabView {
-                Tab("Tasks", systemImage: "checkmark.square") {
+            TabView(selection: Binding(
+                get: { appNavigationStore.selectedTab },
+                set: { appNavigationStore.selectedTab = $0 }
+            )) {
+                Tab("Tasks", systemImage: "checkmark.square", value: .tasks) {
                     TasksView()
                 }
-                Tab("Habits", systemImage: "checkmark.circle") {
+                Tab("Habits", systemImage: "checkmark.circle", value: .habits) {
                     HabitsView()
                 }
-                Tab("Rewards", systemImage: "gift") {
+                Tab("Rewards", systemImage: "gift", value: .rewards) {
                     RewardsView()
                 }
-                Tab("Settings", systemImage: "gear") {
+                Tab("Settings", systemImage: "gear", value: .settings) {
                     SettingsView()
                 }
             }
@@ -49,6 +54,12 @@ struct ContentView: View {
     let previewBalanceStore = BalanceStore()
     let previewRewardStore = RewardStore()
     let previewSettingsStore = UserSettingsStore()
+    let previewReminderStore = ReminderStore(
+        taskStore: previewTaskStore,
+        habitStore: previewHabitStore,
+        notificationScheduler: NoOpReminderNotificationScheduler()
+    )
+    let previewNavigationStore = AppNavigationStore()
     let previewListPreferencesStore = ListPreferencesStore()
 
     ContentView()
@@ -61,6 +72,8 @@ struct ContentView: View {
         .environment(previewBalanceStore)
         .environment(previewRewardStore)
         .environment(previewSettingsStore)
+        .environment(previewReminderStore)
+        .environment(previewNavigationStore)
         .environment(previewListPreferencesStore)
         .environment(
             SyncManager(
@@ -74,6 +87,7 @@ struct ContentView: View {
                 tagStore: previewTagStore,
                 balanceStore: previewBalanceStore,
                 userSettingsStore: previewSettingsStore,
+                reminderStore: previewReminderStore,
                 listPreferencesStore: previewListPreferencesStore
             )
         )

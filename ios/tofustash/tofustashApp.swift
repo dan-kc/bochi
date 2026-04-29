@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // @main is the app entry point — like ReactDOM.createRoot(...).render(<App />).
 @main
@@ -34,8 +35,12 @@ struct tofustashApp: App {
 
     // UserSettingsStore holds gameplay settings like general difficulty.
     @State private var userSettingsStore: UserSettingsStore
+    @State private var reminderStore: ReminderStore
+    @State private var appNavigationStore: AppNavigationStore
     @State private var listPreferencesStore: ListPreferencesStore
     @State private var syncManager: SyncManager
+    @State private var foregroundNotificationPresenter: ForegroundNotificationPresenter
+    private let notificationRouteStore: NotificationTaskRouteStore
 
     init() {
         let tokenStorage: TokenStorage = AppRuntimeEnvironment.isUITesting
@@ -56,8 +61,21 @@ struct tofustashApp: App {
         let balanceStore = BalanceStore()
         let rewardStore = RewardStore()
         let userSettingsStore = UserSettingsStore()
+        let appNavigationStore = AppNavigationStore()
+        let reminderScheduler: ReminderNotificationScheduling = AppRuntimeEnvironment.isUITesting
+            ? NoOpReminderNotificationScheduler()
+            : LiveReminderNotificationScheduler()
+        let reminderStore = ReminderStore(
+            taskStore: taskStore,
+            habitStore: habitStore,
+            notificationScheduler: reminderScheduler
+        )
+        let notificationRouteStore = NotificationTaskRouteStore()
         let listPreferencesStore = ListPreferencesStore()
         let syncStateStore = SyncStateStore()
+        let foregroundNotificationPresenter = ForegroundNotificationPresenter(
+            routeStore: notificationRouteStore
+        )
         let syncManager = SyncManager(
             apiClient: AppConfiguration.makeSyncAPIClient(),
             authManager: authManager,
@@ -69,8 +87,10 @@ struct tofustashApp: App {
             tagStore: tagStore,
             balanceStore: balanceStore,
             userSettingsStore: userSettingsStore,
+            reminderStore: reminderStore,
             listPreferencesStore: listPreferencesStore
         )
+        UNUserNotificationCenter.current().delegate = foregroundNotificationPresenter
 
         _authManager = State(initialValue: authManager)
         _taskStore = State(initialValue: taskStore)
@@ -80,8 +100,12 @@ struct tofustashApp: App {
         _balanceStore = State(initialValue: balanceStore)
         _rewardStore = State(initialValue: rewardStore)
         _userSettingsStore = State(initialValue: userSettingsStore)
+        _reminderStore = State(initialValue: reminderStore)
+        _appNavigationStore = State(initialValue: appNavigationStore)
         _listPreferencesStore = State(initialValue: listPreferencesStore)
         _syncManager = State(initialValue: syncManager)
+        _foregroundNotificationPresenter = State(initialValue: foregroundNotificationPresenter)
+        self.notificationRouteStore = notificationRouteStore
     }
 
     // `body` is like the render function — SwiftUI calls it to get the view tree.
@@ -100,6 +124,8 @@ struct tofustashApp: App {
                 .environment(balanceStore)
                 .environment(rewardStore)
                 .environment(userSettingsStore)
+                .environment(reminderStore)
+                .environment(appNavigationStore)
                 .environment(listPreferencesStore)
                 .environment(syncManager)
                 // .task is useEffect with an empty dep array — runs once on mount.
@@ -108,11 +134,41 @@ struct tofustashApp: App {
                 .task(id: authManager.user?.id) {
                     syncManager.updateSession(userID: authManager.user?.id)
                 }
-                .onChange(of: scenePhase) { _, newPhase in
-                    if newPhase == .active {
-                        syncManager.handleAppDidBecomeActive()
+                .onAppear {
+                    guard scenePhase == .active else { return }
+                    scheduleActivationWork()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .notificationEntityRouteDidChange)) { _ in
+                    DispatchQueue.main.async {
+                        activateQueuedNotificationNavigationIfNeeded()
                     }
                 }
+                .onChange(of: scenePhase) { newPhase in
+                    if newPhase == .active {
+                        scheduleActivationWork()
+                    }
+                }
+        }
+    }
+
+    private func scheduleActivationWork() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            activateQueuedNotificationNavigationIfNeeded()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            syncManager.handleAppDidBecomeActive()
+            reminderStore.reconcileNotifications()
+        }
+    }
+
+    @MainActor
+    private func activateQueuedNotificationNavigationIfNeeded() {
+        guard let route = notificationRouteStore.consumeQueuedRoute() else { return }
+        switch route {
+        case .task(let taskID):
+            appNavigationStore.openTaskForm(taskID: taskID)
+        case .habit(let habitID):
+            appNavigationStore.openHabitForm(habitID: habitID)
         }
     }
 }

@@ -375,6 +375,45 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v4_reminders") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS reminders (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT,
+                    habit_id TEXT,
+                    scheduled_at REAL NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    CHECK (
+                        (CASE WHEN task_id IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN habit_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+                    )
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_reminders_owner_scheduled
+                ON reminders(owner_id, scheduled_at, id);
+                CREATE INDEX IF NOT EXISTS idx_reminders_owner_updated
+                ON reminders(owner_id, updated_at);
+            """)
+        }
+
+        migrator.registerMigration("v5_reminder_urgency") { db in
+            try db.execute(sql: """
+                ALTER TABLE reminders ADD COLUMN is_urgent INTEGER NOT NULL DEFAULT 0;
+            """)
+        }
+
+        migrator.registerMigration("v6_reminder_recurrence") { db in
+            try db.execute(sql: """
+                ALTER TABLE reminders ADD COLUMN repeat_value INTEGER;
+            """)
+            try db.execute(sql: """
+                ALTER TABLE reminders ADD COLUMN repeat_unit TEXT;
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

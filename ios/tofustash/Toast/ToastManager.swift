@@ -9,10 +9,10 @@ import Foundation
 struct ToastItem: Identifiable {
     let id = UUID()
     let message: String
-    let actionLabel: String
+    let actionLabel: String?
     // The closure to run when the user taps the action button.
     // Stored as a non-Sendable closure — always called on MainActor.
-    let action: () -> Void
+    let action: (() -> Void)?
     let duration: TimeInterval
 }
 
@@ -22,6 +22,7 @@ struct ToastItem: Identifiable {
 // @Observable makes this work like a React context provider — any SwiftUI
 // view that reads a property will re-render when that property changes.
 @Observable
+@MainActor
 class ToastManager {
     // The currently visible toasts — newest last. Views read this to
     // render the toast stack. Like a useState<ToastItem[]>([]) in React.
@@ -55,6 +56,21 @@ class ToastManager {
         startTimer(for: toast)
     }
 
+    func show(
+        message: String,
+        duration: TimeInterval = 5
+    ) {
+        let toast = ToastItem(
+            message: message,
+            actionLabel: nil,
+            action: nil,
+            duration: duration
+        )
+        toasts.append(toast)
+        remainingSeconds[toast.id] = Int(duration)
+        startTimer(for: toast)
+    }
+
     // Dismiss is the single exit path so manual dismiss, action taps, and
     // timer expiry all clean up the same state.
     func dismiss(_ id: UUID) {
@@ -68,7 +84,7 @@ class ToastManager {
     // current payload before cleanup happens.
     func performAction(_ id: UUID) {
         if let toast = toasts.first(where: { $0.id == id }) {
-            toast.action()
+            toast.action?()
         }
         dismiss(id)
     }

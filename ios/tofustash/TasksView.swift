@@ -10,10 +10,13 @@ struct TasksView: View {
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
     @Environment(BalanceStore.self) private var balanceStore
+    @Environment(ReminderStore.self) private var reminderStore
+    @Environment(AppNavigationStore.self) private var appNavigationStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: TaskFormRoute? = nil
     @State private var taskToDelete: TaskItem? = nil
+    @State private var toastManager = ToastManager()
 
     private var visibleTasks: [TaskItem] {
         EntityListQuery.apply(
@@ -66,7 +69,9 @@ struct TasksView: View {
                 }
             }
             .sheet(item: $formRoute) { route in
-                TaskFormView(task: route.task)
+                TaskFormView(task: route.task) { clearedReminderCount in
+                    showReminderClearToast(clearedReminderCount)
+                }
             }
             .alert(
                 "Delete Task?",
@@ -77,6 +82,7 @@ struct TasksView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let task = taskToDelete {
+                        reminderStore.deleteAllReminders(for: .task(task.id))
                         taskStore.deleteTask(id: task.id)
                     }
                     taskToDelete = nil
@@ -86,6 +92,19 @@ struct TasksView: View {
                 }
             } message: {
                 Text("This action cannot be undone.")
+            }
+            .overlay {
+                ToastOverlay(toastManager: toastManager)
+            }
+            .onAppear {
+                schedulePendingTaskFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.pendingEntityFormRequest) { _, _ in
+                schedulePendingTaskFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.selectedTab) { _, selectedTab in
+                guard selectedTab == .tasks else { return }
+                schedulePendingTaskFormOpenIfNeeded()
             }
         }
     }
@@ -162,9 +181,38 @@ struct TasksView: View {
     private func completeTask(_ task: TaskItem, reward: Int) {
         guard task.canTrade else { return }
         let claimDate = Date()
+        let clearedReminderCount = reminderStore.cancelFutureReminders(forTaskID: task.id)
         tradeStore.addTaskTrade(taskId: task.id, amount: reward, createdAt: claimDate)
         taskStore.completeTask(id: task.id, completedAt: claimDate)
         balanceStore.refresh()
+        showReminderClearToast(clearedReminderCount)
+    }
+
+    private func showReminderClearToast(_ clearedReminderCount: Int) {
+        if clearedReminderCount > 0 {
+            toastManager.show(
+                message: clearedReminderCount == 1
+                    ? "Task reminder cleared"
+                    : "\(clearedReminderCount) task reminders cleared"
+            )
+        }
+    }
+
+    @MainActor
+    private func openPendingTaskFormIfNeeded() {
+        guard appNavigationStore.selectedTab == .tasks else { return }
+        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
+        guard case .task(let taskID) = request.route else { return }
+        guard let task = taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil }) else { return }
+        guard formRoute == nil else { return }
+        formRoute = TaskFormRoute(task: task)
+        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+    }
+
+    private func schedulePendingTaskFormOpenIfNeeded() {
+        DispatchQueue.main.async {
+            self.openPendingTaskFormIfNeeded()
+        }
     }
 
     private func durationSummary(for durationSeconds: Int?) -> String {
@@ -187,5 +235,11 @@ struct TasksView: View {
         .environment(TagStore())
         .environment(TradeStore())
         .environment(BalanceStore())
+        .environment(ReminderStore(
+            taskStore: TaskStore(),
+            habitStore: HabitStore(),
+            notificationScheduler: NoOpReminderNotificationScheduler()
+        ))
+        .environment(AppNavigationStore())
         .environment(ListPreferencesStore())
 }

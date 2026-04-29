@@ -11,6 +11,8 @@ struct HabitsView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(ReminderStore.self) private var reminderStore
+    @Environment(AppNavigationStore.self) private var appNavigationStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: HabitFormRoute? = nil
@@ -99,6 +101,7 @@ struct HabitsView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let habit = habitToDelete {
+                        reminderStore.deleteAllReminders(for: .habit(habit.id))
                         habitStore.deleteHabit(id: habit.id)
                     }
                     habitToDelete = nil
@@ -111,6 +114,16 @@ struct HabitsView: View {
             }
             .overlay {
                 ToastOverlay(toastManager: toastManager)
+            }
+            .onAppear {
+                schedulePendingHabitFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.pendingEntityFormRequest) { _, _ in
+                schedulePendingHabitFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.selectedTab) { _, selectedTab in
+                guard selectedTab == .habits else { return }
+                schedulePendingHabitFormOpenIfNeeded()
             }
         }
     }
@@ -215,6 +228,23 @@ struct HabitsView: View {
             prefill: nil
         )
     }
+
+    @MainActor
+    private func openPendingHabitFormIfNeeded() {
+        guard appNavigationStore.selectedTab == .habits else { return }
+        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
+        guard case .habit(let habitID) = request.route else { return }
+        guard let habit = habitStore.habits.first(where: { $0.id == habitID && $0.deletedAt == nil }) else { return }
+        guard formRoute == nil else { return }
+        openChangeForm(habit, focus: nil)
+        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+    }
+
+    private func schedulePendingHabitFormOpenIfNeeded() {
+        DispatchQueue.main.async {
+            self.openPendingHabitFormIfNeeded()
+        }
+    }
 }
 
 #Preview {
@@ -224,5 +254,11 @@ struct HabitsView: View {
         .environment(TradeStore())
         .environment(BalanceStore())
         .environment(UserSettingsStore())
+        .environment(ReminderStore(
+            taskStore: TaskStore(),
+            habitStore: HabitStore(),
+            notificationScheduler: NoOpReminderNotificationScheduler()
+        ))
+        .environment(AppNavigationStore())
         .environment(ListPreferencesStore())
 }

@@ -11,10 +11,14 @@ struct TaskFormView: View {
     ]
 
     let task: TaskItem?
+    let onTaskCompleted: ((Int) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(TaskStore.self) private var taskStore
     @Environment(TagStore.self) private var tagStore
+    @Environment(TradeStore.self) private var tradeStore
+    @Environment(BalanceStore.self) private var balanceStore
+    @Environment(ReminderStore.self) private var reminderStore
 
     @State private var draftTaskID: RecordID
     @State private var name: String
@@ -25,11 +29,17 @@ struct TaskFormView: View {
     @State private var hasDueDate: Bool
     @State private var dueDate: Date
     @State private var completedAt: Date?
+    @State private var reminderDrafts: [ReminderDraft] = []
     @State private var showingTags = false
+    @State private var showingReminders = false
     @State private var showingDeleteConfirmation = false
+    @State private var claimed = false
+    @State private var claimedAmount = 0
+    @State private var clearedReminderCountAfterClaim = 0
 
-    init(task: TaskItem?) {
+    init(task: TaskItem?, onTaskCompleted: ((Int) -> Void)? = nil) {
         self.task = task
+        self.onTaskCompleted = onTaskCompleted
         _draftTaskID = State(initialValue: task?.id ?? RecordID())
         _name = State(initialValue: task?.name ?? "")
         _description = State(initialValue: task?.description ?? "")
@@ -70,104 +80,61 @@ struct TaskFormView: View {
         return tagStore.tagsForTask(taskId: taskID)
     }
 
+    private var activeReminderDrafts: [ReminderDraft] {
+        ReminderDraftSupport.active(reminderDrafts, now: reminderStore.referenceDate)
+    }
+
+    private var isCompleted: Bool {
+        completedAt != nil
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Details") {
-                    TextField("Name", text: $name)
-                    TextField("Description", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
+            ZStack {
+                if !claimed {
+                    formContent
+                        .transition(.opacity)
                 }
 
-                Section("Reward") {
-                    Picker("Difficulty", selection: $difficultyTier) {
-                        Text("Not set").tag(HabitDifficultyTier?.none)
-                        ForEach(HabitDifficultyTier.allCases, id: \.self) { tier in
-                            Text(tier.displayName).tag(HabitDifficultyTier?.some(tier))
-                        }
+                if claimed {
+                    ClaimCelebrationView(amount: claimedAmount) {
+                        dismiss()
+                        onTaskCompleted?(clearedReminderCountAfterClaim)
                     }
-
-                    Picker("Duration", selection: $durationSeconds) {
-                        ForEach(Self.durationOptions, id: \.label) { option in
-                            Text(option.label).tag(option.value)
-                        }
-                    }
-
-                    Picker("Skip Consequence", selection: $skipConsequence) {
-                        Text("Not set").tag(Int?.none)
-                        ForEach(Array(SkipConsequenceTier.allCases), id: \.self) { tier in
-                            Text(tier.displayName).tag(Int?.some(tier.rawValue))
-                        }
-                    }
-
-                    HStack {
-                        Text("Reward")
-                        Spacer()
-                        Label("+\(rewardPreview)", systemImage: "cube.fill")
-                            .fontWeight(.semibold)
-                    }
-                }
-
-                Section("Schedule") {
-                    Toggle("Due Date", isOn: $hasDueDate.animation())
-
-                    if hasDueDate {
-                        DatePicker(
-                            "Due",
-                            selection: $dueDate,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                    }
-                }
-
-                Section("Tags") {
-                    if isNewMode {
-                        Text("Save the task before assigning tags.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Button("Manage Tags") {
-                            showingTags = true
-                        }
-
-                        if !existingTags.isEmpty {
-                            TagPillsRow(tags: existingTags, size: .form)
-                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        }
-                    }
-                }
-
-                if let completedAt {
-                    Section("Status") {
-                        LabeledContent("Completed", value: completedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                    }
-
-                    Section {
-                        Button("Delete Task", role: .destructive) {
-                            showingDeleteConfirmation = true
-                        }
-                    }
+                    .transition(.opacity)
                 }
             }
-            .navigationTitle(isNewMode ? "New Task" : "Edit Task")
+            .animation(.easeInOut(duration: 0.2), value: claimed)
+            .navigationTitle(claimed ? "" : (isNewMode ? "New Task" : "Edit Task"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
+                if !claimed {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            dismiss()
+                        }
                     }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        persistTask()
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            persistTask()
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .sheet(isPresented: $showingTags) {
                 TagsView(selectionMode: .assignment(.task(taskID)))
             }
+            .sheet(isPresented: $showingReminders) {
+                ReminderModalView(
+                    reminders: $reminderDrafts,
+                    dueDate: hasDueDate ? dueDate : nil,
+                    referenceDate: reminderStore.referenceDate
+                )
+            }
             .alert("Delete Task?", isPresented: $showingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
+                    reminderStore.deleteAllReminders(for: .task(taskID))
                     taskStore.deleteTask(id: taskID)
                     dismiss()
                 }
@@ -175,10 +142,151 @@ struct TaskFormView: View {
             } message: {
                 Text("This action cannot be undone.")
             }
+            .task {
+                initializeReminders()
+            }
+        }
+    }
+
+    private var formContent: some View {
+        Form {
+            Section("Details") {
+                TextField("Name", text: $name)
+                TextField("Description", text: $description, axis: .vertical)
+                    .lineLimit(3...6)
+            }
+
+            Section("Reward") {
+                Picker("Difficulty", selection: $difficultyTier) {
+                    Text("Not set").tag(HabitDifficultyTier?.none)
+                    ForEach(HabitDifficultyTier.allCases, id: \.self) { tier in
+                        Text(tier.displayName).tag(HabitDifficultyTier?.some(tier))
+                    }
+                }
+
+                Picker("Duration", selection: $durationSeconds) {
+                    ForEach(Self.durationOptions, id: \.label) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
+
+                Picker("Skip Consequence", selection: $skipConsequence) {
+                    Text("Not set").tag(Int?.none)
+                    ForEach(Array(SkipConsequenceTier.allCases), id: \.self) { tier in
+                        Text(tier.displayName).tag(Int?.some(tier.rawValue))
+                    }
+                }
+
+                HStack {
+                    Text("Reward")
+                    Spacer()
+                    Label("+\(rewardPreview)", systemImage: "cube.fill")
+                        .fontWeight(.semibold)
+                }
+            }
+
+            Section("Schedule") {
+                Toggle("Due Date", isOn: $hasDueDate.animation())
+
+                if hasDueDate {
+                    DatePicker(
+                        "Due",
+                        selection: $dueDate,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                }
+            }
+
+            Section("Reminders") {
+                if isCompleted {
+                    Text("Reminders are void for completed tasks.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        showingReminders = true
+                    } label: {
+                        HStack {
+                            Text("Manage Reminders")
+                            Spacer()
+                            Text(ReminderDraftSupport.summary(for: reminderDrafts, now: reminderStore.referenceDate))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if !activeReminderDrafts.isEmpty {
+                        ForEach(activeReminderDrafts) { reminder in
+                            Text(reminder.scheduledAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section("Tags") {
+                if isNewMode {
+                    Text("Save the task before assigning tags.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button("Manage Tags") {
+                        showingTags = true
+                    }
+
+                    if !existingTags.isEmpty {
+                        TagPillsRow(tags: existingTags, size: .form)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    }
+                }
+            }
+
+            if !isNewMode && !isCompleted {
+                Section {
+                    TofuActionButton(
+                        amount: rewardPreview,
+                        polarity: .earning,
+                        layout: .expanded(title: "Complete Task")
+                    ) {
+                        completeTaskFromForm()
+                    }
+                    .accessibilityIdentifier("task.complete")
+                }
+            }
+
+            if let completedAt {
+                Section("Status") {
+                    LabeledContent("Completed", value: completedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                }
+
+                Section {
+                    Button("Delete Task", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                }
+            }
         }
     }
 
     private func persistTask() {
+        let didPersist = TaskFormPersistenceSupport.persistTask(
+            task: task,
+            taskID: taskID,
+            name: name,
+            description: description,
+            difficultyTier: difficultyTier,
+            durationSeconds: durationSeconds,
+            skipConsequence: skipConsequence,
+            dueDate: hasDueDate ? dueDate : nil,
+            completedAt: completedAt,
+            reminderDrafts: reminderDrafts,
+            taskStore: taskStore,
+            reminderStore: reminderStore
+        )
+        guard didPersist else {
+            return
+        }
+        dismiss()
+    }
+
+    private func persistDraftFields() {
         if isNewMode {
             _ = taskStore.addTask(
                 id: taskID,
@@ -202,8 +310,27 @@ struct TaskFormView: View {
                 completedAt: .some(completedAt)
             )
         }
+    }
 
-        dismiss()
+    private func completeTaskFromForm() {
+        guard !isNewMode, !isCompleted else { return }
+        let claimDate = Date()
+
+        persistDraftFields()
+
+        let clearedReminderCount = reminderStore.cancelFutureReminders(forTaskID: taskID)
+        tradeStore.addTaskTrade(taskId: taskID, amount: rewardPreview, createdAt: claimDate)
+        taskStore.completeTask(id: taskID, completedAt: claimDate)
+        balanceStore.refresh()
+
+        completedAt = claimDate
+        claimedAmount = rewardPreview
+        clearedReminderCountAfterClaim = clearedReminderCount
+        claimed = true
+    }
+
+    private func initializeReminders() {
+        reminderDrafts = reminderStore.reminderDrafts(for: .task(taskID))
     }
 }
 
@@ -211,4 +338,11 @@ struct TaskFormView: View {
     TaskFormView(task: nil)
         .environment(TaskStore())
         .environment(TagStore())
+        .environment(TradeStore())
+        .environment(BalanceStore())
+        .environment(ReminderStore(
+            taskStore: TaskStore(),
+            habitStore: HabitStore(),
+            notificationScheduler: NoOpReminderNotificationScheduler()
+        ))
 }

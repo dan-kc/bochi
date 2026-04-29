@@ -300,8 +300,14 @@ struct SettingsView: View {
         appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
     let previewTaskStore = TaskStore()
+    let previewHabitStore = HabitStore()
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()
+    let previewReminderStore = ReminderStore(
+        taskStore: previewTaskStore,
+        habitStore: previewHabitStore,
+        notificationScheduler: NoOpReminderNotificationScheduler()
+    )
     let previewListPreferencesStore = ListPreferencesStore()
 
     SettingsView()
@@ -315,12 +321,13 @@ struct SettingsView: View {
                 authManager: previewAuthManager,
                 syncStateStore: SyncStateStore(),
                 taskStore: previewTaskStore,
-                habitStore: HabitStore(),
+                habitStore: previewHabitStore,
                 rewardStore: RewardStore(),
                 tradeStore: TradeStore(),
                 tagStore: TagStore(),
                 balanceStore: previewBalanceStore,
                 userSettingsStore: previewSettingsStore,
+                reminderStore: previewReminderStore,
                 listPreferencesStore: previewListPreferencesStore
             )
         )
