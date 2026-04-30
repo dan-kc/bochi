@@ -188,13 +188,19 @@ private struct TradeDetailSheetView: View {
 
     private var sourceDetails: SourceDetails? {
         guard let trade else { return nil }
+        let sourceSummary = TradeHistoryBuilder.sourceSummary(
+            for: trade,
+            tasks: taskStore.tasks,
+            habits: habitStore.habits,
+            rewards: rewardStore.rewards
+        )
 
         if let taskID = trade.taskId {
             let task = taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil })
             return SourceDetails(
-                kindLabel: "Task",
-                name: trade.sourceName ?? task?.name ?? "Deleted task",
-                isDeleted: task == nil,
+                kindLabel: sourceSummary.kindLabel,
+                name: sourceSummary.name,
+                isDeleted: sourceSummary.isDeleted,
                 openEditor: task == nil ? nil : {
                     appNavigationStore.openTaskForm(taskID: taskID)
                     onOpenSource()
@@ -205,9 +211,9 @@ private struct TradeDetailSheetView: View {
         if let habitID = trade.habitId {
             let habit = habitStore.habits.first(where: { $0.id == habitID && $0.deletedAt == nil })
             return SourceDetails(
-                kindLabel: "Habit",
-                name: trade.sourceName ?? habit?.name ?? "Deleted habit",
-                isDeleted: habit == nil,
+                kindLabel: sourceSummary.kindLabel,
+                name: sourceSummary.name,
+                isDeleted: sourceSummary.isDeleted,
                 openEditor: habit == nil ? nil : {
                     appNavigationStore.openHabitForm(habitID: habitID)
                     onOpenSource()
@@ -218,9 +224,9 @@ private struct TradeDetailSheetView: View {
         if let rewardID = trade.rewardId {
             let reward = rewardStore.rewards.first(where: { $0.id == rewardID && $0.deletedAt == nil })
             return SourceDetails(
-                kindLabel: "Reward",
-                name: trade.sourceName ?? reward?.name ?? "Deleted reward",
-                isDeleted: reward == nil,
+                kindLabel: sourceSummary.kindLabel,
+                name: sourceSummary.name,
+                isDeleted: sourceSummary.isDeleted,
                 openEditor: reward == nil ? nil : {
                     appNavigationStore.openRewardForm(rewardID: rewardID)
                     onOpenSource()
@@ -228,7 +234,12 @@ private struct TradeDetailSheetView: View {
             )
         }
 
-        return SourceDetails(kindLabel: "Source", name: trade.sourceName ?? "Unknown trade", isDeleted: false, openEditor: nil)
+        return SourceDetails(
+            kindLabel: sourceSummary.kindLabel,
+            name: sourceSummary.name,
+            isDeleted: sourceSummary.isDeleted,
+            openEditor: nil
+        )
     }
 
     private func amountText(for trade: Trade) -> String {

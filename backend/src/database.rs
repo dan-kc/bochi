@@ -1148,6 +1148,7 @@ impl Database {
                     WHERE user_id = $1
                       AND habit_id = thd.habit_id
                       AND deleted_at IS NULL
+                      AND refunded_at IS NULL
                   ) < (thd.baseline_completion_count + thd.required_completions)
             )",
         )

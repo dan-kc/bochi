@@ -10,7 +10,16 @@ enum TaskCompletionSupport {
         taskStore: TaskStore,
         balanceStore: BalanceStore,
         claimDate: Date = Date()
-    ) -> Date {
+    ) -> Date? {
+        guard
+            let task = taskStore.tasks.first(where: { $0.id == taskID }),
+            task.deletedAt == nil,
+            task.completedAt == nil,
+            tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: true) == nil
+        else {
+            return nil
+        }
+
         tradeStore.addTaskTrade(taskId: taskID, sourceName: sourceName, amount: reward, createdAt: claimDate)
         taskStore.completeTask(id: taskID, completedAt: claimDate)
         balanceStore.refresh()

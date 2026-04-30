@@ -78,6 +78,46 @@ struct TradeHistoryBuilderTests {
         #expect(entries[1].isSourceDeleted)
     }
 
+    // Behaviour: when the source still exists locally but has been deleted,
+    // the history row should keep the trade-time name and mark the source deleted.
+    @Test("buildEntries marks soft-deleted sources as deleted")
+    func marksSoftDeletedSourcesAsDeleted() {
+        let now = Date(timeIntervalSince1970: 3_000)
+        let deletedHabit = Habit(
+            id: "habit-1",
+            name: "Morning Run",
+            description: "",
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: now.addingTimeInterval(60),
+            frequency: 1,
+            difficultyTier: .medium
+        )
+
+        let entries = TradeHistoryBuilder.buildEntries(
+            trades: [
+                Trade(
+                    id: "habit-trade",
+                    taskId: nil,
+                    habitId: "habit-1",
+                    rewardId: nil,
+                    sourceName: "Morning Run",
+                    amount: 75,
+                    createdAt: now,
+                    updatedAt: now,
+                    deletedAt: nil
+                )
+            ],
+            tasks: [],
+            habits: [deletedHabit],
+            rewards: [],
+            formatDate: { _ in "date" }
+        )
+
+        #expect(entries.map(\.title) == ["Morning Run"])
+        #expect(entries.map(\.isSourceDeleted) == [true])
+    }
+
     // Behaviour: opening history from a habit should only show that habit's
     // own claims, even when other habits and rewards have trade history.
     @Test("buildEntries filters to the selected habit")

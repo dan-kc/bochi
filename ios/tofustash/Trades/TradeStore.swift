@@ -3,6 +3,12 @@ import Foundation
 @Observable
 @MainActor
 final class TradeStore {
+    private enum TradeSource {
+        case task(RecordID, String?)
+        case habit(RecordID, String?)
+        case reward(RecordID, String?)
+    }
+
     private let databaseURL: URL
     private let database = AppDatabase.shared
     private let syncStateStore: SyncStateStore
@@ -116,19 +122,13 @@ final class TradeStore {
     ) {
         guard !entries.isEmpty else { return }
 
-        let rows = entries.map { entry in
-            Trade(
-                id: entry.id,
-                taskId: nil,
-                habitId: habitId,
-                rewardId: nil,
-                sourceName: sourceName,
-                amount: entry.amount,
-                createdAt: createdAt,
-                updatedAt: updatedAt ?? createdAt,
-                deletedAt: deletedAt
-            )
-        }
+        let rows = makeTrades(
+            entries: entries,
+            source: .habit(habitId, sourceName),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
 
         upsertTrades(rows, markDirty: shouldNotifySync)
         if shouldNotifySync {
@@ -147,19 +147,13 @@ final class TradeStore {
     ) {
         guard !entries.isEmpty else { return }
 
-        let rows = entries.map { entry in
-            Trade(
-                id: entry.id,
-                taskId: taskId,
-                habitId: nil,
-                rewardId: nil,
-                sourceName: sourceName,
-                amount: entry.amount,
-                createdAt: createdAt,
-                updatedAt: updatedAt ?? createdAt,
-                deletedAt: deletedAt
-            )
-        }
+        let rows = makeTrades(
+            entries: entries,
+            source: .task(taskId, sourceName),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
 
         upsertTrades(rows, markDirty: shouldNotifySync)
         if shouldNotifySync {
@@ -178,19 +172,13 @@ final class TradeStore {
     ) {
         guard !entries.isEmpty else { return }
 
-        let rows = entries.map { entry in
-            Trade(
-                id: entry.id,
-                taskId: nil,
-                habitId: nil,
-                rewardId: rewardId,
-                sourceName: sourceName,
-                amount: entry.amount,
-                createdAt: createdAt,
-                updatedAt: updatedAt ?? createdAt,
-                deletedAt: deletedAt
-            )
-        }
+        let rows = makeTrades(
+            entries: entries,
+            source: .reward(rewardId, sourceName),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
 
         upsertTrades(rows, markDirty: shouldNotifySync)
         if shouldNotifySync {
@@ -262,6 +250,13 @@ final class TradeStore {
             }
     }
 
+    func activeTaskTradeCompletionDate(taskId: RecordID) -> Date? {
+        trades
+            .filter { $0.taskId == taskId && $0.deletedAt == nil && $0.refundedAt == nil }
+            .map(\.createdAt)
+            .min()
+    }
+
     func refundTrade(
         id: RecordID,
         refundedAt: Date = Date(),
@@ -271,23 +266,7 @@ final class TradeStore {
             return
         }
 
-        upsertTrades(
-            [
-                Trade(
-                    id: existing.id,
-                    taskId: existing.taskId,
-                    habitId: existing.habitId,
-                    rewardId: existing.rewardId,
-                    sourceName: existing.sourceName,
-                    amount: existing.amount,
-                    createdAt: existing.createdAt,
-                    updatedAt: refundedAt,
-                    deletedAt: existing.deletedAt,
-                    refundedAt: refundedAt
-                )
-            ],
-            markDirty: shouldNotifySync
-        )
+        upsertTrades([updatedTrade(from: existing, updatedAt: refundedAt, refundedAt: refundedAt)], markDirty: shouldNotifySync)
 
         if shouldNotifySync {
             SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
@@ -303,23 +282,7 @@ final class TradeStore {
             return
         }
 
-        upsertTrades(
-            [
-                Trade(
-                    id: existing.id,
-                    taskId: existing.taskId,
-                    habitId: existing.habitId,
-                    rewardId: existing.rewardId,
-                    sourceName: existing.sourceName,
-                    amount: existing.amount,
-                    createdAt: existing.createdAt,
-                    updatedAt: updatedAt,
-                    deletedAt: existing.deletedAt,
-                    refundedAt: nil
-                )
-            ],
-            markDirty: shouldNotifySync
-        )
+        upsertTrades([updatedTrade(from: existing, updatedAt: updatedAt, refundedAt: nil)], markDirty: shouldNotifySync)
 
         if shouldNotifySync {
             SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
@@ -450,6 +413,74 @@ final class TradeStore {
         }
 
         refreshCurrentTrades()
+    }
+
+    private func makeTrades(
+        entries: [(id: RecordID, amount: Int)],
+        source: TradeSource,
+        createdAt: Date,
+        updatedAt: Date?,
+        deletedAt: Date?
+    ) -> [Trade] {
+        entries.map { entry in
+            switch source {
+            case .task(let taskId, let sourceName):
+                return Trade(
+                    id: entry.id,
+                    taskId: taskId,
+                    habitId: nil,
+                    rewardId: nil,
+                    sourceName: sourceName,
+                    amount: entry.amount,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt ?? createdAt,
+                    deletedAt: deletedAt
+                )
+            case .habit(let habitId, let sourceName):
+                return Trade(
+                    id: entry.id,
+                    taskId: nil,
+                    habitId: habitId,
+                    rewardId: nil,
+                    sourceName: sourceName,
+                    amount: entry.amount,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt ?? createdAt,
+                    deletedAt: deletedAt
+                )
+            case .reward(let rewardId, let sourceName):
+                return Trade(
+                    id: entry.id,
+                    taskId: nil,
+                    habitId: nil,
+                    rewardId: rewardId,
+                    sourceName: sourceName,
+                    amount: entry.amount,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt ?? createdAt,
+                    deletedAt: deletedAt
+                )
+            }
+        }
+    }
+
+    private func updatedTrade(
+        from existing: Trade,
+        updatedAt: Date,
+        refundedAt: Date?
+    ) -> Trade {
+        Trade(
+            id: existing.id,
+            taskId: existing.taskId,
+            habitId: existing.habitId,
+            rewardId: existing.rewardId,
+            sourceName: existing.sourceName,
+            amount: existing.amount,
+            createdAt: existing.createdAt,
+            updatedAt: updatedAt,
+            deletedAt: existing.deletedAt,
+            refundedAt: refundedAt
+        )
     }
 
     private func upsertTrade(_ trade: Trade, on databaseHandle: AppDatabaseHandle) throws {

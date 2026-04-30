@@ -200,19 +200,33 @@ struct TaskFormView: View {
     }
 
     private var showsCompleteButton: Bool {
-        !isNewMode && !isCompleted && !claimed
-    }
-
-    private var refundableTaskTrade: Trade? {
-        tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: false)
-    }
-
-    private var refundPreviewAmount: Int {
-        refundableTaskTrade.map { abs($0.amount) } ?? rewardPreview
+        if case .complete = taskTradeActionState {
+            return true
+        }
+        return false
     }
 
     private var showsRefundButton: Bool {
-        !isNewMode && isCompleted && !claimed && refundableTaskTrade != nil
+        switch taskTradeActionState {
+        case .refund, .undoRefund:
+            return true
+        case .none, .complete:
+            return false
+        }
+    }
+
+    private var latestTaskTrade: Trade? {
+        tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: true)
+    }
+
+    private var taskTradeActionState: TaskTradeActionState {
+        TaskTradeActionSupport.state(
+            isNewMode: isNewMode,
+            isCompleted: isCompleted,
+            claimed: claimed,
+            taskTrade: latestTaskTrade,
+            rewardPreview: rewardPreview
+        )
     }
 
     var body: some View {
@@ -446,7 +460,7 @@ struct TaskFormView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 16) {
-                        Color.clear.frame(height: (showsCompleteButton || showsRefundButton) ? 94 : 16)
+                        Color.clear.frame(height: showsCompleteButton || showsRefundButton ? 94 : 16)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -475,16 +489,24 @@ struct TaskFormView: View {
 
     private var floatingControls: some View {
         VStack(spacing: 10) {
-            if showsCompleteButton {
-                TofuActionButton(amount: rewardPreview, polarity: .earning, layout: .expanded(title: "Complete Task")) {
+            switch taskTradeActionState {
+            case .complete(let amount):
+                TofuActionButton(amount: amount, polarity: .earning, layout: .expanded(title: "Complete Task")) {
                     completeTaskFromForm()
                 }
                 .accessibilityIdentifier("task.complete")
-            } else if showsRefundButton {
-                TofuActionButton(amount: refundPreviewAmount, polarity: .spending, layout: .expanded(title: "Refund Task")) {
+            case .refund(let amount):
+                TofuActionButton(amount: amount, polarity: .spending, layout: .expanded(title: "Refund Task")) {
                     refundCompletedTaskFromForm()
                 }
                 .accessibilityIdentifier("task.refund")
+            case .undoRefund(let amount):
+                TofuActionButton(amount: amount, polarity: .earning, layout: .expanded(title: "Undo Refund")) {
+                    unrefundCompletedTaskFromForm()
+                }
+                .accessibilityIdentifier("task.undo-refund")
+            case .none:
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -795,13 +817,14 @@ struct TaskFormView: View {
             taskStore: taskStore,
             balanceStore: balanceStore
         )
+        guard completedAt != nil else { return }
         didPersist = true
         claimedAmount = rewardPreview
         claimed = true
     }
 
     private func refundCompletedTaskFromForm() {
-        guard let trade = refundableTaskTrade else { return }
+        guard let trade = latestTaskTrade else { return }
 
         TradeRefundService.setRefunded(
             true,
@@ -810,7 +833,20 @@ struct TaskFormView: View {
             taskStore: taskStore,
             balanceStore: balanceStore
         )
-        completedAt = nil
+        completedAt = taskStore.tasks.first(where: { $0.id == taskID })?.completedAt
+    }
+
+    private func unrefundCompletedTaskFromForm() {
+        guard let trade = latestTaskTrade else { return }
+
+        TradeRefundService.setRefunded(
+            false,
+            for: trade,
+            tradeStore: tradeStore,
+            taskStore: taskStore,
+            balanceStore: balanceStore
+        )
+        completedAt = taskStore.tasks.first(where: { $0.id == taskID })?.completedAt
     }
 
     nonisolated static func dueDateSummary(_ dueDate: Date) -> String {

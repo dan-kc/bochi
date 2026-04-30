@@ -482,6 +482,73 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
 }
 
 #[tokio::test]
+async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_refunded() {
+    let email = generate_email_from_fn!(
+        test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_refunded
+    );
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_body = json!({
+        "name": "Dependency Habit",
+        "description": "Refunded completions should not satisfy task dependencies"
+    });
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Ship build",
+            "description": "Blocked until the habit dependency is active",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "completedAt": "2025-01-01T10:10:00"
+        }],
+        "taskHabitDependencies": [{
+            "taskId": task_id,
+            "habitId": habit_id,
+            "requiredCompletions": 1,
+            "baselineCompletionCount": 0,
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "trades": [{
+            "id": trade_id,
+            "habitId": habit_id,
+            "sourceName": "Dependency Habit",
+            "amount": 100,
+            "createdAt": "2025-01-01T10:05:00",
+            "refundedAt": "2025-01-01T10:06:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json["errors"][0]["message"],
+        "Validation Error: Task dependencies must be complete before this task can be completed."
+    );
+
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert!(
+        pull_json
+            .get("tasks")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|task| task.get("id").unwrap() != &task_id)
+    );
+}
+
+#[tokio::test]
 async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
     let email = generate_email_from_fn!(test_sync_push_creates_task_task_tag_and_trade_atomically);
     let password = "password123";

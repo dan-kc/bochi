@@ -136,7 +136,15 @@ struct TasksView: View {
     private func taskRow(_ task: TaskItem) -> some View {
         let tags = tagStore.tagsForTask(taskId: task.id)
         let reward = TaskRewardCalculation.calculateReward(task: task)
-        let isBlocked = task.canTrade && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
+        let taskActionState = TaskTradeActionSupport.state(
+            isNewMode: false,
+            isCompleted: task.completedAt != nil,
+            claimed: false,
+            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true),
+            rewardPreview: reward
+        )
+        let canComplete = canCompleteTask(task)
+        let isBlocked = canComplete && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -182,11 +190,16 @@ struct TasksView: View {
                 openChangeForm(task, focus: nil)
             }
 
-            if task.canTrade {
+            if canComplete {
                 TofuActionButton(amount: reward, polarity: .earning, layout: .compact) {
                     completeTask(task, reward: reward)
                 }
                 .accessibilityIdentifier("task.claim")
+            } else if case .undoRefund = taskActionState {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44, alignment: .center)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
@@ -199,13 +212,13 @@ struct TasksView: View {
     }
 
     private func priceSortValue(for task: TaskItem) -> Int? {
-        EntityActionSupport.sortableAmount(isActionable: task.canTrade) {
+        EntityActionSupport.sortableAmount(isActionable: canCompleteTask(task)) {
             TaskRewardCalculation.calculateReward(task: task)
         }
     }
 
     private func completeTask(_ task: TaskItem, reward: Int) {
-        guard task.canTrade else { return }
+        guard canCompleteTask(task) else { return }
         guard !taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore) else {
             showingBlockedTaskAlert = true
             return
@@ -218,6 +231,10 @@ struct TasksView: View {
             taskStore: taskStore,
             balanceStore: balanceStore
         )
+    }
+
+    private func canCompleteTask(_ task: TaskItem) -> Bool {
+        task.canTrade && tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) == nil
     }
 
     private func showDiscardToast(snapshot: TaskFormSnapshot) {
