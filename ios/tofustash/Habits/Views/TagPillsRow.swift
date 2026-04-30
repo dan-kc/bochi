@@ -41,6 +41,8 @@ struct TagPillsRow: View {
     let tags: [Tag]
     var size: Size = .compact
     var leadingInset: CGFloat = 0
+    var showsTrailingFade = false
+    var trailingFadeInset: CGFloat = 0
     private let fadeWidth: CGFloat = 24
 
     var body: some View {
@@ -59,18 +61,22 @@ struct TagPillsRow: View {
                 }
             }
             .padding(.leading, leadingInset)
-            .padding(.trailing, fadeWidth)
+            .padding(.trailing, showsTrailingFade ? (fadeWidth + trailingFadeInset) : 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .mask {
-            HStack(spacing: 0) {
+            if showsTrailingFade {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(
+                        colors: [.white, .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: fadeWidth)
+                }
+            } else {
                 Rectangle()
-                LinearGradient(
-                    colors: [.white, .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: fadeWidth)
             }
         }
     }

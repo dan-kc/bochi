@@ -204,7 +204,13 @@ struct RewardsView: View {
                 }
 
                 if !tags.isEmpty {
-                    TagPillsRow(tags: tags)
+                    TagPillsRow(
+                        tags: tags,
+                        leadingInset: 16,
+                        showsTrailingFade: true,
+                        trailingFadeInset: 36
+                    )
+                    .padding(.leading, -16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

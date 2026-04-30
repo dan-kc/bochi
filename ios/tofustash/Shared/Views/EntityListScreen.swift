@@ -85,7 +85,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                                     // control strip and navigation title. We set the insets
                                     // ourselves so the list stays sharp-edged without the
                                     // grouped container clipping the row content.
-                                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                                    .listRowInsets(EdgeInsets())
                                     .listRowSeparator(.hidden)
                                     // Behaviour: once the user has items, every habit/reward
                                     // row should sit directly on the parent surface instead of
