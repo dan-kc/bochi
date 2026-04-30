@@ -13,6 +13,8 @@ struct SyncResponse: Decodable {
     let trades: [SyncTradeRecord]
     let tags: [SyncTagRecord]
     let taskTags: [SyncTaskTagRecord]
+    let taskTaskDependencies: [SyncTaskTaskDependencyRecord]
+    let taskHabitDependencies: [SyncTaskHabitDependencyRecord]
     let habitTags: [SyncHabitTagRecord]
     let rewards: [SyncRewardRecord]
     let rewardTags: [SyncRewardTagRecord]
@@ -274,6 +276,82 @@ struct SyncTaskTagRecord: Codable {
     }
 }
 
+struct SyncTaskTaskDependencyRecord: Codable {
+    let taskId: String
+    let dependsOnTaskId: String
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    func toModel() -> TaskTaskDependency? {
+        guard
+            let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),
+            let updatedAt = AppDateCoding.parseBackendTimestamp(updatedAt)
+        else {
+            return nil
+        }
+
+        return TaskTaskDependency(
+            taskId: RecordID(taskId),
+            dependsOnTaskId: RecordID(dependsOnTaskId),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
+        )
+    }
+
+    static func from(_ dependency: TaskTaskDependency) -> SyncTaskTaskDependencyRecord {
+        SyncTaskTaskDependencyRecord(
+            taskId: dependency.taskId.rawValue,
+            dependsOnTaskId: dependency.dependsOnTaskId.rawValue,
+            createdAt: AppDateCoding.backendTimestamp(from: dependency.createdAt),
+            updatedAt: AppDateCoding.backendTimestamp(from: dependency.updatedAt),
+            deletedAt: dependency.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
+        )
+    }
+}
+
+struct SyncTaskHabitDependencyRecord: Codable {
+    let taskId: String
+    let habitId: String
+    let requiredCompletions: Int
+    let baselineCompletionCount: Int
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    func toModel() -> TaskHabitDependency? {
+        guard
+            let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),
+            let updatedAt = AppDateCoding.parseBackendTimestamp(updatedAt)
+        else {
+            return nil
+        }
+
+        return TaskHabitDependency(
+            taskId: RecordID(taskId),
+            habitId: RecordID(habitId),
+            requiredCompletions: requiredCompletions,
+            baselineCompletionCount: baselineCompletionCount,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
+        )
+    }
+
+    static func from(_ dependency: TaskHabitDependency) -> SyncTaskHabitDependencyRecord {
+        SyncTaskHabitDependencyRecord(
+            taskId: dependency.taskId.rawValue,
+            habitId: dependency.habitId.rawValue,
+            requiredCompletions: dependency.requiredCompletions,
+            baselineCompletionCount: dependency.baselineCompletionCount,
+            createdAt: AppDateCoding.backendTimestamp(from: dependency.createdAt),
+            updatedAt: AppDateCoding.backendTimestamp(from: dependency.updatedAt),
+            deletedAt: dependency.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
+        )
+    }
+}
+
 struct SyncHabitTagRecord: Codable {
     let habitId: String
     let tagId: String
@@ -394,6 +472,8 @@ struct SyncPushRequest: Encodable {
     let trades: [SyncTradeRecord]?
     let tags: [SyncTagRecord]?
     let taskTags: [SyncTaskTagRecord]?
+    let taskTaskDependencies: [SyncTaskTaskDependencyRecord]?
+    let taskHabitDependencies: [SyncTaskHabitDependencyRecord]?
     let habitTags: [SyncHabitTagRecord]?
     let rewards: [SyncRewardRecord]?
     let rewardTags: [SyncRewardTagRecord]?

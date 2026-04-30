@@ -48,6 +48,7 @@ struct ContentView: View {
         appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
     let previewTaskStore = TaskStore()
+    let previewTaskDependencyStore = TaskDependencyStore()
     let previewHabitStore = HabitStore()
     let previewTagStore = TagStore()
     let previewTradeStore = TradeStore()
@@ -66,6 +67,7 @@ struct ContentView: View {
         // .environment() — injects into SwiftUI's environment (exactly like React Context Provider)
         .environment(previewAuthManager)
         .environment(previewTaskStore)
+        .environment(previewTaskDependencyStore)
         .environment(previewHabitStore)
         .environment(previewTagStore)
         .environment(previewTradeStore)
@@ -81,6 +83,7 @@ struct ContentView: View {
                 authManager: previewAuthManager,
                 syncStateStore: SyncStateStore(),
                 taskStore: previewTaskStore,
+                taskDependencyStore: previewTaskDependencyStore,
                 habitStore: previewHabitStore,
                 rewardStore: previewRewardStore,
                 tradeStore: previewTradeStore,

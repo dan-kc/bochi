@@ -21,6 +21,9 @@ async fn test_sync_pull_returns_all_entity_types() {
     let task_id = uuid::Uuid::new_v4().to_string();
     let tag_id = uuid::Uuid::new_v4().to_string();
     let task_trade_id = uuid::Uuid::new_v4().to_string();
+    let dependent_task_id = uuid::Uuid::new_v4().to_string();
+    let task_dependency_created_at = "2025-01-01T09:15:00";
+    let habit_dependency_created_at = "2025-01-01T09:20:00";
 
     // Create a habit first
     let habit_body = json!({
@@ -44,6 +47,13 @@ async fn test_sync_pull_returns_all_entity_types() {
             "durationSeconds": 600,
             "skipConsequence": 2,
             "dueDate": "2025-01-02T09:00:00"
+        }, {
+            "id": dependent_task_id,
+            "name": "Send report",
+            "description": "Only after the draft is done",
+            "createdAt": "2025-01-01T09:05:00",
+            "updatedAt": "2025-01-01T09:05:00",
+            "difficultyTier": "medium"
         }],
         "tags": [{
             "id": tag_id,
@@ -57,6 +67,20 @@ async fn test_sync_pull_returns_all_entity_types() {
             "tagId": tag_id,
             "createdAt": "2025-01-01T09:00:00",
             "updatedAt": "2025-01-01T09:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": dependent_task_id,
+            "dependsOnTaskId": task_id,
+            "createdAt": task_dependency_created_at,
+            "updatedAt": task_dependency_created_at
+        }],
+        "taskHabitDependencies": [{
+            "taskId": dependent_task_id,
+            "habitId": habit_id,
+            "requiredCompletions": 2,
+            "baselineCompletionCount": 1,
+            "createdAt": habit_dependency_created_at,
+            "updatedAt": habit_dependency_created_at
         }],
         "trades": [{
             "id": trade_id,
@@ -84,9 +108,10 @@ async fn test_sync_pull_returns_all_entity_types() {
     assert_eq!(habits[0].get("name").unwrap(), "Test Habit");
 
     let tasks = json.get("tasks").unwrap().as_array().unwrap();
-    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks.len(), 2);
     assert_eq!(tasks[0].get("id").unwrap(), &task_id);
     assert_eq!(tasks[0].get("dueDate").unwrap(), "2025-01-02T09:00:00");
+    assert_eq!(tasks[1].get("id").unwrap(), &dependent_task_id);
 
     // Check trades
     let trades = json.get("trades").unwrap().as_array().unwrap();
@@ -102,6 +127,39 @@ async fn test_sync_pull_returns_all_entity_types() {
     assert_eq!(task_tags.len(), 1);
     assert_eq!(task_tags[0].get("taskId").unwrap(), &task_id);
     assert_eq!(task_tags[0].get("tagId").unwrap(), &tag_id);
+
+    let task_task_dependencies = json
+        .get("taskTaskDependencies")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    assert_eq!(task_task_dependencies.len(), 1);
+    assert_eq!(task_task_dependencies[0].get("taskId").unwrap(), &dependent_task_id);
+    assert_eq!(
+        task_task_dependencies[0].get("dependsOnTaskId").unwrap(),
+        &task_id
+    );
+
+    let task_habit_dependencies = json
+        .get("taskHabitDependencies")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    assert_eq!(task_habit_dependencies.len(), 1);
+    assert_eq!(task_habit_dependencies[0].get("taskId").unwrap(), &dependent_task_id);
+    assert_eq!(task_habit_dependencies[0].get("habitId").unwrap(), habit_id);
+    assert_eq!(
+        task_habit_dependencies[0]
+            .get("requiredCompletions")
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        task_habit_dependencies[0]
+            .get("baselineCompletionCount")
+            .unwrap(),
+        1
+    );
 
     // Check balance
     let balance = json.get("balance").unwrap();
@@ -245,6 +303,22 @@ async fn test_sync_pull_empty_for_new_user() {
     assert_eq!(json.get("habits").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("trades").unwrap().as_array().unwrap().len(), 0);
     assert_eq!(json.get("taskTags").unwrap().as_array().unwrap().len(), 0);
+    assert_eq!(
+        json.get("taskTaskDependencies")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        json.get("taskHabitDependencies")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
     assert_eq!(
         json.get("balance").unwrap().get("tofuBalance").unwrap(),
         0.0
@@ -464,6 +538,266 @@ async fn test_sync_push_updates_existing_task_due_date() {
             .get("dueDate")
             .unwrap(),
         "2025-02-01T10:00:00"
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied() {
+    let email =
+        generate_email_from_fn!(test_sync_push_rejects_task_completion_until_dependencies_are_satisfied);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let dependency_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let habit_trade_id = uuid::Uuid::new_v4().to_string();
+
+    let setup_body = json!({
+        "tasks": [{
+            "id": dependency_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00",
+            "completedAt": "2025-01-01T09:30:00"
+        }, {
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habits": [{
+            "id": habit_id,
+            "name": "Proofread",
+            "description": "",
+            "createdAt": "2025-01-01T08:00:00",
+            "updatedAt": "2025-01-01T08:00:00"
+        }],
+        "trades": [{
+            "id": habit_trade_id,
+            "habitId": habit_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T08:30:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": dependency_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T10:05:00"
+        }],
+        "taskHabitDependencies": [{
+            "taskId": blocked_task_id,
+            "habitId": habit_id,
+            "requiredCompletions": 2,
+            "baselineCompletionCount": 1,
+            "createdAt": "2025-01-01T10:06:00",
+            "updatedAt": "2025-01-01T10:06:00"
+        }]
+    });
+
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let blocked_completion_body = json!({
+        "tasks": [{
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "completedAt": "2025-01-01T11:00:00"
+        }]
+    });
+
+    let (blocked_status, blocked_json) =
+        make_authenticated_post_request(
+            &access_token,
+            "/api/sync",
+            blocked_completion_body.clone(),
+        )
+        .await;
+    assert_eq!(blocked_status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        blocked_json["errors"][0]["message"],
+        "Validation Error: Task dependencies must be complete before this task can be completed."
+    );
+
+    let second_habit_trade_id = uuid::Uuid::new_v4().to_string();
+    let third_habit_trade_id = uuid::Uuid::new_v4().to_string();
+    let satisfy_habit_body = json!({
+        "trades": [{
+            "id": second_habit_trade_id,
+            "habitId": habit_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T10:30:00"
+        }, {
+            "id": third_habit_trade_id,
+            "habitId": habit_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T10:40:00"
+        }]
+    });
+    let (habit_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", satisfy_habit_body).await;
+    assert_eq!(habit_status, StatusCode::OK);
+
+    let (completion_status, completion_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", blocked_completion_body).await;
+    assert_eq!(completion_status, StatusCode::OK);
+    assert_eq!(
+        completion_json["tasks"]
+            .as_array()
+            .unwrap()[0]
+            .get("completedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:00"
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_rejects_dependency_cycles() {
+    let email = generate_email_from_fn!(test_sync_push_rejects_dependency_cycles);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_a_id = uuid::Uuid::new_v4().to_string();
+    let task_b_id = uuid::Uuid::new_v4().to_string();
+
+    let body = json!({
+        "tasks": [{
+            "id": task_a_id,
+            "name": "Task A",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }, {
+            "id": task_b_id,
+            "name": "Task B",
+            "description": "",
+            "createdAt": "2025-01-01T09:10:00",
+            "updatedAt": "2025-01-01T09:10:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": task_a_id,
+            "dependsOnTaskId": task_b_id,
+            "createdAt": "2025-01-01T09:15:00",
+            "updatedAt": "2025-01-01T09:15:00"
+        }, {
+            "taskId": task_b_id,
+            "dependsOnTaskId": task_a_id,
+            "createdAt": "2025-01-01T09:16:00",
+            "updatedAt": "2025-01-01T09:16:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json["errors"][0]["message"],
+        "Validation Error: Task dependencies cannot contain cycles."
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
+    let email =
+        generate_email_from_fn!(test_sync_push_rejects_deleting_entities_with_active_dependents);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let dependency_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let habit_id = uuid::Uuid::new_v4().to_string();
+
+    let setup_body = json!({
+        "tasks": [{
+            "id": dependency_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }, {
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "habits": [{
+            "id": habit_id,
+            "name": "Proofread",
+            "description": "",
+            "createdAt": "2025-01-01T08:00:00",
+            "updatedAt": "2025-01-01T08:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": dependency_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T10:05:00"
+        }],
+        "taskHabitDependencies": [{
+            "taskId": blocked_task_id,
+            "habitId": habit_id,
+            "requiredCompletions": 1,
+            "baselineCompletionCount": 0,
+            "createdAt": "2025-01-01T10:06:00",
+            "updatedAt": "2025-01-01T10:06:00"
+        }]
+    });
+
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let delete_task_body = json!({
+        "tasks": [{
+            "id": dependency_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "deletedAt": "2025-01-01T11:00:00"
+        }]
+    });
+
+    let (delete_task_status, delete_task_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", delete_task_body).await;
+    assert_eq!(delete_task_status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        delete_task_json["errors"][0]["message"],
+        "Validation Error: This item cannot be deleted while active tasks still depend on it."
+    );
+
+    let delete_habit_body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Proofread",
+            "description": "",
+            "createdAt": "2025-01-01T08:00:00",
+            "updatedAt": "2025-01-01T11:05:00",
+            "deletedAt": "2025-01-01T11:05:00"
+        }]
+    });
+
+    let (delete_habit_status, delete_habit_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", delete_habit_body).await;
+    assert_eq!(delete_habit_status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        delete_habit_json["errors"][0]["message"],
+        "Validation Error: This item cannot be deleted while active tasks still depend on it."
     );
 }
 

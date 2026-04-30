@@ -134,6 +134,17 @@ impl Database {
         .await
     }
 
+    pub async fn task_has_incomplete_dependencies(
+        &self,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let blocked = Self::task_has_incomplete_dependencies_tx(&mut tx, user_id, task_id).await?;
+        tx.rollback().await?;
+        Ok(blocked)
+    }
+
     pub async fn create_reward(
         &self,
         create_reward_options: CreateRewardOptions,
@@ -702,6 +713,76 @@ impl Database {
         }
     }
 
+    /// Get all task_task_dependencies for a user's tasks, optionally filtered by updated_at > since
+    pub async fn get_task_task_dependencies_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TaskTaskDependencyRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at
+                     FROM task_task_dependencies ttd
+                     JOIN tasks t ON ttd.task_id = t.id
+                     WHERE t.user_id = $1 AND ttd.updated_at > $2
+                     ORDER BY ttd.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at
+                     FROM task_task_dependencies ttd
+                     JOIN tasks t ON ttd.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY ttd.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
+    /// Get all task_habit_dependencies for a user's tasks, optionally filtered by updated_at > since
+    pub async fn get_task_habit_dependencies_since(
+        &self,
+        user_id: Uuid,
+        since: Option<NaiveDateTime>,
+    ) -> Result<Vec<TaskHabitDependencyRow>, sqlx::Error> {
+        match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at
+                     FROM task_habit_dependencies thd
+                     JOIN tasks t ON thd.task_id = t.id
+                     WHERE t.user_id = $1 AND thd.updated_at > $2
+                     ORDER BY thd.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&self.pool)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at
+                     FROM task_habit_dependencies thd
+                     JOIN tasks t ON thd.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY thd.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+            }
+        }
+    }
+
     // ============================================================================
     // Transaction Support for Unified Sync
     // ============================================================================
@@ -930,6 +1011,219 @@ impl Database {
         .bind(task_tag.tag_id)
         .bind(task_tag.created_at)
         .bind(task_tag.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    /// Upsert a task-task dependency within a transaction
+    pub async fn upsert_task_task_dependency_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        dependency: &UpsertTaskTaskDependencyOptions,
+    ) -> Result<TaskTaskDependencyRow, sqlx::Error> {
+        let task_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tasks WHERE id = $1 AND user_id = $2")
+                .bind(dependency.task_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if task_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        let depends_on_task_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tasks WHERE id = $1 AND user_id = $2")
+                .bind(dependency.depends_on_task_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if depends_on_task_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        sqlx::query_as(
+            "INSERT INTO task_task_dependencies (task_id, depends_on_task_id, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (task_id, depends_on_task_id) DO UPDATE SET
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING task_id, depends_on_task_id, created_at, updated_at, deleted_at",
+        )
+        .bind(dependency.task_id)
+        .bind(dependency.depends_on_task_id)
+        .bind(dependency.created_at)
+        .bind(dependency.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    /// Upsert a task-habit dependency within a transaction
+    pub async fn upsert_task_habit_dependency_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        dependency: &UpsertTaskHabitDependencyOptions,
+    ) -> Result<TaskHabitDependencyRow, sqlx::Error> {
+        let task_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM tasks WHERE id = $1 AND user_id = $2")
+                .bind(dependency.task_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if task_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        let habit_valid: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM habits WHERE id = $1 AND user_id = $2")
+                .bind(dependency.habit_id)
+                .bind(user_id)
+                .fetch_optional(&mut **tx)
+                .await?;
+
+        if habit_valid.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        sqlx::query_as(
+            "INSERT INTO task_habit_dependencies (task_id, habit_id, required_completions, baseline_completion_count, created_at, deleted_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (task_id, habit_id) DO UPDATE SET
+                required_completions = EXCLUDED.required_completions,
+                baseline_completion_count = EXCLUDED.baseline_completion_count,
+                deleted_at = EXCLUDED.deleted_at
+             RETURNING task_id, habit_id, required_completions, baseline_completion_count, created_at, updated_at, deleted_at",
+        )
+        .bind(dependency.task_id)
+        .bind(dependency.habit_id)
+        .bind(dependency.required_completions)
+        .bind(dependency.baseline_completion_count)
+        .bind(dependency.created_at)
+        .bind(dependency.deleted_at)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    pub async fn task_has_incomplete_dependencies_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let blocked_by_task: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1
+                FROM task_task_dependencies ttd
+                JOIN tasks dependency_task ON dependency_task.id = ttd.depends_on_task_id
+                WHERE ttd.task_id = $2
+                  AND ttd.deleted_at IS NULL
+                  AND dependency_task.user_id = $1
+                  AND (dependency_task.deleted_at IS NOT NULL OR dependency_task.completed_at IS NULL)
+            )",
+        )
+        .bind(user_id)
+        .bind(task_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        if blocked_by_task {
+            return Ok(true);
+        }
+
+        let blocked_by_habit: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1
+                FROM task_habit_dependencies thd
+                WHERE thd.task_id = $2
+                  AND thd.deleted_at IS NULL
+                  AND (
+                    SELECT COUNT(*)
+                    FROM trades
+                    WHERE user_id = $1
+                      AND habit_id = thd.habit_id
+                      AND deleted_at IS NULL
+                  ) < (thd.baseline_completion_count + thd.required_completions)
+            )",
+        )
+        .bind(user_id)
+        .bind(task_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(blocked_by_habit)
+    }
+
+    pub async fn user_has_task_dependency_cycles_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar(
+            "WITH RECURSIVE reach(task_id, depends_on_task_id) AS (
+                SELECT ttd.task_id, ttd.depends_on_task_id
+                FROM task_task_dependencies ttd
+                JOIN tasks t ON ttd.task_id = t.id
+                WHERE t.user_id = $1
+                  AND ttd.deleted_at IS NULL
+                UNION
+                SELECT reach.task_id, ttd.depends_on_task_id
+                FROM reach
+                JOIN task_task_dependencies ttd
+                  ON ttd.task_id = reach.depends_on_task_id
+                WHERE ttd.deleted_at IS NULL
+            )
+            SELECT EXISTS (
+                SELECT 1
+                FROM reach
+                WHERE task_id = depends_on_task_id
+            )",
+        )
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    pub async fn task_has_active_dependents_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        depends_on_task_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1
+                FROM task_task_dependencies ttd
+                JOIN tasks dependent_task ON dependent_task.id = ttd.task_id
+                WHERE ttd.depends_on_task_id = $2
+                  AND ttd.deleted_at IS NULL
+                  AND dependent_task.user_id = $1
+                  AND dependent_task.deleted_at IS NULL
+                  AND dependent_task.completed_at IS NULL
+            )",
+        )
+        .bind(user_id)
+        .bind(depends_on_task_id)
+        .fetch_one(&mut **tx)
+        .await
+    }
+
+    pub async fn habit_has_active_dependents_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        habit_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1
+                FROM task_habit_dependencies thd
+                JOIN tasks dependent_task ON dependent_task.id = thd.task_id
+                WHERE thd.habit_id = $2
+                  AND thd.deleted_at IS NULL
+                  AND dependent_task.user_id = $1
+                  AND dependent_task.deleted_at IS NULL
+                  AND dependent_task.completed_at IS NULL
+            )",
+        )
+        .bind(user_id)
+        .bind(habit_id)
         .fetch_one(&mut **tx)
         .await
     }
@@ -1298,6 +1592,22 @@ pub struct UpsertTaskTagOptions {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
+pub struct UpsertTaskTaskDependencyOptions {
+    pub task_id: Uuid,
+    pub depends_on_task_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+pub struct UpsertTaskHabitDependencyOptions {
+    pub task_id: Uuid,
+    pub habit_id: Uuid,
+    pub required_completions: i32,
+    pub baseline_completion_count: i32,
+    pub created_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
 pub struct UpsertRewardOptions {
     pub id: Uuid,
     pub name: String,
@@ -1403,6 +1713,26 @@ pub struct RewardRow {
 pub struct TaskTagRow {
     pub task_id: Uuid,
     pub tag_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TaskTaskDependencyRow {
+    pub task_id: Uuid,
+    pub depends_on_task_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct TaskHabitDependencyRow {
+    pub task_id: Uuid,
+    pub habit_id: Uuid,
+    pub required_completions: i32,
+    pub baseline_completion_count: i32,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,

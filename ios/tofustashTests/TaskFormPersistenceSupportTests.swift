@@ -22,6 +22,7 @@ struct TaskFormPersistenceSupportTests {
     @Test func invalidNewTaskDoesNotPersistReminders() {
         let storageURL = TestHelpers.makeTemporaryFileURL("task-form-persistence")
         let taskStore = TaskStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
         let reminderStore = ReminderStore(
             storageURL: storageURL,
             taskStore: taskStore,
@@ -41,7 +42,10 @@ struct TaskFormPersistenceSupportTests {
             dueDate: nil,
             completedAt: nil,
             reminderDrafts: [ReminderDraft(scheduledAt: Date().addingTimeInterval(300))],
+            taskDependencies: [],
+            habitDependencies: [],
             taskStore: taskStore,
+            taskDependencyStore: dependencyStore,
             reminderStore: reminderStore
         )
 
@@ -55,6 +59,7 @@ struct TaskFormPersistenceSupportTests {
     @Test func existingTaskEditReplacesReminders() throws {
         let storageURL = TestHelpers.makeTemporaryFileURL("task-form-persistence")
         let taskStore = TaskStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
         let reminderStore = ReminderStore(
             storageURL: storageURL,
             taskStore: taskStore,
@@ -80,7 +85,10 @@ struct TaskFormPersistenceSupportTests {
             dueDate: existingTask.dueDate,
             completedAt: existingTask.completedAt,
             reminderDrafts: [replacementReminder],
+            taskDependencies: [],
+            habitDependencies: [],
             taskStore: taskStore,
+            taskDependencyStore: dependencyStore,
             reminderStore: reminderStore
         )
 
@@ -96,6 +104,7 @@ struct TaskFormPersistenceSupportTests {
     @Test func completedTaskKeepsPersistedReminders() throws {
         let storageURL = TestHelpers.makeTemporaryFileURL("task-form-persistence")
         let taskStore = TaskStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
         let reminderStore = ReminderStore(
             storageURL: storageURL,
             taskStore: taskStore,
@@ -118,12 +127,77 @@ struct TaskFormPersistenceSupportTests {
             dueDate: existingTask.dueDate,
             completedAt: Date(),
             reminderDrafts: [reminder],
+            taskDependencies: [],
+            habitDependencies: [],
             taskStore: taskStore,
+            taskDependencyStore: dependencyStore,
             reminderStore: reminderStore
         )
 
         #expect(didPersist == true)
         let persistedReminders = reminderStore.reminderDrafts(for: .task(existingTask.id))
         #expect(persistedReminders.count == 1)
+    }
+
+    // Behaviour: editing an existing task should replace the saved dependency
+    // list so auto-save keeps the latest prerequisite choices.
+    @Test func existingTaskEditReplacesDependencies() throws {
+        let storageURL = TestHelpers.makeTemporaryFileURL("task-form-dependencies")
+        let taskStore = TaskStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
+        let reminderStore = ReminderStore(
+            storageURL: storageURL,
+            taskStore: taskStore,
+            habitStore: HabitStore(storageURL: storageURL),
+            notificationScheduler: MockReminderNotificationScheduler()
+        )
+        let prerequisiteTask = try #require(taskStore.addTask(name: "Draft report"))
+        let existingTask = try #require(taskStore.addTask(name: "Send report"))
+
+        dependencyStore.replaceDependencies(
+            for: existingTask.id,
+            taskDependencies: [
+                TaskTaskDependency(
+                    taskId: existingTask.id,
+                    dependsOnTaskId: prerequisiteTask.id,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    deletedAt: nil
+                )
+            ],
+            habitDependencies: [],
+            shouldNotifySync: false
+        )
+
+        let replacementTask = try #require(taskStore.addTask(name: "Proofread report"))
+        let didPersist = TaskFormPersistenceSupport.persistTask(
+            task: existingTask,
+            taskID: existingTask.id,
+            name: existingTask.name,
+            description: existingTask.description,
+            difficultyTier: existingTask.difficultyTier,
+            durationSeconds: existingTask.durationSeconds,
+            skipConsequence: existingTask.skipConsequence,
+            dueDate: existingTask.dueDate,
+            completedAt: existingTask.completedAt,
+            reminderDrafts: [],
+            taskDependencies: [
+                TaskTaskDependency(
+                    taskId: existingTask.id,
+                    dependsOnTaskId: replacementTask.id,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_100),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_100),
+                    deletedAt: nil
+                )
+            ],
+            habitDependencies: [],
+            taskStore: taskStore,
+            taskDependencyStore: dependencyStore,
+            reminderStore: reminderStore
+        )
+
+        #expect(didPersist == true)
+        let persistedDependencies = dependencyStore.activeTaskDependencies(for: existingTask.id)
+        #expect(persistedDependencies.map(\.dependsOnTaskId) == [replacementTask.id])
     }
 }

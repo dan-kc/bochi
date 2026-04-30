@@ -13,7 +13,10 @@ enum TaskFormPersistenceSupport {
         dueDate: Date?,
         completedAt: Date?,
         reminderDrafts: [ReminderDraft],
+        taskDependencies: [TaskTaskDependency],
+        habitDependencies: [TaskHabitDependency],
         taskStore: TaskStore,
+        taskDependencyStore: TaskDependencyStore,
         reminderStore: ReminderStore
     ) -> Bool {
         if task == nil {
@@ -42,6 +45,11 @@ enum TaskFormPersistenceSupport {
             )
         }
 
+        taskDependencyStore.replaceDependencies(
+            for: taskID,
+            taskDependencies: taskDependencies,
+            habitDependencies: habitDependencies
+        )
         reminderStore.replaceReminders(for: .task(taskID), with: reminderDrafts)
         return true
     }

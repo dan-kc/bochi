@@ -92,6 +92,22 @@ pub async fn create_trade(
                 ApiError::Internal
             })?;
 
+        let has_incomplete_dependencies = app
+            .database
+            .task_has_incomplete_dependencies(user.user_id, task_id)
+            .await
+            .map_err(|e| {
+                error!("Database Error: {:?}", e);
+                ApiError::Internal
+            })?;
+
+        if has_incomplete_dependencies {
+            return Err(ApiError::Validation(
+                "Task dependencies must be complete before this task can be completed."
+                    .to_string(),
+            ));
+        }
+
         let amount = calculate_task_reward(
             task.difficulty_tier,
             task.duration_seconds,

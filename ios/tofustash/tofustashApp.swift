@@ -17,6 +17,7 @@ struct tofustashApp: App {
     // injected into the environment so all child views can access it via
     // @Environment(HabitStore.self). Like creating a second context provider.
     @State private var taskStore: TaskStore
+    @State private var taskDependencyStore: TaskDependencyStore
     @State private var habitStore: HabitStore
 
     // TagStore follows the same pattern — a separate @Observable class for
@@ -55,6 +56,7 @@ struct tofustashApp: App {
             appleEntitlementClient: appleEntitlementClient
         )
         let taskStore = TaskStore()
+        let taskDependencyStore = TaskDependencyStore()
         let habitStore = HabitStore()
         let tagStore = TagStore()
         let tradeStore = TradeStore()
@@ -81,6 +83,7 @@ struct tofustashApp: App {
             authManager: authManager,
             syncStateStore: syncStateStore,
             taskStore: taskStore,
+            taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
             tradeStore: tradeStore,
@@ -94,6 +97,7 @@ struct tofustashApp: App {
 
         _authManager = State(initialValue: authManager)
         _taskStore = State(initialValue: taskStore)
+        _taskDependencyStore = State(initialValue: taskDependencyStore)
         _habitStore = State(initialValue: habitStore)
         _tagStore = State(initialValue: tagStore)
         _tradeStore = State(initialValue: tradeStore)
@@ -118,6 +122,7 @@ struct tofustashApp: App {
                 // access it with @Environment, which is useContext().
                 .environment(authManager)
                 .environment(taskStore)
+                .environment(taskDependencyStore)
                 .environment(habitStore)
                 .environment(tagStore)
                 .environment(tradeStore)

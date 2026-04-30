@@ -13,6 +13,8 @@ final class SyncStateStore {
         var trades: [DirtyRecordVersion] = []
         var tags: [DirtyRecordVersion] = []
         var taskTags: [DirtyRecordVersion] = []
+        var taskTaskDependencies: [DirtyRecordVersion] = []
+        var taskHabitDependencies: [DirtyRecordVersion] = []
         var habitTags: [DirtyRecordVersion] = []
         var rewards: [DirtyRecordVersion] = []
         var rewardTags: [DirtyRecordVersion] = []
@@ -79,6 +81,8 @@ final class SyncStateStore {
                 trades: dirtyRecords[.trades] ?? [],
                 tags: dirtyRecords[.tags] ?? [],
                 taskTags: dirtyRecords[.taskTags] ?? [],
+                taskTaskDependencies: dirtyRecords[.taskTaskDependencies] ?? [],
+                taskHabitDependencies: dirtyRecords[.taskHabitDependencies] ?? [],
                 habitTags: dirtyRecords[.habitTags] ?? [],
                 rewards: dirtyRecords[.rewards] ?? [],
                 rewardTags: dirtyRecords[.rewardTags] ?? [],
@@ -243,6 +247,8 @@ final class SyncStateStore {
         try clearDirty(userID: userID, kind: .trades, versions: snapshot.dirty.trades, on: databaseHandle)
         try clearDirty(userID: userID, kind: .tags, versions: snapshot.dirty.tags, on: databaseHandle)
         try clearDirty(userID: userID, kind: .taskTags, versions: snapshot.dirty.taskTags, on: databaseHandle)
+        try clearDirty(userID: userID, kind: .taskTaskDependencies, versions: snapshot.dirty.taskTaskDependencies, on: databaseHandle)
+        try clearDirty(userID: userID, kind: .taskHabitDependencies, versions: snapshot.dirty.taskHabitDependencies, on: databaseHandle)
         try clearDirty(userID: userID, kind: .habitTags, versions: snapshot.dirty.habitTags, on: databaseHandle)
         try clearDirty(userID: userID, kind: .rewards, versions: snapshot.dirty.rewards, on: databaseHandle)
         try clearDirty(userID: userID, kind: .rewardTags, versions: snapshot.dirty.rewardTags, on: databaseHandle)

@@ -205,6 +205,13 @@ final class TradeStore {
         }
     }
 
+    func habitCompletionCount(habitId: RecordID) -> Int {
+        trades.reduce(into: 0) { count, trade in
+            guard trade.habitId == habitId, trade.deletedAt == nil else { return }
+            count += 1
+        }
+    }
+
     func rewardPurchaseDates(rewardId: RecordID) -> [Date] {
         trades.compactMap { trade in
             guard trade.rewardId == rewardId, trade.deletedAt == nil else { return nil }

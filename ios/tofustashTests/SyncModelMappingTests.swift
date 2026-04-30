@@ -132,6 +132,38 @@ struct SyncModelMappingTests {
         #expect(record.maxDailyFrequency == rate)
     }
 
+    // Behaviour: task dependency rows must round-trip through sync unchanged so
+    // blocked task state matches the server snapshot exactly.
+    @Test func syncTaskDependencyRecordsRoundTrip() throws {
+        let taskDependency = SyncTaskTaskDependencyRecord(
+            taskId: "task-2",
+            dependsOnTaskId: "task-1",
+            createdAt: "2026-04-23T12:00:00.000000",
+            updatedAt: "2026-04-23T12:00:00.000000",
+            deletedAt: nil
+        )
+        let habitDependency = SyncTaskHabitDependencyRecord(
+            taskId: "task-2",
+            habitId: "habit-1",
+            requiredCompletions: 3,
+            baselineCompletionCount: 5,
+            createdAt: "2026-04-23T12:05:00.000000",
+            updatedAt: "2026-04-23T12:05:00.000000",
+            deletedAt: nil
+        )
+
+        let taskDependencyModel = try #require(taskDependency.toModel())
+        let habitDependencyModel = try #require(habitDependency.toModel())
+
+        #expect(taskDependencyModel.dependsOnTaskId == "task-1")
+        #expect(habitDependencyModel.requiredCompletions == 3)
+        #expect(habitDependencyModel.baselineCompletionCount == 5)
+
+        #expect(SyncTaskTaskDependencyRecord.from(taskDependencyModel).dependsOnTaskId == "task-1")
+        #expect(SyncTaskHabitDependencyRecord.from(habitDependencyModel).requiredCompletions == 3)
+        #expect(SyncTaskHabitDependencyRecord.from(habitDependencyModel).baselineCompletionCount == 5)
+    }
+
     // Behaviour: the JSON decoder used by the sync client should decode
     // camelCase frequency payloads into Double-backed sync records without loss.
     @Test func syncResponseDecodesBoundaryFrequenciesAsDouble() throws {
@@ -179,6 +211,26 @@ struct SyncModelMappingTests {
               "deletedAt": null
             }
           ],
+          "taskTaskDependencies": [
+            {
+              "taskId": "task-2",
+              "dependsOnTaskId": "task-1",
+              "createdAt": "2026-04-23T12:10:00.000000",
+              "updatedAt": "2026-04-23T12:10:00.000000",
+              "deletedAt": null
+            }
+          ],
+          "taskHabitDependencies": [
+            {
+              "taskId": "task-2",
+              "habitId": "habit-1",
+              "requiredCompletions": 2,
+              "baselineCompletionCount": 1,
+              "createdAt": "2026-04-23T12:11:00.000000",
+              "updatedAt": "2026-04-23T12:11:00.000000",
+              "deletedAt": null
+            }
+          ],
           "habitTags": [],
           "rewards": [
             {
@@ -207,6 +259,8 @@ struct SyncModelMappingTests {
         let response = try AppDateCoding.makeDecoder().decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.tasks.first?.dueDate == "2026-04-24T09:00:00.000000")
         #expect(response.taskTags.first?.taskId == "task-1")
+        #expect(response.taskTaskDependencies.first?.dependsOnTaskId == "task-1")
+        #expect(response.taskHabitDependencies.first?.requiredCompletions == 2)
         #expect(response.habits.first?.minDailyFrequency == rate)
         #expect(response.rewards.first?.maxDailyFrequency == rate)
     }

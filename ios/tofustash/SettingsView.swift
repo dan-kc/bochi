@@ -300,6 +300,7 @@ struct SettingsView: View {
         appleEntitlementClient: StoreKitAppleEntitlementClient()
     )
     let previewTaskStore = TaskStore()
+    let previewTaskDependencyStore = TaskDependencyStore()
     let previewHabitStore = HabitStore()
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()
@@ -321,6 +322,7 @@ struct SettingsView: View {
                 authManager: previewAuthManager,
                 syncStateStore: SyncStateStore(),
                 taskStore: previewTaskStore,
+                taskDependencyStore: previewTaskDependencyStore,
                 habitStore: previewHabitStore,
                 rewardStore: RewardStore(),
                 tradeStore: TradeStore(),

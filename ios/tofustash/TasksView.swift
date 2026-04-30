@@ -9,6 +9,7 @@ private struct TaskFormRoute: Identifiable {
 
 struct TasksView: View {
     @Environment(TaskStore.self) private var taskStore
+    @Environment(TaskDependencyStore.self) private var taskDependencyStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
     @Environment(BalanceStore.self) private var balanceStore
@@ -19,6 +20,7 @@ struct TasksView: View {
     @State private var formRoute: TaskFormRoute? = nil
     @State private var taskToDelete: TaskItem? = nil
     @State private var toastManager = ToastManager()
+    @State private var showingBlockedTaskAlert = false
 
     private var visibleTasks: [TaskItem] {
         EntityListQuery.apply(
@@ -29,7 +31,10 @@ struct TasksView: View {
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: priceSortValue(for:),
-            tags: { tagStore.tagsForTask(taskId: $0.id) }
+            tags: { tagStore.tagsForTask(taskId: $0.id) },
+            isDeprioritized: { task in
+                task.canTrade && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
+            }
         )
     }
 
@@ -107,6 +112,11 @@ struct TasksView: View {
             } message: {
                 Text("This action cannot be undone.")
             }
+            .alert("Task Blocked", isPresented: $showingBlockedTaskAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This task cannot be completed until its dependencies are finished.")
+            }
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
@@ -126,6 +136,7 @@ struct TasksView: View {
     private func taskRow(_ task: TaskItem) -> some View {
         let tags = tagStore.tagsForTask(taskId: task.id)
         let reward = TaskRewardCalculation.calculateReward(task: task)
+        let isBlocked = task.canTrade && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -184,6 +195,7 @@ struct TasksView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(isBlocked ? 0.55 : 1)
     }
 
     private func priceSortValue(for task: TaskItem) -> Int? {
@@ -194,6 +206,10 @@ struct TasksView: View {
 
     private func completeTask(_ task: TaskItem, reward: Int) {
         guard task.canTrade else { return }
+        guard !taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore) else {
+            showingBlockedTaskAlert = true
+            return
+        }
         _ = TaskCompletionSupport.completeTask(
             taskID: task.id,
             reward: reward,
@@ -256,14 +272,18 @@ struct TasksView: View {
 }
 
 #Preview {
+    let taskStore = TaskStore()
+    let habitStore = HabitStore()
     TasksView()
-        .environment(TaskStore())
+        .environment(taskStore)
+        .environment(TaskDependencyStore())
+        .environment(habitStore)
         .environment(TagStore())
         .environment(TradeStore())
         .environment(BalanceStore())
         .environment(ReminderStore(
-            taskStore: TaskStore(),
-            habitStore: HabitStore(),
+            taskStore: taskStore,
+            habitStore: habitStore,
             notificationScheduler: NoOpReminderNotificationScheduler()
         ))
         .environment(AppNavigationStore())

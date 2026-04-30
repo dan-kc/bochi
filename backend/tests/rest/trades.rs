@@ -263,6 +263,62 @@ async fn test_create_trade_with_nonexistent_task() {
 }
 
 #[tokio::test]
+async fn test_create_trade_with_task_rejects_incomplete_dependencies() {
+    let email = generate_email_from_fn!(test_create_trade_with_task_rejects_incomplete_dependencies);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let dependency_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_id = uuid::Uuid::new_v4().to_string();
+
+    let sync_body = json!({
+        "tasks": [{
+            "id": dependency_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }, {
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": dependency_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T10:05:00"
+        }]
+    });
+
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let trade_body = json!({
+        "taskId": blocked_task_id
+    });
+
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let errors = json.get("errors").unwrap().as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(
+        errors[0].get("message").unwrap(),
+        &Value::String(
+            "Validation Error: Task dependencies must be complete before this task can be completed."
+                .to_string()
+        )
+    );
+}
+
+#[tokio::test]
 async fn test_create_trade_with_nonexistent_habit() {
     let email = generate_email_from_fn!(test_create_trade_with_nonexistent_habit);
     let password = "password123";

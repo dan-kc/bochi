@@ -45,6 +45,8 @@ pub struct SyncPushRequest {
     pub trades: Option<Vec<SyncTradeInput>>,
     pub tags: Option<Vec<SyncTagInput>>,
     pub task_tags: Option<Vec<SyncTaskTagInput>>,
+    pub task_task_dependencies: Option<Vec<SyncTaskTaskDependencyInput>>,
+    pub task_habit_dependencies: Option<Vec<SyncTaskHabitDependencyInput>>,
     pub habit_tags: Option<Vec<SyncHabitTagInput>>,
     pub rewards: Option<Vec<SyncRewardInput>>,
     pub reward_tags: Option<Vec<SyncRewardTagInput>>,
@@ -122,6 +124,30 @@ pub struct SyncTaskTagInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SyncTaskTaskDependencyInput {
+    pub task_id: String,
+    pub depends_on_task_id: String,
+    pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTaskHabitDependencyInput {
+    pub task_id: String,
+    pub habit_id: String,
+    pub required_completions: i32,
+    pub baseline_completion_count: i32,
+    pub created_at: NaiveDateTime,
+    #[allow(dead_code)]
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncHabitTagInput {
     pub habit_id: String,
     pub tag_id: String,
@@ -164,6 +190,8 @@ pub struct SyncResponse {
     pub trades: Vec<TradeOutput>,
     pub tags: Vec<TagOutput>,
     pub task_tags: Vec<TaskTagOutput>,
+    pub task_task_dependencies: Vec<TaskTaskDependencyOutput>,
+    pub task_habit_dependencies: Vec<TaskHabitDependencyOutput>,
     pub habit_tags: Vec<HabitTagOutput>,
     pub rewards: Vec<RewardOutput>,
     pub reward_tags: Vec<RewardTagOutput>,
@@ -236,6 +264,28 @@ pub struct TagOutput {
 pub struct TaskTagOutput {
     pub task_id: String,
     pub tag_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskTaskDependencyOutput {
+    pub task_id: String,
+    pub depends_on_task_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskHabitDependencyOutput {
+    pub task_id: String,
+    pub habit_id: String,
+    pub required_completions: i32,
+    pub baseline_completion_count: i32,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
@@ -397,6 +447,30 @@ pub async fn get_sync(
         ApiError::Internal
     })?;
 
+    let task_task_dependency_rows = load_task_task_dependencies_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
+    let task_habit_dependency_rows = load_task_habit_dependencies_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
     let habit_tag_rows = load_habit_tags_for_sync(
         &mut tx,
         user.user_id,
@@ -504,6 +578,30 @@ pub async fn get_sync(
         })
         .collect();
 
+    let task_task_dependencies: Vec<TaskTaskDependencyOutput> = task_task_dependency_rows
+        .into_iter()
+        .map(|row| TaskTaskDependencyOutput {
+            task_id: row.task_id.to_string(),
+            depends_on_task_id: row.depends_on_task_id.to_string(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
+    let task_habit_dependencies: Vec<TaskHabitDependencyOutput> = task_habit_dependency_rows
+        .into_iter()
+        .map(|row| TaskHabitDependencyOutput {
+            task_id: row.task_id.to_string(),
+            habit_id: row.habit_id.to_string(),
+            required_completions: row.required_completions,
+            baseline_completion_count: row.baseline_completion_count,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+        })
+        .collect();
+
     let habit_tags: Vec<HabitTagOutput> = habit_tag_rows
         .into_iter()
         .map(|row| HabitTagOutput {
@@ -558,6 +656,8 @@ pub async fn get_sync(
         trades,
         tags,
         task_tags,
+        task_task_dependencies,
+        task_habit_dependencies,
         habit_tags,
         rewards,
         reward_tags,
@@ -589,9 +689,14 @@ pub async fn post_sync(
     let mut result_trades = Vec::new();
     let mut result_tags = Vec::new();
     let mut result_task_tags = Vec::new();
+    let mut result_task_task_dependencies = Vec::new();
+    let mut result_task_habit_dependencies = Vec::new();
     let mut result_habit_tags = Vec::new();
     let mut result_rewards = Vec::new();
     let mut result_reward_tags = Vec::new();
+    let mut completed_task_ids = Vec::new();
+    let mut deleted_task_ids = Vec::new();
+    let mut deleted_habit_ids = Vec::new();
 
     // Process habits first (trades may reference these)
     if let Some(habits) = input.habits {
@@ -622,6 +727,10 @@ pub async fn post_sync(
                 lockout_duration_seconds: habit_input.lockout_duration_seconds,
                 skip_consequence: habit_input.skip_consequence,
             };
+
+            if habit_input.deleted_at.is_some() {
+                deleted_habit_ids.push(habit_id);
+            }
 
             let habit_row = Database::upsert_habit_tx(&mut tx, user.user_id, &upsert_opts)
                 .await
@@ -673,6 +782,14 @@ pub async fn post_sync(
                 due_date: task_input.due_date,
             };
 
+            if task_input.completed_at.is_some() && task_input.deleted_at.is_none() {
+                completed_task_ids.push(task_id);
+            }
+
+            if task_input.deleted_at.is_some() {
+                deleted_task_ids.push(task_id);
+            }
+
             let task_row = Database::upsert_task_tx(&mut tx, user.user_id, &upsert_opts)
                 .await
                 .map_err(|e| {
@@ -696,7 +813,116 @@ pub async fn post_sync(
         }
     }
 
-    // Process rewards third (trades may reference these)
+    // Process task dependencies third (they reference tasks and habits created above)
+    if let Some(task_task_dependencies) = input.task_task_dependencies {
+        for dependency_input in task_task_dependencies {
+            let task_id = dependency_input.task_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid task_id format: {}",
+                    dependency_input.task_id
+                ))
+            })?;
+
+            let depends_on_task_id =
+                dependency_input
+                    .depends_on_task_id
+                    .parse::<Uuid>()
+                    .map_err(|_| {
+                        ApiError::Validation(format!(
+                            "Invalid depends_on_task_id format: {}",
+                            dependency_input.depends_on_task_id
+                        ))
+                    })?;
+
+            let upsert_opts = database::UpsertTaskTaskDependencyOptions {
+                task_id,
+                depends_on_task_id,
+                created_at: dependency_input.created_at,
+                deleted_at: dependency_input.deleted_at,
+            };
+
+            let dependency_row =
+                Database::upsert_task_task_dependency_tx(&mut tx, user.user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting task-task dependency: {:?}", e);
+                        ApiError::Validation(format!(
+                            "Invalid task dependency reference for task_id: {}, depends_on_task_id: {}",
+                            task_id, depends_on_task_id
+                        ))
+                    })?;
+
+            result_task_task_dependencies.push(TaskTaskDependencyOutput {
+                task_id: dependency_row.task_id.to_string(),
+                depends_on_task_id: dependency_row.depends_on_task_id.to_string(),
+                created_at: dependency_row.created_at,
+                updated_at: dependency_row.updated_at,
+                deleted_at: dependency_row.deleted_at,
+            });
+        }
+    }
+
+    if let Some(task_habit_dependencies) = input.task_habit_dependencies {
+        for dependency_input in task_habit_dependencies {
+            if dependency_input.required_completions <= 0 {
+                return Err(ApiError::Validation(
+                    "Habit dependencies must require at least one completion.".to_string(),
+                ));
+            }
+
+            if dependency_input.baseline_completion_count < 0 {
+                return Err(ApiError::Validation(
+                    "Habit dependency baseline completion counts cannot be negative.".to_string(),
+                ));
+            }
+
+            let task_id = dependency_input.task_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid task_id format: {}",
+                    dependency_input.task_id
+                ))
+            })?;
+
+            let habit_id = dependency_input.habit_id.parse::<Uuid>().map_err(|_| {
+                ApiError::Validation(format!(
+                    "Invalid habit_id format: {}",
+                    dependency_input.habit_id
+                ))
+            })?;
+
+            let upsert_opts = database::UpsertTaskHabitDependencyOptions {
+                task_id,
+                habit_id,
+                required_completions: dependency_input.required_completions,
+                baseline_completion_count: dependency_input.baseline_completion_count,
+                created_at: dependency_input.created_at,
+                deleted_at: dependency_input.deleted_at,
+            };
+
+            let dependency_row =
+                Database::upsert_task_habit_dependency_tx(&mut tx, user.user_id, &upsert_opts)
+                    .await
+                    .map_err(|e| {
+                        error!("Database Error upserting task-habit dependency: {:?}", e);
+                        ApiError::Validation(format!(
+                            "Invalid task or habit reference for task_id: {}, habit_id: {}",
+                            task_id, habit_id
+                        ))
+                    })?;
+
+            result_task_habit_dependencies.push(TaskHabitDependencyOutput {
+                task_id: dependency_row.task_id.to_string(),
+                habit_id: dependency_row.habit_id.to_string(),
+                required_completions: dependency_row.required_completions,
+                baseline_completion_count: dependency_row.baseline_completion_count,
+                created_at: dependency_row.created_at,
+                updated_at: dependency_row.updated_at,
+                deleted_at: dependency_row.deleted_at,
+            });
+        }
+    }
+
+    // Process rewards fourth (trades may reference these)
     if let Some(rewards) = input.rewards {
         for reward_input in rewards {
             // Validate reward ID is a valid UUID
@@ -740,7 +966,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process trades fourth (they may reference tasks, habits, or rewards created above)
+    // Process trades fifth (they may reference tasks, habits, or rewards created above)
     if let Some(trades) = input.trades {
         for trade_input in trades {
             // Validate trade ID is a valid UUID
@@ -813,7 +1039,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process tags fifth (entity-tag links may reference these)
+    // Process tags sixth (entity-tag links may reference these)
     if let Some(tags) = input.tags {
         for tag_input in tags {
             // Validate tag ID is a valid UUID
@@ -870,7 +1096,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process task_tags sixth (they reference tasks and tags)
+    // Process task_tags seventh (they reference tasks and tags)
     if let Some(task_tags) = input.task_tags {
         for task_tag_input in task_tags {
             let task_id = task_tag_input.task_id.parse::<Uuid>().map_err(|_| {
@@ -911,7 +1137,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process habit_tags seventh (they reference habits and tags)
+    // Process habit_tags eighth (they reference habits and tags)
     if let Some(habit_tags) = input.habit_tags {
         for habit_tag_input in habit_tags {
             // Validate habit_id is a valid UUID
@@ -954,7 +1180,7 @@ pub async fn post_sync(
         }
     }
 
-    // Process reward_tags eighth (they reference rewards and tags)
+    // Process reward_tags ninth (they reference rewards and tags)
     if let Some(reward_tags) = input.reward_tags {
         for reward_tag_input in reward_tags {
             // Validate reward_id is a valid UUID
@@ -1014,6 +1240,65 @@ pub async fn post_sync(
                 error!("Database Error updating general_difficulty: {:?}", e);
                 ApiError::Internal
             })?;
+    }
+
+    let has_cycles = Database::user_has_task_dependency_cycles_tx(&mut tx, user.user_id)
+        .await
+        .map_err(|e| {
+            error!("Database Error validating task dependency cycles: {:?}", e);
+            ApiError::Internal
+        })?;
+    if has_cycles {
+        return Err(ApiError::Validation(
+            "Task dependencies cannot contain cycles.".to_string(),
+        ));
+    }
+
+    for task_id in deleted_task_ids {
+        let has_dependents = Database::task_has_active_dependents_tx(&mut tx, user.user_id, task_id)
+            .await
+            .map_err(|e| {
+                error!("Database Error validating task dependents: {:?}", e);
+                ApiError::Internal
+            })?;
+
+        if has_dependents {
+            return Err(ApiError::Validation(
+                "This item cannot be deleted while active tasks still depend on it.".to_string(),
+            ));
+        }
+    }
+
+    for habit_id in deleted_habit_ids {
+        let has_dependents = Database::habit_has_active_dependents_tx(&mut tx, user.user_id, habit_id)
+            .await
+            .map_err(|e| {
+                error!("Database Error validating habit dependents: {:?}", e);
+                ApiError::Internal
+            })?;
+
+        if has_dependents {
+            return Err(ApiError::Validation(
+                "This item cannot be deleted while active tasks still depend on it.".to_string(),
+            ));
+        }
+    }
+
+    for task_id in completed_task_ids {
+        let has_incomplete_dependencies =
+            Database::task_has_incomplete_dependencies_tx(&mut tx, user.user_id, task_id)
+                .await
+                .map_err(|e| {
+                    error!("Database Error validating task completion dependencies: {:?}", e);
+                    ApiError::Internal
+                })?;
+
+        if has_incomplete_dependencies {
+            return Err(ApiError::Validation(
+                "Task dependencies must be complete before this task can be completed."
+                    .to_string(),
+            ));
+        }
     }
 
     // Return a balance derived from the just-written trade history instead of
@@ -1079,6 +1364,8 @@ pub async fn post_sync(
         trades: result_trades,
         tags: result_tags,
         task_tags: result_task_tags,
+        task_task_dependencies: result_task_task_dependencies,
+        task_habit_dependencies: result_task_habit_dependencies,
         habit_tags: result_habit_tags,
         rewards: result_rewards,
         reward_tags: result_reward_tags,
@@ -1379,6 +1666,110 @@ async fn load_task_tags_for_sync(
                      JOIN tasks t ON tt.task_id = t.id
                      WHERE t.user_id = $1
                      ORDER BY tt.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_task_task_dependencies_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TaskTaskDependencyRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at
+                 FROM task_task_dependencies ttd
+                 JOIN tasks t ON ttd.task_id = t.id
+                 WHERE t.user_id = $1
+                   AND (((ttd.xmin)::text)::bigint >= $2 OR ((ttd.xmin)::text)::bigint = ANY($3))
+                 ORDER BY ttd.updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at
+                     FROM task_task_dependencies ttd
+                     JOIN tasks t ON ttd.task_id = t.id
+                     WHERE t.user_id = $1 AND ttd.updated_at > $2
+                     ORDER BY ttd.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at
+                     FROM task_task_dependencies ttd
+                     JOIN tasks t ON ttd.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY ttd.updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn load_task_habit_dependencies_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::TaskHabitDependencyRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at
+                 FROM task_habit_dependencies thd
+                 JOIN tasks t ON thd.task_id = t.id
+                 WHERE t.user_id = $1
+                   AND (((thd.xmin)::text)::bigint >= $2 OR ((thd.xmin)::text)::bigint = ANY($3))
+                 ORDER BY thd.updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at
+                     FROM task_habit_dependencies thd
+                     JOIN tasks t ON thd.task_id = t.id
+                     WHERE t.user_id = $1 AND thd.updated_at > $2
+                     ORDER BY thd.updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at
+                     FROM task_habit_dependencies thd
+                     JOIN tasks t ON thd.task_id = t.id
+                     WHERE t.user_id = $1
+                     ORDER BY thd.updated_at ASC",
                 )
                 .bind(user_id)
                 .fetch_all(&mut **tx)

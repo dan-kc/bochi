@@ -12,7 +12,8 @@ enum EntityListQuery {
         createdAt: (Item) -> Date,
         difficultySortOrder: (Item) -> Int?,
         price: (Item) -> Int?,
-        tags: (Item) -> [Tag]
+        tags: (Item) -> [Tag],
+        isDeprioritized: (Item) -> Bool = { _ in false }
     ) -> [Item] {
         let selectedTagIDs = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
 
@@ -24,7 +25,13 @@ enum EntityListQuery {
         }
 
         return filteredItems.sorted { lhs, rhs in
-            compare(
+            let lhsIsDeprioritized = isDeprioritized(lhs)
+            let rhsIsDeprioritized = isDeprioritized(rhs)
+            if lhsIsDeprioritized != rhsIsDeprioritized {
+                return !lhsIsDeprioritized
+            }
+
+            return compare(
                 lhs,
                 rhs,
                 sort: preferences.sort,

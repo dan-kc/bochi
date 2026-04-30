@@ -89,6 +89,32 @@ struct EntityListQueryTests {
         #expect(visible.map(\.id) == [expensive.id, cheap.id, missingPrice.id])
     }
 
+    // Behaviour: blocked tasks should always sink below actionable tasks,
+    // regardless of the active sort option, so the user sees work they can do first.
+    @Test("Blocked items are always sorted after unblocked items")
+    func blockedItemsAlwaysSortAfterUnblockedItems() {
+        let highValueBlocked = makeTask(id: "blocked", createdAt: date(day: 1), difficulty: .hard)
+        let lowValueOpen = makeTask(id: "open", createdAt: date(day: 2), difficulty: .light)
+        let prices: [RecordID: Int] = [
+            highValueBlocked.id: 20,
+            lowValueOpen.id: 5
+        ]
+
+        let visible = EntityListQuery.apply(
+            items: [highValueBlocked, lowValueOpen],
+            preferences: EntityListPreferences(),
+            validTagIDs: [],
+            id: \.id,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
+            price: { prices[$0.id] },
+            tags: { _ in [] },
+            isDeprioritized: { $0.id == highValueBlocked.id }
+        )
+
+        #expect(visible.map(\.id) == [lowValueOpen.id, highValueBlocked.id])
+    }
+
     // Behaviour: Difficulty sorts should respect the explicit tier order rather
     // than the row creation date or enum case declaration order by accident.
     @Test("Difficulty ascending uses tier sort order with a stable tie breaker")
@@ -193,6 +219,26 @@ struct EntityListQueryTests {
             deletedAt: nil,
             frequency: frequency,
             difficultyTier: difficulty
+        )
+    }
+
+    private func makeTask(
+        id: RecordID,
+        createdAt: Date,
+        difficulty: HabitDifficultyTier?
+    ) -> TaskItem {
+        TaskItem(
+            id: id,
+            name: id.rawValue,
+            description: "",
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            deletedAt: nil,
+            completedAt: nil,
+            difficultyTier: difficulty,
+            durationSeconds: nil,
+            skipConsequence: nil,
+            dueDate: nil
         )
     }
 

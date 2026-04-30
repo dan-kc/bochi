@@ -35,6 +35,7 @@ struct SyncManagerTests {
         let syncManager: SyncManager
         let syncStateStore: SyncStateStore
         let taskStore: TaskStore
+        let taskDependencyStore: TaskDependencyStore
         let habitStore: HabitStore
         let rewardStore: RewardStore
         let tradeStore: TradeStore
@@ -77,6 +78,7 @@ struct SyncManagerTests {
 
         let storageURL = TestHelpers.makeTemporaryFileURL("sync-manager")
         let taskStore = TaskStore(storageURL: storageURL)
+        let taskDependencyStore = TaskDependencyStore(storageURL: storageURL)
         let habitStore = HabitStore(storageURL: storageURL)
         let rewardStore = RewardStore(storageURL: storageURL)
         let tradeStore = TradeStore(storageURL: storageURL)
@@ -102,6 +104,7 @@ struct SyncManagerTests {
             authManager: authManager,
             syncStateStore: syncStateStore,
             taskStore: taskStore,
+            taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
             tradeStore: tradeStore,
@@ -120,6 +123,7 @@ struct SyncManagerTests {
             syncManager: syncManager,
             syncStateStore: syncStateStore,
             taskStore: taskStore,
+            taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
             tradeStore: tradeStore,
@@ -138,6 +142,8 @@ struct SyncManagerTests {
         trades: [SyncTradeRecord] = [],
         tags: [SyncTagRecord] = [],
         taskTags: [SyncTaskTagRecord] = [],
+        taskTaskDependencies: [SyncTaskTaskDependencyRecord] = [],
+        taskHabitDependencies: [SyncTaskHabitDependencyRecord] = [],
         habitTags: [SyncHabitTagRecord] = [],
         rewards: [SyncRewardRecord] = [],
         rewardTags: [SyncRewardTagRecord] = [],
@@ -149,6 +155,8 @@ struct SyncManagerTests {
             trades: trades,
             tags: tags,
             taskTags: taskTags,
+            taskTaskDependencies: taskTaskDependencies,
+            taskHabitDependencies: taskHabitDependencies,
             habitTags: habitTags,
             rewards: rewards,
             rewardTags: rewardTags,
@@ -331,6 +339,8 @@ struct SyncManagerTests {
                 trades: [],
                 tags: [],
                 taskTags: [],
+                taskTaskDependencies: [],
+                taskHabitDependencies: [],
                 habitTags: [],
                 rewards: [],
                 rewardTags: [],
@@ -350,6 +360,8 @@ struct SyncManagerTests {
                 trades: [],
                 tags: [],
                 taskTags: [],
+                taskTaskDependencies: [],
+                taskHabitDependencies: [],
                 habitTags: [],
                 rewards: [],
                 rewardTags: [],

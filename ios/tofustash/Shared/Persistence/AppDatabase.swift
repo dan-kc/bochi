@@ -414,6 +414,38 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v7_task_dependencies") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS task_task_dependencies (
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    depends_on_task_id TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    PRIMARY KEY(owner_id, task_id, depends_on_task_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_task_task_dependencies_owner_updated
+                ON task_task_dependencies(owner_id, updated_at);
+
+                CREATE TABLE IF NOT EXISTS task_habit_dependencies (
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    habit_id TEXT NOT NULL,
+                    required_completions INTEGER NOT NULL,
+                    baseline_completion_count INTEGER NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    PRIMARY KEY(owner_id, task_id, habit_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_task_habit_dependencies_owner_updated
+                ON task_habit_dependencies(owner_id, updated_at);
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

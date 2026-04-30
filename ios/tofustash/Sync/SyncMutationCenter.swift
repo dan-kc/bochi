@@ -6,6 +6,8 @@ enum SyncEntityKind: String, Codable, CaseIterable {
     case trades
     case tags
     case taskTags
+    case taskTaskDependencies
+    case taskHabitDependencies
     case habitTags
     case rewards
     case rewardTags
