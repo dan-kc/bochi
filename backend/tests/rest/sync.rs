@@ -392,6 +392,96 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
 }
 
 #[tokio::test]
+async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
+    let email = generate_email_from_fn!(test_sync_push_and_pull_round_trip_refunded_trade_state);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_body = json!({
+        "name": "Refundable Habit",
+        "description": "Trade refund state should sync"
+    });
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
+
+    let active_trade_id = uuid::Uuid::new_v4().to_string();
+    let refunded_trade_id = uuid::Uuid::new_v4().to_string();
+    let refunded_at = "2025-01-01T10:10:00";
+    let push_body = json!({
+        "trades": [{
+            "id": active_trade_id,
+            "habitId": habit_id,
+            "sourceName": "Refundable Habit",
+            "amount": 500,
+            "createdAt": "2025-01-01T10:00:00"
+        }, {
+            "id": refunded_trade_id,
+            "habitId": habit_id,
+            "sourceName": "Refundable Habit",
+            "amount": 200,
+            "createdAt": "2025-01-01T10:05:00",
+            "refundedAt": refunded_at
+        }]
+    });
+
+    let (push_status, push_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", push_body).await;
+
+    assert_eq!(push_status, StatusCode::OK);
+
+    let pushed_trades = push_json.get("trades").unwrap().as_array().unwrap();
+    assert_eq!(pushed_trades.len(), 2);
+    let pushed_active_trade = pushed_trades
+        .iter()
+        .find(|trade| trade.get("id").unwrap() == &active_trade_id)
+        .unwrap();
+    let pushed_refunded_trade = pushed_trades
+        .iter()
+        .find(|trade| trade.get("id").unwrap() == &refunded_trade_id)
+        .unwrap();
+    assert_eq!(
+        pushed_active_trade.get("refundedAt").unwrap(),
+        &serde_json::Value::Null
+    );
+    assert_eq!(pushed_active_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(pushed_refunded_trade.get("refundedAt").unwrap(), refunded_at);
+    assert_eq!(pushed_refunded_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(
+        push_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        500.0
+    );
+
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    assert_eq!(pull_status, StatusCode::OK);
+
+    let pulled_trades = pull_json.get("trades").unwrap().as_array().unwrap();
+    assert_eq!(pulled_trades.len(), 2);
+    let pulled_active_trade = pulled_trades
+        .iter()
+        .find(|trade| trade.get("id").unwrap() == &active_trade_id)
+        .unwrap();
+    let pulled_refunded_trade = pulled_trades
+        .iter()
+        .find(|trade| trade.get("id").unwrap() == &refunded_trade_id)
+        .unwrap();
+    assert_eq!(
+        pulled_active_trade.get("refundedAt").unwrap(),
+        &serde_json::Value::Null
+    );
+    assert_eq!(pulled_active_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(pulled_refunded_trade.get("refundedAt").unwrap(), refunded_at);
+    assert_eq!(pulled_refunded_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(
+        pull_json.get("balance").unwrap().get("tofuBalance").unwrap(),
+        500.0
+    );
+}
+
+#[tokio::test]
 async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
     let email = generate_email_from_fn!(test_sync_push_creates_task_task_tag_and_trade_atomically);
     let password = "password123";

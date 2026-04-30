@@ -1,5 +1,9 @@
 import SwiftUI
 
+private struct TradeDetailRoute: Identifiable {
+    let id: RecordID
+}
+
 struct TradeHistorySheetView: View {
     let filter: TradeHistoryFilter
     let title: String
@@ -10,6 +14,7 @@ struct TradeHistorySheetView: View {
     @Environment(TaskStore.self) private var taskStore
     @Environment(HabitStore.self) private var habitStore
     @Environment(RewardStore.self) private var rewardStore
+    @State private var tradeDetailRoute: TradeDetailRoute?
 
     init(
         filter: TradeHistoryFilter = .all,
@@ -71,7 +76,12 @@ struct TradeHistorySheetView: View {
                     )
                 } else {
                     List(entries) { entry in
-                        TradeHistoryRow(entry: entry)
+                        Button {
+                            tradeDetailRoute = TradeDetailRoute(id: entry.id)
+                        } label: {
+                            TradeHistoryRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
                 }
@@ -91,18 +101,48 @@ struct TradeHistorySheetView: View {
         .presentationDetents(detents)
         .presentationBackground(.thinMaterial)
         .presentationContentInteraction(.scrolls)
+        .sheet(item: $tradeDetailRoute) { route in
+            TradeDetailSheetView(
+                tradeID: route.id,
+                onOpenSource: {
+                    dismiss()
+                }
+            )
+        }
     }
 }
 
 private struct TradeHistoryRow: View {
     let entry: TradeHistoryEntry
 
+    private var amountColor: Color {
+        if entry.isRefunded {
+            return .secondary
+        }
+        return entry.isPositive ? .green : .orange
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(entry.title)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(entry.title)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if entry.isSourceDeleted {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Deleted source")
+                }
+            }
+
+            if let statusText = entry.statusText {
+                Text(statusText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
 
             HStack(alignment: .firstTextBaseline) {
                 Text(entry.dateText)
@@ -116,12 +156,178 @@ private struct TradeHistoryRow: View {
                     Image(systemName: "cube.fill")
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(entry.isPositive ? .green : .orange)
+                .foregroundStyle(amountColor)
             }
         }
-        // Behaviour: each row is informational only; there is no secondary tap
-        // action, so the full row reads as static history rather than a button.
         .padding(.vertical, 4)
+    }
+}
+
+private struct TradeDetailSheetView: View {
+    let tradeID: RecordID
+    let onOpenSource: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(TradeStore.self) private var tradeStore
+    @Environment(TaskStore.self) private var taskStore
+    @Environment(HabitStore.self) private var habitStore
+    @Environment(RewardStore.self) private var rewardStore
+    @Environment(BalanceStore.self) private var balanceStore
+    @Environment(AppNavigationStore.self) private var appNavigationStore
+
+    private struct SourceDetails {
+        let kindLabel: String
+        let name: String
+        let isDeleted: Bool
+        let openEditor: (() -> Void)?
+    }
+
+    private var trade: Trade? {
+        tradeStore.trades.first(where: { $0.id == tradeID })
+    }
+
+    private var sourceDetails: SourceDetails? {
+        guard let trade else { return nil }
+
+        if let taskID = trade.taskId {
+            let task = taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil })
+            return SourceDetails(
+                kindLabel: "Task",
+                name: trade.sourceName ?? task?.name ?? "Deleted task",
+                isDeleted: task == nil,
+                openEditor: task == nil ? nil : {
+                    appNavigationStore.openTaskForm(taskID: taskID)
+                    onOpenSource()
+                }
+            )
+        }
+
+        if let habitID = trade.habitId {
+            let habit = habitStore.habits.first(where: { $0.id == habitID && $0.deletedAt == nil })
+            return SourceDetails(
+                kindLabel: "Habit",
+                name: trade.sourceName ?? habit?.name ?? "Deleted habit",
+                isDeleted: habit == nil,
+                openEditor: habit == nil ? nil : {
+                    appNavigationStore.openHabitForm(habitID: habitID)
+                    onOpenSource()
+                }
+            )
+        }
+
+        if let rewardID = trade.rewardId {
+            let reward = rewardStore.rewards.first(where: { $0.id == rewardID && $0.deletedAt == nil })
+            return SourceDetails(
+                kindLabel: "Reward",
+                name: trade.sourceName ?? reward?.name ?? "Deleted reward",
+                isDeleted: reward == nil,
+                openEditor: reward == nil ? nil : {
+                    appNavigationStore.openRewardForm(rewardID: rewardID)
+                    onOpenSource()
+                }
+            )
+        }
+
+        return SourceDetails(kindLabel: "Source", name: trade.sourceName ?? "Unknown trade", isDeleted: false, openEditor: nil)
+    }
+
+    private func amountText(for trade: Trade) -> String {
+        let sign = trade.amount >= 0 ? "+" : "-"
+        return "\(sign)\(abs(trade.amount))"
+    }
+
+    private func amountColor(for trade: Trade) -> Color {
+        if trade.isRefunded {
+            return .secondary
+        }
+        return trade.amount >= 0 ? .green : .orange
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let trade, let sourceDetails {
+                    List {
+                        Section("Trade") {
+                            LabeledContent("Amount") {
+                                HStack(spacing: 4) {
+                                    Text(amountText(for: trade))
+                                    Image(systemName: "cube.fill")
+                                }
+                                .foregroundStyle(amountColor(for: trade))
+                            }
+
+                            LabeledContent("Created") {
+                                Text(trade.createdAt.formatted(.dateTime.month(.abbreviated).day().year().hour().minute()))
+                            }
+
+                            LabeledContent("Status") {
+                                Text(trade.isRefunded ? "Refunded" : "Active")
+                            }
+                        }
+
+                        Section(sourceDetails.kindLabel) {
+                            if let openEditor = sourceDetails.openEditor {
+                                Button {
+                                    openEditor()
+                                } label: {
+                                    HStack {
+                                        Text(sourceDetails.name)
+                                        if sourceDetails.isDeleted {
+                                            Image(systemName: "trash")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "arrow.up.forward.square")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                HStack(spacing: 6) {
+                                    Text(sourceDetails.name)
+                                        .foregroundStyle(sourceDetails.isDeleted ? .secondary : .primary)
+
+                                    if sourceDetails.isDeleted {
+                                        Image(systemName: "trash")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            Button(trade.isRefunded ? "Undo Refund" : "Refund", role: trade.isRefunded ? nil : .destructive) {
+                                TradeRefundService.setRefunded(
+                                    !trade.isRefunded,
+                                    for: trade,
+                                    tradeStore: tradeStore,
+                                    taskStore: taskStore,
+                                    balanceStore: balanceStore
+                                )
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                } else {
+                    ContentUnavailableView(
+                        "Trade Unavailable",
+                        systemImage: "arrow.left.arrow.right",
+                        description: Text("This trade could not be found.")
+                    )
+                }
+            }
+            .navigationTitle("Trade")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(.thinMaterial)
     }
 }
 
@@ -131,4 +337,6 @@ private struct TradeHistoryRow: View {
         .environment(TaskStore())
         .environment(HabitStore())
         .environment(RewardStore())
+        .environment(BalanceStore())
+        .environment(AppNavigationStore())
 }

@@ -173,8 +173,8 @@ impl Database {
             // literal values that, after the validation is done, gets used by the insert
             // statement.
             "WITH new_trade AS (
-                INSERT INTO trades (habit_id, amount, user_id)
-                SELECT $1, $2, $3
+                INSERT INTO trades (habit_id, source_name, amount, user_id)
+                SELECT $1, habits.name, $2, $3
                 FROM habits
                 WHERE habits.id = $1 AND habits.user_id = $3
                 RETURNING id, habit_id, reward_id, amount, created_at
@@ -207,8 +207,8 @@ impl Database {
                 RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
             ),
             new_trade AS (
-                INSERT INTO trades (task_id, amount, user_id)
-                SELECT id, $2, $3
+                INSERT INTO trades (task_id, source_name, amount, user_id)
+                SELECT id, name, $2, $3
                 FROM updated_task
                 RETURNING id, task_id, habit_id, reward_id, amount, created_at
             )
@@ -243,8 +243,8 @@ impl Database {
     ) -> Result<TradeWithRewardRow, sqlx::Error> {
         sqlx::query_as(
             "WITH new_trade AS (
-                INSERT INTO trades (reward_id, amount, user_id)
-                SELECT $1, $2, $3
+                INSERT INTO trades (reward_id, source_name, amount, user_id)
+                SELECT $1, rewards.name, $2, $3
                 FROM rewards
                 WHERE rewards.id = $1 AND rewards.user_id = $3
                 RETURNING id, habit_id, reward_id, amount, created_at
@@ -479,7 +479,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -491,7 +491,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -503,10 +503,12 @@ impl Database {
         }
     }
 
-    /// Calculate a user's balance directly from non-deleted trades.
+    /// Calculate a user's balance directly from active, non-refunded trades.
     pub async fn calculate_balance_from_trades(&self, user_id: Uuid) -> Result<f64, sqlx::Error> {
         let (total,): (Option<i64>,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+            "SELECT COALESCE(SUM(amount), 0)
+             FROM trades
+             WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
         )
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -954,20 +956,24 @@ impl Database {
 
         // Upsert the trade
         sqlx::query_as(
-            "INSERT INTO trades (id, user_id, task_id, habit_id, reward_id, amount, created_at, deleted_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "INSERT INTO trades (id, user_id, task_id, habit_id, reward_id, source_name, amount, created_at, deleted_at, refunded_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (id) DO UPDATE SET
-                deleted_at = EXCLUDED.deleted_at
-             RETURNING id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at",
+                source_name = EXCLUDED.source_name,
+                deleted_at = EXCLUDED.deleted_at,
+                refunded_at = EXCLUDED.refunded_at
+             RETURNING id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at",
         )
         .bind(trade.id)
         .bind(user_id)
         .bind(trade.task_id)
         .bind(trade.habit_id)
         .bind(trade.reward_id)
+        .bind(&trade.source_name)
         .bind(trade.amount)
         .bind(trade.created_at)
         .bind(trade.deleted_at)
+        .bind(trade.refunded_at)
         .fetch_one(&mut **tx)
         .await
     }
@@ -1234,7 +1240,9 @@ impl Database {
         user_id: Uuid,
     ) -> Result<f64, sqlx::Error> {
         let (total,): (Option<i64>,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+            "SELECT COALESCE(SUM(amount), 0)
+             FROM trades
+             WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
         )
         .bind(user_id)
         .fetch_one(&mut **tx)
@@ -1565,9 +1573,11 @@ pub struct UpsertTradeOptions {
     pub task_id: Option<Uuid>,
     pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
+    pub source_name: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+    pub refunded_at: Option<NaiveDateTime>,
 }
 
 pub struct UpsertTagOptions {
@@ -1631,10 +1641,12 @@ pub struct TradeRow {
     pub task_id: Option<Uuid>,
     pub habit_id: Option<Uuid>,
     pub reward_id: Option<Uuid>,
+    pub source_name: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+    pub refunded_at: Option<NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow)]

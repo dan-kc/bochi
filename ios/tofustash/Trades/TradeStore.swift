@@ -45,6 +45,7 @@ final class TradeStore {
     func addHabitTrade(
         id: RecordID? = nil,
         habitId: RecordID,
+        sourceName: String? = nil,
         amount: Int,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
@@ -54,6 +55,7 @@ final class TradeStore {
         addHabitTrades(
             entries: [(id: id ?? RecordID(), amount: amount)],
             habitId: habitId,
+            sourceName: sourceName,
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: deletedAt,
@@ -64,6 +66,7 @@ final class TradeStore {
     func addTaskTrade(
         id: RecordID? = nil,
         taskId: RecordID,
+        sourceName: String? = nil,
         amount: Int,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
@@ -73,6 +76,7 @@ final class TradeStore {
         addTaskTrades(
             entries: [(id: id ?? RecordID(), amount: amount)],
             taskId: taskId,
+            sourceName: sourceName,
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: deletedAt,
@@ -83,6 +87,7 @@ final class TradeStore {
     func addRewardPurchase(
         id: RecordID? = nil,
         rewardId: RecordID,
+        sourceName: String? = nil,
         amount: Int,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
@@ -92,6 +97,7 @@ final class TradeStore {
         addRewardPurchases(
             entries: [(id: id ?? RecordID(), amount: amount)],
             rewardId: rewardId,
+            sourceName: sourceName,
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: deletedAt,
@@ -102,6 +108,7 @@ final class TradeStore {
     func addHabitTrades(
         entries: [(id: RecordID, amount: Int)],
         habitId: RecordID,
+        sourceName: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -115,6 +122,7 @@ final class TradeStore {
                 taskId: nil,
                 habitId: habitId,
                 rewardId: nil,
+                sourceName: sourceName,
                 amount: entry.amount,
                 createdAt: createdAt,
                 updatedAt: updatedAt ?? createdAt,
@@ -131,6 +139,7 @@ final class TradeStore {
     func addTaskTrades(
         entries: [(id: RecordID, amount: Int)],
         taskId: RecordID,
+        sourceName: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -144,6 +153,7 @@ final class TradeStore {
                 taskId: taskId,
                 habitId: nil,
                 rewardId: nil,
+                sourceName: sourceName,
                 amount: entry.amount,
                 createdAt: createdAt,
                 updatedAt: updatedAt ?? createdAt,
@@ -160,6 +170,7 @@ final class TradeStore {
     func addRewardPurchases(
         entries: [(id: RecordID, amount: Int)],
         rewardId: RecordID,
+        sourceName: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -173,6 +184,7 @@ final class TradeStore {
                 taskId: nil,
                 habitId: nil,
                 rewardId: rewardId,
+                sourceName: sourceName,
                 amount: entry.amount,
                 createdAt: createdAt,
                 updatedAt: updatedAt ?? createdAt,
@@ -200,21 +212,21 @@ final class TradeStore {
 
     func habitTradeDates(habitId: RecordID) -> [Date] {
         trades.compactMap { trade in
-            guard trade.habitId == habitId, trade.deletedAt == nil else { return nil }
+            guard trade.habitId == habitId, trade.deletedAt == nil, trade.refundedAt == nil else { return nil }
             return trade.createdAt
         }
     }
 
     func habitCompletionCount(habitId: RecordID) -> Int {
         trades.reduce(into: 0) { count, trade in
-            guard trade.habitId == habitId, trade.deletedAt == nil else { return }
+            guard trade.habitId == habitId, trade.deletedAt == nil, trade.refundedAt == nil else { return }
             count += 1
         }
     }
 
     func rewardPurchaseDates(rewardId: RecordID) -> [Date] {
         trades.compactMap { trade in
-            guard trade.rewardId == rewardId, trade.deletedAt == nil else { return nil }
+            guard trade.rewardId == rewardId, trade.deletedAt == nil, trade.refundedAt == nil else { return nil }
             return trade.createdAt
         }
     }
@@ -222,15 +234,96 @@ final class TradeStore {
     func tradesInPeriod(habitId: RecordID, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.habitId == habitId && $0.deletedAt == nil && $0.createdAt >= cutoff
+            $0.habitId == habitId && $0.deletedAt == nil && $0.refundedAt == nil && $0.createdAt >= cutoff
         }.count
     }
 
     func rewardPurchasesInPeriod(rewardId: RecordID, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.rewardId == rewardId && $0.deletedAt == nil && $0.createdAt >= cutoff
+            $0.rewardId == rewardId && $0.deletedAt == nil && $0.refundedAt == nil && $0.createdAt >= cutoff
         }.count
+    }
+
+    func latestTaskTrade(taskId: RecordID, includeRefunded: Bool = true) -> Trade? {
+        trades
+            .filter { trade in
+                guard trade.taskId == taskId, trade.deletedAt == nil else { return false }
+                if includeRefunded {
+                    return true
+                }
+                return trade.refundedAt == nil
+            }
+            .max {
+                if $0.createdAt == $1.createdAt {
+                    return $0.updatedAt < $1.updatedAt
+                }
+                return $0.createdAt < $1.createdAt
+            }
+    }
+
+    func refundTrade(
+        id: RecordID,
+        refundedAt: Date = Date(),
+        shouldNotifySync: Bool = true
+    ) {
+        guard let existing = trades.first(where: { $0.id == id && $0.deletedAt == nil && $0.refundedAt == nil }) else {
+            return
+        }
+
+        upsertTrades(
+            [
+                Trade(
+                    id: existing.id,
+                    taskId: existing.taskId,
+                    habitId: existing.habitId,
+                    rewardId: existing.rewardId,
+                    sourceName: existing.sourceName,
+                    amount: existing.amount,
+                    createdAt: existing.createdAt,
+                    updatedAt: refundedAt,
+                    deletedAt: existing.deletedAt,
+                    refundedAt: refundedAt
+                )
+            ],
+            markDirty: shouldNotifySync
+        )
+
+        if shouldNotifySync {
+            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
+        }
+    }
+
+    func unrefundTrade(
+        id: RecordID,
+        updatedAt: Date = Date(),
+        shouldNotifySync: Bool = true
+    ) {
+        guard let existing = trades.first(where: { $0.id == id && $0.deletedAt == nil && $0.refundedAt != nil }) else {
+            return
+        }
+
+        upsertTrades(
+            [
+                Trade(
+                    id: existing.id,
+                    taskId: existing.taskId,
+                    habitId: existing.habitId,
+                    rewardId: existing.rewardId,
+                    sourceName: existing.sourceName,
+                    amount: existing.amount,
+                    createdAt: existing.createdAt,
+                    updatedAt: updatedAt,
+                    deletedAt: existing.deletedAt,
+                    refundedAt: nil
+                )
+            ],
+            markDirty: shouldNotifySync
+        )
+
+        if shouldNotifySync {
+            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
+        }
     }
 
     func mergeTrades(_ remoteTrades: [Trade]) {
@@ -363,18 +456,20 @@ final class TradeStore {
         try database.execute(
             """
             INSERT INTO trades (
-                id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 task_id = excluded.task_id,
                 habit_id = excluded.habit_id,
                 reward_id = excluded.reward_id,
+                source_name = excluded.source_name,
                 amount = excluded.amount,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
-                deleted_at = excluded.deleted_at
+                deleted_at = excluded.deleted_at,
+                refunded_at = excluded.refunded_at
             """,
             bindings: tradeBindings(trade, ownerID: currentOwnerID),
             on: databaseHandle
@@ -384,7 +479,7 @@ final class TradeStore {
     private func loadTrades(ownerID: String) -> [Trade] {
         let fetched = (try? database.query(
             """
-            SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+            SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
             FROM trades
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -397,10 +492,12 @@ final class TradeStore {
                 taskId: SQLiteColumn.optionalText(row, index: 1).map { RecordID(rawValue: $0) },
                 habitId: SQLiteColumn.optionalText(row, index: 2).map { RecordID(rawValue: $0) },
                 rewardId: SQLiteColumn.optionalText(row, index: 3).map { RecordID(rawValue: $0) },
-                amount: SQLiteColumn.int(row, index: 4),
-                createdAt: SQLiteColumn.date(row, index: 5),
-                updatedAt: SQLiteColumn.date(row, index: 6),
-                deletedAt: SQLiteColumn.optionalDate(row, index: 7)
+                sourceName: SQLiteColumn.optionalText(row, index: 4),
+                amount: SQLiteColumn.int(row, index: 5),
+                createdAt: SQLiteColumn.date(row, index: 6),
+                updatedAt: SQLiteColumn.date(row, index: 7),
+                deletedAt: SQLiteColumn.optionalDate(row, index: 8),
+                refundedAt: SQLiteColumn.optionalDate(row, index: 9)
             )
         }) ?? []
 
@@ -422,9 +519,9 @@ final class TradeStore {
             try database.execute(
                 """
                 INSERT INTO trades (
-                    id, owner_id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bindings: tradeBindings(trade, ownerID: ownerID),
                 on: databaseHandle
@@ -443,7 +540,7 @@ final class TradeStore {
             """
             SELECT COALESCE(SUM(amount), 0)
             FROM trades
-            WHERE owner_id = ? AND deleted_at IS NULL
+            WHERE owner_id = ? AND deleted_at IS NULL AND refunded_at IS NULL
             """,
             bindings: [.text(ownerID)],
             on: databaseHandle
@@ -475,10 +572,12 @@ final class TradeStore {
             trade.taskId.map { .text($0.rawValue) } ?? .null,
             trade.habitId.map { .text($0.rawValue) } ?? .null,
             trade.rewardId.map { .text($0.rawValue) } ?? .null,
+            trade.sourceName.map { .text($0) } ?? .null,
             .int(Int64(trade.amount)),
             .double(trade.createdAt.timeIntervalSince1970),
             .double(trade.updatedAt.timeIntervalSince1970),
-            trade.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null
+            trade.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null,
+            trade.refundedAt.map { .double($0.timeIntervalSince1970) } ?? .null
         ]
     }
 }

@@ -94,9 +94,11 @@ pub struct SyncTradeInput {
     pub task_id: Option<String>,
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
+    pub source_name: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+    pub refunded_at: Option<NaiveDateTime>,
 }
 
 #[derive(Deserialize)]
@@ -242,10 +244,12 @@ pub struct TradeOutput {
     pub task_id: Option<String>,
     pub habit_id: Option<String>,
     pub reward_id: Option<String>,
+    pub source_name: Option<String>,
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
+    pub refunded_at: Option<NaiveDateTime>,
 }
 
 #[derive(Serialize)]
@@ -548,10 +552,12 @@ pub async fn get_sync(
             task_id: row.task_id.map(|id| id.to_string()),
             habit_id: row.habit_id.map(|id| id.to_string()),
             reward_id: row.reward_id.map(|id| id.to_string()),
+            source_name: row.source_name,
             amount: row.amount,
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
+            refunded_at: row.refunded_at,
         })
         .collect();
 
@@ -1014,9 +1020,11 @@ pub async fn post_sync(
                 task_id,
                 habit_id,
                 reward_id,
+                source_name: trade_input.source_name,
                 amount: trade_input.amount,
                 created_at: trade_input.created_at,
                 deleted_at: trade_input.deleted_at,
+                refunded_at: trade_input.refunded_at,
             };
 
             let trade_row = Database::upsert_trade_tx(&mut tx, user.user_id, &upsert_opts)
@@ -1031,10 +1039,12 @@ pub async fn post_sync(
                 task_id: trade_row.task_id.map(|id| id.to_string()),
                 habit_id: trade_row.habit_id.map(|id| id.to_string()),
                 reward_id: trade_row.reward_id.map(|id| id.to_string()),
+                source_name: trade_row.source_name,
                 amount: trade_row.amount,
                 created_at: trade_row.created_at,
                 updated_at: trade_row.updated_at,
                 deleted_at: trade_row.deleted_at,
+                refunded_at: trade_row.refunded_at,
             });
         }
     }
@@ -1534,7 +1544,7 @@ async fn load_trades_for_sync(
     match cursor {
         Some(cursor) => {
             sqlx::query_as(
-                "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                  FROM trades
                  WHERE user_id = $1
                    AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
@@ -1549,7 +1559,7 @@ async fn load_trades_for_sync(
         None => match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -1561,7 +1571,7 @@ async fn load_trades_for_sync(
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, amount, created_at, updated_at, deleted_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -1935,7 +1945,9 @@ async fn load_balance_for_sync(
     user_id: Uuid,
 ) -> Result<f64, sqlx::Error> {
     let (total,): (Option<i64>,) = sqlx::query_as(
-        "SELECT COALESCE(SUM(amount), 0) FROM trades WHERE user_id = $1 AND deleted_at IS NULL",
+        "SELECT COALESCE(SUM(amount), 0)
+         FROM trades
+         WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
     )
     .bind(user_id)
     .fetch_one(&mut **tx)

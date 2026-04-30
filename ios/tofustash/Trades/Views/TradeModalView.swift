@@ -200,7 +200,7 @@ struct TradeModalView: View {
             projectedCompletionDates.append(claimDate)
         }
 
-        tradeStore.addHabitTrades(entries: entries, habitId: habit.id, createdAt: claimDate)
+        tradeStore.addHabitTrades(entries: entries, habitId: habit.id, sourceName: habit.name, createdAt: claimDate)
         balanceStore.refresh()
 
         // Show celebration — replaces all form content instantly.

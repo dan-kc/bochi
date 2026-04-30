@@ -446,6 +446,18 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v8_trade_refunds") { db in
+            try db.execute(sql: """
+                ALTER TABLE trades ADD COLUMN refunded_at REAL;
+            """)
+        }
+
+        migrator.registerMigration("v9_trade_source_name") { db in
+            try db.execute(sql: """
+                ALTER TABLE trades ADD COLUMN source_name TEXT;
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

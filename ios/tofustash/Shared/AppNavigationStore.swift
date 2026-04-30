@@ -10,6 +10,7 @@ enum AppTab: Hashable {
 enum PendingEntityFormRoute: Equatable, Sendable {
     case task(RecordID)
     case habit(RecordID)
+    case reward(RecordID)
 
     var tab: AppTab {
         switch self {
@@ -17,6 +18,8 @@ enum PendingEntityFormRoute: Equatable, Sendable {
             return .tasks
         case .habit:
             return .habits
+        case .reward:
+            return .rewards
         }
     }
 }
@@ -40,6 +43,11 @@ final class AppNavigationStore {
     func openHabitForm(habitID: RecordID) {
         selectedTab = .habits
         pendingEntityFormRequest = PendingEntityFormRequest(route: .habit(habitID))
+    }
+
+    func openRewardForm(rewardID: RecordID) {
+        selectedTab = .rewards
+        pendingEntityFormRequest = PendingEntityFormRequest(route: .reward(rewardID))
     }
 
     func clearPendingEntityFormRequest(id: UUID) {

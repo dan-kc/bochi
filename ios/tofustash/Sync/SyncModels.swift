@@ -167,10 +167,12 @@ struct SyncTradeRecord: Codable {
     let taskId: String?
     let habitId: String?
     let rewardId: String?
+    let sourceName: String?
     let amount: Int
     let createdAt: String
     let updatedAt: String?
     let deletedAt: String?
+    let refundedAt: String?
 
     func toModel() -> Trade? {
         guard let createdAt = AppDateCoding.parseBackendTimestamp(createdAt) else {
@@ -182,10 +184,12 @@ struct SyncTradeRecord: Codable {
             taskId: taskId.map { RecordID($0) },
             habitId: habitId.map { RecordID($0) },
             rewardId: rewardId.map { RecordID($0) },
+            sourceName: sourceName,
             amount: amount,
             createdAt: createdAt,
             updatedAt: AppDateCoding.parseBackendTimestamp(updatedAt) ?? createdAt,
-            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt)
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
+            refundedAt: AppDateCoding.parseBackendTimestamp(refundedAt)
         )
     }
 
@@ -195,10 +199,12 @@ struct SyncTradeRecord: Codable {
             taskId: trade.taskId?.rawValue,
             habitId: trade.habitId?.rawValue,
             rewardId: trade.rewardId?.rawValue,
+            sourceName: trade.sourceName,
             amount: trade.amount,
             createdAt: AppDateCoding.backendTimestamp(from: trade.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: trade.updatedAt),
-            deletedAt: trade.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) }
+            deletedAt: trade.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
+            refundedAt: trade.refundedAt.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
 }

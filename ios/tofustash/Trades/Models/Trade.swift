@@ -14,8 +14,40 @@ struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let taskId: RecordID?
     let habitId: RecordID?
     let rewardId: RecordID?
+    let sourceName: String?
     let amount: Int
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+    let refundedAt: Date?
+
+    init(
+        id: RecordID,
+        taskId: RecordID?,
+        habitId: RecordID?,
+        rewardId: RecordID?,
+        sourceName: String? = nil,
+        amount: Int,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        refundedAt: Date? = nil
+    ) {
+        self.id = id
+        self.taskId = taskId
+        self.habitId = habitId
+        self.rewardId = rewardId
+        self.sourceName = sourceName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? sourceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
+        self.amount = amount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.refundedAt = refundedAt
+    }
+
+    var isRefunded: Bool {
+        refundedAt != nil
+    }
 }

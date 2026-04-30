@@ -13,6 +13,7 @@ struct RewardsView: View {
     @Environment(TradeStore.self) private var tradeStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
+    @Environment(AppNavigationStore.self) private var appNavigationStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: RewardFormRoute? = nil
@@ -110,6 +111,16 @@ struct RewardsView: View {
             .overlay {
                 ToastOverlay(toastManager: toastManager)
             }
+            .onAppear {
+                schedulePendingRewardFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.pendingEntityFormRequest) { _, _ in
+                schedulePendingRewardFormOpenIfNeeded()
+            }
+            .onChange(of: appNavigationStore.selectedTab) { _, selectedTab in
+                guard selectedTab == .rewards else { return }
+                schedulePendingRewardFormOpenIfNeeded()
+            }
         }
     }
 
@@ -204,6 +215,23 @@ struct RewardsView: View {
             prefill: nil
         )
     }
+
+    @MainActor
+    private func openPendingRewardFormIfNeeded() {
+        guard appNavigationStore.selectedTab == .rewards else { return }
+        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
+        guard case .reward(let rewardID) = request.route else { return }
+        guard let reward = rewardStore.rewards.first(where: { $0.id == rewardID && $0.deletedAt == nil }) else { return }
+        guard formRoute == nil else { return }
+        openChangeForm(reward, focus: nil)
+        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+    }
+
+    private func schedulePendingRewardFormOpenIfNeeded() {
+        DispatchQueue.main.async {
+            self.openPendingRewardFormIfNeeded()
+        }
+    }
 }
 
 #Preview {
@@ -213,5 +241,6 @@ struct RewardsView: View {
         .environment(TagStore())
         .environment(TradeStore())
         .environment(UserSettingsStore())
+        .environment(AppNavigationStore())
         .environment(ListPreferencesStore())
 }

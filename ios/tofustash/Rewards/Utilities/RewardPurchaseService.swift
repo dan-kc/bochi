@@ -52,7 +52,7 @@ enum RewardPurchaseService {
             purchaseDates.append(purchaseDate)
         }
 
-        tradeStore.addRewardPurchases(entries: entries, rewardId: reward.id, createdAt: purchaseDate)
+        tradeStore.addRewardPurchases(entries: entries, rewardId: reward.id, sourceName: reward.name, createdAt: purchaseDate)
         balanceStore.refresh()
         return totalPrice
     }

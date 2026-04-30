@@ -212,6 +212,7 @@ struct TasksView: View {
         }
         _ = TaskCompletionSupport.completeTask(
             taskID: task.id,
+            sourceName: task.name,
             reward: reward,
             tradeStore: tradeStore,
             taskStore: taskStore,

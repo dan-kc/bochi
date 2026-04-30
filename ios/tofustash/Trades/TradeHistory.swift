@@ -16,6 +16,9 @@ struct TradeHistoryEntry: Identifiable, Equatable {
     let dateText: String
     let amountText: String
     let isPositive: Bool
+    let isRefunded: Bool
+    let isSourceDeleted: Bool
+    let statusText: String?
 }
 
 enum TradeHistoryBuilder {
@@ -52,15 +55,20 @@ enum TradeHistoryBuilder {
             .sorted { $0.createdAt > $1.createdAt }
             .map { trade in
                 let itemName: String
+                let isSourceDeleted: Bool
 
                 if let taskId = trade.taskId {
-                    itemName = taskNames[taskId] ?? "Deleted task"
+                    itemName = trade.sourceName ?? taskNames[taskId] ?? "Deleted task"
+                    isSourceDeleted = taskNames[taskId] == nil
                 } else if let habitId = trade.habitId {
-                    itemName = habitNames[habitId] ?? "Deleted habit"
+                    itemName = trade.sourceName ?? habitNames[habitId] ?? "Deleted habit"
+                    isSourceDeleted = habitNames[habitId] == nil
                 } else if let rewardId = trade.rewardId {
-                    itemName = rewardNames[rewardId] ?? "Deleted reward"
+                    itemName = trade.sourceName ?? rewardNames[rewardId] ?? "Deleted reward"
+                    isSourceDeleted = rewardNames[rewardId] == nil
                 } else {
-                    itemName = "Unknown trade"
+                    itemName = trade.sourceName ?? "Unknown trade"
+                    isSourceDeleted = false
                 }
 
                 let title = "\(itemName)"
@@ -72,7 +80,10 @@ enum TradeHistoryBuilder {
                     title: title,
                     dateText: formatDate(trade.createdAt),
                     amountText: amountText,
-                    isPositive: isPositive
+                    isPositive: isPositive,
+                    isRefunded: trade.refundedAt != nil,
+                    isSourceDeleted: isSourceDeleted,
+                    statusText: trade.refundedAt != nil ? "Refunded" : nil
                 )
             }
     }

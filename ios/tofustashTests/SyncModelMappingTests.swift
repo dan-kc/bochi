@@ -112,6 +112,32 @@ struct SyncModelMappingTests {
         #expect(record.minDailyFrequency == rate)
     }
 
+    // Behaviour: refunded trade state must round-trip through sync so the app
+    // can keep refunded history visible across devices.
+    @Test func syncTradeRecordRoundTripsRefundedAt() throws {
+        let refundedAt = "2026-04-24T08:00:00.000000"
+        let record = SyncTradeRecord(
+            id: "trade-1",
+            taskId: "task-1",
+            habitId: nil,
+            rewardId: nil,
+            sourceName: "Submit report",
+            amount: 120,
+            createdAt: "2026-04-23T12:00:00.000000",
+            updatedAt: "2026-04-24T08:00:00.000000",
+            deletedAt: nil,
+            refundedAt: refundedAt
+        )
+
+        let model = try #require(record.toModel())
+        #expect(model.refundedAt == AppDateCoding.parseBackendTimestamp(refundedAt))
+        #expect(model.sourceName == "Submit report")
+
+        let encoded = SyncTradeRecord.from(model)
+        #expect(encoded.refundedAt == refundedAt)
+        #expect(encoded.sourceName == "Submit report")
+    }
+
     // Behaviour: when a locally edited reward is queued for sync, encoding back
     // to the wire format should keep the same fractional daily rate.
     @Test func syncRewardRecordFromModelPreservesFractionalFrequency() {

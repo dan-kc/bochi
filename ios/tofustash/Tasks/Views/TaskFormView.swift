@@ -203,6 +203,18 @@ struct TaskFormView: View {
         !isNewMode && !isCompleted && !claimed
     }
 
+    private var refundableTaskTrade: Trade? {
+        tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: false)
+    }
+
+    private var refundPreviewAmount: Int {
+        refundableTaskTrade.map { abs($0.amount) } ?? rewardPreview
+    }
+
+    private var showsRefundButton: Bool {
+        !isNewMode && isCompleted && !claimed && refundableTaskTrade != nil
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -434,7 +446,7 @@ struct TaskFormView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 16) {
-                        Color.clear.frame(height: showsCompleteButton ? 94 : 16)
+                        Color.clear.frame(height: (showsCompleteButton || showsRefundButton) ? 94 : 16)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -468,6 +480,11 @@ struct TaskFormView: View {
                     completeTaskFromForm()
                 }
                 .accessibilityIdentifier("task.complete")
+            } else if showsRefundButton {
+                TofuActionButton(amount: refundPreviewAmount, polarity: .spending, layout: .expanded(title: "Refund Task")) {
+                    refundCompletedTaskFromForm()
+                }
+                .accessibilityIdentifier("task.refund")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -772,6 +789,7 @@ struct TaskFormView: View {
 
         completedAt = TaskCompletionSupport.completeTask(
             taskID: taskID,
+            sourceName: draftTask.name,
             reward: rewardPreview,
             tradeStore: tradeStore,
             taskStore: taskStore,
@@ -780,6 +798,19 @@ struct TaskFormView: View {
         didPersist = true
         claimedAmount = rewardPreview
         claimed = true
+    }
+
+    private func refundCompletedTaskFromForm() {
+        guard let trade = refundableTaskTrade else { return }
+
+        TradeRefundService.setRefunded(
+            true,
+            for: trade,
+            tradeStore: tradeStore,
+            taskStore: taskStore,
+            balanceStore: balanceStore
+        )
+        completedAt = nil
     }
 
     nonisolated static func dueDateSummary(_ dueDate: Date) -> String {
@@ -800,6 +831,7 @@ struct TaskFormView: View {
 
         _ = TaskCompletionSupport.completeTask(
             taskID: task.id,
+            sourceName: task.name,
             reward: TaskRewardCalculation.calculateReward(task: task),
             tradeStore: tradeStore,
             taskStore: taskStore,

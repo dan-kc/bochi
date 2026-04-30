@@ -56,12 +56,12 @@ struct TradeHistoryBuilderTests {
 
     // Behaviour: old history stays legible even after the underlying habit or
     // reward has been deleted from the active lists.
-    @Test("buildEntries falls back to deleted labels when the source item is missing")
-    func buildsDeletedFallbackLabels() {
+    @Test("buildEntries keeps the trade-time name when the source item is missing")
+    func keepsTradeTimeNameWhenSourceItemIsMissing() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trades = [
-            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
-            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now.addingTimeInterval(-1), updatedAt: now.addingTimeInterval(-1), deletedAt: nil)
+            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, sourceName: "Morning Run", amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
+            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", sourceName: "Ice Cream", amount: -25, createdAt: now.addingTimeInterval(-1), updatedAt: now.addingTimeInterval(-1), deletedAt: nil)
         ]
 
         let entries = TradeHistoryBuilder.buildEntries(
@@ -72,8 +72,10 @@ struct TradeHistoryBuilderTests {
             formatDate: { _ in "date" }
         )
 
-        #expect(entries[0].title == "Deleted habit")
-        #expect(entries[1].title == "Deleted reward")
+        #expect(entries[0].title == "Morning Run")
+        #expect(entries[0].isSourceDeleted)
+        #expect(entries[1].title == "Ice Cream")
+        #expect(entries[1].isSourceDeleted)
     }
 
     // Behaviour: opening history from a habit should only show that habit's
@@ -188,12 +190,12 @@ struct TradeHistoryBuilderTests {
 
     // Behaviour: filtered history should still stay readable after the edited
     // habit or reward has been deleted from the active list.
-    @Test("buildEntries keeps deleted fallback labels when filtering")
-    func keepsDeletedFallbackLabelsWhenFiltering() {
+    @Test("buildEntries keeps trade-time names when filtering deleted sources")
+    func keepsTradeTimeNamesWhenFilteringDeletedSources() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trades = [
-            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
-            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", amount: -25, createdAt: now, updatedAt: now, deletedAt: nil)
+            Trade(id: "habit-trade", taskId: nil, habitId: "missing-habit", rewardId: nil, sourceName: "Morning Run", amount: 75, createdAt: now, updatedAt: now, deletedAt: nil),
+            Trade(id: "reward-trade", taskId: nil, habitId: nil, rewardId: "missing-reward", sourceName: "Ice Cream", amount: -25, createdAt: now, updatedAt: now, deletedAt: nil)
         ]
 
         let habitEntries = TradeHistoryBuilder.buildEntries(
@@ -214,8 +216,41 @@ struct TradeHistoryBuilderTests {
             formatDate: { _ in "date" }
         )
 
-        #expect(habitEntries.map(\.title) == ["Deleted habit"])
-        #expect(rewardEntries.map(\.title) == ["Deleted reward"])
+        #expect(habitEntries.map(\.title) == ["Morning Run"])
+        #expect(habitEntries.map(\.isSourceDeleted) == [true])
+        #expect(rewardEntries.map(\.title) == ["Ice Cream"])
+        #expect(rewardEntries.map(\.isSourceDeleted) == [true])
+    }
+
+    // Behaviour: trade history should stay historically accurate after a user
+    // renames a source item, so the original trade continues showing the name
+    // from the moment the trade happened.
+    @Test("buildEntries prefers the trade-time source name over the current entity name")
+    func prefersTradeTimeSourceNameOverCurrentEntityName() {
+        let now = Date(timeIntervalSince1970: 3_000)
+        let habit = Habit(
+            id: "habit-1",
+            name: "New Habit Name",
+            description: "",
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: nil,
+            frequency: 1,
+            difficultyTier: .medium
+        )
+
+        let entries = TradeHistoryBuilder.buildEntries(
+            trades: [
+                Trade(id: "habit-trade", taskId: nil, habitId: "habit-1", rewardId: nil, sourceName: "Old Habit Name", amount: 75, createdAt: now, updatedAt: now, deletedAt: nil)
+            ],
+            tasks: [],
+            habits: [habit],
+            rewards: [],
+            formatDate: { _ in "date" }
+        )
+
+        #expect(entries.map(\.title) == ["Old Habit Name"])
+        #expect(entries.map(\.isSourceDeleted) == [false])
     }
 
     // Behaviour: task trades should resolve task names and keep completed items
@@ -256,5 +291,49 @@ struct TradeHistoryBuilderTests {
         #expect(entries.map(\.id) == [RecordID("task-new"), RecordID("task-old")])
         #expect(entries.map(\.title) == ["Submit report", "Submit report"])
         #expect(entries.map(\.amountText) == ["+80", "+60"])
+    }
+
+    // Behaviour: refunded trades stay visible in history so the user can undo
+    // the refund, but the row should clearly show that the tofu is inactive.
+    @Test("buildEntries keeps refunded trades visible and marked")
+    func keepsRefundedTradesVisibleAndMarked() {
+        let createdAt = Date(timeIntervalSince1970: 2_000)
+        let refundedAt = createdAt.addingTimeInterval(120)
+        let reward = Reward(
+            id: "reward-1",
+            name: "Ice Cream",
+            description: "",
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            deletedAt: nil,
+            maxFrequency: 1,
+            damageTier: .medium
+        )
+
+        let entries = TradeHistoryBuilder.buildEntries(
+            trades: [
+                Trade(
+                    id: "reward-refunded",
+                    taskId: nil,
+                    habitId: nil,
+                    rewardId: "reward-1",
+                    amount: -25,
+                    createdAt: createdAt,
+                    updatedAt: refundedAt,
+                    deletedAt: nil,
+                    refundedAt: refundedAt
+                )
+            ],
+            tasks: [],
+            habits: [],
+            rewards: [reward],
+            formatDate: { _ in "date" }
+        )
+
+        #expect(entries.count == 1)
+        #expect(entries[0].title == "Ice Cream")
+        #expect(entries[0].amountText == "-25")
+        #expect(entries[0].isRefunded)
+        #expect(entries[0].statusText == "Refunded")
     }
 }
