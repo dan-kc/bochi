@@ -97,6 +97,23 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Exercise"].waitForExistence(timeout: 2))
     }
 
+    // Behaviour: after adding a habit into a long list, the screen should
+    // scroll so the new habit is immediately visible to the user.
+    func testAddingHabitScrollsToNewHabit() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Habits"].tap()
+        for index in 0..<12 {
+            createHabit(named: "Habit \(index)", in: app)
+        }
+
+        createHabit(named: "Habit Target", in: app)
+
+        let targetHabit = app.staticTexts["Habit Target"]
+        XCTAssertTrue(targetHabit.waitForExistence(timeout: 2))
+        XCTAssertTrue(targetHabit.isHittable)
+    }
+
     // Behaviour: closing a blank reward sheet should not create a recoverable
     // toast because there is no user-authored draft to restore.
     func testBlankRewardDraftDoesNotShowRecoveryToast() {
@@ -169,6 +186,23 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Chips"].waitForExistence(timeout: 2))
     }
 
+    // Behaviour: after adding a reward into a long list, the screen should
+    // scroll so the new reward is immediately visible.
+    func testAddingRewardScrollsToNewReward() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Rewards"].tap()
+        for index in 0..<12 {
+            createReward(named: "Reward \(index)", in: app)
+        }
+
+        createReward(named: "Reward Target", in: app)
+
+        let targetReward = app.staticTexts["Reward Target"]
+        XCTAssertTrue(targetReward.waitForExistence(timeout: 2))
+        XCTAssertTrue(targetReward.isHittable)
+    }
+
     // Behaviour: closing a blank new-task sheet should not offer recovery
     // because the user did not create any draft worth restoring.
     func testBlankTaskDraftDoesNotShowRecoveryToast() {
@@ -238,6 +272,23 @@ final class tofustashUITests: XCTestCase {
         app.navigationBars.buttons["Add"].firstMatch.tap()
 
         XCTAssertTrue(app.staticTexts["Submit report"].waitForExistence(timeout: 2))
+    }
+
+    // Behaviour: after adding a task into a long list, the screen should
+    // scroll so the new task is immediately visible.
+    func testAddingTaskScrollsToNewTask() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        for index in 0..<12 {
+            createTask(named: "Task \(index)", in: app)
+        }
+
+        createTask(named: "Task Target", in: app)
+
+        let targetTask = app.staticTexts["Task Target"]
+        XCTAssertTrue(targetTask.waitForExistence(timeout: 2))
+        XCTAssertTrue(targetTask.isHittable)
     }
 
     // Behaviour: completing a task should keep existing reminders visible and
@@ -370,6 +421,36 @@ final class tofustashUITests: XCTestCase {
         if doneButton.waitForExistence(timeout: 1) {
             doneButton.tap()
         }
+    }
+
+    private func createHabit(named name: String, in app: XCUIApplication) {
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["entity-form.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText(name)
+        finishEditingFormIfNeeded(app)
+        app.navigationBars.buttons["Add"].firstMatch.tap()
+    }
+
+    private func createReward(named name: String, in app: XCUIApplication) {
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["entity-form.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText(name)
+        finishEditingFormIfNeeded(app)
+        app.navigationBars.buttons["Add"].firstMatch.tap()
+    }
+
+    private func createTask(named name: String, in app: XCUIApplication) {
+        app.buttons["entity.add"].tap()
+        let nameField = app.textFields["entity-form.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText(name)
+        finishEditingFormIfNeeded(app)
+        app.navigationBars.buttons["Add"].firstMatch.tap()
     }
 
     private func openTaskEditor(_ taskText: XCUIElement, in app: XCUIApplication) {

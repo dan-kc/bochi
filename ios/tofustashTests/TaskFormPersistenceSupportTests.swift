@@ -31,7 +31,7 @@ struct TaskFormPersistenceSupportTests {
         )
         let taskID = RecordID()
 
-        let didPersist = TaskFormPersistenceSupport.persistTask(
+        let persistedTask = TaskFormPersistenceSupport.persistTask(
             task: nil,
             taskID: taskID,
             name: String(repeating: "x", count: 101),
@@ -49,7 +49,7 @@ struct TaskFormPersistenceSupportTests {
             reminderStore: reminderStore
         )
 
-        #expect(didPersist == false)
+        #expect(persistedTask == nil)
         #expect(taskStore.tasks.isEmpty)
         #expect(reminderStore.reminders(for: .task(taskID)).isEmpty)
     }
@@ -74,7 +74,7 @@ struct TaskFormPersistenceSupportTests {
         )
 
         let replacementReminder = ReminderDraft(scheduledAt: Date().addingTimeInterval(1_200))
-        let didPersist = TaskFormPersistenceSupport.persistTask(
+        let persistedTask = TaskFormPersistenceSupport.persistTask(
             task: existingTask,
             taskID: existingTask.id,
             name: existingTask.name,
@@ -92,7 +92,8 @@ struct TaskFormPersistenceSupportTests {
             reminderStore: reminderStore
         )
 
-        #expect(didPersist == true)
+        let savedTask = try #require(persistedTask)
+        #expect(savedTask.id == existingTask.id)
         let persistedReminders = reminderStore.reminderDrafts(for: .task(existingTask.id))
         #expect(persistedReminders.count == 1)
         let persistedScheduledAt = try #require(persistedReminders.first?.scheduledAt)
@@ -116,7 +117,7 @@ struct TaskFormPersistenceSupportTests {
 
         reminderStore.replaceReminders(for: .task(existingTask.id), with: [reminder])
 
-        let didPersist = TaskFormPersistenceSupport.persistTask(
+        let persistedTask = TaskFormPersistenceSupport.persistTask(
             task: existingTask,
             taskID: existingTask.id,
             name: existingTask.name,
@@ -134,7 +135,8 @@ struct TaskFormPersistenceSupportTests {
             reminderStore: reminderStore
         )
 
-        #expect(didPersist == true)
+        let savedTask = try #require(persistedTask)
+        #expect(savedTask.id == existingTask.id)
         let persistedReminders = reminderStore.reminderDrafts(for: .task(existingTask.id))
         #expect(persistedReminders.count == 1)
     }
@@ -170,7 +172,7 @@ struct TaskFormPersistenceSupportTests {
         )
 
         let replacementTask = try #require(taskStore.addTask(name: "Proofread report"))
-        let didPersist = TaskFormPersistenceSupport.persistTask(
+        let persistedTask = TaskFormPersistenceSupport.persistTask(
             task: existingTask,
             taskID: existingTask.id,
             name: existingTask.name,
@@ -196,7 +198,8 @@ struct TaskFormPersistenceSupportTests {
             reminderStore: reminderStore
         )
 
-        #expect(didPersist == true)
+        let savedTask = try #require(persistedTask)
+        #expect(savedTask.id == existingTask.id)
         let persistedDependencies = dependencyStore.activeTaskDependencies(for: existingTask.id)
         #expect(persistedDependencies.map(\.dependsOnTaskId) == [replacementTask.id])
     }

@@ -60,6 +60,7 @@ struct TaskFormView: View {
     let mode: TaskFormMode
     let initialFocus: TaskFormFocus?
     let prefill: TaskFormSnapshot?
+    let onCreated: ((TaskItem) -> Void)?
     let onDiscard: ((TaskFormSnapshot) -> Void)?
     let onDelete: ((TaskItem) -> Void)?
 
@@ -113,12 +114,14 @@ struct TaskFormView: View {
         mode: TaskFormMode = .new,
         initialFocus: TaskFormFocus? = nil,
         prefill: TaskFormSnapshot? = nil,
+        onCreated: ((TaskItem) -> Void)? = nil,
         onDiscard: ((TaskFormSnapshot) -> Void)? = nil,
         onDelete: ((TaskItem) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
+        self.onCreated = onCreated
         self.onDiscard = onDiscard
         self.onDelete = onDelete
     }
@@ -273,8 +276,9 @@ struct TaskFormView: View {
 
                             if isNewMode {
                                 guard !trimmedName.isEmpty else { return }
-                                guard persistTask() else { return }
+                                guard let task = persistTask() else { return }
                                 didPersist = true
+                                onCreated?(task)
                             }
 
                             dismiss()
@@ -781,7 +785,7 @@ struct TaskFormView: View {
     }
 
     @discardableResult
-    private func persistTask() -> Bool {
+    private func persistTask() -> TaskItem? {
         TaskFormPersistenceSupport.persistTask(
             task: mode.task,
             taskID: taskID,
@@ -803,7 +807,7 @@ struct TaskFormView: View {
 
     private func completeTaskFromForm() {
         guard !isNewMode, !isCompleted else { return }
-        guard persistTask() else { return }
+        guard persistTask() != nil else { return }
         guard !taskDependencyStore.isTaskBlocked(draftTask, taskStore: taskStore, tradeStore: tradeStore) else {
             showingBlockedTaskAlert = true
             return

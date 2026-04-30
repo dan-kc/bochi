@@ -21,6 +21,8 @@ struct TasksView: View {
     @State private var taskToDelete: TaskItem? = nil
     @State private var toastManager = ToastManager()
     @State private var showingBlockedTaskAlert = false
+    @State private var pendingScrollTargetID: RecordID? = nil
+    @State private var highlightedTaskID: RecordID? = nil
 
     private var visibleTasks: [TaskItem] {
         EntityListQuery.apply(
@@ -50,13 +52,26 @@ struct TasksView: View {
                 filteredEmptyDescription: "Try changing the selected tags or clear them to see more tasks.",
                 preferences: listPreferencesStore.taskPreferences,
                 tagScope: .tasks,
-                onSelectSort: listPreferencesStore.setTaskSort,
-                onClearFilters: listPreferencesStore.clearTaskFilters
+                rowIDs: visibleTasks.map(\.id),
+                pendingScrollTargetID: $pendingScrollTargetID,
+                onSelectSort: { option in
+                    withAnimation(.default) {
+                        listPreferencesStore.setTaskSort(option)
+                    }
+                },
+                onClearFilters: listPreferencesStore.clearTaskFilters,
+                onPendingScrollCompleted: { taskID in
+                    scheduleNewTaskHighlightFade(for: taskID)
+                }
             ) {
                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                    EntityListRowSurface(showsDivider: index < visibleTasks.count - 1) {
+                    EntityListRowSurface(
+                        showsDivider: index < visibleTasks.count - 1,
+                        isHighlighted: highlightedTaskID == task.id
+                    ) {
                         taskRow(task)
                     }
+                        .id(task.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 // Behaviour: align task deletion with the existing
@@ -84,6 +99,9 @@ struct TasksView: View {
                     mode: route.mode,
                     initialFocus: route.initialFocus,
                     prefill: route.prefill,
+                    onCreated: { task in
+                        queueScrollToTaskIfVisible(task.id)
+                    },
                     onDiscard: route.mode.isNew ? { snapshot in
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
@@ -235,6 +253,21 @@ struct TasksView: View {
 
     private func canCompleteTask(_ task: TaskItem) -> Bool {
         task.canTrade && tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) == nil
+    }
+
+    private func queueScrollToTaskIfVisible(_ taskID: RecordID) {
+        guard visibleTasks.contains(where: { $0.id == taskID }) else { return }
+        highlightedTaskID = taskID
+        pendingScrollTargetID = taskID
+    }
+
+    private func scheduleNewTaskHighlightFade(for taskID: RecordID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard highlightedTaskID == taskID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                highlightedTaskID = nil
+            }
+        }
     }
 
     private func showDiscardToast(snapshot: TaskFormSnapshot) {

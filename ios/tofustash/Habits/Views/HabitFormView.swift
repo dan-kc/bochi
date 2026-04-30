@@ -44,6 +44,7 @@ struct HabitFormView: View {
     let mode: HabitFormMode
     let initialFocus: HabitFormFocus?
     let prefill: HabitFormSnapshot?
+    let onCreated: ((Habit) -> Void)?
     let onDiscard: ((HabitFormSnapshot) -> Void)?
     let onDelete: ((Habit) -> Void)?
 
@@ -179,12 +180,14 @@ struct HabitFormView: View {
         mode: HabitFormMode = .new,
         initialFocus: HabitFormFocus? = nil,
         prefill: HabitFormSnapshot? = nil,
+        onCreated: ((Habit) -> Void)? = nil,
         onDiscard: ((HabitFormSnapshot) -> Void)? = nil,
         onDelete: ((Habit) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
+        self.onCreated = onCreated
         self.onDiscard = onDiscard
         self.onDelete = onDelete
     }
@@ -261,9 +264,15 @@ struct HabitFormView: View {
                             return
                         }
 
-                        guard isNewMode ? !trimmedName.isEmpty : true else { return }
-                        didPersist = true
-                        _ = persistHabit()
+                        if isNewMode {
+                            guard !trimmedName.isEmpty else { return }
+                            guard let habit = persistHabit() else { return }
+                            didPersist = true
+                            onCreated?(habit)
+                        } else {
+                            didPersist = true
+                            _ = persistHabit()
+                        }
                         dismiss()
                     }
                     .disabled(!isEditingText && isNewMode && trimmedName.isEmpty)

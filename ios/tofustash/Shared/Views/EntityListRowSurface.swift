@@ -5,13 +5,16 @@ import SwiftUI
 // we render the divider ourselves for each non-final row.
 struct EntityListRowSurface<Content: View>: View {
     let showsDivider: Bool
+    let isHighlighted: Bool
     let content: Content
 
     init(
         showsDivider: Bool,
+        isHighlighted: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.showsDivider = showsDivider
+        self.isHighlighted = isHighlighted
         self.content = content()
     }
 
@@ -26,6 +29,14 @@ struct EntityListRowSurface<Content: View>: View {
                 Divider()
                     .padding(.top, 16)
             }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                // Behaviour: a freshly created row briefly glows warm so the
+                // user can immediately spot where the list scrolled them.
+                .fill(Color.orange.opacity(isHighlighted ? 0.22 : 0))
         }
     }
 }

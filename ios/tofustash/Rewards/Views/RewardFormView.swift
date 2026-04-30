@@ -28,6 +28,7 @@ struct RewardFormView: View {
     let mode: RewardFormMode
     let initialFocus: RewardFormFocus?
     let prefill: RewardFormSnapshot?
+    let onCreated: ((Reward) -> Void)?
     let onDiscard: ((RewardFormSnapshot) -> Void)?
     let onDelete: ((Reward) -> Void)?
 
@@ -64,12 +65,14 @@ struct RewardFormView: View {
         mode: RewardFormMode = .new,
         initialFocus: RewardFormFocus? = nil,
         prefill: RewardFormSnapshot? = nil,
+        onCreated: ((Reward) -> Void)? = nil,
         onDiscard: ((RewardFormSnapshot) -> Void)? = nil,
         onDelete: ((Reward) -> Void)? = nil
     ) {
         self.mode = mode
         self.initialFocus = initialFocus
         self.prefill = prefill
+        self.onCreated = onCreated
         self.onDiscard = onDiscard
         self.onDelete = onDelete
     }
@@ -200,9 +203,15 @@ struct RewardFormView: View {
                             return
                         }
 
-                        guard isNewMode ? !trimmedName.isEmpty : true else { return }
-                        didPersist = true
-                        _ = persistReward()
+                        if isNewMode {
+                            guard !trimmedName.isEmpty else { return }
+                            guard let reward = persistReward() else { return }
+                            didPersist = true
+                            onCreated?(reward)
+                        } else {
+                            didPersist = true
+                            _ = persistReward()
+                        }
                         dismiss()
                     }
                     .disabled(!isEditingText && isNewMode && trimmedName.isEmpty)

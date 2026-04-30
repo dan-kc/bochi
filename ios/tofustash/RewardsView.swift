@@ -20,6 +20,8 @@ struct RewardsView: View {
     @State private var purchasingReward: Reward? = nil
     @State private var rewardToDelete: Reward? = nil
     @State private var toastManager = ToastManager()
+    @State private var pendingScrollTargetID: RecordID? = nil
+    @State private var highlightedRewardID: RecordID? = nil
 
     private var visibleRewards: [Reward] {
         EntityListQuery.apply(
@@ -46,13 +48,26 @@ struct RewardsView: View {
                 filteredEmptyDescription: "Try changing the selected tags or clear them to see more rewards.",
                 preferences: listPreferencesStore.rewardPreferences,
                 tagScope: .rewards,
-                onSelectSort: listPreferencesStore.setRewardSort,
-                onClearFilters: listPreferencesStore.clearRewardFilters
+                rowIDs: visibleRewards.map(\.id),
+                pendingScrollTargetID: $pendingScrollTargetID,
+                onSelectSort: { option in
+                    withAnimation(.default) {
+                        listPreferencesStore.setRewardSort(option)
+                    }
+                },
+                onClearFilters: listPreferencesStore.clearRewardFilters,
+                onPendingScrollCompleted: { rewardID in
+                    scheduleNewRewardHighlightFade(for: rewardID)
+                }
             ) {
                 ForEach(Array(visibleRewards.enumerated()), id: \.element.id) { index, reward in
-                    EntityListRowSurface(showsDivider: index < visibleRewards.count - 1) {
+                    EntityListRowSurface(
+                        showsDivider: index < visibleRewards.count - 1,
+                        isHighlighted: highlightedRewardID == reward.id
+                    ) {
                         rewardRow(reward)
                     }
+                        .id(reward.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 // Behaviour: Swiping a row should only open the
@@ -78,6 +93,9 @@ struct RewardsView: View {
                     mode: route.mode,
                     initialFocus: route.initialFocus,
                     prefill: route.prefill,
+                    onCreated: { reward in
+                        queueScrollToRewardIfVisible(reward.id)
+                    },
                     onDiscard: route.mode.isNew ? { snapshot in
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
@@ -214,6 +232,21 @@ struct RewardsView: View {
             initialFocus: focus,
             prefill: nil
         )
+    }
+
+    private func queueScrollToRewardIfVisible(_ rewardID: RecordID) {
+        guard visibleRewards.contains(where: { $0.id == rewardID }) else { return }
+        highlightedRewardID = rewardID
+        pendingScrollTargetID = rewardID
+    }
+
+    private func scheduleNewRewardHighlightFade(for rewardID: RecordID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard highlightedRewardID == rewardID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                highlightedRewardID = nil
+            }
+        }
     }
 
     @MainActor

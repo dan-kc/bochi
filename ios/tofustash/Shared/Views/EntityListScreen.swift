@@ -4,7 +4,7 @@ import SwiftUI
 // content and pricing logic, but the list chrome should behave the same:
 // controls at the top, controls locked while scrolled down, and a distinct
 // empty state when filters hide everything.
-struct EntityListScreen<RowContent: View>: View {
+struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     // SwiftUI `List` does not expose a CSS-like "padding-bottom" on just the
     // scrollable children. The simplest equivalent is to append a final spacer
     // row with a fixed height. Because both habits and rewards use this shared
@@ -20,11 +20,14 @@ struct EntityListScreen<RowContent: View>: View {
     let filteredEmptyDescription: String
     let preferences: EntityListPreferences
     let tagScope: EntityListTagScope
+    let rowIDs: [RowID]
     let onSelectSort: (EntityListSortOption) -> Void
     let onClearFilters: () -> Void
+    let onPendingScrollCompleted: ((RowID) -> Void)?
     let rowContent: RowContent
 
     @State private var isListAtTop = true
+    @Binding private var pendingScrollTargetID: RowID?
 
     init(
         hasAnyItems: Bool,
@@ -36,8 +39,11 @@ struct EntityListScreen<RowContent: View>: View {
         filteredEmptyDescription: String,
         preferences: EntityListPreferences,
         tagScope: EntityListTagScope,
+        rowIDs: [RowID],
+        pendingScrollTargetID: Binding<RowID?>,
         onSelectSort: @escaping (EntityListSortOption) -> Void,
         onClearFilters: @escaping () -> Void,
+        onPendingScrollCompleted: ((RowID) -> Void)? = nil,
         @ViewBuilder rowContent: () -> RowContent
     ) {
         self.hasAnyItems = hasAnyItems
@@ -49,8 +55,11 @@ struct EntityListScreen<RowContent: View>: View {
         self.filteredEmptyDescription = filteredEmptyDescription
         self.preferences = preferences
         self.tagScope = tagScope
+        self.rowIDs = rowIDs
+        self._pendingScrollTargetID = pendingScrollTargetID
         self.onSelectSort = onSelectSort
         self.onClearFilters = onClearFilters
+        self.onPendingScrollCompleted = onPendingScrollCompleted
         self.rowContent = rowContent()
     }
 
@@ -63,36 +72,48 @@ struct EntityListScreen<RowContent: View>: View {
                     description: Text(emptyDescription)
                 )
             } else {
-                List {
-                    controlsRow
+                ScrollViewReader { scrollProxy in
+                    List {
+                        controlsRow
 
-                    Section {
-                        if visibleItemCount == 0 {
-                            filteredEmptyStateRow
-                        } else {
-                            rowContent
-                                // Behaviour: habit/reward content should line up with the
-                                // control strip and navigation title. We set the insets
-                                // ourselves so the list stays sharp-edged without the
-                                // grouped container clipping the row content.
-                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                                .listRowSeparator(.hidden)
-                                // Behaviour: once the user has items, every habit/reward
-                                // row should sit directly on the parent surface instead of
-                                // getting the default opaque grouped-cell fill.
-                                .listRowBackground(Color.clear)
+                        Section {
+                            if visibleItemCount == 0 {
+                                filteredEmptyStateRow
+                            } else {
+                                rowContent
+                                    // Behaviour: habit/reward content should line up with the
+                                    // control strip and navigation title. We set the insets
+                                    // ourselves so the list stays sharp-edged without the
+                                    // grouped container clipping the row content.
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    // Behaviour: once the user has items, every habit/reward
+                                    // row should sit directly on the parent surface instead of
+                                    // getting the default opaque grouped-cell fill.
+                                    .listRowBackground(Color.clear)
 
-                            bottomPaddingRow
+                                bottomPaddingRow
+                            }
                         }
                     }
+                    .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
+                    .listStyle(.plain)
+                    .listSectionSpacing(0)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    // Behaviour: the scrolling surface itself also stays transparent,
+                    // otherwise iOS paints a white grouped background behind clear rows.
+                    .scrollContentBackground(.hidden)
+                    .animation(.default, value: rowIDs)
+                    .onAppear {
+                        scrollToPendingTarget(using: scrollProxy)
+                    }
+                    .onChange(of: rowIDs) { _, _ in
+                        scrollToPendingTarget(using: scrollProxy)
+                    }
+                    .onChange(of: pendingScrollTargetID) { _, _ in
+                        scrollToPendingTarget(using: scrollProxy)
+                    }
                 }
-                .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)
-                .listStyle(.plain)
-                .listSectionSpacing(0)
-                .contentMargins(.top, 0, for: .scrollContent)
-                // Behaviour: the scrolling surface itself also stays transparent,
-                // otherwise iOS paints a white grouped background behind clear rows.
-                .scrollContentBackground(.hidden)
             }
         }
         .onChange(of: visibleItemCount == 0) { _, isEmpty in
@@ -146,5 +167,18 @@ struct EntityListScreen<RowContent: View>: View {
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+    }
+
+    private func scrollToPendingTarget(using scrollProxy: ScrollViewProxy) {
+        guard let pendingScrollTargetID else { return }
+        guard rowIDs.contains(pendingScrollTargetID) else { return }
+
+        DispatchQueue.main.async {
+            withAnimation {
+                scrollProxy.scrollTo(pendingScrollTargetID, anchor: .center)
+            }
+            self.pendingScrollTargetID = nil
+            self.onPendingScrollCompleted?(pendingScrollTargetID)
+        }
     }
 }

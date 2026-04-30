@@ -18,9 +18,11 @@ enum TaskFormPersistenceSupport {
         taskStore: TaskStore,
         taskDependencyStore: TaskDependencyStore,
         reminderStore: ReminderStore
-    ) -> Bool {
+    ) -> TaskItem? {
+        let persistedTask: TaskItem
+
         if task == nil {
-            guard taskStore.addTask(
+            guard let createdTask = taskStore.addTask(
                 id: taskID,
                 name: name,
                 description: description,
@@ -29,9 +31,10 @@ enum TaskFormPersistenceSupport {
                 skipConsequence: skipConsequence,
                 dueDate: dueDate,
                 completedAt: completedAt
-            ) != nil else {
-                return false
+            ) else {
+                return nil
             }
+            persistedTask = createdTask
         } else {
             taskStore.updateTask(
                 id: taskID,
@@ -43,6 +46,10 @@ enum TaskFormPersistenceSupport {
                 dueDate: .some(dueDate),
                 completedAt: .some(completedAt)
             )
+            guard let updatedTask = taskStore.tasks.first(where: { $0.id == taskID }) else {
+                return nil
+            }
+            persistedTask = updatedTask
         }
 
         taskDependencyStore.replaceDependencies(
@@ -51,6 +58,6 @@ enum TaskFormPersistenceSupport {
             habitDependencies: habitDependencies
         )
         reminderStore.replaceReminders(for: .task(taskID), with: reminderDrafts)
-        return true
+        return persistedTask
     }
 }

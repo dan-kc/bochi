@@ -19,6 +19,8 @@ struct HabitsView: View {
     @State private var tradingHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
+    @State private var pendingScrollTargetID: RecordID? = nil
+    @State private var highlightedHabitID: RecordID? = nil
 
     private var visibleHabits: [Habit] {
         EntityListQuery.apply(
@@ -45,13 +47,26 @@ struct HabitsView: View {
                 filteredEmptyDescription: "Try changing the selected tags or clear them to see more habits.",
                 preferences: listPreferencesStore.habitPreferences,
                 tagScope: .habits,
-                onSelectSort: listPreferencesStore.setHabitSort,
-                onClearFilters: listPreferencesStore.clearHabitFilters
+                rowIDs: visibleHabits.map(\.id),
+                pendingScrollTargetID: $pendingScrollTargetID,
+                onSelectSort: { option in
+                    withAnimation(.default) {
+                        listPreferencesStore.setHabitSort(option)
+                    }
+                },
+                onClearFilters: listPreferencesStore.clearHabitFilters,
+                onPendingScrollCompleted: { habitID in
+                    scheduleNewHabitHighlightFade(for: habitID)
+                }
             ) {
                 ForEach(Array(visibleHabits.enumerated()), id: \.element.id) { index, habit in
-                    EntityListRowSurface(showsDivider: index < visibleHabits.count - 1) {
+                    EntityListRowSurface(
+                        showsDivider: index < visibleHabits.count - 1,
+                        isHighlighted: highlightedHabitID == habit.id
+                    ) {
                         habitRow(habit)
                     }
+                        .id(habit.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 // Behaviour: Swiping a row should only stage the delete
@@ -81,6 +96,9 @@ struct HabitsView: View {
                     mode: route.mode,
                     initialFocus: route.initialFocus,
                     prefill: route.prefill,
+                    onCreated: { habit in
+                        queueScrollToHabitIfVisible(habit.id)
+                    },
                     onDiscard: route.mode.isNew ? { snapshot in
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
@@ -227,6 +245,21 @@ struct HabitsView: View {
             initialFocus: focus,
             prefill: nil
         )
+    }
+
+    private func queueScrollToHabitIfVisible(_ habitID: RecordID) {
+        guard visibleHabits.contains(where: { $0.id == habitID }) else { return }
+        highlightedHabitID = habitID
+        pendingScrollTargetID = habitID
+    }
+
+    private func scheduleNewHabitHighlightFade(for habitID: RecordID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard highlightedHabitID == habitID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                highlightedHabitID = nil
+            }
+        }
     }
 
     @MainActor
