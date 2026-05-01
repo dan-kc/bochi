@@ -291,6 +291,57 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(targetTask.isHittable)
     }
 
+    // Behaviour: opening list search from the floating button should narrow
+    // the current list live, keep the search bar visible after the keyboard
+    // collapses, and only collapse once the user clears the text and taps away.
+    func testTaskListSearchKeepsFilterAfterClosingKeyboard() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        createTask(named: "Alpha Task", in: app)
+        createTask(named: "Bravo Task", in: app)
+
+        app.buttons["entity.search"].tap()
+        let searchField = app.textFields["entity.searchField"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 2))
+        searchField.tap()
+        searchField.typeText("bravo")
+
+        XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.staticTexts["Alpha Task"].waitForExistence(timeout: 1))
+
+        app.navigationBars["Tasks"].tap()
+
+        XCTAssertTrue(searchField.waitForExistence(timeout: 1))
+        XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.staticTexts["Alpha Task"].waitForExistence(timeout: 1))
+
+        app.buttons["entity.search.clear"].tap()
+        app.navigationBars["Tasks"].tap()
+
+        XCTAssertFalse(searchField.waitForExistence(timeout: 1))
+        XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Alpha Task"].waitForExistence(timeout: 2))
+    }
+
+    // Behaviour: submitting an empty list search should collapse the search
+    // chrome instead of leaving an empty filter bar behind.
+    func testEmptyTaskSearchSubmitClosesSearch() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        createTask(named: "Alpha Task", in: app)
+
+        app.buttons["entity.search"].tap()
+        let searchField = app.textFields["entity.searchField"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 2))
+        searchField.tap()
+        app.keyboards.buttons["Done"].tap()
+
+        XCTAssertFalse(searchField.waitForExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["entity.search"].waitForExistence(timeout: 1))
+    }
+
     // Behaviour: completing a task should keep existing reminders visible and
     // still let the user add more reminders from the completed task form.
     func testCompletedTaskKeepsAndAllowsReminderEdits() {

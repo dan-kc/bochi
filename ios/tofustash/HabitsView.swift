@@ -22,13 +22,18 @@ struct HabitsView: View {
     @State private var toastManager = ToastManager()
     @State private var pendingScrollTargetID: RecordID? = nil
     @State private var highlightedHabitID: RecordID? = nil
+    @Namespace private var searchChromeNamespace
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
 
     private var visibleHabits: [Habit] {
         EntityListQuery.apply(
             items: habitStore.activeHabits,
             preferences: listPreferencesStore.habitPreferences,
             validTagIDs: tagStore.activeTagIDs,
+            searchText: searchText,
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: priceSortValue(for:),
@@ -45,11 +50,22 @@ struct HabitsView: View {
                 emptySystemImage: "checkmark.circle",
                 emptyDescription: "Tap + to create your first habit.",
                 filteredEmptyTitle: "No Matching Habits",
-                filteredEmptyDescription: "Try changing the selected tags or clear them to see more habits.",
+                filteredEmptyDescription: "Try changing the search text or selected tags to see more habits.",
+                searchPrompt: "Search habits",
+                searchChromeNamespace: searchChromeNamespace,
                 preferences: listPreferencesStore.habitPreferences,
                 tagScope: .habits,
                 rowIDs: visibleHabits.map(\.id),
+                searchText: $searchText,
+                isSearchPresented: $isSearchPresented,
                 pendingScrollTargetID: $pendingScrollTargetID,
+                onAdd: {
+                    formRoute = HabitFormRoute(
+                        mode: .new,
+                        initialFocus: nil,
+                        prefill: nil
+                    )
+                },
                 onSelectSort: { option in
                     withAnimation(.default) {
                         listPreferencesStore.setHabitSort(option)
@@ -87,11 +103,21 @@ struct HabitsView: View {
             }
             .navigationTitle("Habits")
             .overlay(alignment: .bottomTrailing) {
-                EntityFloatingAddButton {
-                    formRoute = HabitFormRoute(
-                        mode: .new,
-                        initialFocus: nil,
-                        prefill: nil
+                if !isSearchPresented {
+                    EntityFloatingActionButtons(
+                        namespace: searchChromeNamespace,
+                        onSearch: {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                                isSearchPresented = true
+                            }
+                        },
+                        onAdd: {
+                            formRoute = HabitFormRoute(
+                                mode: .new,
+                                initialFocus: nil,
+                                prefill: nil
+                            )
+                        }
                     )
                 }
             }

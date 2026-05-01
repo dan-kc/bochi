@@ -24,13 +24,18 @@ struct TasksView: View {
     @State private var showingBlockedTaskAlert = false
     @State private var pendingScrollTargetID: RecordID? = nil
     @State private var highlightedTaskID: RecordID? = nil
+    @Namespace private var searchChromeNamespace
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
 
     private var visibleTasks: [TaskItem] {
         EntityListQuery.apply(
             items: taskStore.tasks.filter { $0.deletedAt == nil },
             preferences: listPreferencesStore.taskPreferences,
             validTagIDs: tagStore.activeTagIDs,
+            searchText: searchText,
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: priceSortValue(for:),
@@ -50,11 +55,22 @@ struct TasksView: View {
                 emptySystemImage: "checkmark.square",
                 emptyDescription: "Tap + to create your first task.",
                 filteredEmptyTitle: "No Matching Tasks",
-                filteredEmptyDescription: "Try changing the selected tags or clear them to see more tasks.",
+                filteredEmptyDescription: "Try changing the search text or selected tags to see more tasks.",
+                searchPrompt: "Search tasks",
+                searchChromeNamespace: searchChromeNamespace,
                 preferences: listPreferencesStore.taskPreferences,
                 tagScope: .tasks,
                 rowIDs: visibleTasks.map(\.id),
+                searchText: $searchText,
+                isSearchPresented: $isSearchPresented,
                 pendingScrollTargetID: $pendingScrollTargetID,
+                onAdd: {
+                    formRoute = TaskFormRoute(
+                        mode: .new,
+                        initialFocus: nil,
+                        prefill: nil
+                    )
+                },
                 onSelectSort: { option in
                     withAnimation(.default) {
                         listPreferencesStore.setTaskSort(option)
@@ -90,11 +106,21 @@ struct TasksView: View {
             }
             .navigationTitle("Tasks")
             .overlay(alignment: .bottomTrailing) {
-                EntityFloatingAddButton {
-                    formRoute = TaskFormRoute(
-                        mode: .new,
-                        initialFocus: nil,
-                        prefill: nil
+                if !isSearchPresented {
+                    EntityFloatingActionButtons(
+                        namespace: searchChromeNamespace,
+                        onSearch: {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                                isSearchPresented = true
+                            }
+                        },
+                        onAdd: {
+                            formRoute = TaskFormRoute(
+                                mode: .new,
+                                initialFocus: nil,
+                                prefill: nil
+                            )
+                        }
                     )
                 }
             }

@@ -8,7 +8,9 @@ enum EntityListQuery {
         items: [Item],
         preferences: EntityListPreferences,
         validTagIDs: Set<RecordID>,
+        searchText: String = "",
         id: (Item) -> RecordID,
+        name: (Item) -> String,
         createdAt: (Item) -> Date,
         difficultySortOrder: (Item) -> Int?,
         price: (Item) -> Int?,
@@ -16,12 +18,17 @@ enum EntityListQuery {
         isDeprioritized: (Item) -> Bool = { _ in false }
     ) -> [Item] {
         let selectedTagIDs = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
+        let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let filteredItems = items.filter { item in
             matchesTagFilter(
                 selectedTagIDs: selectedTagIDs,
                 itemTags: tags(item)
             )
+                && matchesNameFilter(
+                    searchText: trimmedSearchText,
+                    name: name(item)
+                )
         }
 
         return filteredItems.sorted { lhs, rhs in
@@ -41,6 +48,14 @@ enum EntityListQuery {
                 price: price
             )
         }
+    }
+
+    private static func matchesNameFilter(
+        searchText: String,
+        name: String
+    ) -> Bool {
+        guard !searchText.isEmpty else { return true }
+        return name.localizedCaseInsensitiveContains(searchText)
     }
 
     private static func matchesTagFilter(

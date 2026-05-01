@@ -28,6 +28,7 @@ struct EntityListQueryTests {
             preferences: preferences,
             validTagIDs: [social.id, health.id],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
@@ -54,6 +55,7 @@ struct EntityListQueryTests {
             preferences: EntityListPreferences(),
             validTagIDs: [focus.id],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
@@ -80,6 +82,7 @@ struct EntityListQueryTests {
             preferences: EntityListPreferences(),
             validTagIDs: [],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { prices[$0.id] },
@@ -105,6 +108,7 @@ struct EntityListQueryTests {
             preferences: EntityListPreferences(),
             validTagIDs: [],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { prices[$0.id] },
@@ -132,6 +136,7 @@ struct EntityListQueryTests {
             preferences: preferences,
             validTagIDs: [],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
@@ -162,6 +167,7 @@ struct EntityListQueryTests {
             preferences: preferences,
             validTagIDs: [focus.id],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
@@ -191,6 +197,7 @@ struct EntityListQueryTests {
             preferences: preferences,
             validTagIDs: [focus.id],
             id: \.id,
+            name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
             price: { _ in nil },
@@ -198,6 +205,41 @@ struct EntityListQueryTests {
         )
 
         #expect(visible.map(\.id) == [deepWork.id])
+    }
+
+    // Behaviour: list search should only match the visible entity name, so a
+    // query never keeps a row around because the description happened to match.
+    @Test("Name search is case-insensitive, trims whitespace, and ignores descriptions")
+    func nameSearchMatchesNameOnly() {
+        let bedtimeReading = makeHabit(
+            id: "bedtime-reading",
+            createdAt: date(day: 1),
+            frequency: 1,
+            difficulty: .light,
+            description: "Wind down before bed"
+        )
+        let eveningWalk = makeHabit(
+            id: "evening-walk",
+            createdAt: date(day: 2),
+            frequency: 1,
+            difficulty: .medium,
+            description: "Fresh air"
+        )
+
+        let visible = EntityListQuery.apply(
+            items: [bedtimeReading, eveningWalk],
+            preferences: EntityListPreferences(),
+            validTagIDs: [],
+            searchText: "  WALK  ",
+            id: \.id,
+            name: \.name,
+            createdAt: \.createdAt,
+            difficultySortOrder: { $0.difficultyTier?.sortOrder },
+            price: { _ in nil },
+            tags: { _ in [] }
+        )
+
+        #expect(visible.map(\.id) == [eveningWalk.id])
     }
 
     private func date(day: Int) -> Date {
@@ -208,12 +250,13 @@ struct EntityListQueryTests {
         id: RecordID,
         createdAt: Date,
         frequency: Double?,
-        difficulty: HabitDifficultyTier?
+        difficulty: HabitDifficultyTier?,
+        description: String = ""
     ) -> Habit {
         Habit(
             id: id,
             name: id.rawValue,
-            description: "",
+            description: description,
             createdAt: createdAt,
             updatedAt: createdAt,
             deletedAt: nil,
