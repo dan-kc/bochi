@@ -73,6 +73,8 @@ struct EntityListPreferences: Codable, Equatable, Sendable {
     var selectedTagIDs: [RecordID] = []
 
     var hasActiveFilters: Bool {
+        // Behaviour: the top Filter chip only reflects persisted tag filters.
+        // Name search is transient per tab and should not highlight that chip.
         !selectedTagIDs.isEmpty
     }
 }

@@ -23,15 +23,20 @@ struct HabitsView: View {
     @State private var pendingScrollTargetID: RecordID? = nil
     @State private var highlightedHabitID: RecordID? = nil
     @Namespace private var searchChromeNamespace
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
+    @State private var searchState = EntityListSearchState()
+
+    private var filterState: EntityListFilterState {
+        EntityListFilterState(
+            preferences: listPreferencesStore.habitPreferences,
+            search: searchState
+        )
+    }
 
     private var visibleHabits: [Habit] {
         EntityListQuery.apply(
             items: habitStore.activeHabits,
-            preferences: listPreferencesStore.habitPreferences,
+            filterState: filterState,
             validTagIDs: tagStore.activeTagIDs,
-            searchText: searchText,
             id: \.id,
             name: \.name,
             createdAt: \.createdAt,
@@ -53,19 +58,12 @@ struct HabitsView: View {
                 filteredEmptyDescription: "Try changing the search text or selected tags to see more habits.",
                 searchPrompt: "Search habits",
                 searchChromeNamespace: searchChromeNamespace,
-                preferences: listPreferencesStore.habitPreferences,
+                filterState: filterState,
                 tagScope: .habits,
                 rowIDs: visibleHabits.map(\.id),
-                searchText: $searchText,
-                isSearchPresented: $isSearchPresented,
+                searchState: $searchState,
                 pendingScrollTargetID: $pendingScrollTargetID,
-                onAdd: {
-                    formRoute = HabitFormRoute(
-                        mode: .new,
-                        initialFocus: nil,
-                        prefill: nil
-                    )
-                },
+                onAdd: openNewHabitForm,
                 onSelectSort: { option in
                     withAnimation(.default) {
                         listPreferencesStore.setHabitSort(option)
@@ -103,23 +101,12 @@ struct HabitsView: View {
             }
             .navigationTitle("Habits")
             .overlay(alignment: .bottomTrailing) {
-                if !isSearchPresented {
-                    EntityFloatingActionButtons(
-                        namespace: searchChromeNamespace,
-                        onSearch: {
-                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                                isSearchPresented = true
-                            }
-                        },
-                        onAdd: {
-                            formRoute = HabitFormRoute(
-                                mode: .new,
-                                initialFocus: nil,
-                                prefill: nil
-                            )
-                        }
-                    )
-                }
+                EntityListFloatingActionOverlay(
+                    showsSearchButton: !habitStore.activeHabits.isEmpty,
+                    namespace: searchChromeNamespace,
+                    searchState: $searchState,
+                    onAdd: openNewHabitForm
+                )
             }
             .sheet(item: $formRoute) { route in
                 HabitFormView(
@@ -180,6 +167,14 @@ struct HabitsView: View {
                 schedulePendingHabitFormOpenIfNeeded()
             }
         }
+    }
+
+    private func openNewHabitForm() {
+        formRoute = HabitFormRoute(
+            mode: .new,
+            initialFocus: nil,
+            prefill: nil
+        )
     }
 
     // Behaviour: when the user dismisses a new-habit sheet with unsaved content,

@@ -25,15 +25,24 @@ struct TasksView: View {
     @State private var pendingScrollTargetID: RecordID? = nil
     @State private var highlightedTaskID: RecordID? = nil
     @Namespace private var searchChromeNamespace
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
+    @State private var searchState = EntityListSearchState()
+
+    private var activeTasks: [TaskItem] {
+        taskStore.tasks.filter { $0.deletedAt == nil }
+    }
+
+    private var filterState: EntityListFilterState {
+        EntityListFilterState(
+            preferences: listPreferencesStore.taskPreferences,
+            search: searchState
+        )
+    }
 
     private var visibleTasks: [TaskItem] {
         EntityListQuery.apply(
-            items: taskStore.tasks.filter { $0.deletedAt == nil },
-            preferences: listPreferencesStore.taskPreferences,
+            items: activeTasks,
+            filterState: filterState,
             validTagIDs: tagStore.activeTagIDs,
-            searchText: searchText,
             id: \.id,
             name: \.name,
             createdAt: \.createdAt,
@@ -49,7 +58,7 @@ struct TasksView: View {
     var body: some View {
         NavigationStack {
             EntityListScreen(
-                hasAnyItems: !taskStore.tasks.filter({ $0.deletedAt == nil }).isEmpty,
+                hasAnyItems: !activeTasks.isEmpty,
                 visibleItemCount: visibleTasks.count,
                 emptyTitle: "No Tasks Yet",
                 emptySystemImage: "checkmark.square",
@@ -58,19 +67,12 @@ struct TasksView: View {
                 filteredEmptyDescription: "Try changing the search text or selected tags to see more tasks.",
                 searchPrompt: "Search tasks",
                 searchChromeNamespace: searchChromeNamespace,
-                preferences: listPreferencesStore.taskPreferences,
+                filterState: filterState,
                 tagScope: .tasks,
                 rowIDs: visibleTasks.map(\.id),
-                searchText: $searchText,
-                isSearchPresented: $isSearchPresented,
+                searchState: $searchState,
                 pendingScrollTargetID: $pendingScrollTargetID,
-                onAdd: {
-                    formRoute = TaskFormRoute(
-                        mode: .new,
-                        initialFocus: nil,
-                        prefill: nil
-                    )
-                },
+                onAdd: openNewTaskForm,
                 onSelectSort: { option in
                     withAnimation(.default) {
                         listPreferencesStore.setTaskSort(option)
@@ -106,23 +108,12 @@ struct TasksView: View {
             }
             .navigationTitle("Tasks")
             .overlay(alignment: .bottomTrailing) {
-                if !isSearchPresented {
-                    EntityFloatingActionButtons(
-                        namespace: searchChromeNamespace,
-                        onSearch: {
-                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                                isSearchPresented = true
-                            }
-                        },
-                        onAdd: {
-                            formRoute = TaskFormRoute(
-                                mode: .new,
-                                initialFocus: nil,
-                                prefill: nil
-                            )
-                        }
-                    )
-                }
+                EntityListFloatingActionOverlay(
+                    showsSearchButton: !activeTasks.isEmpty,
+                    namespace: searchChromeNamespace,
+                    searchState: $searchState,
+                    onAdd: openNewTaskForm
+                )
             }
             .sheet(item: $formRoute) { route in
                 TaskFormView(
@@ -185,6 +176,14 @@ struct TasksView: View {
                 schedulePendingTaskFormOpenIfNeeded()
             }
         }
+    }
+
+    private func openNewTaskForm() {
+        formRoute = TaskFormRoute(
+            mode: .new,
+            initialFocus: nil,
+            prefill: nil
+        )
     }
 
     private func taskRow(_ task: TaskItem) -> some View {

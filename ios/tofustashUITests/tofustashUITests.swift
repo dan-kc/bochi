@@ -293,8 +293,9 @@ final class tofustashUITests: XCTestCase {
 
     // Behaviour: opening list search from the floating button should narrow
     // the current list live, keep the search bar visible after the keyboard
-    // collapses, and only collapse once the user clears the text and taps away.
-    func testTaskListSearchKeepsFilterAfterClosingKeyboard() {
+    // collapses, and collapse immediately if the user clears an unfocused
+    // search with the clear button.
+    func testTaskListSearchClearButtonClosesUnfocusedSearch() {
         let app = launchApp()
 
         app.tabBars.buttons["Tasks"].tap()
@@ -317,11 +318,21 @@ final class tofustashUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Alpha Task"].waitForExistence(timeout: 1))
 
         app.buttons["entity.search.clear"].tap()
-        app.navigationBars["Tasks"].tap()
 
         XCTAssertFalse(searchField.waitForExistence(timeout: 1))
         XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Alpha Task"].waitForExistence(timeout: 2))
+    }
+
+    // Behaviour: an empty entity list should offer creation, not a dead-end
+    // search affordance with nothing available to match against yet.
+    func testEmptyTaskListHidesSearchButton() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+
+        XCTAssertTrue(app.buttons["entity.add"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["entity.search"].waitForExistence(timeout: 1))
     }
 
     // Behaviour: submitting an empty list search should collapse the search

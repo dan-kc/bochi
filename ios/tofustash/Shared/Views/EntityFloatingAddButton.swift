@@ -1,5 +1,33 @@
 import SwiftUI
 
+struct EntityFloatingGlassButton<Label: View>: View {
+    let accessibilityIdentifier: String
+    let action: () -> Void
+    let label: Label
+
+    init(
+        accessibilityIdentifier: String,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.action = action
+        self.label = label()
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .frame(
+                    width: EntityFloatingActionButtons.buttonSize,
+                    height: EntityFloatingActionButtons.buttonSize
+                )
+        }
+        .tofuGlassButton(borderShape: .circle)
+        .accessibilityIdentifier(accessibilityIdentifier)
+    }
+}
+
 // Shared floating action cluster so the main entity tabs keep the same affordances:
 // add stays primary, while search can show when the current list is filtered by name.
 struct EntityFloatingActionButtons: View {
@@ -22,29 +50,48 @@ struct EntityFloatingActionButtons: View {
     }
 
     private var searchButton: some View {
-        Button(action: onSearch) {
+        EntityFloatingGlassButton(accessibilityIdentifier: "entity.search", action: onSearch) {
             Image(systemName: "magnifyingglass")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
                 .matchedGeometryEffect(id: "entity.search.icon", in: namespace)
-                .frame(width: Self.buttonSize, height: Self.buttonSize)
         }
-        .tofuGlassButton(borderShape: .circle)
         .matchedGeometryEffect(id: "entity.search.container", in: namespace)
-        .accessibilityIdentifier("entity.search")
     }
 
     private var addButton: some View {
-        Button(action: onAdd) {
+        EntityFloatingGlassButton(accessibilityIdentifier: "entity.add", action: onAdd) {
             Image(systemName: "plus")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
-                .frame(width: Self.buttonSize, height: Self.buttonSize)
         }
-        .tofuGlassButton(borderShape: .circle)
-        .accessibilityIdentifier("entity.add")
+    }
+}
+
+struct EntityListFloatingActionOverlay: View {
+    let showsSearchButton: Bool
+    let namespace: Namespace.ID
+    @Binding var searchState: EntityListSearchState
+    let onAdd: () -> Void
+
+    var body: some View {
+        Group {
+            if !searchState.isPresented {
+                if showsSearchButton {
+                    EntityFloatingActionButtons(
+                        namespace: namespace,
+                        onSearch: {
+                            EntityListSearchChrome.present(&searchState)
+                        },
+                        onAdd: onAdd
+                    )
+                } else {
+                    EntityFloatingAddButton(action: onAdd)
+                }
+            }
+        }
     }
 }
 
@@ -54,15 +101,12 @@ struct EntityFloatingAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        EntityFloatingGlassButton(accessibilityIdentifier: "entity.add", action: action) {
             Image(systemName: "plus")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundStyle(.primary)
-                .frame(width: EntityFloatingActionButtons.buttonSize, height: EntityFloatingActionButtons.buttonSize)
         }
-        .tofuGlassButton(borderShape: .circle)
-        .accessibilityIdentifier("entity.add")
         .padding()
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }

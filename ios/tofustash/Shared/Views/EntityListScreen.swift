@@ -10,10 +10,6 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     // row with a fixed height. Because all three entity tabs use this shared
     // shell, one constant keeps the extra runway consistent across them.
     private static var bottomContentPadding: CGFloat { 96 }
-    private static var searchChromeAnimation: Animation {
-        .spring(response: 0.32, dampingFraction: 0.86)
-    }
-
     let hasAnyItems: Bool
     let visibleItemCount: Int
     let emptyTitle: String
@@ -23,7 +19,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     let filteredEmptyDescription: String
     let searchPrompt: String
     let searchChromeNamespace: Namespace.ID
-    let preferences: EntityListPreferences
+    let filterState: EntityListFilterState
     let tagScope: EntityListTagScope
     let rowIDs: [RowID]
     let onAdd: () -> Void
@@ -34,8 +30,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
 
     @State private var isListAtTop = true
     @FocusState private var isSearchFieldFocused: Bool
-    @Binding private var searchText: String
-    @Binding private var isSearchPresented: Bool
+    @Binding private var searchState: EntityListSearchState
     @Binding private var pendingScrollTargetID: RowID?
 
     init(
@@ -48,11 +43,10 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
         filteredEmptyDescription: String,
         searchPrompt: String,
         searchChromeNamespace: Namespace.ID,
-        preferences: EntityListPreferences,
+        filterState: EntityListFilterState,
         tagScope: EntityListTagScope,
         rowIDs: [RowID],
-        searchText: Binding<String>,
-        isSearchPresented: Binding<Bool>,
+        searchState: Binding<EntityListSearchState>,
         pendingScrollTargetID: Binding<RowID?>,
         onAdd: @escaping () -> Void,
         onSelectSort: @escaping (EntityListSortOption) -> Void,
@@ -69,11 +63,10 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
         self.filteredEmptyDescription = filteredEmptyDescription
         self.searchPrompt = searchPrompt
         self.searchChromeNamespace = searchChromeNamespace
-        self.preferences = preferences
+        self.filterState = filterState
         self.tagScope = tagScope
         self.rowIDs = rowIDs
-        self._searchText = searchText
-        self._isSearchPresented = isSearchPresented
+        self._searchState = searchState
         self._pendingScrollTargetID = pendingScrollTargetID
         self.onAdd = onAdd
         self.onSelectSort = onSelectSort
@@ -136,13 +129,16 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                 }
             }
         }
+        // Behaviour: tapping outside the field should dismiss the keyboard, but
+        // a non-empty search stays applied and visible so the user can keep the
+        // filtered context while reading the list.
         .simultaneousGesture(
             TapGesture().onEnded {
                 dismissSearchFocus()
             }
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isSearchPresented {
+            if searchState.isPresented {
                 searchAccessory
             }
         }
@@ -154,7 +150,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                 isListAtTop = true
             }
         }
-        .onChange(of: isSearchPresented) { _, isPresented in
+        .onChange(of: searchState.isPresented) { _, isPresented in
             guard isPresented else {
                 isSearchFieldFocused = false
                 return
@@ -166,7 +162,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
         }
         .onChange(of: isSearchFieldFocused) { _, isFocused in
             guard !isFocused else { return }
-            guard isSearchPresented else { return }
+            guard searchState.isPresented else { return }
 
             collapseSearchIfNeeded()
         }
@@ -174,7 +170,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
 
     private var controlsRow: some View {
         EntityListControls(
-            preferences: preferences,
+            preferences: filterState.preferences,
             tagScope: tagScope,
             isEnabled: isListAtTop,
             onSelectSort: onSelectSort
@@ -192,7 +188,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
         } description: {
             Text(filteredEmptyDescription)
         } actions: {
-            if preferences.hasActiveFilters {
+            if filterState.preferences.hasActiveFilters {
                 Button("Clear Filters") {
                     onClearFilters()
                 }
@@ -225,7 +221,7 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
 
                 TextField(
                     "",
-                    text: $searchText,
+                    text: $searchState.text,
                     prompt: Text(searchPrompt).foregroundStyle(.secondary)
                 )
                     .focused($isSearchFieldFocused)
@@ -238,9 +234,9 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                     .font(.system(size: 17, weight: .medium))
                     .accessibilityIdentifier("entity.searchField")
 
-                if !searchText.isEmpty {
+                if !searchState.text.isEmpty {
                     Button {
-                        searchText = ""
+                        clearSearchText()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.bold))
@@ -262,24 +258,16 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
             }
             .shadow(color: .black.opacity(0.06), radius: 14, y: 8)
 
-            Button {
-                onAdd()
-            } label: {
+            EntityFloatingGlassButton(accessibilityIdentifier: "entity.add", action: onAdd) {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .frame(
-                        width: EntityFloatingActionButtons.buttonSize,
-                        height: EntityFloatingActionButtons.buttonSize
-                    )
             }
-            .tofuGlassButton(borderShape: .circle)
-            .accessibilityIdentifier("entity.add")
         }
         .padding(.horizontal, 18)
         .padding(.top, 2)
         .padding(.bottom, 8)
-        .animation(Self.searchChromeAnimation, value: isSearchPresented)
+        .animation(EntityListSearchChrome.animation, value: searchState.isPresented)
     }
 
     private func scrollToPendingTarget(using scrollProxy: ScrollViewProxy) {
@@ -301,23 +289,29 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     }
 
     private func finalizeSearchSubmission() {
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if searchState.trimmedText.isEmpty {
             collapseSearch()
             return
         }
 
+        searchState.text = searchState.trimmedText
         isSearchFieldFocused = false
     }
 
     private func collapseSearchIfNeeded() {
-        guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard searchState.trimmedText.isEmpty else { return }
         collapseSearch()
     }
 
     private func collapseSearch() {
-        withAnimation(Self.searchChromeAnimation) {
-            isSearchPresented = false
-        }
+        EntityListSearchChrome.collapse(&searchState)
         isSearchFieldFocused = false
+    }
+
+    private func clearSearchText() {
+        searchState.text = ""
+
+        guard !isSearchFieldFocused else { return }
+        collapseSearch()
     }
 }

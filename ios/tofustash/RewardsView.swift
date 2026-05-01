@@ -24,15 +24,20 @@ struct RewardsView: View {
     @State private var pendingScrollTargetID: RecordID? = nil
     @State private var highlightedRewardID: RecordID? = nil
     @Namespace private var searchChromeNamespace
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
+    @State private var searchState = EntityListSearchState()
+
+    private var filterState: EntityListFilterState {
+        EntityListFilterState(
+            preferences: listPreferencesStore.rewardPreferences,
+            search: searchState
+        )
+    }
 
     private var visibleRewards: [Reward] {
         EntityListQuery.apply(
             items: rewardStore.activeRewards,
-            preferences: listPreferencesStore.rewardPreferences,
+            filterState: filterState,
             validTagIDs: tagStore.activeTagIDs,
-            searchText: searchText,
             id: \.id,
             name: \.name,
             createdAt: \.createdAt,
@@ -54,15 +59,12 @@ struct RewardsView: View {
                 filteredEmptyDescription: "Try changing the search text or selected tags to see more rewards.",
                 searchPrompt: "Search rewards",
                 searchChromeNamespace: searchChromeNamespace,
-                preferences: listPreferencesStore.rewardPreferences,
+                filterState: filterState,
                 tagScope: .rewards,
                 rowIDs: visibleRewards.map(\.id),
-                searchText: $searchText,
-                isSearchPresented: $isSearchPresented,
+                searchState: $searchState,
                 pendingScrollTargetID: $pendingScrollTargetID,
-                onAdd: {
-                    formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
-                },
+                onAdd: openNewRewardForm,
                 onSelectSort: { option in
                     withAnimation(.default) {
                         listPreferencesStore.setRewardSort(option)
@@ -100,19 +102,12 @@ struct RewardsView: View {
             }
             .navigationTitle("Rewards")
             .overlay(alignment: .bottomTrailing) {
-                if !isSearchPresented {
-                    EntityFloatingActionButtons(
-                        namespace: searchChromeNamespace,
-                        onSearch: {
-                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                                isSearchPresented = true
-                            }
-                        },
-                        onAdd: {
-                            formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
-                        }
-                    )
-                }
+                EntityListFloatingActionOverlay(
+                    showsSearchButton: !rewardStore.activeRewards.isEmpty,
+                    namespace: searchChromeNamespace,
+                    searchState: $searchState,
+                    onAdd: openNewRewardForm
+                )
             }
             .sheet(item: $formRoute) { route in
                 RewardFormView(
@@ -172,6 +167,10 @@ struct RewardsView: View {
                 schedulePendingRewardFormOpenIfNeeded()
             }
         }
+    }
+
+    private func openNewRewardForm() {
+        formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
     }
 
     private func showDiscardToast(snapshot: RewardFormSnapshot) {

@@ -6,9 +6,8 @@ enum EntityListQuery {
     // reuse instead of each screen hand-rolling the same pipeline.
     static func apply<Item>(
         items: [Item],
-        preferences: EntityListPreferences,
+        filterState: EntityListFilterState,
         validTagIDs: Set<RecordID>,
-        searchText: String = "",
         id: (Item) -> RecordID,
         name: (Item) -> String,
         createdAt: (Item) -> Date,
@@ -17,8 +16,8 @@ enum EntityListQuery {
         tags: (Item) -> [Tag],
         isDeprioritized: (Item) -> Bool = { _ in false }
     ) -> [Item] {
-        let selectedTagIDs = preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
-        let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectedTagIDs = filterState.preferences.selectedTagIDs.filter { validTagIDs.contains($0) }
+        let trimmedSearchText = filterState.search.trimmedText
 
         let filteredItems = items.filter { item in
             matchesTagFilter(
@@ -41,7 +40,7 @@ enum EntityListQuery {
             return compare(
                 lhs,
                 rhs,
-                sort: preferences.sort,
+                sort: filterState.preferences.sort,
                 id: id,
                 createdAt: createdAt,
                 difficultySortOrder: difficultySortOrder,

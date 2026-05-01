@@ -25,7 +25,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [callFriend, pushups, reading],
-            preferences: preferences,
+            filterState: EntityListFilterState(
+                preferences: preferences,
+                search: EntityListSearchState()
+            ),
             validTagIDs: [social.id, health.id],
             id: \.id,
             name: \.name,
@@ -52,7 +55,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [journal, stretch],
-            preferences: EntityListPreferences(),
+            filterState: EntityListFilterState(
+                preferences: EntityListPreferences(),
+                search: EntityListSearchState()
+            ),
             validTagIDs: [focus.id],
             id: \.id,
             name: \.name,
@@ -79,7 +85,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [cheap, missingPrice, expensive],
-            preferences: EntityListPreferences(),
+            filterState: EntityListFilterState(
+                preferences: EntityListPreferences(),
+                search: EntityListSearchState()
+            ),
             validTagIDs: [],
             id: \.id,
             name: \.name,
@@ -105,7 +114,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [highValueBlocked, lowValueOpen],
-            preferences: EntityListPreferences(),
+            filterState: EntityListFilterState(
+                preferences: EntityListPreferences(),
+                search: EntityListSearchState()
+            ),
             validTagIDs: [],
             id: \.id,
             name: \.name,
@@ -133,7 +145,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [hard, mediumNewer, trivial, mediumOlder],
-            preferences: preferences,
+            filterState: EntityListFilterState(
+                preferences: preferences,
+                search: EntityListSearchState()
+            ),
             validTagIDs: [],
             id: \.id,
             name: \.name,
@@ -164,7 +179,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [stretch, journal],
-            preferences: preferences,
+            filterState: EntityListFilterState(
+                preferences: preferences,
+                search: EntityListSearchState()
+            ),
             validTagIDs: [focus.id],
             id: \.id,
             name: \.name,
@@ -194,7 +212,10 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [walk, deepWork],
-            preferences: preferences,
+            filterState: EntityListFilterState(
+                preferences: preferences,
+                search: EntityListSearchState()
+            ),
             validTagIDs: [focus.id],
             id: \.id,
             name: \.name,
@@ -228,9 +249,11 @@ struct EntityListQueryTests {
 
         let visible = EntityListQuery.apply(
             items: [bedtimeReading, eveningWalk],
-            preferences: EntityListPreferences(),
+            filterState: EntityListFilterState(
+                preferences: EntityListPreferences(),
+                search: EntityListSearchState(text: "  WALK  ", isPresented: true)
+            ),
             validTagIDs: [],
-            searchText: "  WALK  ",
             id: \.id,
             name: \.name,
             createdAt: \.createdAt,
