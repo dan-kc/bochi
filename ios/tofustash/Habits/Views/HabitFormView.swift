@@ -636,10 +636,8 @@ struct ClaimRewardButton: View {
         Button(action: action) {
             labelContent
         }
-        .buttonStyle(.borderedProminent)
-        .tint(tintColor)
+        .tofuGlassButton(tint: tintColor)
         .controlSize(controlSize)
-        .clipShape(Capsule())
         .onAppear {
             displayedPrice = price
             tintColor = Self.baseTint

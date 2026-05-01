@@ -10,11 +10,10 @@ struct EntityFloatingAddButton: View {
             Image(systemName: "plus")
                 .font(.title2)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 56, height: 56)
-                .background(.blue, in: .circle)
-                .shadow(radius: 4)
         }
+        .tofuGlassButton(tint: .blue, borderShape: .circle)
         .accessibilityIdentifier("entity.add")
         .padding()
     }

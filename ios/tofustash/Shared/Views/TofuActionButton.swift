@@ -28,6 +28,15 @@ struct TofuActionButton: View {
         }
 
         var icon: String { "cube.fill" }
+
+        var tint: Color {
+            switch self {
+            case .earning:
+                return .green
+            case .spending:
+                return .orange
+            }
+        }
     }
 
     var body: some View {
@@ -39,9 +48,8 @@ struct TofuActionButton: View {
                 expandedLabel(title: title)
             }
         }
-        .buttonStyle(.borderedProminent)
+        .tofuGlassButton(tint: polarity.tint)
         .controlSize(controlSize)
-        .clipShape(Capsule())
     }
 
     private var compactLabel: some View {

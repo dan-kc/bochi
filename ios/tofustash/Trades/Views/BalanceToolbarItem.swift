@@ -31,8 +31,7 @@ struct BalanceOverlay: View {
             }
             .font(.headline.weight(.semibold))
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
+        .tofuGlassButton(tint: .teal)
         .animation(.easeInOut(duration: 2.0), value: balanceStore.balance)
         .sheet(isPresented: $showingTradeHistory) {
             TradeHistorySheetView(filter: .all)
