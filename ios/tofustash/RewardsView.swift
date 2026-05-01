@@ -18,6 +18,7 @@ struct RewardsView: View {
 
     @State private var formRoute: RewardFormRoute? = nil
     @State private var purchasingReward: Reward? = nil
+    @State private var historyReward: Reward? = nil
     @State private var rewardToDelete: Reward? = nil
     @State private var toastManager = ToastManager()
     @State private var pendingScrollTargetID: RecordID? = nil
@@ -80,6 +81,9 @@ struct RewardsView: View {
                             }
                             .tint(.red)
                         }
+                        .contextMenu {
+                            rewardRowMenu(reward)
+                        }
                 }
             }
             .navigationTitle("Rewards")
@@ -106,6 +110,12 @@ struct RewardsView: View {
             }
             .sheet(item: $purchasingReward) { reward in
                 RewardPurchaseModalView(reward: reward)
+            }
+            .sheet(item: $historyReward) { reward in
+                TradeHistorySheetView(
+                    filter: .reward(reward.id),
+                    detents: [.large]
+                )
             }
             .alert(
                 "Delete Reward?",
@@ -230,6 +240,38 @@ struct RewardsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func rewardRowMenu(_ reward: Reward) -> some View {
+        let price = priceForReward(reward)
+        let canClaimReward = reward.canPurchase && balanceStore.balance >= price
+
+        if canClaimReward {
+            Button {
+                purchasingReward = reward
+            } label: {
+                Label("Claim Reward", systemImage: "gift")
+            }
+        }
+
+        Button {
+            openChangeForm(reward, focus: nil)
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+
+        Button {
+            historyReward = reward
+        } label: {
+            Label("View History", systemImage: "clock.arrow.circlepath")
+        }
+
+        Button(role: .destructive) {
+            rewardToDelete = reward
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private func openChangeForm(_ reward: Reward, focus: RewardFormFocus?) {

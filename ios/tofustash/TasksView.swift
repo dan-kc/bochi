@@ -18,6 +18,7 @@ struct TasksView: View {
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: TaskFormRoute? = nil
+    @State private var historyTask: TaskItem? = nil
     @State private var taskToDelete: TaskItem? = nil
     @State private var toastManager = ToastManager()
     @State private var showingBlockedTaskAlert = false
@@ -82,6 +83,9 @@ struct TasksView: View {
                             }
                             .tint(.red)
                         }
+                        .contextMenu {
+                            taskRowMenu(task)
+                        }
                 }
             }
             .navigationTitle("Tasks")
@@ -108,6 +112,12 @@ struct TasksView: View {
                     onDelete: { task in
                         taskToDelete = task
                     }
+                )
+            }
+            .sheet(item: $historyTask) { task in
+                TradeHistorySheetView(
+                    filter: .task(task.id),
+                    detents: [.large]
                 )
             }
             .alert(
@@ -261,6 +271,59 @@ struct TasksView: View {
         task.canTrade && tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) == nil
     }
 
+    @ViewBuilder
+    private func taskRowMenu(_ task: TaskItem) -> some View {
+        let reward = TaskRewardCalculation.calculateReward(task: task)
+        let taskActionState = TaskTradeActionSupport.state(
+            isNewMode: false,
+            isCompleted: task.completedAt != nil,
+            claimed: false,
+            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true),
+            rewardPreview: reward
+        )
+
+        switch taskActionState {
+        case .complete:
+            Button {
+                completeTask(task, reward: reward)
+            } label: {
+                Label("Complete", systemImage: "checkmark.circle")
+            }
+        case .refund:
+            Button {
+                setRefunded(true, forTask: task)
+            } label: {
+                Label("Refund", systemImage: "arrow.uturn.backward")
+            }
+        case .undoRefund:
+            Button {
+                setRefunded(false, forTask: task)
+            } label: {
+                Label("Undo Refund", systemImage: "arrow.uturn.forward")
+            }
+        case .none:
+            EmptyView()
+        }
+
+        Button {
+            openChangeForm(task, focus: nil)
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+
+        Button {
+            historyTask = task
+        } label: {
+            Label("View History", systemImage: "clock.arrow.circlepath")
+        }
+
+        Button(role: .destructive) {
+            taskToDelete = task
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
     private func queueScrollToTaskIfVisible(_ taskID: RecordID) {
         guard visibleTasks.contains(where: { $0.id == taskID }) else { return }
         highlightedTaskID = taskID
@@ -324,6 +387,18 @@ struct TasksView: View {
             mode: .change(task),
             initialFocus: focus,
             prefill: nil
+        )
+    }
+
+    private func setRefunded(_ refunded: Bool, forTask task: TaskItem) {
+        guard let trade = tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) else { return }
+
+        TradeRefundService.setRefunded(
+            refunded,
+            for: trade,
+            tradeStore: tradeStore,
+            taskStore: taskStore,
+            balanceStore: balanceStore
         )
     }
 }

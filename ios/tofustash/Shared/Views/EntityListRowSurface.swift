@@ -40,6 +40,11 @@ struct EntityListRowSurface<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        // Behaviour: native context menus snapshot the pressed row before they
+        // animate it upward. Flattening the row into one surface stops SwiftUI
+        // from lifting the trailing action pill separately from the text stack.
+        .compositingGroup()
         .background {
             Rectangle()
                 // Behaviour: a freshly created row briefly glows warm across

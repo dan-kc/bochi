@@ -633,11 +633,18 @@ struct ClaimRewardButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            labelContent
+        Group {
+            switch layout {
+            case .compact:
+                compactActionSurface
+            case .expanded:
+                Button(action: action) {
+                    labelContent
+                }
+                .tofuGlassButton(tint: tintColor)
+                .controlSize(controlSize)
+            }
         }
-        .tofuGlassButton(tint: tintColor)
-        .controlSize(controlSize)
         .onAppear {
             displayedPrice = price
             tintColor = Self.baseTint
@@ -658,6 +665,20 @@ struct ClaimRewardButton: View {
         .onDisappear {
             colorResetTask?.cancel()
         }
+    }
+
+    private var compactActionSurface: some View {
+        labelContent
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.95), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+            .onTapGesture(perform: action)
+            .accessibilityAddTraits(.isButton)
     }
 
     private var priceValue: some View {

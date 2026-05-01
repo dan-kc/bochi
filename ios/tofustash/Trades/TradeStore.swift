@@ -234,20 +234,9 @@ final class TradeStore {
     }
 
     func latestTaskTrade(taskId: RecordID, includeRefunded: Bool = true) -> Trade? {
-        trades
-            .filter { trade in
-                guard trade.taskId == taskId, trade.deletedAt == nil else { return false }
-                if includeRefunded {
-                    return true
-                }
-                return trade.refundedAt == nil
-            }
-            .max {
-                if $0.createdAt == $1.createdAt {
-                    return $0.updatedAt < $1.updatedAt
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        latestTrade(includeRefunded: includeRefunded) { trade in
+            trade.taskId == taskId && trade.deletedAt == nil
+        }
     }
 
     func activeTaskTradeCompletionDate(taskId: RecordID) -> Date? {
@@ -356,6 +345,26 @@ final class TradeStore {
         let sorted = OwnerScopedRecordSupport.sorted(authoritativeTrades)
         try replaceRows(ownerID: currentOwnerID, trades: sorted, on: databaseHandle)
         try recalculateBalance(ownerID: currentOwnerID, on: databaseHandle)
+    }
+
+    private func latestTrade(
+        includeRefunded: Bool,
+        where predicate: (Trade) -> Bool
+    ) -> Trade? {
+        trades
+            .filter { trade in
+                guard predicate(trade) else { return false }
+                if includeRefunded {
+                    return true
+                }
+                return trade.refundedAt == nil
+            }
+            .max {
+                if $0.createdAt == $1.createdAt {
+                    return $0.updatedAt < $1.updatedAt
+                }
+                return $0.createdAt < $1.createdAt
+            }
     }
 
     func persistDeletedTradePurge(excluding dirtyIDs: Set<RecordID>) throws {

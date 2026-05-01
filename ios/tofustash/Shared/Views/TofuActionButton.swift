@@ -40,16 +40,30 @@ struct TofuActionButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            switch layout {
-            case .compact:
-                compactLabel
-            case .expanded(let title):
+        switch layout {
+        case .compact:
+            compactActionSurface
+        case .expanded(let title):
+            Button(action: action) {
                 expandedLabel(title: title)
             }
+            .tofuGlassButton(tint: polarity.tint)
+            .controlSize(controlSize)
         }
-        .tofuGlassButton(tint: polarity.tint)
-        .controlSize(controlSize)
+    }
+
+    private var compactActionSurface: some View {
+        compactLabel
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.95), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+            .onTapGesture(perform: action)
+            .accessibilityAddTraits(.isButton)
     }
 
     private var compactLabel: some View {

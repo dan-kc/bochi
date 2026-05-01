@@ -14,6 +14,8 @@ struct TradeHistorySheetView: View {
     @Environment(TaskStore.self) private var taskStore
     @Environment(HabitStore.self) private var habitStore
     @Environment(RewardStore.self) private var rewardStore
+    @Environment(BalanceStore.self) private var balanceStore
+    @Environment(AppNavigationStore.self) private var appNavigationStore
     @State private var tradeDetailRoute: TradeDetailRoute?
 
     init(
@@ -82,6 +84,9 @@ struct TradeHistorySheetView: View {
                             TradeHistoryRow(entry: entry)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            tradeRowMenu(for: entry)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -109,6 +114,54 @@ struct TradeHistorySheetView: View {
                 }
             )
         }
+    }
+
+    @ViewBuilder
+    private func tradeRowMenu(for entry: TradeHistoryEntry) -> some View {
+        if let trade = tradeStore.trades.first(where: { $0.id == entry.id && $0.deletedAt == nil }) {
+            Button {
+                tradeDetailRoute = TradeDetailRoute(id: trade.id)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            Button(role: trade.isRefunded ? nil : .destructive) {
+                TradeRefundService.setRefunded(
+                    !trade.isRefunded,
+                    for: trade,
+                    tradeStore: tradeStore,
+                    taskStore: taskStore,
+                    balanceStore: balanceStore
+                )
+            } label: {
+                Label(trade.isRefunded ? "Undo Refund" : "Refund", systemImage: trade.isRefunded ? "arrow.uturn.forward" : "arrow.uturn.backward")
+            }
+
+            if let route = TradeSourceNavigationSupport.route(
+                for: trade,
+                tasks: taskStore.tasks,
+                habits: habitStore.habits,
+                rewards: rewardStore.rewards
+            ) {
+                Button {
+                    openSource(route)
+                } label: {
+                    Label(route.viewActionTitle, systemImage: "arrow.up.forward.square")
+                }
+            }
+        }
+    }
+
+    private func openSource(_ route: TradeSourceNavigationRoute) {
+        switch route {
+        case .task(let taskID):
+            appNavigationStore.openTaskForm(taskID: taskID)
+        case .habit(let habitID):
+            appNavigationStore.openHabitForm(habitID: habitID)
+        case .reward(let rewardID):
+            appNavigationStore.openRewardForm(rewardID: rewardID)
+        }
+        dismiss()
     }
 }
 

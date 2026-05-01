@@ -17,6 +17,7 @@ struct HabitsView: View {
 
     @State private var formRoute: HabitFormRoute? = nil
     @State private var tradingHabit: Habit? = nil
+    @State private var historyHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
     @State private var pendingScrollTargetID: RecordID? = nil
@@ -79,6 +80,9 @@ struct HabitsView: View {
                             }
                             .tint(.red)
                         }
+                        .contextMenu {
+                            habitRowMenu(habit)
+                        }
                 }
             }
             .navigationTitle("Habits")
@@ -109,6 +113,12 @@ struct HabitsView: View {
             }
             .sheet(item: $tradingHabit) { habit in
                 TradeModalView(habit: habit)
+            }
+            .sheet(item: $historyHabit) { habit in
+                TradeHistorySheetView(
+                    filter: .habit(habit.id),
+                    detents: [.large]
+                )
             }
             .alert(
                 "Delete Habit?",
@@ -239,6 +249,37 @@ struct HabitsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func habitRowMenu(_ habit: Habit) -> some View {
+        let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
+
+        if habit.canTrade && !isLocked {
+            Button {
+                tradingHabit = habit
+            } label: {
+                Label("Complete", systemImage: "checkmark.circle")
+            }
+        }
+
+        Button {
+            openChangeForm(habit, focus: nil)
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+
+        Button {
+            historyHabit = habit
+        } label: {
+            Label("View History", systemImage: "clock.arrow.circlepath")
+        }
+
+        Button(role: .destructive) {
+            habitToDelete = habit
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private func habitMetaPill(text: String, isSet: Bool) -> some View {
