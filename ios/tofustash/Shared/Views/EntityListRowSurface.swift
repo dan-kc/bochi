@@ -1,8 +1,8 @@
 import SwiftUI
 
-// Shared row surface for habits and rewards. SwiftUI's built-in list separators
-// do not let us both remove the final divider and tune the divider spacing, so
-// we render the divider ourselves for each non-final row.
+// Shared row surface for tasks, habits, and rewards. SwiftUI's built-in list
+// separators do not let us both remove the final divider and tune the divider
+// spacing, so we render the divider ourselves for each non-final row.
 struct EntityListRowSurface<Content: View>: View {
     private static var horizontalInset: CGFloat { 16 }
     private static var verticalInset: CGFloat { 8 }

@@ -153,16 +153,15 @@ struct RewardsView: View {
     }
 
     private func showDiscardToast(snapshot: RewardFormSnapshot) {
-        toastManager.show(
-            message: "Reward Discarded",
-            actionLabel: "Recover"
-        ) {
-            formRoute = RewardFormRoute(
-                mode: .new,
-                initialFocus: nil,
-                prefill: snapshot
-            )
-        }
+        EntityListViewCoordinator.showDiscardToast(
+            toastManager: toastManager,
+            entityName: "Reward",
+            snapshot: snapshot,
+            makeRoute: {
+                RewardFormRoute(mode: .new, initialFocus: nil, prefill: $0)
+            },
+            setRoute: { formRoute = $0 }
+        )
     }
 
     private func priceForReward(_ reward: Reward) -> Int {
@@ -225,21 +224,25 @@ struct RewardsView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                openChangeForm(reward, focus: nil)
-            }
 
             if canPurchase {
-                TofuActionButton(amount: price, polarity: .spending, layout: .compact) {
+                TofuActionButton(
+                    amount: price,
+                    polarity: .spending,
+                    layout: .compact,
+                    isEnabled: canAfford
+                ) {
                     if canAfford {
                         purchasingReward = reward
                     }
                 }
-                .disabled(!canAfford)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            openChangeForm(reward, focus: nil)
+        }
     }
 
     @ViewBuilder
@@ -255,23 +258,17 @@ struct RewardsView: View {
             }
         }
 
-        Button {
-            openChangeForm(reward, focus: nil)
-        } label: {
-            Label("Edit", systemImage: "pencil")
-        }
-
-        Button {
-            historyReward = reward
-        } label: {
-            Label("View History", systemImage: "clock.arrow.circlepath")
-        }
-
-        Button(role: .destructive) {
-            rewardToDelete = reward
-        } label: {
-            Label("Delete", systemImage: "trash")
-        }
+        EntityRowContextMenuActions.editHistoryDelete(
+            onEdit: {
+                openChangeForm(reward, focus: nil)
+            },
+            onViewHistory: {
+                historyReward = reward
+            },
+            onDelete: {
+                rewardToDelete = reward
+            }
+        )
     }
 
     private func openChangeForm(_ reward: Reward, focus: RewardFormFocus?) {
@@ -283,35 +280,47 @@ struct RewardsView: View {
     }
 
     private func queueScrollToRewardIfVisible(_ rewardID: RecordID) {
-        guard visibleRewards.contains(where: { $0.id == rewardID }) else { return }
-        highlightedRewardID = rewardID
-        pendingScrollTargetID = rewardID
+        EntityListViewCoordinator.queueScrollToVisibleItem(
+            rewardID,
+            visibleIDs: visibleRewards.map(\.id),
+            highlightedID: &highlightedRewardID,
+            pendingScrollTargetID: &pendingScrollTargetID
+        )
     }
 
     private func scheduleNewRewardHighlightFade(for rewardID: RecordID) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            guard highlightedRewardID == rewardID else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                highlightedRewardID = nil
-            }
-        }
+        EntityListViewCoordinator.scheduleHighlightFade(
+            for: rewardID,
+            highlightedID: { highlightedRewardID },
+            setHighlightedID: { highlightedRewardID = $0 }
+        )
     }
 
     @MainActor
     private func openPendingRewardFormIfNeeded() {
-        guard appNavigationStore.selectedTab == .rewards else { return }
-        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
-        guard case .reward(let rewardID) = request.route else { return }
-        guard let reward = rewardStore.rewards.first(where: { $0.id == rewardID && $0.deletedAt == nil }) else { return }
-        guard formRoute == nil else { return }
-        openChangeForm(reward, focus: nil)
-        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+        EntityListViewCoordinator.openPendingFormIfNeeded(
+            expectedTab: .rewards,
+            selectedTab: appNavigationStore.selectedTab,
+            request: appNavigationStore.pendingEntityFormRequest,
+            extractID: { route in
+                guard case .reward(let rewardID) = route else { return nil }
+                return rewardID
+            },
+            resolveEntity: { rewardID in
+                rewardStore.rewards.first(where: { $0.id == rewardID && $0.deletedAt == nil })
+            },
+            isPresentingForm: formRoute != nil,
+            open: { reward in
+                openChangeForm(reward, focus: nil)
+            },
+            clearRequest: { requestID in
+                appNavigationStore.clearPendingEntityFormRequest(id: requestID)
+            }
+        )
     }
 
     private func schedulePendingRewardFormOpenIfNeeded() {
-        DispatchQueue.main.async {
-            self.openPendingRewardFormIfNeeded()
-        }
+        EntityListViewCoordinator.schedulePendingFormOpen(openPendingRewardFormIfNeeded)
     }
 }
 

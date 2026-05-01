@@ -12,6 +12,7 @@ struct TofuActionButton: View {
     let amount: Int
     let polarity: Polarity
     let layout: Layout
+    var isEnabled: Bool = true
     let action: () -> Void
 
     enum Polarity {
@@ -42,28 +43,18 @@ struct TofuActionButton: View {
     var body: some View {
         switch layout {
         case .compact:
-            compactActionSurface
+            TofuActionSurface(layout: .compact, isEnabled: isEnabled, action: action) {
+                compactLabel
+            }
         case .expanded(let title):
-            Button(action: action) {
+            TofuActionSurface(
+                layout: .expanded(tint: polarity.tint),
+                isEnabled: isEnabled,
+                action: action
+            ) {
                 expandedLabel(title: title)
             }
-            .tofuGlassButton(tint: polarity.tint)
-            .controlSize(controlSize)
         }
-    }
-
-    private var compactActionSurface: some View {
-        compactLabel
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(Color.white.opacity(0.95), lineWidth: 1)
-            }
-            .contentShape(Capsule())
-            .onTapGesture(perform: action)
-            .accessibilityAddTraits(.isButton)
     }
 
     private var compactLabel: some View {
@@ -92,12 +83,4 @@ struct TofuActionButton: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var controlSize: ControlSize {
-        switch layout {
-        case .compact:
-            return .regular
-        case .expanded:
-            return .large
-        }
-    }
 }

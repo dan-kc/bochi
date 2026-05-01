@@ -219,10 +219,6 @@ struct TasksView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                openChangeForm(task, focus: nil)
-            }
 
             if canComplete {
                 TofuActionButton(amount: reward, polarity: .earning, layout: .compact) {
@@ -243,6 +239,10 @@ struct TasksView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(isBlocked ? 0.55 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            openChangeForm(task, focus: nil)
+        }
     }
 
     private func priceSortValue(for task: TaskItem) -> Int? {
@@ -305,68 +305,73 @@ struct TasksView: View {
             EmptyView()
         }
 
-        Button {
-            openChangeForm(task, focus: nil)
-        } label: {
-            Label("Edit", systemImage: "pencil")
-        }
-
-        Button {
-            historyTask = task
-        } label: {
-            Label("View History", systemImage: "clock.arrow.circlepath")
-        }
-
-        Button(role: .destructive) {
-            taskToDelete = task
-        } label: {
-            Label("Delete", systemImage: "trash")
-        }
+        EntityRowContextMenuActions.editHistoryDelete(
+            onEdit: {
+                openChangeForm(task, focus: nil)
+            },
+            onViewHistory: {
+                historyTask = task
+            },
+            onDelete: {
+                taskToDelete = task
+            }
+        )
     }
 
     private func queueScrollToTaskIfVisible(_ taskID: RecordID) {
-        guard visibleTasks.contains(where: { $0.id == taskID }) else { return }
-        highlightedTaskID = taskID
-        pendingScrollTargetID = taskID
+        EntityListViewCoordinator.queueScrollToVisibleItem(
+            taskID,
+            visibleIDs: visibleTasks.map(\.id),
+            highlightedID: &highlightedTaskID,
+            pendingScrollTargetID: &pendingScrollTargetID
+        )
     }
 
     private func scheduleNewTaskHighlightFade(for taskID: RecordID) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            guard highlightedTaskID == taskID else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                highlightedTaskID = nil
-            }
-        }
+        EntityListViewCoordinator.scheduleHighlightFade(
+            for: taskID,
+            highlightedID: { highlightedTaskID },
+            setHighlightedID: { highlightedTaskID = $0 }
+        )
     }
 
     private func showDiscardToast(snapshot: TaskFormSnapshot) {
-        toastManager.show(
-            message: "Task Discarded",
-            actionLabel: "Recover"
-        ) {
-            formRoute = TaskFormRoute(
-                mode: .new,
-                initialFocus: nil,
-                prefill: snapshot
-            )
-        }
+        EntityListViewCoordinator.showDiscardToast(
+            toastManager: toastManager,
+            entityName: "Task",
+            snapshot: snapshot,
+            makeRoute: {
+                TaskFormRoute(mode: .new, initialFocus: nil, prefill: $0)
+            },
+            setRoute: { formRoute = $0 }
+        )
     }
 
     @MainActor
     private func openPendingTaskFormIfNeeded() {
-        guard appNavigationStore.selectedTab == .tasks else { return }
-        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
-        guard case .task(let taskID) = request.route else { return }
-        guard let task = taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil }) else { return }
-        guard formRoute == nil else { return }
-        openChangeForm(task, focus: nil)
-        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+        EntityListViewCoordinator.openPendingFormIfNeeded(
+            expectedTab: .tasks,
+            selectedTab: appNavigationStore.selectedTab,
+            request: appNavigationStore.pendingEntityFormRequest,
+            extractID: { route in
+                guard case .task(let taskID) = route else { return nil }
+                return taskID
+            },
+            resolveEntity: { taskID in
+                taskStore.tasks.first(where: { $0.id == taskID && $0.deletedAt == nil })
+            },
+            isPresentingForm: formRoute != nil,
+            open: { task in
+                openChangeForm(task, focus: nil)
+            },
+            clearRequest: { requestID in
+                appNavigationStore.clearPendingEntityFormRequest(id: requestID)
+            }
+        )
     }
 
     private func schedulePendingTaskFormOpenIfNeeded() {
-        DispatchQueue.main.async {
-            self.openPendingTaskFormIfNeeded()
-        }
+        EntityListViewCoordinator.schedulePendingFormOpen(openPendingTaskFormIfNeeded)
     }
 
     private func durationSummary(for durationSeconds: Int?) -> String {

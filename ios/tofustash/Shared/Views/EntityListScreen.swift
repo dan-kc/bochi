@@ -1,14 +1,14 @@
 import SwiftUI
 
-// Shared list shell for habits and rewards. Both screens keep their own row
-// content and pricing logic, but the list chrome should behave the same:
+// Shared list shell for tasks, habits, and rewards. Each screen keeps its own
+// row content and pricing logic, but the list chrome should behave the same:
 // controls at the top, controls locked while scrolled down, and a distinct
 // empty state when filters hide everything.
 struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     // SwiftUI `List` does not expose a CSS-like "padding-bottom" on just the
     // scrollable children. The simplest equivalent is to append a final spacer
-    // row with a fixed height. Because both habits and rewards use this shared
-    // shell, one constant keeps the extra runway consistent across both tabs.
+    // row with a fixed height. Because all three entity tabs use this shared
+    // shell, one constant keeps the extra runway consistent across them.
     private static var bottomContentPadding: CGFloat { 96 }
 
     let hasAnyItems: Bool
@@ -81,13 +81,13 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                                 filteredEmptyStateRow
                             } else {
                                 rowContent
-                                    // Behaviour: habit/reward content should line up with the
+                                    // Behaviour: entity rows should line up with the
                                     // control strip and navigation title. We set the insets
                                     // ourselves so the list stays sharp-edged without the
                                     // grouped container clipping the row content.
                                     .listRowInsets(EdgeInsets())
                                     .listRowSeparator(.hidden)
-                                    // Behaviour: once the user has items, every habit/reward
+                                    // Behaviour: once the user has items, every entity
                                     // row should sit directly on the parent surface instead of
                                     // getting the default opaque grouped-cell fill.
                                     .listRowBackground(Color.clear)
@@ -161,9 +161,9 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
     private var bottomPaddingRow: some View {
         Color.clear
             .frame(height: Self.bottomContentPadding)
-            // Behaviour: the user should be able to scroll the final habit or
-            // reward completely above the floating add button so the row never
-            // feels clipped or harder to tap near the bottom edge.
+            // Behaviour: the user should be able to scroll the final row
+            // completely above the floating add button so the row never feels
+            // clipped or harder to tap near the bottom edge.
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)

@@ -159,16 +159,15 @@ struct HabitsView: View {
     // Behaviour: when the user dismisses a new-habit sheet with unsaved content,
     // show a toast so they can recover the exact draft they just closed.
     private func showDiscardToast(snapshot: HabitFormSnapshot) {
-        toastManager.show(
-            message: "Habit Discarded",
-            actionLabel: "Recover"
-        ) {
-            formRoute = HabitFormRoute(
-                mode: .new,
-                initialFocus: nil,
-                prefill: snapshot
-            )
-        }
+        EntityListViewCoordinator.showDiscardToast(
+            toastManager: toastManager,
+            entityName: "Habit",
+            snapshot: snapshot,
+            makeRoute: {
+                HabitFormRoute(mode: .new, initialFocus: nil, prefill: $0)
+            },
+            setRoute: { formRoute = $0 }
+        )
     }
 
     private func priceForHabit(_ habit: Habit) -> Int {
@@ -206,12 +205,12 @@ struct HabitsView: View {
                 }
 
                 HStack(spacing: 8) {
-                    habitMetaPill(
+                    EntityListMetaPill(
                         text: FrequencyConversion.formatSummary(habit.frequency) ?? "Frequency",
                         isSet: habit.frequency != nil
                     )
 
-                    habitMetaPill(
+                    EntityListMetaPill(
                         text: habit.difficultyTier?.displayName ?? "Difficulty",
                         isSet: habit.difficultyTier != nil
                     )
@@ -229,10 +228,6 @@ struct HabitsView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                openChangeForm(habit, focus: nil)
-            }
 
             if habit.canTrade {
                 if isLocked {
@@ -249,6 +244,10 @@ struct HabitsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            openChangeForm(habit, focus: nil)
+        }
     }
 
     @ViewBuilder
@@ -263,27 +262,17 @@ struct HabitsView: View {
             }
         }
 
-        Button {
-            openChangeForm(habit, focus: nil)
-        } label: {
-            Label("Edit", systemImage: "pencil")
-        }
-
-        Button {
-            historyHabit = habit
-        } label: {
-            Label("View History", systemImage: "clock.arrow.circlepath")
-        }
-
-        Button(role: .destructive) {
-            habitToDelete = habit
-        } label: {
-            Label("Delete", systemImage: "trash")
-        }
-    }
-
-    private func habitMetaPill(text: String, isSet: Bool) -> some View {
-        EntityListMetaPill(text: text, isSet: isSet)
+        EntityRowContextMenuActions.editHistoryDelete(
+            onEdit: {
+                openChangeForm(habit, focus: nil)
+            },
+            onViewHistory: {
+                historyHabit = habit
+            },
+            onDelete: {
+                habitToDelete = habit
+            }
+        )
     }
 
     private func openChangeForm(_ habit: Habit, focus: HabitFormFocus?) {
@@ -295,35 +284,47 @@ struct HabitsView: View {
     }
 
     private func queueScrollToHabitIfVisible(_ habitID: RecordID) {
-        guard visibleHabits.contains(where: { $0.id == habitID }) else { return }
-        highlightedHabitID = habitID
-        pendingScrollTargetID = habitID
+        EntityListViewCoordinator.queueScrollToVisibleItem(
+            habitID,
+            visibleIDs: visibleHabits.map(\.id),
+            highlightedID: &highlightedHabitID,
+            pendingScrollTargetID: &pendingScrollTargetID
+        )
     }
 
     private func scheduleNewHabitHighlightFade(for habitID: RecordID) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            guard highlightedHabitID == habitID else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                highlightedHabitID = nil
-            }
-        }
+        EntityListViewCoordinator.scheduleHighlightFade(
+            for: habitID,
+            highlightedID: { highlightedHabitID },
+            setHighlightedID: { highlightedHabitID = $0 }
+        )
     }
 
     @MainActor
     private func openPendingHabitFormIfNeeded() {
-        guard appNavigationStore.selectedTab == .habits else { return }
-        guard let request = appNavigationStore.pendingEntityFormRequest else { return }
-        guard case .habit(let habitID) = request.route else { return }
-        guard let habit = habitStore.habits.first(where: { $0.id == habitID && $0.deletedAt == nil }) else { return }
-        guard formRoute == nil else { return }
-        openChangeForm(habit, focus: nil)
-        appNavigationStore.clearPendingEntityFormRequest(id: request.id)
+        EntityListViewCoordinator.openPendingFormIfNeeded(
+            expectedTab: .habits,
+            selectedTab: appNavigationStore.selectedTab,
+            request: appNavigationStore.pendingEntityFormRequest,
+            extractID: { route in
+                guard case .habit(let habitID) = route else { return nil }
+                return habitID
+            },
+            resolveEntity: { habitID in
+                habitStore.habits.first(where: { $0.id == habitID && $0.deletedAt == nil })
+            },
+            isPresentingForm: formRoute != nil,
+            open: { habit in
+                openChangeForm(habit, focus: nil)
+            },
+            clearRequest: { requestID in
+                appNavigationStore.clearPendingEntityFormRequest(id: requestID)
+            }
+        )
     }
 
     private func schedulePendingHabitFormOpenIfNeeded() {
-        DispatchQueue.main.async {
-            self.openPendingHabitFormIfNeeded()
-        }
+        EntityListViewCoordinator.schedulePendingFormOpen(openPendingHabitFormIfNeeded)
     }
 }
 

@@ -636,13 +636,13 @@ struct ClaimRewardButton: View {
         Group {
             switch layout {
             case .compact:
-                compactActionSurface
-            case .expanded:
-                Button(action: action) {
+                TofuActionSurface(layout: .compact, action: action) {
                     labelContent
                 }
-                .tofuGlassButton(tint: tintColor)
-                .controlSize(controlSize)
+            case .expanded:
+                TofuActionSurface(layout: .expanded(tint: tintColor), action: action) {
+                    labelContent
+                }
             }
         }
         .onAppear {
@@ -665,20 +665,6 @@ struct ClaimRewardButton: View {
         .onDisappear {
             colorResetTask?.cancel()
         }
-    }
-
-    private var compactActionSurface: some View {
-        labelContent
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(Color.white.opacity(0.95), lineWidth: 1)
-            }
-            .contentShape(Capsule())
-            .onTapGesture(perform: action)
-            .accessibilityAddTraits(.isButton)
     }
 
     private var priceValue: some View {
@@ -709,15 +695,6 @@ struct ClaimRewardButton: View {
                 .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var controlSize: ControlSize {
-        switch layout {
-        case .compact:
-            return .regular
-        case .expanded:
-            return .large
         }
     }
 
