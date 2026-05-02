@@ -178,6 +178,11 @@ struct HabitFormView: View {
         )
     }
 
+    private var lastCompletedAt: Date? {
+        guard !isNewMode else { return nil }
+        return tradeStore.habitTradeDates(habitId: draftHabit.id).max()
+    }
+
     init(
         mode: HabitFormMode = .new,
         initialFocus: HabitFormFocus? = nil,
@@ -219,6 +224,14 @@ struct HabitFormView: View {
                         PillRow(pills: buildPills(), leadingInset: 16, trailingInset: 16)
                             .opacity(isEditingText ? 0 : 1)
                             .allowsHitTesting(!isEditingText)
+
+                        if let lastCompletedAt {
+                            Text(RecentActivitySummary.text(prefix: "Last completed", date: lastCompletedAt))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 16)
+                                .opacity(isEditingText ? 0 : 1)
+                        }
 
                         VStack(alignment: .leading, spacing: 16) {
                             Color.clear.frame(height: showsTradeButton ? 94 : 16)

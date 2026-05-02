@@ -137,6 +137,11 @@ struct RewardFormView: View {
         )
     }
 
+    private var lastPurchasedAt: Date? {
+        guard let reward = draftRewardForPurchase else { return nil }
+        return tradeStore.rewardPurchaseDates(rewardId: reward.id).max()
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
@@ -158,6 +163,14 @@ struct RewardFormView: View {
                         PillRow(pills: buildPills(), leadingInset: 16, trailingInset: 16)
                             .opacity(isEditingText ? 0 : 1)
                             .allowsHitTesting(!isEditingText)
+
+                        if let lastPurchasedAt {
+                            Text(RecentActivitySummary.text(prefix: "Last purchased", date: lastPurchasedAt))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 16)
+                                .opacity(isEditingText ? 0 : 1)
+                        }
 
                         VStack(alignment: .leading, spacing: 16) {
                             Color.clear.frame(height: isNewMode ? 16 : 94)

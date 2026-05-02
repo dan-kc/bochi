@@ -12,11 +12,11 @@ Postgresql, with migrations are handled with flyway.
 
 The app uses a unified sync system for offline-first operation:
 
-- **Single endpoint**: All entity types (habits, trades) sync through one REST `/sync` endpoint
+- **Single endpoint**: All entity types (habits, trades) sync through one REST `/api/v1/sync` endpoint
 - **Atomic transactions**: Push operations process all entities in a single database transaction
 - **Dependency ordering**: Habits are processed before trades to handle foreign key constraints
 - **Conflict resolution**: Last-write-wins based on `updated_at` timestamps
-- **Snapshot pull cursor**: `GET /api/sync` reads from one repeatable-read snapshot and returns an opaque `serverCursor`
+- **Snapshot pull cursor**: `GET /api/v1/sync` reads from one repeatable-read snapshot and returns an opaque `serverCursor`
 - **Incremental sync**: Uses `cursor` to fetch only changes after the last acknowledged snapshot
 - **Full sync**: Automatically triggered every 24 hours to ensure consistency
 
