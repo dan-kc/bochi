@@ -189,8 +189,10 @@ struct HabitsView: View {
 
     private func deleteHabit(_ habit: Habit) {
         reminderStore.deleteAllReminders(for: .habit(habit.id))
-        habitStore.deleteHabit(id: habit.id)
-        habitToDelete = nil
+        withAnimation(.default) {
+            habitStore.deleteHabit(id: habit.id)
+            habitToDelete = nil
+        }
     }
 
     // Behaviour: when the user dismisses a new-habit sheet with unsaved content,

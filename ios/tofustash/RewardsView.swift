@@ -185,8 +185,10 @@ struct RewardsView: View {
     }
 
     private func deleteReward(_ reward: Reward) {
-        rewardStore.deleteReward(id: reward.id)
-        rewardToDelete = nil
+        withAnimation(.default) {
+            rewardStore.deleteReward(id: reward.id)
+            rewardToDelete = nil
+        }
     }
 
     private func showDiscardToast(snapshot: RewardFormSnapshot) {

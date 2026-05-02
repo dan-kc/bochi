@@ -196,12 +196,14 @@ struct TasksView: View {
     private func deleteTask(_ task: TaskItem) {
         let deletedAt = Date()
         reminderStore.deleteAllReminders(for: .task(task.id))
-        taskDependencyStore.deleteDependenciesReferencingTask(
-            task.id,
-            deletedAt: deletedAt
-        )
-        taskStore.deleteTask(id: task.id, deletedAt: deletedAt)
-        taskToDelete = nil
+        withAnimation(.default) {
+            taskDependencyStore.deleteDependenciesReferencingTask(
+                task.id,
+                deletedAt: deletedAt
+            )
+            taskStore.deleteTask(id: task.id, deletedAt: deletedAt)
+            taskToDelete = nil
+        }
     }
 
     private func taskRow(_ task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> some View {
