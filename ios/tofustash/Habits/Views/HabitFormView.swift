@@ -256,6 +256,7 @@ struct HabitFormView: View {
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
+                        .accessibilityIdentifier("habit.form.menu")
                     }
                 }
 

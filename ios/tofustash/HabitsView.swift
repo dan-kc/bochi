@@ -93,7 +93,7 @@ struct HabitsView: View {
                                 // confirmation. SwiftUI animates `.destructive` swipe
                                 // buttons as if the row is already gone, which causes the
                                 // brief disappear/reappear glitch before the user confirms.
-                                habitToDelete = habit
+                                confirmDelete(habit)
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -125,7 +125,7 @@ struct HabitsView: View {
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
                     onDelete: { habit in
-                        habitToDelete = habit
+                        deleteHabit(habit)
                     }
                 )
             }
@@ -150,10 +150,8 @@ struct HabitsView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let habit = habitToDelete {
-                        reminderStore.deleteAllReminders(for: .habit(habit.id))
-                        habitStore.deleteHabit(id: habit.id)
+                        deleteHabit(habit)
                     }
-                    habitToDelete = nil
                 }
                 Button("Cancel", role: .cancel) {
                     habitToDelete = nil
@@ -183,6 +181,16 @@ struct HabitsView: View {
             initialFocus: nil,
             prefill: nil
         )
+    }
+
+    private func confirmDelete(_ habit: Habit) {
+        habitToDelete = habit
+    }
+
+    private func deleteHabit(_ habit: Habit) {
+        reminderStore.deleteAllReminders(for: .habit(habit.id))
+        habitStore.deleteHabit(id: habit.id)
+        habitToDelete = nil
     }
 
     // Behaviour: when the user dismisses a new-habit sheet with unsaved content,
@@ -306,7 +314,7 @@ struct HabitsView: View {
                 historyHabit = habit
             },
             onDelete: {
-                habitToDelete = habit
+                confirmDelete(habit)
             }
         )
     }

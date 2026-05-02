@@ -465,6 +465,78 @@ final class tofustashUITests: XCTestCase {
         XCTAssertFalse(taskText.waitForExistence(timeout: 1))
     }
 
+    // Behaviour: deleting from the edit-task menu should confirm once, dismiss
+    // the sheet, and never re-open the same confirmation alert.
+    func testEditTaskDeleteOnlyShowsConfirmationOnce() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Tasks"].tap()
+        createTask(named: "Duplicate alert task", in: app)
+
+        let taskText = app.staticTexts["Duplicate alert task"]
+        XCTAssertTrue(taskText.waitForExistence(timeout: 2))
+        openTaskEditor(taskText, in: app)
+
+        app.buttons["task.form.menu"].tap()
+        app.buttons["Delete Task"].tap()
+
+        let deleteAlert = app.alerts["Delete Task?"]
+        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 2))
+        deleteAlert.buttons["Delete"].tap()
+
+        XCTAssertTrue(waitForNonExistence(deleteAlert, timeout: 2))
+        XCTAssertFalse(app.alerts["Delete Task?"].waitForExistence(timeout: 1))
+        XCTAssertFalse(taskText.waitForExistence(timeout: 1))
+    }
+
+    // Behaviour: deleting from the edit-habit menu should only ask for
+    // confirmation once before removing the habit.
+    func testEditHabitDeleteOnlyShowsConfirmationOnce() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Habits"].tap()
+        createHabit(named: "Duplicate alert habit", in: app)
+
+        let habitText = app.staticTexts["Duplicate alert habit"]
+        XCTAssertTrue(habitText.waitForExistence(timeout: 2))
+        openHabitEditor(habitText, in: app)
+
+        app.buttons["habit.form.menu"].tap()
+        app.buttons["Delete Habit"].tap()
+
+        let deleteAlert = app.alerts["Delete Habit?"]
+        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 2))
+        deleteAlert.buttons["Delete"].tap()
+
+        XCTAssertTrue(waitForNonExistence(deleteAlert, timeout: 2))
+        XCTAssertFalse(app.alerts["Delete Habit?"].waitForExistence(timeout: 1))
+        XCTAssertFalse(habitText.waitForExistence(timeout: 1))
+    }
+
+    // Behaviour: deleting from the edit-reward menu should only show the
+    // destructive confirmation one time.
+    func testEditRewardDeleteOnlyShowsConfirmationOnce() {
+        let app = launchApp()
+
+        app.tabBars.buttons["Rewards"].tap()
+        createReward(named: "Duplicate alert reward", in: app)
+
+        let rewardText = app.staticTexts["Duplicate alert reward"]
+        XCTAssertTrue(rewardText.waitForExistence(timeout: 2))
+        openRewardEditor(rewardText, in: app)
+
+        app.buttons["reward.form.menu"].tap()
+        app.buttons["Delete Reward"].tap()
+
+        let deleteAlert = app.alerts["Delete Reward?"]
+        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 2))
+        deleteAlert.buttons["Delete"].tap()
+
+        XCTAssertTrue(waitForNonExistence(deleteAlert, timeout: 2))
+        XCTAssertFalse(app.alerts["Delete Reward?"].waitForExistence(timeout: 1))
+        XCTAssertFalse(rewardText.waitForExistence(timeout: 1))
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         let storageDirectory = FileManager.default.temporaryDirectory
@@ -512,6 +584,44 @@ final class tofustashUITests: XCTestCase {
         nameField.typeText(name)
         finishEditingFormIfNeeded(app)
         app.navigationBars.buttons["Add"].firstMatch.tap()
+    }
+
+    private func waitForNonExistence(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func openHabitEditor(_ habitText: XCUIElement, in app: XCUIApplication) {
+        let editHabitTitle = app.navigationBars["Edit Habit"]
+        if editHabitTitle.waitForExistence(timeout: 1) {
+            return
+        }
+
+        for _ in 0..<3 {
+            habitText.tap()
+            if editHabitTitle.waitForExistence(timeout: 1) {
+                return
+            }
+        }
+
+        XCTFail("step: edit habit sheet opened")
+    }
+
+    private func openRewardEditor(_ rewardText: XCUIElement, in app: XCUIApplication) {
+        let editRewardTitle = app.navigationBars["Edit Reward"]
+        if editRewardTitle.waitForExistence(timeout: 1) {
+            return
+        }
+
+        for _ in 0..<3 {
+            rewardText.tap()
+            if editRewardTitle.waitForExistence(timeout: 1) {
+                return
+            }
+        }
+
+        XCTFail("step: edit reward sheet opened")
     }
 
     private func openTaskEditor(_ taskText: XCUIElement, in app: XCUIApplication) {

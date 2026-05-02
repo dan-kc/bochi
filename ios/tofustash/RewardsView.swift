@@ -94,7 +94,7 @@ struct RewardsView: View {
                                 // confirmation alert. Using a `.destructive` swipe button
                                 // makes SwiftUI preview the removal before the user confirms,
                                 // which causes the row to flicker out and then back in.
-                                rewardToDelete = reward
+                                confirmDelete(reward)
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -126,7 +126,7 @@ struct RewardsView: View {
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
                     onDelete: { reward in
-                        rewardToDelete = reward
+                        deleteReward(reward)
                     }
                 )
             }
@@ -151,9 +151,8 @@ struct RewardsView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let reward = rewardToDelete {
-                        rewardStore.deleteReward(id: reward.id)
+                        deleteReward(reward)
                     }
-                    rewardToDelete = nil
                 }
                 Button("Cancel", role: .cancel) {
                     rewardToDelete = nil
@@ -179,6 +178,15 @@ struct RewardsView: View {
 
     private func openNewRewardForm() {
         formRoute = RewardFormRoute(mode: .new, initialFocus: nil, prefill: nil)
+    }
+
+    private func confirmDelete(_ reward: Reward) {
+        rewardToDelete = reward
+    }
+
+    private func deleteReward(_ reward: Reward) {
+        rewardStore.deleteReward(id: reward.id)
+        rewardToDelete = nil
     }
 
     private func showDiscardToast(snapshot: RewardFormSnapshot) {
@@ -302,7 +310,7 @@ struct RewardsView: View {
                 historyReward = reward
             },
             onDelete: {
-                rewardToDelete = reward
+                confirmDelete(reward)
             }
         )
     }

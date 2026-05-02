@@ -195,6 +195,7 @@ struct RewardFormView: View {
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
+                        .accessibilityIdentifier("reward.form.menu")
                     }
                 }
 

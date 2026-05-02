@@ -100,7 +100,7 @@ struct TasksView: View {
                             Button {
                                 // Behaviour: align task deletion with the existing
                                 // habits/rewards confirmation flow.
-                                taskToDelete = task
+                                confirmDelete(task)
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -132,7 +132,7 @@ struct TasksView: View {
                         showDiscardToast(snapshot: snapshot)
                     } : nil,
                     onDelete: { task in
-                        taskToDelete = task
+                        deleteTask(task)
                     }
                 )
             }
@@ -151,15 +151,8 @@ struct TasksView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let task = taskToDelete {
-                        let deletedAt = Date()
-                        reminderStore.deleteAllReminders(for: .task(task.id))
-                        taskDependencyStore.deleteDependenciesReferencingTask(
-                            task.id,
-                            deletedAt: deletedAt
-                        )
-                        taskStore.deleteTask(id: task.id, deletedAt: deletedAt)
+                        deleteTask(task)
                     }
-                    taskToDelete = nil
                 }
                 Button("Cancel", role: .cancel) {
                     taskToDelete = nil
@@ -194,6 +187,21 @@ struct TasksView: View {
             initialFocus: nil,
             prefill: nil
         )
+    }
+
+    private func confirmDelete(_ task: TaskItem) {
+        taskToDelete = task
+    }
+
+    private func deleteTask(_ task: TaskItem) {
+        let deletedAt = Date()
+        reminderStore.deleteAllReminders(for: .task(task.id))
+        taskDependencyStore.deleteDependenciesReferencingTask(
+            task.id,
+            deletedAt: deletedAt
+        )
+        taskStore.deleteTask(id: task.id, deletedAt: deletedAt)
+        taskToDelete = nil
     }
 
     private func taskRow(_ task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> some View {
@@ -356,7 +364,7 @@ struct TasksView: View {
                 historyTask = task
             },
             onDelete: {
-                taskToDelete = task
+                confirmDelete(task)
             }
         )
     }
