@@ -264,7 +264,8 @@ async fn test_create_trade_with_nonexistent_task() {
 
 #[tokio::test]
 async fn test_create_trade_with_task_rejects_incomplete_dependencies() {
-    let email = generate_email_from_fn!(test_create_trade_with_task_rejects_incomplete_dependencies);
+    let email =
+        generate_email_from_fn!(test_create_trade_with_task_rejects_incomplete_dependencies);
     let password = "password123";
 
     register_user(&email, password).await;

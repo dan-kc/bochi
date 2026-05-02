@@ -120,20 +120,14 @@ final class TradeStore {
         deletedAt: Date? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard !entries.isEmpty else { return }
-
-        let rows = makeTrades(
+        addTrades(
             entries: entries,
             source: .habit(habitId, sourceName),
             createdAt: createdAt,
             updatedAt: updatedAt,
-            deletedAt: deletedAt
+            deletedAt: deletedAt,
+            shouldNotifySync: shouldNotifySync
         )
-
-        upsertTrades(rows, markDirty: shouldNotifySync)
-        if shouldNotifySync {
-            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
-        }
     }
 
     func addTaskTrades(
@@ -145,20 +139,14 @@ final class TradeStore {
         deletedAt: Date? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard !entries.isEmpty else { return }
-
-        let rows = makeTrades(
+        addTrades(
             entries: entries,
             source: .task(taskId, sourceName),
             createdAt: createdAt,
             updatedAt: updatedAt,
-            deletedAt: deletedAt
+            deletedAt: deletedAt,
+            shouldNotifySync: shouldNotifySync
         )
-
-        upsertTrades(rows, markDirty: shouldNotifySync)
-        if shouldNotifySync {
-            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
-        }
     }
 
     func addRewardPurchases(
@@ -170,20 +158,14 @@ final class TradeStore {
         deletedAt: Date? = nil,
         shouldNotifySync: Bool = true
     ) {
-        guard !entries.isEmpty else { return }
-
-        let rows = makeTrades(
+        addTrades(
             entries: entries,
             source: .reward(rewardId, sourceName),
             createdAt: createdAt,
             updatedAt: updatedAt,
-            deletedAt: deletedAt
+            deletedAt: deletedAt,
+            shouldNotifySync: shouldNotifySync
         )
-
-        upsertTrades(rows, markDirty: shouldNotifySync)
-        if shouldNotifySync {
-            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: rows.map(\.id)))
-        }
     }
 
     func addHabitTradeWithDate(habitId: RecordID, amount: Int, createdAt: Date) {
@@ -266,6 +248,9 @@ final class TradeStore {
         guard canRefundTrade(existing) else {
             return nil
         }
+        guard refundedAt >= existing.createdAt else {
+            return nil
+        }
 
         let refundTrade = Trade(
             id: RecordID(),
@@ -283,9 +268,7 @@ final class TradeStore {
         upsertTrades([refundTrade], markDirty: shouldNotifySync)
 
         if shouldNotifySync {
-            SyncMutationCenter.post(
-                SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [refundTrade.id])
-            )
+            notifySync(ids: [refundTrade.id])
         }
 
         return refundTrade
@@ -374,10 +357,37 @@ final class TradeStore {
             }
             .max {
                 if $0.createdAt == $1.createdAt {
+                    if $0.updatedAt == $1.updatedAt {
+                        return $0.id.rawValue < $1.id.rawValue
+                    }
                     return $0.updatedAt < $1.updatedAt
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private func addTrades(
+        entries: [(id: RecordID, amount: Int)],
+        source: TradeSource,
+        createdAt: Date,
+        updatedAt: Date?,
+        deletedAt: Date?,
+        shouldNotifySync: Bool
+    ) {
+        guard !entries.isEmpty else { return }
+
+        let rows = makeTrades(
+            entries: entries,
+            source: source,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
+
+        upsertTrades(rows, markDirty: shouldNotifySync)
+        if shouldNotifySync {
+            notifySync(ids: rows.map(\.id))
+        }
     }
 
     func persistDeletedTradePurge(excluding dirtyIDs: Set<RecordID>) throws {
@@ -508,6 +518,10 @@ final class TradeStore {
             bindings: tradeBindings(trade, ownerID: currentOwnerID),
             on: databaseHandle
         )
+    }
+
+    private func notifySync(ids: [RecordID]) {
+        SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: ids))
     }
 
     private func loadTrades(ownerID: String) -> [Trade] {

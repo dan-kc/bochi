@@ -32,6 +32,19 @@ final class SyncManager {
     private(set) var lastSyncTime: Date?
     private(set) var lastErrorMessage: String?
 
+    private struct SyncPayload {
+        let tasks: [TaskItem]
+        let taskTaskDependencies: [TaskTaskDependency]
+        let taskHabitDependencies: [TaskHabitDependency]
+        let habits: [Habit]
+        let trades: [Trade]
+        let tags: [Tag]
+        let taskTags: [TaskTag]
+        let habitTags: [HabitTag]
+        let rewards: [Reward]
+        let rewardTags: [RewardTag]
+    }
+
     init(
         apiClient: SyncAPIClient,
         authManager: AuthManager,
@@ -438,16 +451,7 @@ final class SyncManager {
                 try self.rewardStore.purgeDeletedRewards(excluding: Set(remainingDirty.dirty.rewards.map(\.id)), on: db)
             }
             lastSyncTime = serverTime
-            taskStore.setCurrentOwner(currentUserID)
-            taskDependencyStore.setCurrentOwner(currentUserID)
-            habitStore.setCurrentOwner(currentUserID)
-            tradeStore.setCurrentOwner(currentUserID)
-            tagStore.setCurrentOwner(currentUserID)
-            rewardStore.setCurrentOwner(currentUserID)
-            balanceStore.setCurrentOwner(currentUserID)
-            userSettingsStore.setCurrentOwner(currentUserID)
-            reminderStore.setCurrentOwner(currentUserID)
-            listPreferencesStore.setCurrentOwner(currentUserID)
+            setOwnerAcrossStores(currentUserID)
             reminderStore.reconcileNotifications()
 
             status = .synced
@@ -476,61 +480,27 @@ final class SyncManager {
         dirtyRewardTags: [RewardTag],
         generalDifficultyDirty: Bool
     ) throws {
-        let authoritativeTasks = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.tasks.compactMap { $0.toModel() },
-            remote: dirtyTasks
-        )
-        let authoritativeHabits = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.habits.compactMap { $0.toModel() },
-            remote: dirtyHabits
-        )
-        let authoritativeTaskTaskDependencies = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.taskTaskDependencies.compactMap { $0.toModel() },
-            remote: dirtyTaskTaskDependencies
-        )
-        let authoritativeTaskHabitDependencies = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.taskHabitDependencies.compactMap { $0.toModel() },
-            remote: dirtyTaskHabitDependencies
-        )
-        let authoritativeTrades = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.trades.compactMap { $0.toModel() },
-            remote: dirtyTrades
-        )
-        let authoritativeTags = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.tags.compactMap { $0.toModel() },
-            remote: dirtyTags
-        )
-        let authoritativeTaskTags = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.taskTags.compactMap { $0.toModel() },
-            remote: dirtyTaskTags
-        )
-        let authoritativeHabitTags = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.habitTags.compactMap { $0.toModel() },
-            remote: dirtyHabitTags
-        )
-        let authoritativeRewards = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.rewards.compactMap { $0.toModel() },
-            remote: dirtyRewards
-        )
-        let authoritativeRewardTags = OwnerScopedRecordSupport.mergeRecords(
-            local: pullResponse.rewardTags.compactMap { $0.toModel() },
-            remote: dirtyRewardTags
+        let payload = makeSyncPayload(from: pullResponse)
+        let authoritativePayload = SyncPayload(
+            tasks: OwnerScopedRecordSupport.mergeRecords(local: payload.tasks, remote: dirtyTasks),
+            taskTaskDependencies: OwnerScopedRecordSupport.mergeRecords(
+                local: payload.taskTaskDependencies,
+                remote: dirtyTaskTaskDependencies
+            ),
+            taskHabitDependencies: OwnerScopedRecordSupport.mergeRecords(
+                local: payload.taskHabitDependencies,
+                remote: dirtyTaskHabitDependencies
+            ),
+            habits: OwnerScopedRecordSupport.mergeRecords(local: payload.habits, remote: dirtyHabits),
+            trades: OwnerScopedRecordSupport.mergeRecords(local: payload.trades, remote: dirtyTrades),
+            tags: OwnerScopedRecordSupport.mergeRecords(local: payload.tags, remote: dirtyTags),
+            taskTags: OwnerScopedRecordSupport.mergeRecords(local: payload.taskTags, remote: dirtyTaskTags),
+            habitTags: OwnerScopedRecordSupport.mergeRecords(local: payload.habitTags, remote: dirtyHabitTags),
+            rewards: OwnerScopedRecordSupport.mergeRecords(local: payload.rewards, remote: dirtyRewards),
+            rewardTags: OwnerScopedRecordSupport.mergeRecords(local: payload.rewardTags, remote: dirtyRewardTags)
         )
 
-        try taskStore.persistReplacedTasks(authoritativeTasks)
-        try taskDependencyStore.persistReplacedAll(
-            taskTaskDependencies: authoritativeTaskTaskDependencies,
-            taskHabitDependencies: authoritativeTaskHabitDependencies
-        )
-        try habitStore.persistReplacedHabits(authoritativeHabits)
-        try tradeStore.persistReplacedTrades(authoritativeTrades)
-        try tagStore.persistReplacedAll(
-            tags: authoritativeTags,
-            taskTags: authoritativeTaskTags,
-            habitTags: authoritativeHabitTags,
-            rewardTags: authoritativeRewardTags
-        )
-        try rewardStore.persistReplacedRewards(authoritativeRewards)
+        try persistSyncPayload(authoritativePayload)
         if !dirtyTrades.isEmpty {
             balanceStore.refresh()
         } else {
@@ -539,8 +509,6 @@ final class SyncManager {
         if !generalDifficultyDirty {
             try userSettingsStore.persistGeneralDifficulty(pullResponse.generalDifficulty)
         }
-        sanitizeListPreferencesForCurrentOwner()
-        reminderStore.reconcileNotifications()
     }
 
     private func applyPullResponse(_ response: SyncResponse, filteringDirtyState dirtyState: SyncStateStore.UserSyncState?) throws {
@@ -551,98 +519,8 @@ final class SyncManager {
             dirtyIDs = DirtyIDSnapshot()
         }
 
-        let habits: [Habit] = response.habits.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.habits[model.id] == nil else { return nil }
-            return model
-        }
-        let tasks: [TaskItem] = response.tasks.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.tasks[model.id] == nil else { return nil }
-            return model
-        }
-
-        let trades: [Trade] = response.trades.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.trades[model.id] == nil else { return nil }
-            return model
-        }
-
-        let tags: [Tag] = response.tags.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.tags[model.id] == nil else { return nil }
-            return model
-        }
-        let taskTaskDependencies: [TaskTaskDependency] = response.taskTaskDependencies.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.taskTaskDependencies[model.id] == nil else { return nil }
-            return model
-        }
-        let taskHabitDependencies: [TaskHabitDependency] = response.taskHabitDependencies.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.taskHabitDependencies[model.id] == nil else { return nil }
-            return model
-        }
-        let taskTags: [TaskTag] = response.taskTags.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.taskTags[model.id] == nil else { return nil }
-            return model
-        }
-
-        let habitTags: [HabitTag] = response.habitTags.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.habitTags[model.id] == nil else { return nil }
-            return model
-        }
-
-        let rewards: [Reward] = response.rewards.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.rewards[model.id] == nil else { return nil }
-            return model
-        }
-
-        let rewardTags: [RewardTag] = response.rewardTags.compactMap { record in
-            let model = record.toModel()
-            guard let model else { return nil }
-            guard dirtyIDs.rewardTags[model.id] == nil else { return nil }
-            return model
-        }
-
-        let mergedTasks = tasks.isEmpty ? taskStore.tasks : OwnerScopedRecordSupport.mergeRecords(local: taskStore.tasks, remote: tasks)
-        let mergedTaskTaskDependencies = taskTaskDependencies.isEmpty
-            ? taskDependencyStore.taskTaskDependencies
-            : OwnerScopedRecordSupport.mergeRecords(local: taskDependencyStore.taskTaskDependencies, remote: taskTaskDependencies)
-        let mergedTaskHabitDependencies = taskHabitDependencies.isEmpty
-            ? taskDependencyStore.taskHabitDependencies
-            : OwnerScopedRecordSupport.mergeRecords(local: taskDependencyStore.taskHabitDependencies, remote: taskHabitDependencies)
-        let mergedHabits = habits.isEmpty ? habitStore.habits : OwnerScopedRecordSupport.mergeRecords(local: habitStore.habits, remote: habits)
-        let mergedTrades = trades.isEmpty ? tradeStore.trades : OwnerScopedRecordSupport.mergeRecords(local: tradeStore.trades, remote: trades)
-        let mergedTags = tags.isEmpty ? tagStore.tags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.tags, remote: tags)
-        let mergedTaskTags = taskTags.isEmpty ? tagStore.taskTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.taskTags, remote: taskTags)
-        let mergedHabitTags = habitTags.isEmpty ? tagStore.habitTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.habitTags, remote: habitTags)
-        let mergedRewards = rewards.isEmpty ? rewardStore.rewards : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: rewards)
-        let mergedRewardTags = rewardTags.isEmpty ? tagStore.rewardTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: rewardTags)
-
-        try taskStore.persistReplacedTasks(mergedTasks)
-        try taskDependencyStore.persistReplacedAll(
-            taskTaskDependencies: mergedTaskTaskDependencies,
-            taskHabitDependencies: mergedTaskHabitDependencies
-        )
-        try habitStore.persistReplacedHabits(mergedHabits)
-        try tradeStore.persistReplacedTrades(mergedTrades)
-        try tagStore.persistReplacedAll(tags: mergedTags, taskTags: mergedTaskTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
-        try rewardStore.persistReplacedRewards(mergedRewards)
-        sanitizeListPreferencesForCurrentOwner()
-        reminderStore.reconcileNotifications()
+        let payload = makeSyncPayload(from: response, excluding: dirtyIDs)
+        try persistSyncPayload(mergeCurrentState(with: payload))
 
         if dirtyIDs.trades.isEmpty {
             try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
@@ -672,46 +550,128 @@ final class SyncManager {
     }
 
     private func applyPushResponse(_ response: SyncResponse) throws {
-        let tasks: [TaskItem] = response.tasks.compactMap { $0.toModel() }
-        let taskTaskDependencies: [TaskTaskDependency] = response.taskTaskDependencies.compactMap { $0.toModel() }
-        let taskHabitDependencies: [TaskHabitDependency] = response.taskHabitDependencies.compactMap { $0.toModel() }
-        let habits: [Habit] = response.habits.compactMap { $0.toModel() }
-        let trades: [Trade] = response.trades.compactMap { $0.toModel() }
-        let tags: [Tag] = response.tags.compactMap { $0.toModel() }
-        let taskTags: [TaskTag] = response.taskTags.compactMap { $0.toModel() }
-        let habitTags: [HabitTag] = response.habitTags.compactMap { $0.toModel() }
-        let rewards: [Reward] = response.rewards.compactMap { $0.toModel() }
-        let rewardTags: [RewardTag] = response.rewardTags.compactMap { $0.toModel() }
-
-        let mergedTasks = tasks.isEmpty ? taskStore.tasks : OwnerScopedRecordSupport.mergeRecords(local: taskStore.tasks, remote: tasks)
-        let mergedTaskTaskDependencies = taskTaskDependencies.isEmpty
-            ? taskDependencyStore.taskTaskDependencies
-            : OwnerScopedRecordSupport.mergeRecords(local: taskDependencyStore.taskTaskDependencies, remote: taskTaskDependencies)
-        let mergedTaskHabitDependencies = taskHabitDependencies.isEmpty
-            ? taskDependencyStore.taskHabitDependencies
-            : OwnerScopedRecordSupport.mergeRecords(local: taskDependencyStore.taskHabitDependencies, remote: taskHabitDependencies)
-        let mergedHabits = habits.isEmpty ? habitStore.habits : OwnerScopedRecordSupport.mergeRecords(local: habitStore.habits, remote: habits)
-        let mergedTrades = trades.isEmpty ? tradeStore.trades : OwnerScopedRecordSupport.mergeRecords(local: tradeStore.trades, remote: trades)
-        let mergedTags = tags.isEmpty ? tagStore.tags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.tags, remote: tags)
-        let mergedTaskTags = taskTags.isEmpty ? tagStore.taskTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.taskTags, remote: taskTags)
-        let mergedHabitTags = habitTags.isEmpty ? tagStore.habitTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.habitTags, remote: habitTags)
-        let mergedRewards = rewards.isEmpty ? rewardStore.rewards : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: rewards)
-        let mergedRewardTags = rewardTags.isEmpty ? tagStore.rewardTags : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: rewardTags)
-
-        try taskStore.persistReplacedTasks(mergedTasks)
-        try taskDependencyStore.persistReplacedAll(
-            taskTaskDependencies: mergedTaskTaskDependencies,
-            taskHabitDependencies: mergedTaskHabitDependencies
-        )
-        try habitStore.persistReplacedHabits(mergedHabits)
-        try tradeStore.persistReplacedTrades(mergedTrades)
-        try tagStore.persistReplacedAll(tags: mergedTags, taskTags: mergedTaskTags, habitTags: mergedHabitTags, rewardTags: mergedRewardTags)
-        try rewardStore.persistReplacedRewards(mergedRewards)
-        sanitizeListPreferencesForCurrentOwner()
-        reminderStore.reconcileNotifications()
+        try persistSyncPayload(mergeCurrentState(with: makeSyncPayload(from: response)))
 
         try balanceStore.persistBalance(Int(response.balance.tofuBalance.rounded()))
         try userSettingsStore.persistGeneralDifficulty(response.generalDifficulty)
+    }
+
+    private func makeSyncPayload(
+        from response: SyncResponse,
+        excluding dirtyIDs: DirtyIDSnapshot? = nil
+    ) -> SyncPayload {
+        SyncPayload(
+            tasks: response.tasks.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.tasks[model.id] == nil else { return nil }
+                return model
+            },
+            taskTaskDependencies: response.taskTaskDependencies.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.taskTaskDependencies[model.id] == nil else { return nil }
+                return model
+            },
+            taskHabitDependencies: response.taskHabitDependencies.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.taskHabitDependencies[model.id] == nil else { return nil }
+                return model
+            },
+            habits: response.habits.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.habits[model.id] == nil else { return nil }
+                return model
+            },
+            trades: response.trades.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.trades[model.id] == nil else { return nil }
+                return model
+            },
+            tags: response.tags.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.tags[model.id] == nil else { return nil }
+                return model
+            },
+            taskTags: response.taskTags.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.taskTags[model.id] == nil else { return nil }
+                return model
+            },
+            habitTags: response.habitTags.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.habitTags[model.id] == nil else { return nil }
+                return model
+            },
+            rewards: response.rewards.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.rewards[model.id] == nil else { return nil }
+                return model
+            },
+            rewardTags: response.rewardTags.compactMap { record in
+                guard let model = record.toModel() else { return nil }
+                guard dirtyIDs?.rewardTags[model.id] == nil else { return nil }
+                return model
+            }
+        )
+    }
+
+    private func mergeCurrentState(with incoming: SyncPayload) -> SyncPayload {
+        SyncPayload(
+            tasks: incoming.tasks.isEmpty
+                ? taskStore.tasks
+                : OwnerScopedRecordSupport.mergeRecords(local: taskStore.tasks, remote: incoming.tasks),
+            taskTaskDependencies: incoming.taskTaskDependencies.isEmpty
+                ? taskDependencyStore.taskTaskDependencies
+                : OwnerScopedRecordSupport.mergeRecords(
+                    local: taskDependencyStore.taskTaskDependencies,
+                    remote: incoming.taskTaskDependencies
+                ),
+            taskHabitDependencies: incoming.taskHabitDependencies.isEmpty
+                ? taskDependencyStore.taskHabitDependencies
+                : OwnerScopedRecordSupport.mergeRecords(
+                    local: taskDependencyStore.taskHabitDependencies,
+                    remote: incoming.taskHabitDependencies
+                ),
+            habits: incoming.habits.isEmpty
+                ? habitStore.habits
+                : OwnerScopedRecordSupport.mergeRecords(local: habitStore.habits, remote: incoming.habits),
+            trades: incoming.trades.isEmpty
+                ? tradeStore.trades
+                : OwnerScopedRecordSupport.mergeRecords(local: tradeStore.trades, remote: incoming.trades),
+            tags: incoming.tags.isEmpty
+                ? tagStore.tags
+                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.tags, remote: incoming.tags),
+            taskTags: incoming.taskTags.isEmpty
+                ? tagStore.taskTags
+                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.taskTags, remote: incoming.taskTags),
+            habitTags: incoming.habitTags.isEmpty
+                ? tagStore.habitTags
+                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.habitTags, remote: incoming.habitTags),
+            rewards: incoming.rewards.isEmpty
+                ? rewardStore.rewards
+                : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: incoming.rewards),
+            rewardTags: incoming.rewardTags.isEmpty
+                ? tagStore.rewardTags
+                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: incoming.rewardTags)
+        )
+    }
+
+    private func persistSyncPayload(_ payload: SyncPayload) throws {
+        try taskStore.persistReplacedTasks(payload.tasks)
+        try taskDependencyStore.persistReplacedAll(
+            taskTaskDependencies: payload.taskTaskDependencies,
+            taskHabitDependencies: payload.taskHabitDependencies
+        )
+        try habitStore.persistReplacedHabits(payload.habits)
+        try tradeStore.persistReplacedTrades(payload.trades)
+        try tagStore.persistReplacedAll(
+            tags: payload.tags,
+            taskTags: payload.taskTags,
+            habitTags: payload.habitTags,
+            rewardTags: payload.rewardTags
+        )
+        try rewardStore.persistReplacedRewards(payload.rewards)
+        sanitizeListPreferencesForCurrentOwner()
+        reminderStore.reconcileNotifications()
     }
 
     private func sanitizeListPreferencesForCurrentOwner() {

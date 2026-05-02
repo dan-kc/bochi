@@ -134,7 +134,10 @@ async fn test_sync_pull_returns_all_entity_types() {
         .as_array()
         .unwrap();
     assert_eq!(task_task_dependencies.len(), 1);
-    assert_eq!(task_task_dependencies[0].get("taskId").unwrap(), &dependent_task_id);
+    assert_eq!(
+        task_task_dependencies[0].get("taskId").unwrap(),
+        &dependent_task_id
+    );
     assert_eq!(
         task_task_dependencies[0].get("dependsOnTaskId").unwrap(),
         &task_id
@@ -146,7 +149,10 @@ async fn test_sync_pull_returns_all_entity_types() {
         .as_array()
         .unwrap();
     assert_eq!(task_habit_dependencies.len(), 1);
-    assert_eq!(task_habit_dependencies[0].get("taskId").unwrap(), &dependent_task_id);
+    assert_eq!(
+        task_habit_dependencies[0].get("taskId").unwrap(),
+        &dependent_task_id
+    );
     assert_eq!(task_habit_dependencies[0].get("habitId").unwrap(), habit_id);
     assert_eq!(
         task_habit_dependencies[0]
@@ -445,13 +451,26 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
         pushed_active_trade.get("refundsTradeId").unwrap(),
         &serde_json::Value::Null
     );
-    assert_eq!(pushed_active_trade.get("sourceName").unwrap(), "Refundable Habit");
-    assert_eq!(pushed_refunded_trade.get("refundsTradeId").unwrap(), &active_trade_id);
+    assert_eq!(
+        pushed_active_trade.get("sourceName").unwrap(),
+        "Refundable Habit"
+    );
+    assert_eq!(
+        pushed_refunded_trade.get("refundsTradeId").unwrap(),
+        &active_trade_id
+    );
     assert_eq!(
         pushed_refunded_trade.get("sourceName").unwrap(),
         "Refundable Habit refund"
     );
-    assert_eq!(push_json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
+    assert_eq!(
+        push_json
+            .get("balance")
+            .unwrap()
+            .get("tofuBalance")
+            .unwrap(),
+        0.0
+    );
 
     let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
@@ -471,13 +490,26 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
         pulled_active_trade.get("refundsTradeId").unwrap(),
         &serde_json::Value::Null
     );
-    assert_eq!(pulled_active_trade.get("sourceName").unwrap(), "Refundable Habit");
-    assert_eq!(pulled_refunded_trade.get("refundsTradeId").unwrap(), &active_trade_id);
+    assert_eq!(
+        pulled_active_trade.get("sourceName").unwrap(),
+        "Refundable Habit"
+    );
+    assert_eq!(
+        pulled_refunded_trade.get("refundsTradeId").unwrap(),
+        &active_trade_id
+    );
     assert_eq!(
         pulled_refunded_trade.get("sourceName").unwrap(),
         "Refundable Habit refund"
     );
-    assert_eq!(pull_json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
+    assert_eq!(
+        pull_json
+            .get("balance")
+            .unwrap()
+            .get("tofuBalance")
+            .unwrap(),
+        0.0
+    );
 }
 
 #[tokio::test]
@@ -544,14 +576,207 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
     );
 
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    assert!(
-        pull_json
-            .get("tasks")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|task| task.get("id").unwrap() != &task_id)
+    assert!(pull_json
+        .get("tasks")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|task| task.get("id").unwrap() != &task_id));
+}
+
+#[tokio::test]
+async fn test_sync_push_refund_trade_reopens_task_without_task_row_update() {
+    let email =
+        generate_email_from_fn!(test_sync_push_refund_trade_reopens_task_without_task_row_update);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let refund_trade_id = uuid::Uuid::new_v4().to_string();
+
+    let setup_body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Submit report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00",
+            "completedAt": "2025-01-01T09:30:00"
+        }],
+        "trades": [{
+            "id": trade_id,
+            "taskId": task_id,
+            "sourceName": "Submit report",
+            "amount": 120,
+            "createdAt": "2025-01-01T09:30:00"
+        }]
+    });
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let refund_body = json!({
+        "trades": [{
+            "id": refund_trade_id,
+            "taskId": task_id,
+            "sourceName": "Submit report refund",
+            "amount": -120,
+            "createdAt": "2025-01-01T09:35:00",
+            "refundsTradeId": trade_id
+        }]
+    });
+    let (refund_status, refund_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+
+    assert_eq!(refund_status, StatusCode::OK);
+    assert_eq!(refund_json["balance"]["tofuBalance"], 0.0);
+
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    assert_eq!(pull_status, StatusCode::OK);
+
+    let task = pull_json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["id"] == task_id)
+        .unwrap();
+    assert_eq!(task.get("completedAt").unwrap(), &Value::Null);
+}
+
+#[tokio::test]
+async fn test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependencies() {
+    let email = generate_email_from_fn!(
+        test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependencies
+    );
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let prerequisite_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let prerequisite_trade_id = uuid::Uuid::new_v4().to_string();
+    let refund_trade_id = uuid::Uuid::new_v4().to_string();
+
+    let setup_body = json!({
+        "tasks": [{
+            "id": prerequisite_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00",
+            "completedAt": "2025-01-01T09:30:00"
+        }, {
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": prerequisite_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T10:05:00"
+        }],
+        "trades": [{
+            "id": prerequisite_trade_id,
+            "taskId": prerequisite_task_id,
+            "sourceName": "Draft report",
+            "amount": 80,
+            "createdAt": "2025-01-01T09:30:00"
+        }]
+    });
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let refund_body = json!({
+        "trades": [{
+            "id": refund_trade_id,
+            "taskId": prerequisite_task_id,
+            "sourceName": "Draft report refund",
+            "amount": -80,
+            "createdAt": "2025-01-01T09:35:00",
+            "refundsTradeId": prerequisite_trade_id
+        }]
+    });
+    let (refund_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+    assert_eq!(refund_status, StatusCode::OK);
+
+    let complete_body = json!({
+        "tasks": [{
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "completedAt": "2025-01-01T11:00:00"
+        }]
+    });
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", complete_body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json["errors"][0]["message"],
+        "Validation Error: Task dependencies must be complete before this task can be completed."
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_rejects_refund_trade_before_original_trade_time() {
+    let email =
+        generate_email_from_fn!(test_sync_push_rejects_refund_trade_before_original_trade_time);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_body = json!({
+        "name": "Refundable Habit",
+        "description": "Refund trades should follow the original event"
+    });
+    let (_, habit_json) =
+        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
+
+    let trade_id = uuid::Uuid::new_v4().to_string();
+    let setup_body = json!({
+        "trades": [{
+            "id": trade_id,
+            "habitId": habit_id,
+            "sourceName": "Refundable Habit",
+            "amount": 100,
+            "createdAt": "2025-01-01T10:00:00"
+        }]
+    });
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let refund_body = json!({
+        "trades": [{
+            "id": uuid::Uuid::new_v4().to_string(),
+            "habitId": habit_id,
+            "sourceName": "Refundable Habit refund",
+            "amount": -100,
+            "createdAt": "2025-01-01T09:59:59",
+            "refundsTradeId": trade_id
+        }]
+    });
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json["errors"][0]["message"],
+        "Validation Error: Refund trades cannot be created before the original trade."
     );
 }
 
@@ -566,6 +791,7 @@ async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
 
     let dependency_task_id = uuid::Uuid::new_v4().to_string();
     let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_trade_id = uuid::Uuid::new_v4().to_string();
 
     let setup_body = json!({
         "tasks": [{
@@ -602,6 +828,12 @@ async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
             "updatedAt": "2025-01-01T11:00:00",
             "completedAt": "2025-01-01T11:00:00"
         }],
+        "trades": [{
+            "id": blocked_task_trade_id,
+            "taskId": blocked_task_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T11:00:00"
+        }],
         "taskTaskDependencies": [{
             "taskId": blocked_task_id,
             "dependsOnTaskId": dependency_task_id,
@@ -611,7 +843,8 @@ async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", completion_body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/sync", completion_body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -676,7 +909,7 @@ async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
     let tasks = json.get("tasks").unwrap().as_array().unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].get("id").unwrap(), &task_id);
-    assert_eq!(tasks[0].get("completedAt").unwrap(), &Value::Null);
+    assert_eq!(tasks[0].get("completedAt").unwrap(), "2025-01-01T11:00:00");
 
     let task_tags = json.get("taskTags").unwrap().as_array().unwrap();
     assert_eq!(task_tags.len(), 1);
@@ -721,11 +954,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
         make_authenticated_post_request(&access_token, "/api/sync", initial_body).await;
     assert_eq!(initial_status, StatusCode::OK);
     assert_eq!(
-        initial_json
-            .get("tasks")
-            .unwrap()
-            .as_array()
-            .unwrap()[0]
+        initial_json.get("tasks").unwrap().as_array().unwrap()[0]
             .get("dueDate")
             .unwrap(),
         &Value::Null
@@ -750,11 +979,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
 
     assert_eq!(update_status, StatusCode::OK);
     assert_eq!(
-        update_json
-            .get("tasks")
-            .unwrap()
-            .as_array()
-            .unwrap()[0]
+        update_json.get("tasks").unwrap().as_array().unwrap()[0]
             .get("dueDate")
             .unwrap(),
         "2025-02-01T10:00:00"
@@ -763,11 +988,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
     let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
     assert_eq!(pull_status, StatusCode::OK);
     assert_eq!(
-        pull_json
-            .get("tasks")
-            .unwrap()
-            .as_array()
-            .unwrap()[0]
+        pull_json.get("tasks").unwrap().as_array().unwrap()[0]
             .get("dueDate")
             .unwrap(),
         "2025-02-01T10:00:00"
@@ -776,8 +997,9 @@ async fn test_sync_push_updates_existing_task_due_date() {
 
 #[tokio::test]
 async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied() {
-    let email =
-        generate_email_from_fn!(test_sync_push_rejects_task_completion_until_dependencies_are_satisfied);
+    let email = generate_email_from_fn!(
+        test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
+    );
     let password = "password123";
 
     register_user(&email, password).await;
@@ -788,6 +1010,8 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
     let habit_blocked_task_id = uuid::Uuid::new_v4().to_string();
     let habit_id = uuid::Uuid::new_v4().to_string();
     let habit_trade_id = uuid::Uuid::new_v4().to_string();
+    let dependency_task_trade_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_trade_id = uuid::Uuid::new_v4().to_string();
 
     let setup_body = json!({
         "tasks": [{
@@ -822,6 +1046,11 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
             "habitId": habit_id,
             "amount": 1000,
             "createdAt": "2025-01-01T08:30:00"
+        }, {
+            "id": dependency_task_trade_id,
+            "taskId": dependency_task_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T09:30:00"
         }],
         "taskTaskDependencies": [{
             "taskId": blocked_task_id,
@@ -851,16 +1080,21 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T11:00:00",
             "completedAt": "2025-01-01T11:00:00"
+        }],
+        "trades": [{
+            "id": blocked_task_trade_id,
+            "taskId": blocked_task_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T11:00:00"
         }]
     });
 
-    let (blocked_status, blocked_json) =
-        make_authenticated_post_request(
-            &access_token,
-            "/api/sync",
-            blocked_completion_body.clone(),
-        )
-        .await;
+    let (blocked_status, blocked_json) = make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        blocked_completion_body.clone(),
+    )
+    .await;
     assert_eq!(blocked_status, StatusCode::BAD_REQUEST);
     assert_eq!(
         blocked_json["errors"][0]["message"],
@@ -890,9 +1124,7 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
         make_authenticated_post_request(&access_token, "/api/sync", blocked_completion_body).await;
     assert_eq!(completion_status, StatusCode::OK);
     assert_eq!(
-        completion_json["tasks"]
-            .as_array()
-            .unwrap()[0]
+        completion_json["tasks"].as_array().unwrap()[0]
             .get("completedAt")
             .unwrap()
             .as_str()
@@ -961,6 +1193,7 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
     let blocked_task_id = uuid::Uuid::new_v4().to_string();
     let habit_blocked_task_id = uuid::Uuid::new_v4().to_string();
     let habit_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_trade_id = uuid::Uuid::new_v4().to_string();
 
     let setup_body = json!({
         "tasks": [{
@@ -1047,7 +1280,9 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
         "2025-01-01T11:00:00"
     );
     assert_eq!(
-        delete_task_json["taskHabitDependencies"].as_array().unwrap()[0]
+        delete_task_json["taskHabitDependencies"]
+            .as_array()
+            .unwrap()[0]
             .get("deletedAt")
             .unwrap()
             .as_str()
@@ -1063,10 +1298,17 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T11:00:30",
             "completedAt": "2025-01-01T11:00:30"
+        }],
+        "trades": [{
+            "id": blocked_task_trade_id,
+            "taskId": blocked_task_id,
+            "amount": 1000,
+            "createdAt": "2025-01-01T11:00:30"
         }]
     });
     let (complete_blocked_task_status, complete_blocked_task_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", complete_blocked_task_body).await;
+        make_authenticated_post_request(&access_token, "/api/sync", complete_blocked_task_body)
+            .await;
     assert_eq!(complete_blocked_task_status, StatusCode::OK);
     assert_eq!(
         complete_blocked_task_json["tasks"].as_array().unwrap()[0]

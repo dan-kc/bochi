@@ -194,26 +194,8 @@ final class TaskDependencyStore {
         let dirtyTaskTaskIDs = normalizedTaskDependencies.map(\.id) + deletedTaskDependencies.map(\.id)
         let dirtyTaskHabitIDs = normalizedHabitDependencies.map(\.id) + deletedHabitDependencies.map(\.id)
 
-        if !dirtyTaskTaskIDs.isEmpty {
-            if currentOwnerID != StorageOwner.local {
-                syncStateStore.markDirty(
-                    userID: currentOwnerID,
-                    kind: .taskTaskDependencies,
-                    ids: dirtyTaskTaskIDs
-                )
-            }
-            notifySync(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
-        }
-        if !dirtyTaskHabitIDs.isEmpty {
-            if currentOwnerID != StorageOwner.local {
-                syncStateStore.markDirty(
-                    userID: currentOwnerID,
-                    kind: .taskHabitDependencies,
-                    ids: dirtyTaskHabitIDs
-                )
-            }
-            notifySync(kind: .taskHabitDependencies, ids: dirtyTaskHabitIDs)
-        }
+        markDirtyAndNotify(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
+        markDirtyAndNotify(kind: .taskHabitDependencies, ids: dirtyTaskHabitIDs)
     }
 
     func deleteDependenciesReferencingTask(
@@ -281,27 +263,8 @@ final class TaskDependencyStore {
         let dirtyTaskTaskIDs = deletedTaskDependencies.map(\.id)
         let dirtyTaskHabitIDs = deletedHabitDependencies.map(\.id)
 
-        if !dirtyTaskTaskIDs.isEmpty {
-            if currentOwnerID != StorageOwner.local {
-                syncStateStore.markDirty(
-                    userID: currentOwnerID,
-                    kind: .taskTaskDependencies,
-                    ids: dirtyTaskTaskIDs
-                )
-            }
-            notifySync(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
-        }
-
-        if !dirtyTaskHabitIDs.isEmpty {
-            if currentOwnerID != StorageOwner.local {
-                syncStateStore.markDirty(
-                    userID: currentOwnerID,
-                    kind: .taskHabitDependencies,
-                    ids: dirtyTaskHabitIDs
-                )
-            }
-            notifySync(kind: .taskHabitDependencies, ids: dirtyTaskHabitIDs)
-        }
+        markDirtyAndNotify(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
+        markDirtyAndNotify(kind: .taskHabitDependencies, ids: dirtyTaskHabitIDs)
     }
 
     func updateHabitDependencyRequiredCompletions(
@@ -337,16 +300,8 @@ final class TaskDependencyStore {
             return
         }
 
-        if shouldNotifySync {
-            if currentOwnerID != StorageOwner.local {
-                syncStateStore.markDirty(
-                    userID: currentOwnerID,
-                    kind: .taskHabitDependencies,
-                    ids: [updated.id]
-                )
-            }
-            notifySync(kind: .taskHabitDependencies, ids: [updated.id])
-        }
+        guard shouldNotifySync else { return }
+        markDirtyAndNotify(kind: .taskHabitDependencies, ids: [updated.id])
     }
 
     func getDirtyTaskTaskDependencies(ids: Set<RecordID>) -> [TaskTaskDependency] {
@@ -611,6 +566,15 @@ final class TaskDependencyStore {
     private func nextUpdatedAt(after existingUpdatedAt: Date) -> Date {
         let now = Date()
         return now > existingUpdatedAt ? now : existingUpdatedAt.addingTimeInterval(0.001)
+    }
+
+    private func markDirtyAndNotify(kind: SyncEntityKind, ids: [RecordID]) {
+        guard !ids.isEmpty else { return }
+
+        if currentOwnerID != StorageOwner.local {
+            syncStateStore.markDirty(userID: currentOwnerID, kind: kind, ids: ids)
+        }
+        notifySync(kind: kind, ids: ids)
     }
 
     private func notifySync(kind: SyncEntityKind, ids: [RecordID]) {

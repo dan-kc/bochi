@@ -490,7 +490,13 @@ final class AppDatabase {
                     id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                 )
                 SELECT
-                    lower(hex(randomblob(16))),
+                    lower(
+                        hex(randomblob(4)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(6))
+                    ),
                     owner_id,
                     task_id,
                     habit_id,
@@ -499,7 +505,7 @@ final class AppDatabase {
                     -amount,
                     refunded_at,
                     refunded_at,
-                    NULL,
+                    deleted_at,
                     id
                 FROM trades
                 WHERE refunded_at IS NOT NULL;
@@ -515,6 +521,69 @@ final class AppDatabase {
                 ON trades(owner_id, deleted_at);
                 CREATE INDEX IF NOT EXISTS idx_trades_refunds_trade_id
                 ON trades(refunds_trade_id);
+            """)
+        }
+
+        migrator.registerMigration("v11_repair_refund_trade_migration_state") { db in
+            try db.execute(sql: """
+                CREATE TEMP TABLE refund_trade_id_repairs (
+                    old_id TEXT PRIMARY KEY,
+                    new_id TEXT NOT NULL
+                );
+
+                INSERT INTO refund_trade_id_repairs (old_id, new_id)
+                SELECT
+                    id,
+                    lower(
+                        hex(randomblob(4)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        hex(randomblob(6))
+                    )
+                FROM trades
+                WHERE refunds_trade_id IS NOT NULL
+                  AND (
+                    length(id) != 36
+                    OR substr(id, 9, 1) != '-'
+                    OR substr(id, 14, 1) != '-'
+                    OR substr(id, 19, 1) != '-'
+                    OR substr(id, 24, 1) != '-'
+                  );
+
+                UPDATE dirty_records
+                SET record_id = (
+                    SELECT new_id
+                    FROM refund_trade_id_repairs
+                    WHERE old_id = dirty_records.record_id
+                )
+                WHERE entity_kind = 'trades'
+                  AND record_id IN (SELECT old_id FROM refund_trade_id_repairs);
+
+                UPDATE trades
+                SET id = (
+                    SELECT new_id
+                    FROM refund_trade_id_repairs
+                    WHERE old_id = trades.id
+                )
+                WHERE id IN (SELECT old_id FROM refund_trade_id_repairs);
+
+                UPDATE trades AS refund
+                SET deleted_at = (
+                    SELECT original.deleted_at
+                    FROM trades AS original
+                    WHERE original.id = refund.refunds_trade_id
+                )
+                WHERE refund.refunds_trade_id IS NOT NULL
+                  AND refund.deleted_at IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM trades AS original
+                    WHERE original.id = refund.refunds_trade_id
+                      AND original.deleted_at IS NOT NULL
+                  );
+
+                DROP TABLE refund_trade_id_repairs;
             """)
         }
 

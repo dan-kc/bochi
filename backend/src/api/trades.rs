@@ -103,8 +103,7 @@ pub async fn create_trade(
 
         if has_incomplete_dependencies {
             return Err(ApiError::Validation(
-                "Task dependencies must be complete before this task can be completed."
-                    .to_string(),
+                "Task dependencies must be complete before this task can be completed.".to_string(),
             ));
         }
 

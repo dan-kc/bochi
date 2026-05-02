@@ -31,6 +31,62 @@ pub struct Database {
     pool: Pool<Postgres>,
 }
 
+fn active_unresolved_task_trade_exists_sql(task_id_expr: &str, user_id_expr: &str) -> String {
+    format!(
+        "EXISTS (
+            SELECT 1
+            FROM trades task_trade
+            WHERE task_trade.user_id = {user_id_expr}
+              AND task_trade.task_id = {task_id_expr}
+              AND task_trade.deleted_at IS NULL
+              AND task_trade.refunds_trade_id IS NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM trades refund
+                WHERE refund.refunds_trade_id = task_trade.id
+                  AND refund.deleted_at IS NULL
+              )
+        )"
+    )
+}
+
+fn derived_task_completed_at_sql(task_id_expr: &str, user_id_expr: &str) -> String {
+    format!(
+        "(SELECT task_trade.created_at
+          FROM trades task_trade
+          WHERE task_trade.user_id = {user_id_expr}
+            AND task_trade.task_id = {task_id_expr}
+            AND task_trade.deleted_at IS NULL
+            AND task_trade.refunds_trade_id IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM trades refund
+              WHERE refund.refunds_trade_id = task_trade.id
+                AND refund.deleted_at IS NULL
+            )
+          ORDER BY task_trade.created_at DESC, task_trade.updated_at DESC, task_trade.id DESC
+          LIMIT 1)"
+    )
+}
+
+pub(crate) fn task_select_columns(task_alias: &str, user_id_expr: &str) -> String {
+    let task_id_expr = format!("{task_alias}.id");
+    format!(
+        "{task_alias}.id,
+         {task_alias}.name,
+         {task_alias}.description,
+         {task_alias}.created_at,
+         {task_alias}.updated_at,
+         {task_alias}.deleted_at,
+         {} AS completed_at,
+         {task_alias}.difficulty_tier,
+         {task_alias}.duration_seconds,
+         {task_alias}.skip_consequence,
+         {task_alias}.due_date",
+        derived_task_completed_at_sql(&task_id_expr, user_id_expr)
+    )
+}
+
 impl Database {
     pub async fn new() -> Self {
         // Get configuration from environment variables
@@ -123,15 +179,17 @@ impl Database {
         user_id: Uuid,
         task_id: Uuid,
     ) -> Result<TaskRow, sqlx::Error> {
-        sqlx::query_as(
-            "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+        let query = format!(
+            "SELECT {}
              FROM tasks
              WHERE id = $1 AND user_id = $2",
-        )
-        .bind(task_id)
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await
+            task_select_columns("tasks", "tasks.user_id")
+        );
+        sqlx::query_as(&query)
+            .bind(task_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     pub async fn task_has_incomplete_dependencies(
@@ -196,20 +254,19 @@ impl Database {
         &self,
         create_trade_options: CreateTradeWithTaskOptions,
     ) -> Result<TradeWithTaskRow, sqlx::Error> {
-        sqlx::query_as(
-            "WITH updated_task AS (
-                UPDATE tasks
-                SET completed_at = CURRENT_TIMESTAMP
+        let query = format!(
+            "WITH candidate_task AS (
+                SELECT id, name, description, created_at, updated_at, deleted_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                FROM tasks
                 WHERE tasks.id = $1
                   AND tasks.user_id = $3
                   AND tasks.deleted_at IS NULL
-                  AND tasks.completed_at IS NULL
-                RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                  AND NOT {}
             ),
             new_trade AS (
                 INSERT INTO trades (task_id, source_name, amount, user_id)
                 SELECT id, name, $2, $3
-                FROM updated_task
+                FROM candidate_task
                 RETURNING id, task_id, habit_id, reward_id, amount, created_at
             )
             SELECT
@@ -222,19 +279,21 @@ impl Database {
                 t.created_at AS task_created_at,
                 t.updated_at AS task_updated_at,
                 t.deleted_at AS task_deleted_at,
-                t.completed_at AS task_completed_at,
+                nt.created_at AS task_completed_at,
                 t.difficulty_tier AS task_difficulty_tier,
                 t.duration_seconds AS task_duration_seconds,
                 t.skip_consequence AS task_skip_consequence,
                 t.due_date AS task_due_date
             FROM new_trade nt
-            JOIN updated_task t ON nt.task_id = t.id",
-        )
-        .bind(create_trade_options.task_id)
-        .bind(create_trade_options.amount)
-        .bind(create_trade_options.user_id)
-        .fetch_one(&self.pool)
-        .await
+            JOIN candidate_task t ON nt.task_id = t.id",
+            active_unresolved_task_trade_exists_sql("tasks.id", "tasks.user_id")
+        );
+        sqlx::query_as(&query)
+            .bind(create_trade_options.task_id)
+            .bind(create_trade_options.amount)
+            .bind(create_trade_options.user_id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     pub async fn create_trade_with_reward(
@@ -406,29 +465,34 @@ impl Database {
         user_id: Uuid,
         since: Option<NaiveDateTime>,
     ) -> Result<Vec<TaskRow>, sqlx::Error> {
+        let select_columns = task_select_columns("tasks", "tasks.user_id");
         match since {
             Some(since_time) => {
-                sqlx::query_as(
-                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                let query = format!(
+                    "SELECT {}
                      FROM tasks
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
-                )
-                .bind(user_id)
-                .bind(since_time)
-                .fetch_all(&self.pool)
-                .await
+                    select_columns
+                );
+                sqlx::query_as(&query)
+                    .bind(user_id)
+                    .bind(since_time)
+                    .fetch_all(&self.pool)
+                    .await
             }
             None => {
-                sqlx::query_as(
-                    "SELECT id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                let query = format!(
+                    "SELECT {}
                      FROM tasks
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
-                )
-                .bind(user_id)
-                .fetch_all(&self.pool)
-                .await
+                    select_columns
+                );
+                sqlx::query_as(&query)
+                    .bind(user_id)
+                    .fetch_all(&self.pool)
+                    .await
             }
         }
     }
@@ -871,7 +935,6 @@ impl Database {
                 name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
                 description = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.description ELSE tasks.description END,
                 deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
-                completed_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.completed_at ELSE tasks.completed_at END,
                 difficulty_tier = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.difficulty_tier ELSE tasks.difficulty_tier END,
                 duration_seconds = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.duration_seconds ELSE tasks.duration_seconds END,
                 skip_consequence = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.skip_consequence ELSE tasks.skip_consequence END,
@@ -884,7 +947,7 @@ impl Database {
         .bind(&task.description)
         .bind(task.created_at)
         .bind(task.deleted_at)
-        .bind(task.completed_at)
+        .bind(Option::<NaiveDateTime>::None)
         .bind(task.difficulty_tier)
         .bind(task.duration_seconds)
         .bind(task.skip_consequence)
@@ -985,6 +1048,12 @@ impl Database {
             if trade.amount != -refunded_trade.amount {
                 return Err(sqlx::Error::Protocol(
                     "Refund trades must negate the original trade amount".into(),
+                ));
+            }
+
+            if trade.created_at < refunded_trade.created_at {
+                return Err(sqlx::Error::Protocol(
+                    "Refund trades cannot be created before the original trade.".into(),
                 ));
             }
 
@@ -1184,7 +1253,7 @@ impl Database {
                     WHERE refund.refunds_trade_id = candidate.id
                       AND refund.deleted_at IS NULL
                )
-             ORDER BY candidate.created_at DESC, candidate.id DESC
+             ORDER BY candidate.created_at DESC, candidate.updated_at DESC, candidate.id DESC
              LIMIT 1",
         )
         .bind(user_id)
@@ -1200,7 +1269,11 @@ impl Database {
         user_id: Uuid,
         task_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
-        let blocked_by_task: bool = sqlx::query_scalar(
+        let dependency_task_is_completed = active_unresolved_task_trade_exists_sql(
+            "dependency_task.id",
+            "dependency_task.user_id",
+        );
+        let blocked_by_task: bool = sqlx::query_scalar(&format!(
             "SELECT EXISTS (
                 SELECT 1
                 FROM task_task_dependencies ttd
@@ -1208,9 +1281,10 @@ impl Database {
                 WHERE ttd.task_id = $2
                   AND ttd.deleted_at IS NULL
                   AND dependency_task.user_id = $1
-                  AND (dependency_task.deleted_at IS NOT NULL OR dependency_task.completed_at IS NULL)
+                  AND (dependency_task.deleted_at IS NOT NULL OR NOT {})
             )",
-        )
+            dependency_task_is_completed
+        ))
         .bind(user_id)
         .bind(task_id)
         .fetch_one(&mut **tx)
@@ -1330,7 +1404,9 @@ impl Database {
         user_id: Uuid,
         habit_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
-        sqlx::query_scalar(
+        let dependent_task_is_completed =
+            active_unresolved_task_trade_exists_sql("dependent_task.id", "dependent_task.user_id");
+        sqlx::query_scalar(&format!(
             "SELECT EXISTS (
                 SELECT 1
                 FROM task_habit_dependencies thd
@@ -1339,9 +1415,10 @@ impl Database {
                   AND thd.deleted_at IS NULL
                   AND dependent_task.user_id = $1
                   AND dependent_task.deleted_at IS NULL
-                  AND dependent_task.completed_at IS NULL
+                  AND NOT {}
             )",
-        )
+            dependent_task_is_completed
+        ))
         .bind(user_id)
         .bind(habit_id)
         .fetch_one(&mut **tx)
@@ -1662,7 +1739,6 @@ pub struct UpsertTaskOptions {
     pub description: String,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub completed_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub skip_consequence: Option<i16>,

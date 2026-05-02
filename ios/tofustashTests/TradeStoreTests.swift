@@ -157,6 +157,62 @@ struct TradeStoreTests {
         #expect(sut.trades.count == 2)
     }
 
+    // Behaviour: refunds should never appear before the trade they reverse,
+    // even if a caller passes an invalid timestamp directly to the store.
+    @Test("refunding a trade before its created date is rejected")
+    func refundingTradeBeforeOriginalTimeIsRejected() {
+        let sut = makeSUT()
+        let originalDate = Date(timeIntervalSince1970: 1_700_000_000)
+
+        sut.addHabitTrade(
+            id: "habit-trade-1",
+            habitId: "habit-1",
+            amount: 100,
+            createdAt: originalDate,
+            shouldNotifySync: false
+        )
+
+        let refundTrade = sut.refundTrade(
+            id: "habit-trade-1",
+            refundedAt: originalDate.addingTimeInterval(-1),
+            shouldNotifySync: false
+        )
+
+        #expect(refundTrade == nil)
+        #expect(sut.trades.count == 1)
+    }
+
+    // Behaviour: if two source trades share a created timestamp, the latest
+    // unresolved one should be chosen using the same updatedAt tie-breaker the
+    // backend uses during refund validation.
+    @Test("latest task trade prefers the newer updated timestamp when createdAt ties")
+    func latestTaskTradeUsesUpdatedAtTieBreaker() throws {
+        let sut = makeSUT()
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let firstUpdatedAt = createdAt
+        let secondUpdatedAt = createdAt.addingTimeInterval(5)
+
+        sut.addTaskTrade(
+            id: "task-trade-1",
+            taskId: "task-1",
+            amount: 100,
+            createdAt: createdAt,
+            updatedAt: firstUpdatedAt,
+            shouldNotifySync: false
+        )
+        sut.addTaskTrade(
+            id: "task-trade-2",
+            taskId: "task-1",
+            amount: 120,
+            createdAt: createdAt,
+            updatedAt: secondUpdatedAt,
+            shouldNotifySync: false
+        )
+
+        let latestTrade = try #require(sut.latestTaskTrade(taskId: "task-1", includeRefunded: false))
+        #expect(latestTrade.id == "task-trade-2")
+    }
+
     // Behaviour: refund trades should stop influencing pricing and lockout
     // calculations that depend on unresolved source timestamps.
     @Test("refund trades exclude the reversed activity from pricing selectors")

@@ -28,6 +28,24 @@ struct TradeSourceSummary: Equatable {
 }
 
 enum TradeHistoryBuilder {
+    private struct SourceIndexes {
+        let taskNames: [RecordID: String]
+        let activeTaskIDs: Set<RecordID>
+        let habitNames: [RecordID: String]
+        let activeHabitIDs: Set<RecordID>
+        let rewardNames: [RecordID: String]
+        let activeRewardIDs: Set<RecordID>
+
+        init(tasks: [TaskItem], habits: [Habit], rewards: [Reward]) {
+            taskNames = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.name) })
+            activeTaskIDs = Set(tasks.filter { $0.deletedAt == nil }.map(\.id))
+            habitNames = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0.name) })
+            activeHabitIDs = Set(habits.filter { $0.deletedAt == nil }.map(\.id))
+            rewardNames = Dictionary(uniqueKeysWithValues: rewards.map { ($0.id, $0.name) })
+            activeRewardIDs = Set(rewards.filter { $0.deletedAt == nil }.map(\.id))
+        }
+    }
+
     // Maps raw trades into rows the sheet can render directly.
     // Keeping this logic outside the SwiftUI view makes the UI code smaller
     // and gives us a stable place to write behaviour-focused tests.
@@ -39,12 +57,7 @@ enum TradeHistoryBuilder {
         filter: TradeHistoryFilter = .all,
         formatDate: (Date) -> String = Self.formatDate
     ) -> [TradeHistoryEntry] {
-        let taskNames = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.name) })
-        let activeTaskIDs = Set(tasks.filter { $0.deletedAt == nil }.map(\.id))
-        let habitNames = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0.name) })
-        let activeHabitIDs = Set(habits.filter { $0.deletedAt == nil }.map(\.id))
-        let rewardNames = Dictionary(uniqueKeysWithValues: rewards.map { ($0.id, $0.name) })
-        let activeRewardIDs = Set(rewards.filter { $0.deletedAt == nil }.map(\.id))
+        let sourceIndexes = SourceIndexes(tasks: tasks, habits: habits, rewards: rewards)
 
         return trades
             .filter { trade in
@@ -63,15 +76,7 @@ enum TradeHistoryBuilder {
             }
             .sorted { $0.createdAt > $1.createdAt }
             .map { trade in
-                let source = sourceSummary(
-                    for: trade,
-                    taskNames: taskNames,
-                    activeTaskIDs: activeTaskIDs,
-                    habitNames: habitNames,
-                    activeHabitIDs: activeHabitIDs,
-                    rewardNames: rewardNames,
-                    activeRewardIDs: activeRewardIDs
-                )
+                let source = sourceSummary(for: trade, indexes: sourceIndexes)
                 let isPositive = trade.amount >= 0
                 let amountText = "\(isPositive ? "+" : "-")\(abs(trade.amount))"
 
@@ -94,22 +99,7 @@ enum TradeHistoryBuilder {
         habits: [Habit],
         rewards: [Reward]
     ) -> TradeSourceSummary {
-        let taskNames = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.name) })
-        let activeTaskIDs = Set(tasks.filter { $0.deletedAt == nil }.map(\.id))
-        let habitNames = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0.name) })
-        let activeHabitIDs = Set(habits.filter { $0.deletedAt == nil }.map(\.id))
-        let rewardNames = Dictionary(uniqueKeysWithValues: rewards.map { ($0.id, $0.name) })
-        let activeRewardIDs = Set(rewards.filter { $0.deletedAt == nil }.map(\.id))
-
-        return sourceSummary(
-            for: trade,
-            taskNames: taskNames,
-            activeTaskIDs: activeTaskIDs,
-            habitNames: habitNames,
-            activeHabitIDs: activeHabitIDs,
-            rewardNames: rewardNames,
-            activeRewardIDs: activeRewardIDs
-        )
+        sourceSummary(for: trade, indexes: SourceIndexes(tasks: tasks, habits: habits, rewards: rewards))
     }
 
     nonisolated static func formatDate(_ date: Date) -> String {
@@ -118,34 +108,29 @@ enum TradeHistoryBuilder {
 
     private static func sourceSummary(
         for trade: Trade,
-        taskNames: [RecordID: String],
-        activeTaskIDs: Set<RecordID>,
-        habitNames: [RecordID: String],
-        activeHabitIDs: Set<RecordID>,
-        rewardNames: [RecordID: String],
-        activeRewardIDs: Set<RecordID>
+        indexes: SourceIndexes
     ) -> TradeSourceSummary {
         if let taskId = trade.taskId {
             return TradeSourceSummary(
                 kindLabel: "Task",
-                name: trade.sourceName ?? taskNames[taskId] ?? "Deleted task",
-                isDeleted: !activeTaskIDs.contains(taskId)
+                name: trade.sourceName ?? indexes.taskNames[taskId] ?? "Deleted task",
+                isDeleted: !indexes.activeTaskIDs.contains(taskId)
             )
         }
 
         if let habitId = trade.habitId {
             return TradeSourceSummary(
                 kindLabel: "Habit",
-                name: trade.sourceName ?? habitNames[habitId] ?? "Deleted habit",
-                isDeleted: !activeHabitIDs.contains(habitId)
+                name: trade.sourceName ?? indexes.habitNames[habitId] ?? "Deleted habit",
+                isDeleted: !indexes.activeHabitIDs.contains(habitId)
             )
         }
 
         if let rewardId = trade.rewardId {
             return TradeSourceSummary(
                 kindLabel: "Reward",
-                name: trade.sourceName ?? rewardNames[rewardId] ?? "Deleted reward",
-                isDeleted: !activeRewardIDs.contains(rewardId)
+                name: trade.sourceName ?? indexes.rewardNames[rewardId] ?? "Deleted reward",
+                isDeleted: !indexes.activeRewardIDs.contains(rewardId)
             )
         }
 
