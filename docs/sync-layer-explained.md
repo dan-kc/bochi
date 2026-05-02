@@ -561,7 +561,7 @@ The app uses a mix of debounced push, periodic background pull, full sync reset,
 
 ### 7.1 Debounced push
 
-Every signed-in local mutation schedules sync after a 2-second debounce.
+Every signed-in local mutation schedules sync after a 6-second debounce.
 
 This batches rapid edits such as:
 
@@ -573,7 +573,7 @@ The motivation is not only efficiency. It also makes the UI feel less fragile be
 
 ### 7.2 Background pull
 
-While signed in, the app periodically pulls every 5 seconds.
+While signed in, the app periodically pulls every 10 seconds.
 
 This is for passive freshness:
 

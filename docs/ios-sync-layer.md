@@ -155,7 +155,7 @@ The iOS implementation follows the frontend timing model:
 ### Debounced Push
 
 - Every local create, update, delete, or tag-toggle while signed in posts a mutation.
-- The app waits 2 seconds after the last change.
+- The app waits 6 seconds after the last change.
 - Then a full sync cycle runs.
 
 This batches rapid edits like:
@@ -166,7 +166,7 @@ This batches rapid edits like:
 
 ### Background Pull
 
-- While signed in, the app runs a read-only pull every 5 seconds.
+- While signed in, the app runs a read-only pull every 10 seconds.
 - If a sync is already running, the background pull is skipped.
 - Background pull failures are silent.
 

@@ -62,8 +62,8 @@ final class SyncManager {
         userSettingsStore: UserSettingsStore,
         reminderStore: ReminderStore,
         listPreferencesStore: ListPreferencesStore,
-        debounceDuration: Duration = .seconds(2),
-        backgroundPullDuration: Duration = .seconds(5),
+        debounceDuration: Duration = .seconds(6),
+        backgroundPullDuration: Duration = .seconds(10),
         fullSyncResetDuration: Duration = .seconds(60 * 60 * 24)
     ) {
         self.apiClient = apiClient
