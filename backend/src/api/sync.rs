@@ -331,7 +331,7 @@ pub struct RewardTagOutput {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "snake_case")]
 pub enum SpecialOfferEntityKind {
     Task,
@@ -521,6 +521,51 @@ fn random_offer_modifier_percent(entity_kind: SpecialOfferEntityKind) -> i16 {
         SpecialOfferEntityKind::Task | SpecialOfferEntityKind::Habit => base_value,
         SpecialOfferEntityKind::Reward => -base_value,
     }
+}
+
+const SPECIAL_OFFER_SELECT_COLUMNS: &str =
+    "id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at";
+
+fn special_offer_select_query(where_clause: &str) -> String {
+    format!(
+        "SELECT {}
+         FROM special_offers
+         {}",
+        SPECIAL_OFFER_SELECT_COLUMNS, where_clause
+    )
+}
+
+fn active_special_offer_target_is_current_sql() -> String {
+    let active_task_trade_exists =
+        active_unresolved_task_trade_exists_sql("special_offers.task_id", "special_offers.user_id");
+
+    format!(
+        "(
+            (special_offers.task_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM tasks
+                    WHERE tasks.id = special_offers.task_id
+                      AND tasks.deleted_at IS NULL
+                )
+                AND NOT {})
+            OR (special_offers.habit_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM habits
+                    WHERE habits.id = special_offers.habit_id
+                      AND habits.deleted_at IS NULL
+                ))
+            OR (special_offers.reward_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM rewards
+                    WHERE rewards.id = special_offers.reward_id
+                      AND rewards.deleted_at IS NULL
+                ))
+        )",
+        active_task_trade_exists
+    )
 }
 
 // ============================================================================
@@ -2191,15 +2236,18 @@ async fn load_special_offers_for_sync(
     since: Option<NaiveDateTime>,
     cursor: Option<&SyncCursor>,
 ) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
+    let base_query = special_offer_select_query(
+        "WHERE user_id = $1
+         ORDER BY updated_at ASC",
+    );
     match cursor {
         Some(cursor) => {
-            sqlx::query_as(
-                "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
-                 FROM special_offers
-                 WHERE user_id = $1
+            let query = special_offer_select_query(
+                "WHERE user_id = $1
                    AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
                  ORDER BY updated_at ASC",
-            )
+            );
+            sqlx::query_as(&query)
             .bind(user_id)
             .bind(cursor.upper_bound_tx_id)
             .bind(&cursor.in_progress_tx_ids)
@@ -2208,28 +2256,21 @@ async fn load_special_offers_for_sync(
         }
         None => match since {
             Some(since_time) => {
-                sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
-                     FROM special_offers
-                     WHERE user_id = $1 AND updated_at > $2
+                let query = special_offer_select_query(
+                    "WHERE user_id = $1
+                       AND updated_at > $2
                      ORDER BY updated_at ASC",
-                )
+                );
+                sqlx::query_as(&query)
                 .bind(user_id)
                 .bind(since_time)
                 .fetch_all(&mut **tx)
                 .await
             }
-            None => {
-                sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
-                     FROM special_offers
-                     WHERE user_id = $1
-                     ORDER BY updated_at ASC",
-                )
+            None => sqlx::query_as(&base_query)
                 .bind(user_id)
                 .fetch_all(&mut **tx)
-                .await
-            }
+                .await,
         },
     }
 }
@@ -2250,46 +2291,39 @@ async fn ensure_special_offers_current_tx(
     user_id: Uuid,
     now: NaiveDateTime,
 ) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
-    let active_rows: Vec<database::SpecialOfferRow> = sqlx::query_as(
-        "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
-         FROM special_offers
-         WHERE user_id = $1
-           AND deleted_at IS NULL
-           AND expires_at > $2
-         ORDER BY updated_at ASC, id ASC",
-    )
-    .bind(user_id)
-    .bind(now)
-    .fetch_all(&mut **tx)
-    .await?;
+    lock_special_offer_refresh_scope(tx, user_id).await?;
 
-    if !active_rows.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut changed_rows: Vec<database::SpecialOfferRow> = sqlx::query_as(
-        "UPDATE special_offers
-         SET deleted_at = $2
-         WHERE user_id = $1
-           AND deleted_at IS NULL
-         RETURNING id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at",
-    )
-    .bind(user_id)
-    .bind(now)
-    .fetch_all(&mut **tx)
-    .await?;
-
+    let mut changed_rows = retire_invalid_special_offers(tx, user_id, now).await?;
+    let active_rows = load_current_special_offers(tx, user_id, now).await?;
     let eligible_targets = load_special_offer_targets(tx, user_id).await?;
     let desired_count = desired_special_offer_count(eligible_targets.len());
-    if desired_count == 0 {
+
+    if active_rows.len() >= desired_count {
+        return Ok(changed_rows);
+    }
+
+    let active_target_keys: BTreeSet<(SpecialOfferEntityKind, Uuid)> = active_rows
+        .iter()
+        .filter_map(|row| special_offer_target_from_row(row))
+        .map(|target| (target.entity_kind, target.entity_id))
+        .collect();
+    let available_targets: Vec<SpecialOfferTarget> = eligible_targets
+        .into_iter()
+        .filter(|target| !active_target_keys.contains(&(target.entity_kind, target.entity_id)))
+        .collect();
+    let missing_count = desired_count
+        .saturating_sub(active_rows.len())
+        .min(available_targets.len());
+
+    if missing_count == 0 {
         return Ok(changed_rows);
     }
 
     let expires_at = now + Duration::hours(24);
     let selected_targets = {
         let mut rng = rand::thread_rng();
-        eligible_targets
-            .choose_multiple(&mut rng, desired_count)
+        available_targets
+            .choose_multiple(&mut rng, missing_count)
             .cloned()
             .collect::<Vec<_>>()
     };
@@ -2323,6 +2357,84 @@ async fn ensure_special_offers_current_tx(
     }
 
     Ok(changed_rows)
+}
+
+async fn lock_special_offer_refresh_scope(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let _ = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+    Ok(())
+}
+
+async fn retire_invalid_special_offers(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    now: NaiveDateTime,
+) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
+    let current_target_sql = active_special_offer_target_is_current_sql();
+    let query = format!(
+        "UPDATE special_offers
+         SET deleted_at = $2
+         WHERE user_id = $1
+           AND deleted_at IS NULL
+           AND (expires_at <= $2 OR NOT {})
+         RETURNING {}",
+        current_target_sql, SPECIAL_OFFER_SELECT_COLUMNS
+    );
+
+    sqlx::query_as(&query)
+    .bind(user_id)
+    .bind(now)
+    .fetch_all(&mut **tx)
+    .await
+}
+
+async fn load_current_special_offers(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    now: NaiveDateTime,
+) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
+    let current_target_sql = active_special_offer_target_is_current_sql();
+    let query = special_offer_select_query(&format!(
+        "WHERE user_id = $1
+           AND deleted_at IS NULL
+           AND expires_at > $2
+           AND {}
+         ORDER BY updated_at ASC, id ASC",
+        current_target_sql
+    ));
+
+    sqlx::query_as(&query)
+    .bind(user_id)
+    .bind(now)
+    .fetch_all(&mut **tx)
+    .await
+}
+
+fn special_offer_target_from_row(row: &database::SpecialOfferRow) -> Option<SpecialOfferTarget> {
+    if let Some(task_id) = row.task_id {
+        Some(SpecialOfferTarget {
+            entity_kind: SpecialOfferEntityKind::Task,
+            entity_id: task_id,
+        })
+    } else if let Some(habit_id) = row.habit_id {
+        Some(SpecialOfferTarget {
+            entity_kind: SpecialOfferEntityKind::Habit,
+            entity_id: habit_id,
+        })
+    } else if let Some(reward_id) = row.reward_id {
+        Some(SpecialOfferTarget {
+            entity_kind: SpecialOfferEntityKind::Reward,
+            entity_id: reward_id,
+        })
+    } else {
+        None
+    }
 }
 
 async fn load_special_offer_targets(

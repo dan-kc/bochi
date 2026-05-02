@@ -1,6 +1,16 @@
 import Foundation
 
 enum SpecialOfferSupport {
+    nonisolated static func adjustedRoundedAmount(
+        _ rawAmount: Double,
+        specialOfferModifierPercent: Int?
+    ) -> Int {
+        adjustedAmount(
+            baseAmount: Int(rawAmount.rounded()),
+            specialOfferModifierPercent: specialOfferModifierPercent
+        )
+    }
+
     nonisolated static func adjustedAmount(
         baseAmount: Int,
         specialOfferModifierPercent: Int?

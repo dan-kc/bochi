@@ -71,8 +71,8 @@ enum RewardPriceCalculation {
         )
 
         let price = 100.0 * generalDifficulty * damageMultiplier * frequencyMultiplier
-        return SpecialOfferSupport.adjustedAmount(
-            baseAmount: Int(price.rounded()),
+        return SpecialOfferSupport.adjustedRoundedAmount(
+            price,
             specialOfferModifierPercent: specialOfferModifierPercent
         )
     }

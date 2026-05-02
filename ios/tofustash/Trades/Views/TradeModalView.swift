@@ -13,6 +13,7 @@ import SwiftUI
 // modal dismisses.
 struct TradeModalView: View {
     let habit: Habit
+    let resolvedSpecialOffer: SpecialOffer?
 
     // Called after a successful claim. The parent uses this to chain
     // dismissals (e.g., dismiss the change form too).
@@ -21,7 +22,6 @@ struct TradeModalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(HabitStore.self) private var habitStore
     @Environment(TradeStore.self) private var tradeStore
-    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
 
     // How many times the user wants to claim this habit. Starts at 1.
@@ -49,12 +49,8 @@ struct TradeModalView: View {
             allHabits: habitStore.activeHabits,
             completionDates: completionDates,
             quantity: quantity,
-            specialOfferModifierPercent: specialOffer?.modifierPercent
+            specialOfferModifierPercent: resolvedSpecialOffer?.modifierPercent
         )
-    }
-
-    private var specialOffer: SpecialOffer? {
-        specialOfferStore.activeOffer(for: .habit, entityID: habit.id)
     }
 
     private var isLocked: Bool {
@@ -109,27 +105,11 @@ struct TradeModalView: View {
         VStack(spacing: 24) {
             // Behaviour: the sheet now opens with the payout summary in the
             // most prominent spot, so the user focuses on the outcome first.
-            VStack(spacing: 4) {
-                Text("Total Reward")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Text("\(totalPrice)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .contentTransition(.numericText())
-                        .animation(.snappy, value: totalPrice)
-                    Image(systemName: "cube.fill")
-                        .font(.body)
-                }
-
-                if let specialOffer {
-                    Text(SpecialOfferSupport.badgeText(modifierPercent: specialOffer.modifierPercent))
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .padding(.top, 8)
+            SpecialOfferAmountSummary(
+                title: "Total Reward",
+                amount: totalPrice,
+                offer: resolvedSpecialOffer
+            )
 
             Spacer()
 
@@ -207,7 +187,7 @@ struct TradeModalView: View {
                 allHabits: habitStore.activeHabits,
                 completionDates: projectedCompletionDates,
                 now: claimDate,
-                specialOfferModifierPercent: specialOffer?.modifierPercent
+                specialOfferModifierPercent: resolvedSpecialOffer?.modifierPercent
             )
             entries.append((id: RecordID(), amount: price))
             projectedCompletionDates.append(claimDate)

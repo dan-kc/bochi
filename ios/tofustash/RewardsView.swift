@@ -18,7 +18,7 @@ struct RewardsView: View {
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: RewardFormRoute? = nil
-    @State private var purchasingReward: Reward? = nil
+    @State private var purchasingRewardRoute: RewardPurchaseRoute? = nil
     @State private var historyReward: Reward? = nil
     @State private var rewardToDelete: Reward? = nil
     @State private var toastManager = ToastManager()
@@ -34,7 +34,7 @@ struct RewardsView: View {
         )
     }
 
-    private var visibleRewards: [Reward] {
+    private func visibleRewards(offerSnapshot: SpecialOfferSnapshot) -> [Reward] {
         EntityListQuery.apply(
             items: rewardStore.activeRewards,
             filterState: filterState,
@@ -43,12 +43,15 @@ struct RewardsView: View {
             name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.damageTier?.sortOrder },
-            price: priceSortValue(for:),
+            price: { priceSortValue(for: $0, offerSnapshot: offerSnapshot) },
             tags: { tagStore.tagsForReward(rewardId: $0.id) }
         )
     }
 
     var body: some View {
+        let offerSnapshot = specialOfferStore.makeSnapshot()
+        let visibleRewards = visibleRewards(offerSnapshot: offerSnapshot)
+
         NavigationStack {
             EntityListScreen(
                 hasAnyItems: !rewardStore.activeRewards.isEmpty,
@@ -80,9 +83,9 @@ struct RewardsView: View {
                     EntityListRowSurface(
                         showsDivider: index < visibleRewards.count - 1,
                         isHighlighted: highlightedRewardID == reward.id,
-                        isSpecialOffer: specialOffer(for: reward) != nil
+                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .reward, entityID: reward.id)
                     ) {
-                        rewardRow(reward)
+                        rewardRow(reward, offerSnapshot: offerSnapshot)
                     }
                         .id(reward.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -98,7 +101,7 @@ struct RewardsView: View {
                             .tint(.red)
                         }
                         .contextMenu {
-                            rewardRowMenu(reward)
+                            rewardRowMenu(reward, offerSnapshot: offerSnapshot)
                         }
                 }
             }
@@ -127,8 +130,11 @@ struct RewardsView: View {
                     }
                 )
             }
-            .sheet(item: $purchasingReward) { reward in
-                RewardPurchaseModalView(reward: reward)
+            .sheet(item: $purchasingRewardRoute) { route in
+                RewardPurchaseModalView(
+                    reward: route.reward,
+                    resolvedSpecialOffer: route.resolvedSpecialOffer
+                )
             }
             .sheet(item: $historyReward) { reward in
                 TradeHistorySheetView(
@@ -187,29 +193,29 @@ struct RewardsView: View {
         )
     }
 
-    private func priceForReward(_ reward: Reward) -> Int {
+    private func priceForReward(_ reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> Int {
         let purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
         return RewardPriceCalculation.calculatePrice(
             reward: reward,
             allRewards: rewardStore.activeRewards,
             purchaseDates: purchaseDates,
             generalDifficulty: userSettingsStore.generalDifficulty,
-            specialOfferModifierPercent: specialOffer(for: reward)?.modifierPercent
+            specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .reward, entityID: reward.id)
         )
     }
 
-    private func priceSortValue(for reward: Reward) -> Int? {
+    private func priceSortValue(for reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> Int? {
         EntityActionSupport.sortableAmount(isActionable: reward.canPurchase) {
-            priceForReward(reward)
+            priceForReward(reward, offerSnapshot: offerSnapshot)
         }
     }
 
-    private func rewardRow(_ reward: Reward) -> some View {
+    private func rewardRow(_ reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> some View {
         let tags = tagStore.tagsForReward(rewardId: reward.id)
         let canPurchase = reward.canPurchase
-        let price = priceForReward(reward)
+        let price = priceForReward(reward, offerSnapshot: offerSnapshot)
         let canAfford = canPurchase && balanceStore.balance >= price
-        let offer = specialOffer(for: reward)
+        let offer = offerSnapshot.activeOffer(for: .reward, entityID: reward.id)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -237,10 +243,7 @@ struct RewardsView: View {
                     )
 
                     if let offer {
-                        EntityListMetaPill(
-                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
-                            isSet: true
-                        )
+                        SpecialOfferMetaPill(offer: offer)
                     }
                 }
 
@@ -265,7 +268,7 @@ struct RewardsView: View {
                     isEnabled: canAfford
                 ) {
                     if canAfford {
-                        purchasingReward = reward
+                        openPurchaseModal(for: reward, offer: offer)
                     }
                 }
             }
@@ -277,18 +280,15 @@ struct RewardsView: View {
         }
     }
 
-    private func specialOffer(for reward: Reward) -> SpecialOffer? {
-        specialOfferStore.activeOffer(for: .reward, entityID: reward.id)
-    }
-
     @ViewBuilder
-    private func rewardRowMenu(_ reward: Reward) -> some View {
-        let price = priceForReward(reward)
+    private func rewardRowMenu(_ reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> some View {
+        let price = priceForReward(reward, offerSnapshot: offerSnapshot)
         let canClaimReward = reward.canPurchase && balanceStore.balance >= price
 
         if canClaimReward {
+            let offer = offerSnapshot.activeOffer(for: .reward, entityID: reward.id)
             Button {
-                purchasingReward = reward
+                openPurchaseModal(for: reward, offer: offer)
             } label: {
                 Label("Claim Reward", systemImage: "gift")
             }
@@ -315,10 +315,17 @@ struct RewardsView: View {
         )
     }
 
+    private func openPurchaseModal(for reward: Reward, offer: SpecialOffer?) {
+        purchasingRewardRoute = RewardPurchaseRoute(
+            reward: reward,
+            resolvedSpecialOffer: offer
+        )
+    }
+
     private func queueScrollToRewardIfVisible(_ rewardID: RecordID) {
         EntityListViewCoordinator.queueScrollToVisibleItem(
             rewardID,
-            visibleIDs: visibleRewards.map(\.id),
+            visibleIDs: visibleRewards(offerSnapshot: specialOfferStore.makeSnapshot()).map(\.id),
             highlightedID: &highlightedRewardID,
             pendingScrollTargetID: &pendingScrollTargetID
         )

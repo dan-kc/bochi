@@ -28,14 +28,24 @@ final class SpecialOfferStore {
         offers.filter { $0.isActive(at: now) }
     }
 
+    func makeSnapshot(now: Date = Date()) -> SpecialOfferSnapshot {
+        SpecialOfferSnapshot(offers: activeOffers(now: now), now: now)
+    }
+
     func activeOffer(
         for entityKind: SpecialOfferEntityKind,
         entityID: RecordID,
         now: Date = Date()
     ) -> SpecialOffer? {
-        activeOffers(now: now).first {
-            $0.entityKind == entityKind && $0.entityID == entityID
-        }
+        makeSnapshot(now: now).activeOffer(for: entityKind, entityID: entityID)
+    }
+
+    func activeModifierPercent(
+        for entityKind: SpecialOfferEntityKind,
+        entityID: RecordID,
+        now: Date = Date()
+    ) -> Int? {
+        makeSnapshot(now: now).activeModifierPercent(for: entityKind, entityID: entityID)
     }
 
     func mergeOffers(_ remoteOffers: [SpecialOffer]) {

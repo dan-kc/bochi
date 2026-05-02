@@ -35,8 +35,8 @@ enum TaskRewardCalculation {
             * calculateDifficultyMultiplier(task: task)
             * calculateDurationMultiplier(task: task)
             * calculateSkipConsequenceMultiplier(task: task)
-        return SpecialOfferSupport.adjustedAmount(
-            baseAmount: Int(reward.rounded()),
+        return SpecialOfferSupport.adjustedRoundedAmount(
+            reward,
             specialOfferModifierPercent: specialOfferModifierPercent
         )
     }

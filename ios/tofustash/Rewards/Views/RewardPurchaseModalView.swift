@@ -4,12 +4,12 @@ import SwiftUI
 // price, whether they can afford it, and a small celebration after purchase.
 struct RewardPurchaseModalView: View {
     let reward: Reward
+    let resolvedSpecialOffer: SpecialOffer?
     var onPurchase: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(RewardStore.self) private var rewardStore
     @Environment(TradeStore.self) private var tradeStore
-    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
@@ -30,12 +30,8 @@ struct RewardPurchaseModalView: View {
             purchaseDates: purchaseDates,
             quantity: quantity,
             generalDifficulty: userSettingsStore.generalDifficulty,
-            specialOfferModifierPercent: specialOffer?.modifierPercent
+            specialOfferModifierPercent: resolvedSpecialOffer?.modifierPercent
         )
-    }
-
-    private var specialOffer: SpecialOffer? {
-        specialOfferStore.activeOffer(for: .reward, entityID: reward.id)
     }
 
     private var canAfford: Bool {
@@ -87,26 +83,12 @@ struct RewardPurchaseModalView: View {
         VStack(spacing: 24) {
             // Behaviour: the sheet now leads with the current total cost so
             // the user sees the spend decision before any supporting copy.
-            VStack(spacing: 4) {
-                Text("Total Cost")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Text("\(totalPrice)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .contentTransition(.numericText())
-                    Image(systemName: "cube.fill")
-                }
-                .foregroundStyle(canAfford ? Color.primary : Color.red)
-
-                if let specialOffer {
-                    Text(SpecialOfferSupport.badgeText(modifierPercent: specialOffer.modifierPercent))
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .padding(.top, 8)
+            SpecialOfferAmountSummary(
+                title: "Total Cost",
+                amount: totalPrice,
+                amountColor: canAfford ? .primary : .red,
+                offer: resolvedSpecialOffer
+            )
 
             if !reward.description.isEmpty {
                 Text(reward.description)
@@ -173,7 +155,7 @@ struct RewardPurchaseModalView: View {
                 tradeStore: tradeStore,
                 balanceStore: balanceStore,
                 generalDifficulty: userSettingsStore.generalDifficulty,
-                specialOfferModifierPercent: specialOffer?.modifierPercent,
+                specialOfferModifierPercent: resolvedSpecialOffer?.modifierPercent,
                 quantity: quantity
             )
             purchased = true

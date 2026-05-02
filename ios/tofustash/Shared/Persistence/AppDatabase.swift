@@ -609,6 +609,14 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v13_special_offer_active_entity_uniqueness") { db in
+            try db.execute(sql: """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_special_offers_owner_active_entity
+                ON special_offers(owner_id, entity_kind, entity_id)
+                WHERE deleted_at IS NULL;
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

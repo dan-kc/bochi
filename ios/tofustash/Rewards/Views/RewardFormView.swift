@@ -48,7 +48,7 @@ struct RewardFormView: View {
     @State private var showingFrequency = false
     @State private var showingDamage = false
     @State private var showingTags = false
-    @State private var purchasingReward: Reward? = nil
+    @State private var purchasingRewardRoute: RewardPurchaseRoute? = nil
     @State private var showingHistory = false
     @State private var showingDeleteConfirmation = false
 
@@ -133,7 +133,7 @@ struct RewardFormView: View {
             allRewards: allRewards,
             purchaseDates: purchaseDates,
             generalDifficulty: userSettingsStore.generalDifficulty,
-            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .reward, entityID: reward.id)?.modifierPercent
+            specialOfferModifierPercent: specialOfferStore.activeModifierPercent(for: .reward, entityID: reward.id)
         )
     }
 
@@ -240,8 +240,11 @@ struct RewardFormView: View {
         .sheet(isPresented: $showingTags) {
             TagsView(selectionMode: .assignment(.reward(rewardId)))
         }
-        .sheet(item: $purchasingReward) { reward in
-            RewardPurchaseModalView(reward: reward) {
+        .sheet(item: $purchasingRewardRoute) { route in
+            RewardPurchaseModalView(
+                reward: route.reward,
+                resolvedSpecialOffer: route.resolvedSpecialOffer
+            ) {
                 dismiss()
             }
         }
@@ -306,7 +309,10 @@ struct RewardFormView: View {
                 TofuActionButton(amount: currentPrice, polarity: .spending, layout: .expanded(title: "Buy Reward")) {
                     guard let persistedReward = persistReward() else { return }
                     didPersist = true
-                    purchasingReward = persistedReward
+                    purchasingRewardRoute = RewardPurchaseRoute(
+                        reward: persistedReward,
+                        resolvedSpecialOffer: specialOfferStore.activeOffer(for: .reward, entityID: persistedReward.id)
+                    )
                 }
             }
         }

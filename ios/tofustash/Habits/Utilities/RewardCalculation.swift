@@ -85,8 +85,8 @@ enum RewardCalculation {
             * frequencyMultiplier
             * durationMultiplier
             * skipConsequenceMultiplier
-        return SpecialOfferSupport.adjustedAmount(
-            baseAmount: Int(reward.rounded()),
+        return SpecialOfferSupport.adjustedRoundedAmount(
+            reward,
             specialOfferModifierPercent: specialOfferModifierPercent
         )
     }

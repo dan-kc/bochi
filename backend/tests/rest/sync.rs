@@ -303,6 +303,171 @@ async fn test_sync_pull_caps_special_offers_at_five() {
 }
 
 #[tokio::test]
+async fn test_sync_pull_replaces_special_offer_for_completed_task() {
+    let email = generate_email_from_fn!(test_sync_pull_replaces_special_offer_for_completed_task);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tasks: Vec<Value> = (0..21)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Task {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T09:{:02}:00", index % 60),
+                "updatedAt": format!("2025-01-01T09:{:02}:00", index % 60)
+            })
+        })
+        .collect();
+
+    make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        json!({ "tasks": tasks }),
+    )
+    .await;
+
+    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let initial_offers = initial_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    assert_eq!(initial_offers.len(), 2);
+
+    let offered_task_id = initial_offers[0]
+        .get("entityId")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    let offered_task = tasks
+        .iter()
+        .find(|task| task.get("id").unwrap().as_str().unwrap() == offered_task_id)
+        .unwrap();
+    let trade_id = uuid::Uuid::new_v4().to_string();
+
+    make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        json!({
+            "tasks": [{
+                "id": offered_task_id,
+                "name": offered_task.get("name").unwrap().as_str().unwrap(),
+                "description": offered_task.get("description").unwrap().as_str().unwrap(),
+                "createdAt": offered_task.get("createdAt").unwrap().as_str().unwrap(),
+                "updatedAt": "2025-01-01T12:00:00",
+                "completedAt": "2025-01-01T12:00:00"
+            }],
+            "trades": [{
+                "id": trade_id,
+                "taskId": initial_offers[0].get("entityId").unwrap().as_str().unwrap(),
+                "amount": 20,
+                "createdAt": "2025-01-01T12:00:00"
+            }]
+        }),
+    )
+    .await;
+
+    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let refreshed_offers = refreshed_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    let active_refreshed_offers: Vec<&Value> = refreshed_offers
+        .iter()
+        .filter(|offer| offer.get("deletedAt").unwrap().is_null())
+        .collect();
+
+    assert_eq!(active_refreshed_offers.len(), 2);
+    assert!(!active_refreshed_offers.iter().any(|offer| {
+        offer.get("entityId").unwrap().as_str().unwrap() == offered_task_id
+    }));
+}
+
+#[tokio::test]
+async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
+    let email = generate_email_from_fn!(test_sync_pull_replaces_special_offer_for_deleted_reward);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let rewards: Vec<Value> = (0..21)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Reward {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T11:{:02}:00", index % 60),
+                "updatedAt": format!("2025-01-01T11:{:02}:00", index % 60)
+            })
+        })
+        .collect();
+
+    make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        json!({ "rewards": rewards }),
+    )
+    .await;
+
+    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let initial_offers = initial_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    assert_eq!(initial_offers.len(), 2);
+
+    let offered_reward_id = initial_offers[0]
+        .get("entityId")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    let offered_reward = rewards
+        .iter()
+        .find(|reward| reward.get("id").unwrap().as_str().unwrap() == offered_reward_id)
+        .unwrap();
+
+    make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        json!({
+            "rewards": [{
+                "id": offered_reward_id,
+                "name": offered_reward.get("name").unwrap().as_str().unwrap(),
+                "description": offered_reward.get("description").unwrap().as_str().unwrap(),
+                "createdAt": offered_reward.get("createdAt").unwrap().as_str().unwrap(),
+                "updatedAt": "2025-01-01T12:30:00",
+                "deletedAt": "2025-01-01T12:30:00"
+            }]
+        }),
+    )
+    .await;
+
+    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let refreshed_offers = refreshed_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    let active_refreshed_offers: Vec<&Value> = refreshed_offers
+        .iter()
+        .filter(|offer| offer.get("deletedAt").unwrap().is_null())
+        .collect();
+
+    assert_eq!(active_refreshed_offers.len(), 2);
+    assert!(!active_refreshed_offers.iter().any(|offer| {
+        offer.get("entityId").unwrap().as_str().unwrap() == offered_reward_id
+    }));
+}
+
+#[tokio::test]
 async fn test_sync_pull_with_since_filters_all_entities() {
     let email = generate_email_from_fn!(test_sync_pull_with_since_filters_all_entities);
     let password = "password123";

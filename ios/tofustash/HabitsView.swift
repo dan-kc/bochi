@@ -17,7 +17,7 @@ struct HabitsView: View {
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
 
     @State private var formRoute: HabitFormRoute? = nil
-    @State private var tradingHabit: Habit? = nil
+    @State private var tradingHabitRoute: HabitTradeRoute? = nil
     @State private var historyHabit: Habit? = nil
     @State private var habitToDelete: Habit? = nil
     @State private var toastManager = ToastManager()
@@ -33,7 +33,7 @@ struct HabitsView: View {
         )
     }
 
-    private var visibleHabits: [Habit] {
+    private func visibleHabits(offerSnapshot: SpecialOfferSnapshot) -> [Habit] {
         EntityListQuery.apply(
             items: habitStore.activeHabits,
             filterState: filterState,
@@ -42,12 +42,15 @@ struct HabitsView: View {
             name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
-            price: priceSortValue(for:),
+            price: { priceSortValue(for: $0, offerSnapshot: offerSnapshot) },
             tags: { tagStore.tagsForHabit(habitId: $0.id) }
         )
     }
 
     var body: some View {
+        let offerSnapshot = specialOfferStore.makeSnapshot()
+        let visibleHabits = visibleHabits(offerSnapshot: offerSnapshot)
+
         NavigationStack {
             EntityListScreen(
                 hasAnyItems: !habitStore.activeHabits.isEmpty,
@@ -79,9 +82,9 @@ struct HabitsView: View {
                     EntityListRowSurface(
                         showsDivider: index < visibleHabits.count - 1,
                         isHighlighted: highlightedHabitID == habit.id,
-                        isSpecialOffer: specialOffer(for: habit) != nil
+                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .habit, entityID: habit.id)
                     ) {
-                        habitRow(habit)
+                        habitRow(habit, offerSnapshot: offerSnapshot)
                     }
                         .id(habit.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -97,7 +100,7 @@ struct HabitsView: View {
                             .tint(.red)
                         }
                         .contextMenu {
-                            habitRowMenu(habit)
+                            habitRowMenu(habit, offerSnapshot: offerSnapshot)
                         }
                 }
             }
@@ -126,8 +129,11 @@ struct HabitsView: View {
                     }
                 )
             }
-            .sheet(item: $tradingHabit) { habit in
-                TradeModalView(habit: habit)
+            .sheet(item: $tradingHabitRoute) { route in
+                TradeModalView(
+                    habit: route.habit,
+                    resolvedSpecialOffer: route.resolvedSpecialOffer
+                )
             }
             .sheet(item: $historyHabit) { habit in
                 TradeHistorySheetView(
@@ -193,27 +199,27 @@ struct HabitsView: View {
         )
     }
 
-    private func priceForHabit(_ habit: Habit) -> Int {
+    private func priceForHabit(_ habit: Habit, offerSnapshot: SpecialOfferSnapshot) -> Int {
         let completionDates = tradeStore.habitTradeDates(habitId: habit.id)
         return RewardCalculation.calculateReward(
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionDates: completionDates,
-            specialOfferModifierPercent: specialOffer(for: habit)?.modifierPercent
+            specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .habit, entityID: habit.id)
         )
     }
 
-    private func priceSortValue(for habit: Habit) -> Int? {
+    private func priceSortValue(for habit: Habit, offerSnapshot: SpecialOfferSnapshot) -> Int? {
         let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
         return EntityActionSupport.sortableAmount(isActionable: habit.canTrade && !isLocked) {
-            priceForHabit(habit)
+            priceForHabit(habit, offerSnapshot: offerSnapshot)
         }
     }
 
-    private func habitRow(_ habit: Habit) -> some View {
+    private func habitRow(_ habit: Habit, offerSnapshot: SpecialOfferSnapshot) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
         let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
-        let offer = specialOffer(for: habit)
+        let offer = offerSnapshot.activeOffer(for: .habit, entityID: habit.id)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -241,10 +247,7 @@ struct HabitsView: View {
                     )
 
                     if let offer {
-                        EntityListMetaPill(
-                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
-                            isSet: true
-                        )
+                        SpecialOfferMetaPill(offer: offer)
                     }
                 }
 
@@ -268,9 +271,9 @@ struct HabitsView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44, alignment: .center)
                 } else {
-                    let price = priceForHabit(habit)
+                    let price = priceForHabit(habit, offerSnapshot: offerSnapshot)
                     ClaimRewardButton(price: price, layout: .compact) {
-                        tradingHabit = habit
+                        openTradeModal(for: habit, offer: offer)
                     }
                 }
             }
@@ -282,17 +285,14 @@ struct HabitsView: View {
         }
     }
 
-    private func specialOffer(for habit: Habit) -> SpecialOffer? {
-        specialOfferStore.activeOffer(for: .habit, entityID: habit.id)
-    }
-
     @ViewBuilder
-    private func habitRowMenu(_ habit: Habit) -> some View {
+    private func habitRowMenu(_ habit: Habit, offerSnapshot: SpecialOfferSnapshot) -> some View {
         let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
 
         if habit.canTrade && !isLocked {
+            let offer = offerSnapshot.activeOffer(for: .habit, entityID: habit.id)
             Button {
-                tradingHabit = habit
+                openTradeModal(for: habit, offer: offer)
             } label: {
                 Label("Complete", systemImage: "checkmark.circle")
             }
@@ -319,10 +319,17 @@ struct HabitsView: View {
         )
     }
 
+    private func openTradeModal(for habit: Habit, offer: SpecialOffer?) {
+        tradingHabitRoute = HabitTradeRoute(
+            habit: habit,
+            resolvedSpecialOffer: offer
+        )
+    }
+
     private func queueScrollToHabitIfVisible(_ habitID: RecordID) {
         EntityListViewCoordinator.queueScrollToVisibleItem(
             habitID,
-            visibleIDs: visibleHabits.map(\.id),
+            visibleIDs: visibleHabits(offerSnapshot: specialOfferStore.makeSnapshot()).map(\.id),
             highlightedID: &highlightedHabitID,
             pendingScrollTargetID: &pendingScrollTargetID
         )

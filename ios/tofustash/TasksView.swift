@@ -39,7 +39,7 @@ struct TasksView: View {
         )
     }
 
-    private var visibleTasks: [TaskItem] {
+    private func visibleTasks(offerSnapshot: SpecialOfferSnapshot) -> [TaskItem] {
         EntityListQuery.apply(
             items: activeTasks,
             filterState: filterState,
@@ -48,7 +48,7 @@ struct TasksView: View {
             name: \.name,
             createdAt: \.createdAt,
             difficultySortOrder: { $0.difficultyTier?.sortOrder },
-            price: priceSortValue(for:),
+            price: { priceSortValue(for: $0, offerSnapshot: offerSnapshot) },
             tags: { tagStore.tagsForTask(taskId: $0.id) },
             isDeprioritized: { task in
                 task.canTrade && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
@@ -57,6 +57,9 @@ struct TasksView: View {
     }
 
     var body: some View {
+        let offerSnapshot = specialOfferStore.makeSnapshot()
+        let visibleTasks = visibleTasks(offerSnapshot: offerSnapshot)
+
         NavigationStack {
             EntityListScreen(
                 hasAnyItems: !activeTasks.isEmpty,
@@ -88,9 +91,9 @@ struct TasksView: View {
                     EntityListRowSurface(
                         showsDivider: index < visibleTasks.count - 1,
                         isHighlighted: highlightedTaskID == task.id,
-                        isSpecialOffer: specialOffer(for: task) != nil
+                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .task, entityID: task.id)
                     ) {
-                        taskRow(task)
+                        taskRow(task, offerSnapshot: offerSnapshot)
                     }
                         .id(task.id)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -104,7 +107,7 @@ struct TasksView: View {
                             .tint(.red)
                         }
                         .contextMenu {
-                            taskRowMenu(task)
+                            taskRowMenu(task, offerSnapshot: offerSnapshot)
                         }
                 }
             }
@@ -193,11 +196,11 @@ struct TasksView: View {
         )
     }
 
-    private func taskRow(_ task: TaskItem) -> some View {
+    private func taskRow(_ task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> some View {
         let tags = tagStore.tagsForTask(taskId: task.id)
         let reward = TaskRewardCalculation.calculateReward(
             task: task,
-            specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+            specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .task, entityID: task.id)
         )
         let taskActionState = TaskTradeActionSupport.state(
             isNewMode: false,
@@ -208,7 +211,7 @@ struct TasksView: View {
         )
         let canComplete = canCompleteTask(task)
         let isBlocked = canComplete && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
-        let offer = specialOffer(for: task)
+        let offer = offerSnapshot.activeOffer(for: .task, entityID: task.id)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -243,10 +246,7 @@ struct TasksView: View {
                     }
 
                     if let offer {
-                        EntityListMetaPill(
-                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
-                            isSet: true
-                        )
+                        SpecialOfferMetaPill(offer: offer)
                     }
                 }
 
@@ -288,11 +288,11 @@ struct TasksView: View {
         }
     }
 
-    private func priceSortValue(for task: TaskItem) -> Int? {
+    private func priceSortValue(for task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> Int? {
         EntityActionSupport.sortableAmount(isActionable: canCompleteTask(task)) {
             TaskRewardCalculation.calculateReward(
                 task: task,
-                specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+                specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .task, entityID: task.id)
             )
         }
     }
@@ -318,10 +318,10 @@ struct TasksView: View {
     }
 
     @ViewBuilder
-    private func taskRowMenu(_ task: TaskItem) -> some View {
+    private func taskRowMenu(_ task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> some View {
         let reward = TaskRewardCalculation.calculateReward(
             task: task,
-            specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+            specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .task, entityID: task.id)
         )
         let taskActionState = TaskTradeActionSupport.state(
             isNewMode: false,
@@ -361,14 +361,10 @@ struct TasksView: View {
         )
     }
 
-    private func specialOffer(for task: TaskItem) -> SpecialOffer? {
-        specialOfferStore.activeOffer(for: .task, entityID: task.id)
-    }
-
     private func queueScrollToTaskIfVisible(_ taskID: RecordID) {
         EntityListViewCoordinator.queueScrollToVisibleItem(
             taskID,
-            visibleIDs: visibleTasks.map(\.id),
+            visibleIDs: visibleTasks(offerSnapshot: specialOfferStore.makeSnapshot()).map(\.id),
             highlightedID: &highlightedTaskID,
             pendingScrollTargetID: &pendingScrollTargetID
         )

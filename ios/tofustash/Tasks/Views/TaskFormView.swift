@@ -99,7 +99,7 @@ struct TaskFormView: View {
     @State private var claimedAmount = 0
     @State private var dependencyEditorRoute: TaskDependencyEditorRoute? = nil
     @State private var habitDependencyCountRoute: HabitDependencyCountEditorRoute? = nil
-    @State private var dependencyTradeHabit: Habit? = nil
+    @State private var dependencyTradeHabitRoute: HabitTradeRoute? = nil
 
     @State private var hasInitialized = false
     @State private var hasAppliedInitialLoad = false
@@ -177,7 +177,7 @@ struct TaskFormView: View {
     private var rewardPreview: Int {
         TaskRewardCalculation.calculateReward(
             task: draftTask,
-            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .task, entityID: draftTask.id)?.modifierPercent
+            specialOfferModifierPercent: specialOfferStore.activeModifierPercent(for: .task, entityID: draftTask.id)
         )
     }
 
@@ -366,8 +366,11 @@ struct TaskFormView: View {
                 }
             )
         }
-        .sheet(item: $dependencyTradeHabit) { habit in
-            TradeModalView(habit: habit)
+        .sheet(item: $dependencyTradeHabitRoute) { route in
+            TradeModalView(
+                habit: route.habit,
+                resolvedSpecialOffer: route.resolvedSpecialOffer
+            )
         }
         .alert("Delete Task?", isPresented: $showingDeleteConfirmation) {
             if let task = mode.task {
@@ -622,7 +625,10 @@ struct TaskFormView: View {
 
                 if !isComplete {
                     Button("Claim") {
-                        dependencyTradeHabit = habit
+                        dependencyTradeHabitRoute = HabitTradeRoute(
+                            habit: habit,
+                            resolvedSpecialOffer: specialOfferStore.activeOffer(for: .habit, entityID: habit.id)
+                        )
                     }
                     .buttonStyle(.bordered)
                 }
@@ -859,7 +865,7 @@ struct TaskFormView: View {
             sourceName: task.name,
             reward: TaskRewardCalculation.calculateReward(
                 task: task,
-                specialOfferModifierPercent: specialOfferStore.activeOffer(for: .task, entityID: task.id)?.modifierPercent
+                specialOfferModifierPercent: specialOfferStore.activeModifierPercent(for: .task, entityID: task.id)
             ),
             tradeStore: tradeStore,
             taskStore: taskStore,

@@ -71,7 +71,7 @@ struct HabitFormView: View {
     @State private var showingSkipConsequence = false
     @State private var showingReminders = false
     @State private var showingTags = false
-    @State private var tradingHabit: Habit? = nil
+    @State private var tradingHabitRoute: HabitTradeRoute? = nil
     @State private var showingHistory = false
     @State private var showingDeleteConfirmation = false
 
@@ -174,7 +174,7 @@ struct HabitFormView: View {
             habit: draftHabit,
             allHabits: habitStore.activeHabits,
             completionDates: completionDates,
-            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .habit, entityID: draftHabit.id)?.modifierPercent
+            specialOfferModifierPercent: specialOfferStore.activeModifierPercent(for: .habit, entityID: draftHabit.id)
         )
     }
 
@@ -322,8 +322,11 @@ struct HabitFormView: View {
         .sheet(isPresented: $showingTags) {
             TagsView(selectionMode: .assignment(.habit(habitId)))
         }
-        .sheet(item: $tradingHabit) { habit in
-            TradeModalView(habit: habit) {
+        .sheet(item: $tradingHabitRoute) { route in
+            TradeModalView(
+                habit: route.habit,
+                resolvedSpecialOffer: route.resolvedSpecialOffer
+            ) {
                 dismiss()
             }
         }
@@ -436,7 +439,10 @@ struct HabitFormView: View {
             guard !HabitLockout.isLocked(habit: draftHabit, tradeStore: tradeStore) else { return }
             guard let persistedHabit = persistHabit() else { return }
             didPersist = true
-            tradingHabit = persistedHabit
+            tradingHabitRoute = HabitTradeRoute(
+                habit: persistedHabit,
+                resolvedSpecialOffer: specialOfferStore.activeOffer(for: .habit, entityID: persistedHabit.id)
+            )
         }
     }
 
