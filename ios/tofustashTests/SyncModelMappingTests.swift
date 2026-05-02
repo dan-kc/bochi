@@ -112,10 +112,10 @@ struct SyncModelMappingTests {
         #expect(record.minDailyFrequency == rate)
     }
 
-    // Behaviour: refunded trade state must round-trip through sync so the app
-    // can keep refunded history visible across devices.
-    @Test func syncTradeRecordRoundTripsRefundedAt() throws {
-        let refundedAt = "2026-04-24T08:00:00.000000"
+    // Behaviour: refund trades must round-trip through sync so the app can
+    // keep explicit refund ledger rows consistent across devices.
+    @Test func syncTradeRecordRoundTripsRefundsTradeID() throws {
+        let refundsTradeId = "trade-0"
         let record = SyncTradeRecord(
             id: "trade-1",
             taskId: "task-1",
@@ -126,15 +126,15 @@ struct SyncModelMappingTests {
             createdAt: "2026-04-23T12:00:00.000000",
             updatedAt: "2026-04-24T08:00:00.000000",
             deletedAt: nil,
-            refundedAt: refundedAt
+            refundsTradeId: refundsTradeId
         )
 
         let model = try #require(record.toModel())
-        #expect(model.refundedAt == AppDateCoding.parseBackendTimestamp(refundedAt))
+        #expect(model.refundsTradeId == RecordID(refundsTradeId))
         #expect(model.sourceName == "Submit report")
 
         let encoded = SyncTradeRecord.from(model)
-        #expect(encoded.refundedAt == refundedAt)
+        #expect(encoded.refundsTradeId == refundsTradeId)
         #expect(encoded.sourceName == "Submit report")
     }
 

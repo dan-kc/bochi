@@ -160,4 +160,92 @@ struct TaskDependencyStoreTests {
         #expect(updated.requiredCompletions == 2)
         #expect(updated.baselineCompletionCount == 4)
     }
+
+    // Behaviour: deleting a task should tombstone every dependency row that
+    // references it so downstream tasks stop being blocked before sync runs.
+    @Test func deletingTaskRemovesAllLinksToThatTask() throws {
+        let storageURL = makeStorageURL()
+        let taskStore = TaskStore(storageURL: storageURL)
+        let habitStore = HabitStore(storageURL: storageURL)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
+
+        let prerequisiteTask = try #require(taskStore.addTask(name: "Draft report"))
+        let deletedTask = try #require(taskStore.addTask(name: "Review report"))
+        let downstreamTask = try #require(taskStore.addTask(name: "Send report"))
+        let habit = try #require(habitStore.addHabit(name: "Proofread"))
+        let deletedAt = Date(timeIntervalSince1970: 1_800_000_900)
+
+        dependencyStore.replaceDependencies(
+            for: deletedTask.id,
+            taskDependencies: [
+                TaskTaskDependency(
+                    taskId: deletedTask.id,
+                    dependsOnTaskId: prerequisiteTask.id,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_100),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_100),
+                    deletedAt: nil
+                )
+            ],
+            habitDependencies: [
+                TaskHabitDependency(
+                    taskId: deletedTask.id,
+                    habitId: habit.id,
+                    requiredCompletions: 1,
+                    baselineCompletionCount: 0,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_200),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_200),
+                    deletedAt: nil
+                )
+            ],
+            shouldNotifySync: false
+        )
+        dependencyStore.replaceDependencies(
+            for: downstreamTask.id,
+            taskDependencies: [
+                TaskTaskDependency(
+                    taskId: downstreamTask.id,
+                    dependsOnTaskId: deletedTask.id,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_300),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_300),
+                    deletedAt: nil
+                )
+            ],
+            habitDependencies: [],
+            shouldNotifySync: false
+        )
+
+        #expect(
+            dependencyStore.isTaskBlocked(
+                downstreamTask,
+                taskStore: taskStore,
+                tradeStore: tradeStore
+            )
+        )
+
+        dependencyStore.deleteDependenciesReferencingTask(
+            deletedTask.id,
+            deletedAt: deletedAt,
+            shouldNotifySync: false
+        )
+        taskStore.deleteTask(id: deletedTask.id, deletedAt: deletedAt, shouldNotifySync: false)
+
+        let deletedTaskTaskDependencies = dependencyStore.taskTaskDependencies.filter {
+            $0.taskId == deletedTask.id || $0.dependsOnTaskId == deletedTask.id
+        }
+        #expect(deletedTaskTaskDependencies.count == 2)
+        #expect(deletedTaskTaskDependencies.allSatisfy { $0.deletedAt == deletedAt })
+
+        let deletedHabitDependencies = dependencyStore.taskHabitDependencies.filter { $0.taskId == deletedTask.id }
+        #expect(deletedHabitDependencies.count == 1)
+        #expect(deletedHabitDependencies.allSatisfy { $0.deletedAt == deletedAt })
+
+        #expect(
+            !dependencyStore.isTaskBlocked(
+                downstreamTask,
+                taskStore: taskStore,
+                tradeStore: tradeStore
+            )
+        )
+    }
 }

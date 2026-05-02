@@ -19,7 +19,7 @@ struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
-    let refundedAt: Date?
+    let refundsTradeId: RecordID?
 
     init(
         id: RecordID,
@@ -31,7 +31,7 @@ struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
         createdAt: Date,
         updatedAt: Date,
         deletedAt: Date?,
-        refundedAt: Date? = nil
+        refundsTradeId: RecordID? = nil
     ) {
         self.id = id
         self.taskId = taskId
@@ -44,10 +44,14 @@ struct Trade: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
-        self.refundedAt = refundedAt
+        self.refundsTradeId = refundsTradeId
+    }
+
+    var isRefundTrade: Bool {
+        refundsTradeId != nil
     }
 
     var isRefunded: Bool {
-        refundedAt != nil
+        isRefundTrade
     }
 }

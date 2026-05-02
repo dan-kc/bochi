@@ -65,7 +65,13 @@ So we use exponential decay instead of a fixed window.
 Let:
 
 - `now` be the current timestamp
-- `H = (t₁, …, tₙ)` be the finite list of past action timestamps
+- `H = (t₁, …, tₙ)` be the finite list of unresolved past action timestamps
+
+Under the refund ledger model:
+
+- normal completion/purchase trades contribute timestamps
+- refund trades do not contribute timestamps
+- if a normal trade is later refunded, its timestamp is removed from `H`
 
 Define:
 
@@ -82,6 +88,9 @@ Interpretation:
 
 - fast-cadence items forget history quickly
 - slow-cadence items remember history longer
+
+So refunds affect cadence by canceling the original action rather than by
+adding a new cadence event of their own.
 
 ### 2.3 Why `U` Is Not Enough
 

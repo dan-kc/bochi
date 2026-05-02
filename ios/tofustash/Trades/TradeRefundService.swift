@@ -2,22 +2,20 @@ import Foundation
 
 @MainActor
 enum TradeRefundService {
-    static func setRefunded(
-        _ refunded: Bool,
+    @discardableResult
+    static func refund(
         for trade: Trade,
         tradeStore: TradeStore,
         taskStore: TaskStore,
         balanceStore: BalanceStore,
         now: Date = Date()
-    ) {
-        if refunded {
-            tradeStore.refundTrade(id: trade.id, refundedAt: now)
-        } else {
-            tradeStore.unrefundTrade(id: trade.id, updatedAt: now)
-        }
+    ) -> Trade? {
+        let refundTrade = tradeStore.refundTrade(id: trade.id, refundedAt: now)
+        guard let refundTrade else { return nil }
 
         syncTaskCompletionIfNeeded(for: trade, tradeStore: tradeStore, taskStore: taskStore, updatedAt: now)
         balanceStore.refresh()
+        return refundTrade
     }
 
     private static func syncTaskCompletionIfNeeded(

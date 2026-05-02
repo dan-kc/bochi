@@ -333,12 +333,11 @@ struct TradeHistoryBuilderTests {
         #expect(entries.map(\.amountText) == ["+80", "+60"])
     }
 
-    // Behaviour: refunded trades stay visible in history so the user can undo
-    // the refund, but the row should clearly show that the tofu is inactive.
-    @Test("buildEntries keeps refunded trades visible and marked")
-    func keepsRefundedTradesVisibleAndMarked() {
+    // Behaviour: refund trades stay visible as their own ledger rows so the
+    // user can see the reversal rather than a mutated original entry.
+    @Test("buildEntries keeps refund trades visible and marked")
+    func keepsRefundTradesVisibleAndMarked() {
         let createdAt = Date(timeIntervalSince1970: 2_000)
-        let refundedAt = createdAt.addingTimeInterval(120)
         let reward = Reward(
             id: "reward-1",
             name: "Ice Cream",
@@ -353,15 +352,15 @@ struct TradeHistoryBuilderTests {
         let entries = TradeHistoryBuilder.buildEntries(
             trades: [
                 Trade(
-                    id: "reward-refunded",
+                    id: "reward-refund",
                     taskId: nil,
                     habitId: nil,
                     rewardId: "reward-1",
-                    amount: -25,
+                    amount: 25,
                     createdAt: createdAt,
-                    updatedAt: refundedAt,
+                    updatedAt: createdAt,
                     deletedAt: nil,
-                    refundedAt: refundedAt
+                    refundsTradeId: "reward-trade"
                 )
             ],
             tasks: [],
@@ -372,8 +371,8 @@ struct TradeHistoryBuilderTests {
 
         #expect(entries.count == 1)
         #expect(entries[0].title == "Ice Cream")
-        #expect(entries[0].amountText == "-25")
+        #expect(entries[0].amountText == "+25")
         #expect(entries[0].isRefunded)
-        #expect(entries[0].statusText == "Refunded")
+        #expect(entries[0].statusText == "Refund")
     }
 }

@@ -109,39 +109,58 @@ struct TradeStoreTests {
         #expect(sut.trades[0].rewardId == nil)
     }
 
-    // Behaviour: refunding a trade should remove it from the running balance
-    // without erasing the history row, and un-refunding should restore it.
-    @Test("refunding a trade updates balance without deleting the record")
-    func refundingTradeUpdatesBalance() throws {
+    // Behaviour: refunding a trade should append a compensating ledger row
+    // instead of mutating the original trade in place.
+    @Test("refunding a trade appends a compensating trade and updates balance")
+    func refundingTradeCreatesCompensatingEntry() throws {
         let storageURL = makeStorageURL("refundable-trades")
         let tradeStore = makeSUT(storageURL: storageURL)
         let balanceStore = makeBalanceStore(storageURL: storageURL)
         let refundedAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let unrefundedAt = refundedAt.addingTimeInterval(300)
 
         tradeStore.addHabitTrade(id: "trade-1", habitId: "habit-1", amount: 250, shouldNotifySync: false)
         balanceStore.refresh()
         #expect(balanceStore.balance == 250)
 
-        tradeStore.refundTrade(id: "trade-1", refundedAt: refundedAt, shouldNotifySync: false)
+        let refundTrade = try #require(
+            tradeStore.refundTrade(id: "trade-1", refundedAt: refundedAt, shouldNotifySync: false)
+        )
         balanceStore.refresh()
 
-        let refundedTrade = try #require(tradeStore.trades.first(where: { $0.id == "trade-1" }))
-        #expect(refundedTrade.refundedAt == refundedAt)
+        let originalTrade = try #require(tradeStore.trades.first(where: { $0.id == "trade-1" }))
+        #expect(originalTrade.refundsTradeId == nil)
+        #expect(refundTrade.amount == -250)
+        #expect(refundTrade.habitId == "habit-1")
+        #expect(refundTrade.refundsTradeId == originalTrade.id)
+        #expect(tradeStore.trades.count == 2)
         #expect(balanceStore.balance == 0)
-
-        tradeStore.unrefundTrade(id: "trade-1", updatedAt: unrefundedAt, shouldNotifySync: false)
-        balanceStore.refresh()
-
-        let activeTrade = try #require(tradeStore.trades.first(where: { $0.id == "trade-1" }))
-        #expect(activeTrade.refundedAt == nil)
-        #expect(balanceStore.balance == 250)
     }
 
-    // Behaviour: refunded trades should stop influencing pricing and lockout
-    // calculations that depend on active trade timestamps.
-    @Test("refunding a trade excludes it from active trade selectors")
-    func refundedTradesAreExcludedFromActiveSelectors() {
+    // Behaviour: refunds should only reverse the latest unresolved trade for a
+    // source, so older prices cannot be cherry-picked after later activity.
+    @Test("refunding an older trade is rejected when a newer source trade exists")
+    func refundingOlderTradeIsRejected() {
+        let sut = makeSUT()
+        let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let secondDate = Date(timeIntervalSince1970: 1_700_000_100)
+
+        sut.addHabitTrade(id: "habit-trade-1", habitId: "habit-1", amount: 100, createdAt: firstDate, shouldNotifySync: false)
+        sut.addHabitTrade(id: "habit-trade-2", habitId: "habit-1", amount: 200, createdAt: secondDate, shouldNotifySync: false)
+
+        let refundTrade = sut.refundTrade(
+            id: "habit-trade-1",
+            refundedAt: secondDate.addingTimeInterval(60),
+            shouldNotifySync: false
+        )
+
+        #expect(refundTrade == nil)
+        #expect(sut.trades.count == 2)
+    }
+
+    // Behaviour: refund trades should stop influencing pricing and lockout
+    // calculations that depend on unresolved source timestamps.
+    @Test("refund trades exclude the reversed activity from pricing selectors")
+    func refundTradesAreExcludedFromActiveSelectors() {
         let sut = makeSUT()
         let firstDate = Date(timeIntervalSince1970: 1_700_000_000)
         let secondDate = Date(timeIntervalSince1970: 1_700_000_100)
@@ -150,8 +169,8 @@ struct TradeStoreTests {
         sut.addHabitTrade(id: "habit-trade-2", habitId: "habit-1", amount: 200, createdAt: secondDate, shouldNotifySync: false)
         sut.addRewardPurchase(id: "reward-trade-1", rewardId: "reward-1", amount: -50, createdAt: secondDate, shouldNotifySync: false)
 
-        sut.refundTrade(id: "habit-trade-2", refundedAt: secondDate.addingTimeInterval(60), shouldNotifySync: false)
-        sut.refundTrade(id: "reward-trade-1", refundedAt: secondDate.addingTimeInterval(120), shouldNotifySync: false)
+        _ = sut.refundTrade(id: "habit-trade-2", refundedAt: secondDate.addingTimeInterval(60), shouldNotifySync: false)
+        _ = sut.refundTrade(id: "reward-trade-1", refundedAt: secondDate.addingTimeInterval(120), shouldNotifySync: false)
 
         #expect(sut.habitTradeDates(habitId: "habit-1") == [firstDate])
         #expect(sut.habitCompletionCount(habitId: "habit-1") == 1)

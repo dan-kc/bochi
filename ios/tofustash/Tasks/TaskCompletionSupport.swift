@@ -15,7 +15,7 @@ enum TaskCompletionSupport {
             let task = taskStore.tasks.first(where: { $0.id == taskID }),
             task.deletedAt == nil,
             task.completedAt == nil,
-            tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: true) == nil
+            tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: false) == nil
         else {
             return nil
         }

@@ -81,9 +81,9 @@ enum TradeHistoryBuilder {
                     dateText: formatDate(trade.createdAt),
                     amountText: amountText,
                     isPositive: isPositive,
-                    isRefunded: trade.refundedAt != nil,
+                    isRefunded: trade.isRefundTrade,
                     isSourceDeleted: source.isDeleted,
-                    statusText: trade.refundedAt != nil ? "Refunded" : nil
+                    statusText: trade.isRefundTrade ? "Refund" : nil
                 )
             }
     }

@@ -102,9 +102,10 @@ final class TaskDependencyStore {
 
         if activeTaskDependencies(for: task.id).contains(where: { dependency in
             guard let prerequisiteTask = taskStore.tasks.first(where: { $0.id == dependency.dependsOnTaskId }) else {
-                return true
+                return false
             }
-            return prerequisiteTask.deletedAt != nil || prerequisiteTask.completedAt == nil
+            guard prerequisiteTask.deletedAt == nil else { return false }
+            return prerequisiteTask.completedAt == nil
         }) {
             return true
         }
@@ -203,6 +204,94 @@ final class TaskDependencyStore {
             }
             notifySync(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
         }
+        if !dirtyTaskHabitIDs.isEmpty {
+            if currentOwnerID != StorageOwner.local {
+                syncStateStore.markDirty(
+                    userID: currentOwnerID,
+                    kind: .taskHabitDependencies,
+                    ids: dirtyTaskHabitIDs
+                )
+            }
+            notifySync(kind: .taskHabitDependencies, ids: dirtyTaskHabitIDs)
+        }
+    }
+
+    func deleteDependenciesReferencingTask(
+        _ taskID: RecordID,
+        deletedAt: Date = Date(),
+        shouldNotifySync: Bool = true
+    ) {
+        let deletedTaskDependencies = taskTaskDependencies.compactMap { dependency -> TaskTaskDependency? in
+            guard dependency.deletedAt == nil else { return nil }
+            guard dependency.taskId == taskID || dependency.dependsOnTaskId == taskID else { return nil }
+
+            let tombstoneAt = dependency.updatedAt < deletedAt
+                ? deletedAt
+                : nextUpdatedAt(after: dependency.updatedAt)
+            return TaskTaskDependency(
+                taskId: dependency.taskId,
+                dependsOnTaskId: dependency.dependsOnTaskId,
+                createdAt: dependency.createdAt,
+                updatedAt: tombstoneAt,
+                deletedAt: tombstoneAt
+            )
+        }
+
+        let deletedHabitDependencies = taskHabitDependencies.compactMap { dependency -> TaskHabitDependency? in
+            guard dependency.deletedAt == nil else { return nil }
+            guard dependency.taskId == taskID else { return nil }
+
+            let tombstoneAt = dependency.updatedAt < deletedAt
+                ? deletedAt
+                : nextUpdatedAt(after: dependency.updatedAt)
+            return TaskHabitDependency(
+                taskId: dependency.taskId,
+                habitId: dependency.habitId,
+                requiredCompletions: dependency.requiredCompletions,
+                baselineCompletionCount: dependency.baselineCompletionCount,
+                createdAt: dependency.createdAt,
+                updatedAt: tombstoneAt,
+                deletedAt: tombstoneAt
+            )
+        }
+
+        guard !deletedTaskDependencies.isEmpty || !deletedHabitDependencies.isEmpty else { return }
+
+        let mergedTaskDependencies = OwnerScopedRecordSupport.mergeRecords(
+            local: taskTaskDependencies,
+            remote: deletedTaskDependencies
+        )
+        let mergedHabitDependencies = OwnerScopedRecordSupport.mergeRecords(
+            local: taskHabitDependencies,
+            remote: deletedHabitDependencies
+        )
+
+        do {
+            try persistReplacedAll(
+                taskTaskDependencies: mergedTaskDependencies,
+                taskHabitDependencies: mergedHabitDependencies
+            )
+        } catch {
+            assertionFailure("Failed to delete task dependencies for task deletion: \(error)")
+            return
+        }
+
+        guard shouldNotifySync else { return }
+
+        let dirtyTaskTaskIDs = deletedTaskDependencies.map(\.id)
+        let dirtyTaskHabitIDs = deletedHabitDependencies.map(\.id)
+
+        if !dirtyTaskTaskIDs.isEmpty {
+            if currentOwnerID != StorageOwner.local {
+                syncStateStore.markDirty(
+                    userID: currentOwnerID,
+                    kind: .taskTaskDependencies,
+                    ids: dirtyTaskTaskIDs
+                )
+            }
+            notifySync(kind: .taskTaskDependencies, ids: dirtyTaskTaskIDs)
+        }
+
         if !dirtyTaskHabitIDs.isEmpty {
             if currentOwnerID != StorageOwner.local {
                 syncStateStore.markDirty(

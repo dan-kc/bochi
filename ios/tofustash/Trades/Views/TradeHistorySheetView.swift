@@ -125,16 +125,17 @@ struct TradeHistorySheetView: View {
                 Label("Edit", systemImage: "pencil")
             }
 
-            Button(role: trade.isRefunded ? nil : .destructive) {
-                TradeRefundService.setRefunded(
-                    !trade.isRefunded,
+            if tradeStore.canRefundTrade(trade) {
+                Button(role: .destructive) {
+                    _ = TradeRefundService.refund(
                     for: trade,
                     tradeStore: tradeStore,
                     taskStore: taskStore,
                     balanceStore: balanceStore
                 )
-            } label: {
-                Label(trade.isRefunded ? "Undo Refund" : "Refund", systemImage: trade.isRefunded ? "arrow.uturn.forward" : "arrow.uturn.backward")
+                } label: {
+                    Label("Refund", systemImage: "arrow.uturn.backward")
+                }
             }
 
             if let route = TradeSourceNavigationSupport.route(
@@ -301,7 +302,7 @@ private struct TradeDetailSheetView: View {
     }
 
     private func amountColor(for trade: Trade) -> Color {
-        if trade.isRefunded {
+        if trade.isRefundTrade {
             return .secondary
         }
         return trade.amount >= 0 ? .green : .orange
@@ -326,7 +327,7 @@ private struct TradeDetailSheetView: View {
                             }
 
                             LabeledContent("Status") {
-                                Text(trade.isRefunded ? "Refunded" : "Active")
+                                Text(trade.isRefundTrade ? "Refund" : "Active")
                             }
                         }
 
@@ -359,15 +360,16 @@ private struct TradeDetailSheetView: View {
                             }
                         }
 
-                        Section {
-                            Button(trade.isRefunded ? "Undo Refund" : "Refund", role: trade.isRefunded ? nil : .destructive) {
-                                TradeRefundService.setRefunded(
-                                    !trade.isRefunded,
-                                    for: trade,
-                                    tradeStore: tradeStore,
-                                    taskStore: taskStore,
-                                    balanceStore: balanceStore
-                                )
+                        if tradeStore.canRefundTrade(trade) {
+                            Section {
+                                Button("Refund", role: .destructive) {
+                                    _ = TradeRefundService.refund(
+                                        for: trade,
+                                        tradeStore: tradeStore,
+                                        taskStore: taskStore,
+                                        balanceStore: balanceStore
+                                    )
+                                }
                             }
                         }
                     }

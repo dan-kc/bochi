@@ -172,7 +172,7 @@ struct SyncTradeRecord: Codable {
     let createdAt: String
     let updatedAt: String?
     let deletedAt: String?
-    let refundedAt: String?
+    let refundsTradeId: String?
 
     func toModel() -> Trade? {
         guard let createdAt = AppDateCoding.parseBackendTimestamp(createdAt) else {
@@ -189,7 +189,7 @@ struct SyncTradeRecord: Codable {
             createdAt: createdAt,
             updatedAt: AppDateCoding.parseBackendTimestamp(updatedAt) ?? createdAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
-            refundedAt: AppDateCoding.parseBackendTimestamp(refundedAt)
+            refundsTradeId: refundsTradeId.map { RecordID($0) }
         )
     }
 
@@ -204,7 +204,7 @@ struct SyncTradeRecord: Codable {
             createdAt: AppDateCoding.backendTimestamp(from: trade.createdAt),
             updatedAt: AppDateCoding.backendTimestamp(from: trade.updatedAt),
             deletedAt: trade.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
-            refundedAt: trade.refundedAt.map { AppDateCoding.backendTimestamp(from: $0) }
+            refundsTradeId: trade.refundsTradeId?.rawValue
         )
     }
 }

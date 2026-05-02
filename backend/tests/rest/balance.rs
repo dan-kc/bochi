@@ -65,8 +65,8 @@ async fn test_get_balance_sums_active_trade_history() {
 }
 
 #[tokio::test]
-async fn test_get_balance_excludes_refunded_trades() {
-    let email = generate_email_from_fn!(test_get_balance_excludes_refunded_trades);
+async fn test_get_balance_counts_refund_trades_in_the_ledger_total() {
+    let email = generate_email_from_fn!(test_get_balance_counts_refund_trades_in_the_ledger_total);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -74,26 +74,37 @@ async fn test_get_balance_excludes_refunded_trades() {
 
     let habit_body = json!({
         "name": "Refundable Balance Habit",
-        "description": "Refunded trades should not count toward balance"
+        "description": "Refund trades should offset the original ledger entry"
     });
     let (_, habit_json) =
         make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
+    let original_trade_id = uuid::Uuid::new_v4().to_string();
+    let latest_trade_id = uuid::Uuid::new_v4().to_string();
 
     let sync_body = json!({
         "trades": [
             {
-                "id": uuid::Uuid::new_v4().to_string(),
+                "id": original_trade_id,
                 "habitId": habit_id,
+                "sourceName": "Refundable Balance Habit",
                 "amount": 282,
                 "createdAt": "2025-01-01T10:00:00"
             },
             {
+                "id": latest_trade_id,
+                "habitId": habit_id,
+                "sourceName": "Refundable Balance Habit",
+                "amount": 50,
+                "createdAt": "2025-01-01T10:05:00"
+            },
+            {
                 "id": uuid::Uuid::new_v4().to_string(),
                 "habitId": habit_id,
-                "amount": 50,
-                "createdAt": "2025-01-01T10:05:00",
-                "refundedAt": "2025-01-01T10:10:00"
+                "sourceName": "Refundable Balance Habit refund",
+                "amount": -50,
+                "createdAt": "2025-01-01T10:10:00",
+                "refundsTradeId": latest_trade_id
             }
         ]
     });

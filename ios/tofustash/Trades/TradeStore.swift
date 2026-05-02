@@ -200,21 +200,21 @@ final class TradeStore {
 
     func habitTradeDates(habitId: RecordID) -> [Date] {
         trades.compactMap { trade in
-            guard trade.habitId == habitId, trade.deletedAt == nil, trade.refundedAt == nil else { return nil }
+            guard trade.habitId == habitId, isUnresolvedSourceTrade(trade) else { return nil }
             return trade.createdAt
         }
     }
 
     func habitCompletionCount(habitId: RecordID) -> Int {
         trades.reduce(into: 0) { count, trade in
-            guard trade.habitId == habitId, trade.deletedAt == nil, trade.refundedAt == nil else { return }
+            guard trade.habitId == habitId, isUnresolvedSourceTrade(trade) else { return }
             count += 1
         }
     }
 
     func rewardPurchaseDates(rewardId: RecordID) -> [Date] {
         trades.compactMap { trade in
-            guard trade.rewardId == rewardId, trade.deletedAt == nil, trade.refundedAt == nil else { return nil }
+            guard trade.rewardId == rewardId, isUnresolvedSourceTrade(trade) else { return nil }
             return trade.createdAt
         }
     }
@@ -222,14 +222,14 @@ final class TradeStore {
     func tradesInPeriod(habitId: RecordID, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.habitId == habitId && $0.deletedAt == nil && $0.refundedAt == nil && $0.createdAt >= cutoff
+            $0.habitId == habitId && isUnresolvedSourceTrade($0) && $0.createdAt >= cutoff
         }.count
     }
 
     func rewardPurchasesInPeriod(rewardId: RecordID, days: Int) -> Int {
         let cutoff = Date(timeIntervalSinceNow: -Double(days) * 86400)
         return trades.filter {
-            $0.rewardId == rewardId && $0.deletedAt == nil && $0.refundedAt == nil && $0.createdAt >= cutoff
+            $0.rewardId == rewardId && isUnresolvedSourceTrade($0) && $0.createdAt >= cutoff
         }.count
     }
 
@@ -240,42 +240,55 @@ final class TradeStore {
     }
 
     func activeTaskTradeCompletionDate(taskId: RecordID) -> Date? {
-        trades
-            .filter { $0.taskId == taskId && $0.deletedAt == nil && $0.refundedAt == nil }
-            .map(\.createdAt)
-            .min()
+        latestTaskTrade(taskId: taskId, includeRefunded: false)?.createdAt
     }
 
+    func canRefundTrade(_ trade: Trade) -> Bool {
+        guard trade.deletedAt == nil, !trade.isRefundTrade else { return false }
+
+        return latestTrade(includeRefunded: false) { candidate in
+            candidate.taskId == trade.taskId
+                && candidate.habitId == trade.habitId
+                && candidate.rewardId == trade.rewardId
+                && candidate.deletedAt == nil
+        }?.id == trade.id
+    }
+
+    @discardableResult
     func refundTrade(
         id: RecordID,
         refundedAt: Date = Date(),
         shouldNotifySync: Bool = true
-    ) {
-        guard let existing = trades.first(where: { $0.id == id && $0.deletedAt == nil && $0.refundedAt == nil }) else {
-            return
+    ) -> Trade? {
+        guard let existing = trades.first(where: { $0.id == id }) else {
+            return nil
+        }
+        guard canRefundTrade(existing) else {
+            return nil
         }
 
-        upsertTrades([updatedTrade(from: existing, updatedAt: refundedAt, refundedAt: refundedAt)], markDirty: shouldNotifySync)
+        let refundTrade = Trade(
+            id: RecordID(),
+            taskId: existing.taskId,
+            habitId: existing.habitId,
+            rewardId: existing.rewardId,
+            sourceName: existing.sourceName,
+            amount: -existing.amount,
+            createdAt: refundedAt,
+            updatedAt: refundedAt,
+            deletedAt: nil,
+            refundsTradeId: existing.id
+        )
+
+        upsertTrades([refundTrade], markDirty: shouldNotifySync)
 
         if shouldNotifySync {
-            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
-        }
-    }
-
-    func unrefundTrade(
-        id: RecordID,
-        updatedAt: Date = Date(),
-        shouldNotifySync: Bool = true
-    ) {
-        guard let existing = trades.first(where: { $0.id == id && $0.deletedAt == nil && $0.refundedAt != nil }) else {
-            return
+            SyncMutationCenter.post(
+                SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [refundTrade.id])
+            )
         }
 
-        upsertTrades([updatedTrade(from: existing, updatedAt: updatedAt, refundedAt: nil)], markDirty: shouldNotifySync)
-
-        if shouldNotifySync {
-            SyncMutationCenter.post(SyncMutation(ownerID: currentOwnerID, entityKind: .trades, recordIDs: [id]))
-        }
+        return refundTrade
     }
 
     func mergeTrades(_ remoteTrades: [Trade]) {
@@ -353,11 +366,11 @@ final class TradeStore {
     ) -> Trade? {
         trades
             .filter { trade in
-                guard predicate(trade) else { return false }
+                guard trade.deletedAt == nil, predicate(trade) else { return false }
                 if includeRefunded {
                     return true
                 }
-                return trade.refundedAt == nil
+                return isUnresolvedSourceTrade(trade)
             }
             .max {
                 if $0.createdAt == $1.createdAt {
@@ -473,30 +486,11 @@ final class TradeStore {
         }
     }
 
-    private func updatedTrade(
-        from existing: Trade,
-        updatedAt: Date,
-        refundedAt: Date?
-    ) -> Trade {
-        Trade(
-            id: existing.id,
-            taskId: existing.taskId,
-            habitId: existing.habitId,
-            rewardId: existing.rewardId,
-            sourceName: existing.sourceName,
-            amount: existing.amount,
-            createdAt: existing.createdAt,
-            updatedAt: updatedAt,
-            deletedAt: existing.deletedAt,
-            refundedAt: refundedAt
-        )
-    }
-
     private func upsertTrade(_ trade: Trade, on databaseHandle: AppDatabaseHandle) throws {
         try database.execute(
             """
             INSERT INTO trades (
-                id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
@@ -509,7 +503,7 @@ final class TradeStore {
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
                 deleted_at = excluded.deleted_at,
-                refunded_at = excluded.refunded_at
+                refunds_trade_id = excluded.refunds_trade_id
             """,
             bindings: tradeBindings(trade, ownerID: currentOwnerID),
             on: databaseHandle
@@ -519,7 +513,7 @@ final class TradeStore {
     private func loadTrades(ownerID: String) -> [Trade] {
         let fetched = (try? database.query(
             """
-            SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+            SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
             FROM trades
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -537,7 +531,7 @@ final class TradeStore {
                 createdAt: SQLiteColumn.date(row, index: 6),
                 updatedAt: SQLiteColumn.date(row, index: 7),
                 deletedAt: SQLiteColumn.optionalDate(row, index: 8),
-                refundedAt: SQLiteColumn.optionalDate(row, index: 9)
+                refundsTradeId: SQLiteColumn.optionalText(row, index: 9).map { RecordID(rawValue: $0) }
             )
         }) ?? []
 
@@ -559,7 +553,7 @@ final class TradeStore {
             try database.execute(
                 """
                 INSERT INTO trades (
-                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -580,7 +574,7 @@ final class TradeStore {
             """
             SELECT COALESCE(SUM(amount), 0)
             FROM trades
-            WHERE owner_id = ? AND deleted_at IS NULL AND refunded_at IS NULL
+            WHERE owner_id = ? AND deleted_at IS NULL
             """,
             bindings: [.text(ownerID)],
             on: databaseHandle
@@ -617,7 +611,15 @@ final class TradeStore {
             .double(trade.createdAt.timeIntervalSince1970),
             .double(trade.updatedAt.timeIntervalSince1970),
             trade.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null,
-            trade.refundedAt.map { .double($0.timeIntervalSince1970) } ?? .null
+            trade.refundsTradeId.map { .text($0.rawValue) } ?? .null
         ]
+    }
+
+    private func isUnresolvedSourceTrade(_ trade: Trade) -> Bool {
+        trade.deletedAt == nil && !trade.isRefundTrade && !hasActiveRefund(for: trade.id)
+    }
+
+    private func hasActiveRefund(for tradeID: RecordID) -> Bool {
+        trades.contains { $0.refundsTradeId == tradeID && $0.deletedAt == nil }
     }
 }

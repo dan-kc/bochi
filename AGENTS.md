@@ -11,8 +11,8 @@
 - Write comments for an expert React engineer who does not know Swift.
 - Comment user behaviors, not obvious syntax.
 - Keep code DRY where reasonable.
-- Write iOS unit and ui tests only when they cover user behavior; keep them BDD-style and add a behavior comment to each test.
-- Run unit tests with `ios-test` and UI tests with `ios-xctest`. Always run these command sequentially.
+- Write iOS unit and UI tests only when they cover user behavior; keep them BDD-style and add a behavior comment to each test.
+- Run unit tests with `ios-test`. Don't run the UI tests just write them, I will verify them myself.
 
 ## Backend
 

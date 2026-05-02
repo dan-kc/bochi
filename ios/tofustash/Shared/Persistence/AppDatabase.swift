@@ -458,6 +458,66 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v10_refund_trades") { db in
+            try db.execute(sql: """
+                CREATE TABLE trades_v10 (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    task_id TEXT,
+                    habit_id TEXT,
+                    reward_id TEXT,
+                    source_name TEXT,
+                    amount INTEGER NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    refunds_trade_id TEXT,
+                    CHECK (
+                        (CASE WHEN task_id IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN habit_id IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN reward_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+                    )
+                );
+
+                INSERT INTO trades_v10 (
+                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
+                )
+                SELECT
+                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, NULL
+                FROM trades;
+
+                INSERT INTO trades_v10 (
+                    id, owner_id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
+                )
+                SELECT
+                    lower(hex(randomblob(16))),
+                    owner_id,
+                    task_id,
+                    habit_id,
+                    reward_id,
+                    source_name,
+                    -amount,
+                    refunded_at,
+                    refunded_at,
+                    NULL,
+                    id
+                FROM trades
+                WHERE refunded_at IS NOT NULL;
+
+                DROP TABLE trades;
+                ALTER TABLE trades_v10 RENAME TO trades;
+
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_created
+                ON trades(owner_id, created_at, id);
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_updated
+                ON trades(owner_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_trades_owner_deleted
+                ON trades(owner_id, deleted_at);
+                CREATE INDEX IF NOT EXISTS idx_trades_refunds_trade_id
+                ON trades(refunds_trade_id);
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

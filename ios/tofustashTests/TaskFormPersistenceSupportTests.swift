@@ -203,4 +203,80 @@ struct TaskFormPersistenceSupportTests {
         let persistedDependencies = dependencyStore.activeTaskDependencies(for: existingTask.id)
         #expect(persistedDependencies.map(\.dependsOnTaskId) == [replacementTask.id])
     }
+
+    // Behaviour: removing a blocking dependency in the task form should take
+    // effect immediately, so the user can complete the task without reopening it.
+    @Test func removingDependencyThenCompletingTaskSucceeds() throws {
+        let storageURL = TestHelpers.makeTemporaryFileURL("task-form-remove-dependency")
+        let taskStore = TaskStore(storageURL: storageURL)
+        let dependencyStore = TaskDependencyStore(storageURL: storageURL)
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        let reminderStore = ReminderStore(
+            storageURL: storageURL,
+            taskStore: taskStore,
+            habitStore: HabitStore(storageURL: storageURL),
+            notificationScheduler: MockReminderNotificationScheduler()
+        )
+
+        let prerequisiteTask = try #require(taskStore.addTask(name: "Draft report"))
+        let blockedTask = try #require(taskStore.addTask(name: "Send report"))
+
+        dependencyStore.replaceDependencies(
+            for: blockedTask.id,
+            taskDependencies: [
+                TaskTaskDependency(
+                    taskId: blockedTask.id,
+                    dependsOnTaskId: prerequisiteTask.id,
+                    createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    deletedAt: nil
+                )
+            ],
+            habitDependencies: [],
+            shouldNotifySync: false
+        )
+
+        let persistedTask = try #require(
+            TaskFormPersistenceSupport.persistTask(
+                task: blockedTask,
+                taskID: blockedTask.id,
+                name: blockedTask.name,
+                description: blockedTask.description,
+                difficultyTier: blockedTask.difficultyTier,
+                durationSeconds: blockedTask.durationSeconds,
+                skipConsequence: blockedTask.skipConsequence,
+                dueDate: blockedTask.dueDate,
+                completedAt: blockedTask.completedAt,
+                reminderDrafts: [],
+                taskDependencies: [],
+                habitDependencies: [],
+                taskStore: taskStore,
+                taskDependencyStore: dependencyStore,
+                reminderStore: reminderStore
+            )
+        )
+
+        #expect(
+            !dependencyStore.isTaskBlocked(
+                persistedTask,
+                taskStore: taskStore,
+                tradeStore: tradeStore
+            )
+        )
+
+        let completedAt = try #require(
+            TaskCompletionSupport.completeTask(
+                taskID: blockedTask.id,
+                sourceName: blockedTask.name,
+                reward: 120,
+                tradeStore: tradeStore,
+                taskStore: taskStore,
+                balanceStore: balanceStore,
+                claimDate: Date(timeIntervalSince1970: 1_800_000_100)
+            )
+        )
+
+        #expect(completedAt == Date(timeIntervalSince1970: 1_800_000_100))
+    }
 }

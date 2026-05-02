@@ -19,10 +19,10 @@ struct TaskTradeActionSupportTests {
         #expect(state == .complete(amount: 120))
     }
 
-    // Behaviour: refunding a task should reopen it while still surfacing
-    // undo refund as the only recovery action.
-    @Test("state shows undo refund for refunded incomplete tasks")
-    func showsUndoRefundForRefundedIncompleteTask() {
+    // Behaviour: a completed task should offer the reverse action using the
+    // amount from the current completion trade.
+    @Test("state shows refund for completed tasks")
+    func showsRefundForCompletedTask() {
         let now = Date(timeIntervalSince1970: 3_000)
         let trade = Trade(
             id: "task-trade",
@@ -33,18 +33,17 @@ struct TaskTradeActionSupportTests {
             amount: 120,
             createdAt: now,
             updatedAt: now.addingTimeInterval(60),
-            deletedAt: nil,
-            refundedAt: now.addingTimeInterval(60)
+            deletedAt: nil
         )
 
         let state = TaskTradeActionSupport.state(
             isNewMode: false,
-            isCompleted: false,
+            isCompleted: true,
             claimed: false,
             taskTrade: trade,
             rewardPreview: 120
         )
 
-        #expect(state == .undoRefund(amount: 120))
+        #expect(state == .refund(amount: 120))
     }
 }

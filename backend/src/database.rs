@@ -479,7 +479,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -491,7 +491,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -503,12 +503,12 @@ impl Database {
         }
     }
 
-    /// Calculate a user's balance directly from active, non-refunded trades.
+    /// Calculate a user's balance directly from non-deleted ledger entries.
     pub async fn calculate_balance_from_trades(&self, user_id: Uuid) -> Result<f64, sqlx::Error> {
         let (total,): (Option<i64>,) = sqlx::query_as(
             "SELECT COALESCE(SUM(amount), 0)
              FROM trades
-             WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
+             WHERE user_id = $1 AND deleted_at IS NULL",
         )
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -954,15 +954,66 @@ impl Database {
             }
         }
 
+        if let Some(refunds_trade_id) = trade.refunds_trade_id {
+            let refunded_trade: Option<TradeRow> = sqlx::query_as(
+                "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
+                 FROM trades
+                 WHERE id = $1 AND user_id = $2",
+            )
+            .bind(refunds_trade_id)
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+            let refunded_trade = refunded_trade.ok_or(sqlx::Error::RowNotFound)?;
+
+            if refunded_trade.deleted_at.is_some() || refunded_trade.refunds_trade_id.is_some() {
+                return Err(sqlx::Error::Protocol(
+                    "Refund trades must target an active non-refund trade".into(),
+                ));
+            }
+
+            if refunded_trade.task_id != trade.task_id
+                || refunded_trade.habit_id != trade.habit_id
+                || refunded_trade.reward_id != trade.reward_id
+            {
+                return Err(sqlx::Error::Protocol(
+                    "Refund trades must match the original trade source".into(),
+                ));
+            }
+
+            if trade.amount != -refunded_trade.amount {
+                return Err(sqlx::Error::Protocol(
+                    "Refund trades must negate the original trade amount".into(),
+                ));
+            }
+
+            let latest_trade_id = Self::latest_unresolved_trade_id_for_source_tx(
+                tx,
+                user_id,
+                trade.task_id,
+                trade.habit_id,
+                trade.reward_id,
+            )
+            .await?;
+
+            if latest_trade_id != Some(refunds_trade_id) {
+                return Err(sqlx::Error::Protocol(
+                    "Refund trades may only reverse the latest unresolved trade for that source"
+                        .into(),
+                ));
+            }
+        }
+
         // Upsert the trade
         sqlx::query_as(
-            "INSERT INTO trades (id, user_id, task_id, habit_id, reward_id, source_name, amount, created_at, deleted_at, refunded_at)
+            "INSERT INTO trades (id, user_id, task_id, habit_id, reward_id, source_name, amount, created_at, deleted_at, refunds_trade_id)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (id) DO UPDATE SET
                 source_name = EXCLUDED.source_name,
                 deleted_at = EXCLUDED.deleted_at,
-                refunded_at = EXCLUDED.refunded_at
-             RETURNING id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at",
+                refunds_trade_id = EXCLUDED.refunds_trade_id
+             RETURNING id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id",
         )
         .bind(trade.id)
         .bind(user_id)
@@ -973,7 +1024,7 @@ impl Database {
         .bind(trade.amount)
         .bind(trade.created_at)
         .bind(trade.deleted_at)
-        .bind(trade.refunded_at)
+        .bind(trade.refunds_trade_id)
         .fetch_one(&mut **tx)
         .await
     }
@@ -1111,6 +1162,39 @@ impl Database {
         .await
     }
 
+    async fn latest_unresolved_trade_id_for_source_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task_id: Option<Uuid>,
+        habit_id: Option<Uuid>,
+        reward_id: Option<Uuid>,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT candidate.id
+             FROM trades candidate
+             WHERE candidate.user_id = $1
+               AND candidate.deleted_at IS NULL
+               AND candidate.refunds_trade_id IS NULL
+               AND candidate.task_id IS NOT DISTINCT FROM $2
+               AND candidate.habit_id IS NOT DISTINCT FROM $3
+               AND candidate.reward_id IS NOT DISTINCT FROM $4
+               AND NOT EXISTS (
+                    SELECT 1
+                    FROM trades refund
+                    WHERE refund.refunds_trade_id = candidate.id
+                      AND refund.deleted_at IS NULL
+               )
+             ORDER BY candidate.created_at DESC, candidate.id DESC
+             LIMIT 1",
+        )
+        .bind(user_id)
+        .bind(task_id)
+        .bind(habit_id)
+        .bind(reward_id)
+        .fetch_optional(&mut **tx)
+        .await
+    }
+
     pub async fn task_has_incomplete_dependencies_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
@@ -1144,11 +1228,17 @@ impl Database {
                   AND thd.deleted_at IS NULL
                   AND (
                     SELECT COUNT(*)
-                    FROM trades
-                    WHERE user_id = $1
-                      AND habit_id = thd.habit_id
-                      AND deleted_at IS NULL
-                      AND refunded_at IS NULL
+                    FROM trades trade
+                    WHERE trade.user_id = $1
+                      AND trade.habit_id = thd.habit_id
+                      AND trade.deleted_at IS NULL
+                      AND trade.refunds_trade_id IS NULL
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM trades refund
+                        WHERE refund.refunds_trade_id = trade.id
+                          AND refund.deleted_at IS NULL
+                      )
                   ) < (thd.baseline_completion_count + thd.required_completions)
             )",
         )
@@ -1189,26 +1279,49 @@ impl Database {
         .await
     }
 
-    pub async fn task_has_active_dependents_tx(
+    pub async fn soft_delete_task_task_dependencies_for_task_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
-        depends_on_task_id: Uuid,
-    ) -> Result<bool, sqlx::Error> {
-        sqlx::query_scalar(
-            "SELECT EXISTS (
-                SELECT 1
-                FROM task_task_dependencies ttd
-                JOIN tasks dependent_task ON dependent_task.id = ttd.task_id
-                WHERE ttd.depends_on_task_id = $2
-                  AND ttd.deleted_at IS NULL
-                  AND dependent_task.user_id = $1
-                  AND dependent_task.deleted_at IS NULL
-                  AND dependent_task.completed_at IS NULL
-            )",
+        task_id: Uuid,
+        deleted_at: NaiveDateTime,
+    ) -> Result<Vec<TaskTaskDependencyRow>, sqlx::Error> {
+        sqlx::query_as(
+            "UPDATE task_task_dependencies ttd
+             SET deleted_at = $3
+             FROM tasks dependent_task
+             WHERE dependent_task.id = ttd.task_id
+               AND dependent_task.user_id = $1
+               AND ttd.deleted_at IS NULL
+               AND (ttd.task_id = $2 OR ttd.depends_on_task_id = $2)
+             RETURNING ttd.task_id, ttd.depends_on_task_id, ttd.created_at, ttd.updated_at, ttd.deleted_at",
         )
         .bind(user_id)
-        .bind(depends_on_task_id)
-        .fetch_one(&mut **tx)
+        .bind(task_id)
+        .bind(deleted_at)
+        .fetch_all(&mut **tx)
+        .await
+    }
+
+    pub async fn soft_delete_task_habit_dependencies_for_task_tx(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+        task_id: Uuid,
+        deleted_at: NaiveDateTime,
+    ) -> Result<Vec<TaskHabitDependencyRow>, sqlx::Error> {
+        sqlx::query_as(
+            "UPDATE task_habit_dependencies thd
+             SET deleted_at = $3
+             FROM tasks dependent_task
+             WHERE dependent_task.id = thd.task_id
+               AND dependent_task.user_id = $1
+               AND thd.deleted_at IS NULL
+               AND thd.task_id = $2
+             RETURNING thd.task_id, thd.habit_id, thd.required_completions, thd.baseline_completion_count, thd.created_at, thd.updated_at, thd.deleted_at",
+        )
+        .bind(user_id)
+        .bind(task_id)
+        .bind(deleted_at)
+        .fetch_all(&mut **tx)
         .await
     }
 
@@ -1235,7 +1348,7 @@ impl Database {
         .await
     }
 
-    /// Calculate a user's balance from non-deleted trades within a transaction.
+    /// Calculate a user's balance from non-deleted ledger rows within a transaction.
     pub async fn calculate_balance_from_trades_tx(
         tx: &mut Transaction<'_, Postgres>,
         user_id: Uuid,
@@ -1243,7 +1356,7 @@ impl Database {
         let (total,): (Option<i64>,) = sqlx::query_as(
             "SELECT COALESCE(SUM(amount), 0)
              FROM trades
-             WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
+             WHERE user_id = $1 AND deleted_at IS NULL",
         )
         .bind(user_id)
         .fetch_one(&mut **tx)
@@ -1578,7 +1691,7 @@ pub struct UpsertTradeOptions {
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub refunded_at: Option<NaiveDateTime>,
+    pub refunds_trade_id: Option<Uuid>,
 }
 
 pub struct UpsertTagOptions {
@@ -1647,7 +1760,7 @@ pub struct TradeRow {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub refunded_at: Option<NaiveDateTime>,
+    pub refunds_trade_id: Option<Uuid>,
 }
 
 #[derive(sqlx::FromRow)]

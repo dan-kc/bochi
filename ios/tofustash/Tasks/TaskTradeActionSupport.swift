@@ -4,7 +4,6 @@ enum TaskTradeActionState: Equatable {
     case none
     case complete(amount: Int)
     case refund(amount: Int)
-    case undoRefund(amount: Int)
 }
 
 enum TaskTradeActionSupport {
@@ -17,16 +16,12 @@ enum TaskTradeActionSupport {
     ) -> TaskTradeActionState {
         guard !isNewMode, !claimed else { return .none }
 
-        if let taskTrade {
-            let amount = abs(taskTrade.amount)
-            if taskTrade.isRefunded {
-                return .undoRefund(amount: amount)
-            }
-            return .refund(amount: amount)
+        if !isCompleted {
+            return taskTrade == nil ? .complete(amount: rewardPreview) : .none
         }
 
-        if !isCompleted {
-            return .complete(amount: rewardPreview)
+        if let taskTrade {
+            return .refund(amount: abs(taskTrade.amount))
         }
 
         return .none

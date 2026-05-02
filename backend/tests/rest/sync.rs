@@ -392,8 +392,8 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
 }
 
 #[tokio::test]
-async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
-    let email = generate_email_from_fn!(test_sync_push_and_pull_round_trip_refunded_trade_state);
+async fn test_sync_push_and_pull_round_trip_refund_trades() {
+    let email = generate_email_from_fn!(test_sync_push_and_pull_round_trip_refund_trades);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -401,7 +401,7 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
 
     let habit_body = json!({
         "name": "Refundable Habit",
-        "description": "Trade refund state should sync"
+        "description": "Refund trades should sync"
     });
     let (_, habit_json) =
         make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
@@ -409,7 +409,6 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
 
     let active_trade_id = uuid::Uuid::new_v4().to_string();
     let refunded_trade_id = uuid::Uuid::new_v4().to_string();
-    let refunded_at = "2025-01-01T10:10:00";
     let push_body = json!({
         "trades": [{
             "id": active_trade_id,
@@ -420,10 +419,10 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
         }, {
             "id": refunded_trade_id,
             "habitId": habit_id,
-            "sourceName": "Refundable Habit",
-            "amount": 200,
-            "createdAt": "2025-01-01T10:05:00",
-            "refundedAt": refunded_at
+            "sourceName": "Refundable Habit refund",
+            "amount": -500,
+            "createdAt": "2025-01-01T10:10:00",
+            "refundsTradeId": active_trade_id
         }]
     });
 
@@ -443,16 +442,16 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
         .find(|trade| trade.get("id").unwrap() == &refunded_trade_id)
         .unwrap();
     assert_eq!(
-        pushed_active_trade.get("refundedAt").unwrap(),
+        pushed_active_trade.get("refundsTradeId").unwrap(),
         &serde_json::Value::Null
     );
     assert_eq!(pushed_active_trade.get("sourceName").unwrap(), "Refundable Habit");
-    assert_eq!(pushed_refunded_trade.get("refundedAt").unwrap(), refunded_at);
-    assert_eq!(pushed_refunded_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(pushed_refunded_trade.get("refundsTradeId").unwrap(), &active_trade_id);
     assert_eq!(
-        push_json.get("balance").unwrap().get("tofuBalance").unwrap(),
-        500.0
+        pushed_refunded_trade.get("sourceName").unwrap(),
+        "Refundable Habit refund"
     );
+    assert_eq!(push_json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
 
     let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
 
@@ -469,16 +468,16 @@ async fn test_sync_push_and_pull_round_trip_refunded_trade_state() {
         .find(|trade| trade.get("id").unwrap() == &refunded_trade_id)
         .unwrap();
     assert_eq!(
-        pulled_active_trade.get("refundedAt").unwrap(),
+        pulled_active_trade.get("refundsTradeId").unwrap(),
         &serde_json::Value::Null
     );
     assert_eq!(pulled_active_trade.get("sourceName").unwrap(), "Refundable Habit");
-    assert_eq!(pulled_refunded_trade.get("refundedAt").unwrap(), refunded_at);
-    assert_eq!(pulled_refunded_trade.get("sourceName").unwrap(), "Refundable Habit");
+    assert_eq!(pulled_refunded_trade.get("refundsTradeId").unwrap(), &active_trade_id);
     assert_eq!(
-        pull_json.get("balance").unwrap().get("tofuBalance").unwrap(),
-        500.0
+        pulled_refunded_trade.get("sourceName").unwrap(),
+        "Refundable Habit refund"
     );
+    assert_eq!(pull_json.get("balance").unwrap().get("tofuBalance").unwrap(), 0.0);
 }
 
 #[tokio::test]
@@ -501,6 +500,7 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
 
     let task_id = uuid::Uuid::new_v4().to_string();
     let trade_id = uuid::Uuid::new_v4().to_string();
+    let refund_trade_id = uuid::Uuid::new_v4().to_string();
     let body = json!({
         "tasks": [{
             "id": task_id,
@@ -524,7 +524,14 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
             "sourceName": "Dependency Habit",
             "amount": 100,
             "createdAt": "2025-01-01T10:05:00",
-            "refundedAt": "2025-01-01T10:06:00"
+            "updatedAt": "2025-01-01T10:05:00"
+        }, {
+            "id": refund_trade_id,
+            "habitId": habit_id,
+            "sourceName": "Dependency Habit refund",
+            "amount": -100,
+            "createdAt": "2025-01-01T10:06:00",
+            "refundsTradeId": trade_id
         }]
     });
 
@@ -545,6 +552,75 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
             .unwrap()
             .iter()
             .all(|task| task.get("id").unwrap() != &task_id)
+    );
+}
+
+#[tokio::test]
+async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
+    let email =
+        generate_email_from_fn!(test_sync_push_allows_task_completion_after_dependency_is_removed);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let dependency_task_id = uuid::Uuid::new_v4().to_string();
+    let blocked_task_id = uuid::Uuid::new_v4().to_string();
+
+    let setup_body = json!({
+        "tasks": [{
+            "id": dependency_task_id,
+            "name": "Draft report",
+            "description": "",
+            "createdAt": "2025-01-01T09:00:00",
+            "updatedAt": "2025-01-01T09:00:00"
+        }, {
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": dependency_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T10:05:00"
+        }]
+    });
+
+    let (setup_status, _) =
+        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+    assert_eq!(setup_status, StatusCode::OK);
+
+    let completion_body = json!({
+        "tasks": [{
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "completedAt": "2025-01-01T11:00:00"
+        }],
+        "taskTaskDependencies": [{
+            "taskId": blocked_task_id,
+            "dependsOnTaskId": dependency_task_id,
+            "createdAt": "2025-01-01T10:05:00",
+            "updatedAt": "2025-01-01T11:00:00",
+            "deletedAt": "2025-01-01T11:00:00"
+        }]
+    });
+
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", completion_body).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json["tasks"].as_array().unwrap()[0]
+            .get("completedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:00"
     );
 }
 
@@ -709,6 +785,7 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
 
     let dependency_task_id = uuid::Uuid::new_v4().to_string();
     let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let habit_blocked_task_id = uuid::Uuid::new_v4().to_string();
     let habit_id = uuid::Uuid::new_v4().to_string();
     let habit_trade_id = uuid::Uuid::new_v4().to_string();
 
@@ -726,6 +803,12 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
             "description": "",
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T10:00:00"
+        }, {
+            "id": habit_blocked_task_id,
+            "name": "Share checklist",
+            "description": "",
+            "createdAt": "2025-01-01T10:01:00",
+            "updatedAt": "2025-01-01T10:01:00"
         }],
         "habits": [{
             "id": habit_id,
@@ -866,9 +949,9 @@ async fn test_sync_push_rejects_dependency_cycles() {
 }
 
 #[tokio::test]
-async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
+async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
     let email =
-        generate_email_from_fn!(test_sync_push_rejects_deleting_entities_with_active_dependents);
+        generate_email_from_fn!(test_sync_push_deleting_task_soft_deletes_links_to_that_task);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -876,6 +959,7 @@ async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
 
     let dependency_task_id = uuid::Uuid::new_v4().to_string();
     let blocked_task_id = uuid::Uuid::new_v4().to_string();
+    let habit_blocked_task_id = uuid::Uuid::new_v4().to_string();
     let habit_id = uuid::Uuid::new_v4().to_string();
 
     let setup_body = json!({
@@ -891,6 +975,12 @@ async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
             "description": "",
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T10:00:00"
+        }, {
+            "id": habit_blocked_task_id,
+            "name": "Share checklist",
+            "description": "",
+            "createdAt": "2025-01-01T10:01:00",
+            "updatedAt": "2025-01-01T10:01:00"
         }],
         "habits": [{
             "id": habit_id,
@@ -906,12 +996,19 @@ async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
             "updatedAt": "2025-01-01T10:05:00"
         }],
         "taskHabitDependencies": [{
-            "taskId": blocked_task_id,
+            "taskId": dependency_task_id,
             "habitId": habit_id,
             "requiredCompletions": 1,
             "baselineCompletionCount": 0,
             "createdAt": "2025-01-01T10:06:00",
             "updatedAt": "2025-01-01T10:06:00"
+        }, {
+            "taskId": habit_blocked_task_id,
+            "habitId": habit_id,
+            "requiredCompletions": 1,
+            "baselineCompletionCount": 0,
+            "createdAt": "2025-01-01T10:07:00",
+            "updatedAt": "2025-01-01T10:07:00"
         }]
     });
 
@@ -932,10 +1029,52 @@ async fn test_sync_push_rejects_deleting_entities_with_active_dependents() {
 
     let (delete_task_status, delete_task_json) =
         make_authenticated_post_request(&access_token, "/api/sync", delete_task_body).await;
-    assert_eq!(delete_task_status, StatusCode::BAD_REQUEST);
+    assert_eq!(delete_task_status, StatusCode::OK);
     assert_eq!(
-        delete_task_json["errors"][0]["message"],
-        "Validation Error: This item cannot be deleted while active tasks still depend on it."
+        delete_task_json["tasks"].as_array().unwrap()[0]
+            .get("deletedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:00"
+    );
+    assert_eq!(
+        delete_task_json["taskTaskDependencies"].as_array().unwrap()[0]
+            .get("deletedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:00"
+    );
+    assert_eq!(
+        delete_task_json["taskHabitDependencies"].as_array().unwrap()[0]
+            .get("deletedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:00"
+    );
+
+    let complete_blocked_task_body = json!({
+        "tasks": [{
+            "id": blocked_task_id,
+            "name": "Send report",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T11:00:30",
+            "completedAt": "2025-01-01T11:00:30"
+        }]
+    });
+    let (complete_blocked_task_status, complete_blocked_task_json) =
+        make_authenticated_post_request(&access_token, "/api/sync", complete_blocked_task_body).await;
+    assert_eq!(complete_blocked_task_status, StatusCode::OK);
+    assert_eq!(
+        complete_blocked_task_json["tasks"].as_array().unwrap()[0]
+            .get("completedAt")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "2025-01-01T11:00:30"
     );
 
     let delete_habit_body = json!({

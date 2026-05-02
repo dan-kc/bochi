@@ -9,18 +9,17 @@ struct TradeRefundServiceTests {
         TestHelpers.makeTemporaryFileURL("trade-refund-service")
     }
 
-    // Behaviour: refunding a task completion should reopen the task and remove
-    // its tofu, while undoing the refund should restore both.
-    @Test("task trade refunds reopen the task and can be undone without creating a second completion")
-    func taskTradeRefundReopensTaskAndCanBeUndone() throws {
+    // Behaviour: refunding a task completion should reopen the task and allow
+    // the user to complete it again as a fresh trade later.
+    @Test("task trade refunds reopen the task and allow a fresh completion")
+    func taskTradeRefundReopensTaskAndAllowsFreshCompletion() throws {
         let storageURL = makeStorageURL()
         let taskStore = TaskStore(storageURL: storageURL)
         let tradeStore = TradeStore(storageURL: storageURL)
         let balanceStore = BalanceStore(storageURL: storageURL)
         let completedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let refundedAt = completedAt.addingTimeInterval(300)
-        let attemptedSecondCompletionAt = refundedAt.addingTimeInterval(60)
-        let unrefundedAt = refundedAt.addingTimeInterval(300)
+        let secondCompletionAt = refundedAt.addingTimeInterval(60)
 
         let task = try #require(taskStore.addTask(id: "task-1", name: "Submit report", shouldNotifySync: false))
         tradeStore.addTaskTrade(id: "trade-1", taskId: task.id, sourceName: task.name, amount: 120, createdAt: completedAt, shouldNotifySync: false)
@@ -29,48 +28,36 @@ struct TradeRefundServiceTests {
         #expect(balanceStore.balance == 120)
 
         let initialTrade = try #require(tradeStore.trades.first(where: { $0.id == "trade-1" }))
-        TradeRefundService.setRefunded(
-            true,
+        let refundTrade = try #require(
+            TradeRefundService.refund(
             for: initialTrade,
             tradeStore: tradeStore,
             taskStore: taskStore,
             balanceStore: balanceStore,
             now: refundedAt
+            )
         )
 
         let refundedTask = try #require(taskStore.tasks.first(where: { $0.id == task.id }))
-        let refundedTrade = try #require(tradeStore.trades.first(where: { $0.id == initialTrade.id }))
         #expect(refundedTask.completedAt == nil)
-        #expect(refundedTrade.refundedAt == refundedAt)
+        #expect(refundTrade.refundsTradeId == initialTrade.id)
+        #expect(refundTrade.amount == -120)
         #expect(balanceStore.balance == 0)
 
-        let attemptedSecondCompletion = TaskCompletionSupport.completeTask(
+        let secondCompletion = TaskCompletionSupport.completeTask(
             taskID: task.id,
             sourceName: task.name,
             reward: 120,
             tradeStore: tradeStore,
             taskStore: taskStore,
             balanceStore: balanceStore,
-            claimDate: attemptedSecondCompletionAt
+            claimDate: secondCompletionAt
         )
-        #expect(attemptedSecondCompletion == nil)
-        #expect(tradeStore.trades.count == 1)
-        #expect(balanceStore.balance == 0)
-
-        let tradeToRestore = try #require(tradeStore.trades.first(where: { $0.id == initialTrade.id }))
-        TradeRefundService.setRefunded(
-            false,
-            for: tradeToRestore,
-            tradeStore: tradeStore,
-            taskStore: taskStore,
-            balanceStore: balanceStore,
-            now: unrefundedAt
-        )
-
-        let restoredTask = try #require(taskStore.tasks.first(where: { $0.id == task.id }))
-        let restoredTrade = try #require(tradeStore.trades.first(where: { $0.id == initialTrade.id }))
-        #expect(restoredTask.completedAt == completedAt)
-        #expect(restoredTrade.refundedAt == nil)
+        #expect(secondCompletion == secondCompletionAt)
+        #expect(tradeStore.trades.count == 3)
         #expect(balanceStore.balance == 120)
+
+        let completedTask = try #require(taskStore.tasks.first(where: { $0.id == task.id }))
+        #expect(completedTask.completedAt == secondCompletionAt)
     }
 }

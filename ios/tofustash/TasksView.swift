@@ -146,8 +146,13 @@ struct TasksView: View {
             ) {
                 Button("Delete", role: .destructive) {
                     if let task = taskToDelete {
+                        let deletedAt = Date()
                         reminderStore.deleteAllReminders(for: .task(task.id))
-                        taskStore.deleteTask(id: task.id)
+                        taskDependencyStore.deleteDependenciesReferencingTask(
+                            task.id,
+                            deletedAt: deletedAt
+                        )
+                        taskStore.deleteTask(id: task.id, deletedAt: deletedAt)
                     }
                     taskToDelete = nil
                 }
@@ -193,7 +198,7 @@ struct TasksView: View {
             isNewMode: false,
             isCompleted: task.completedAt != nil,
             claimed: false,
-            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true),
+            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: false),
             rewardPreview: reward
         )
         let canComplete = canCompleteTask(task)
@@ -250,11 +255,11 @@ struct TasksView: View {
                     completeTask(task, reward: reward)
                 }
                 .accessibilityIdentifier("task.claim")
-            } else if case .undoRefund = taskActionState {
-                Image(systemName: "arrow.uturn.backward.circle")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44, alignment: .center)
+            } else if case .refund(let amount) = taskActionState {
+                TofuActionButton(amount: amount, polarity: .spending, layout: .compact) {
+                    refundTask(task)
+                }
+                .accessibilityIdentifier("task.refund")
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
@@ -293,7 +298,7 @@ struct TasksView: View {
     }
 
     private func canCompleteTask(_ task: TaskItem) -> Bool {
-        task.canTrade && tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) == nil
+        task.canTrade && tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: false) == nil
     }
 
     @ViewBuilder
@@ -303,7 +308,7 @@ struct TasksView: View {
             isNewMode: false,
             isCompleted: task.completedAt != nil,
             claimed: false,
-            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true),
+            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: false),
             rewardPreview: reward
         )
 
@@ -316,15 +321,9 @@ struct TasksView: View {
             }
         case .refund:
             Button {
-                setRefunded(true, forTask: task)
+                refundTask(task)
             } label: {
                 Label("Refund", systemImage: "arrow.uturn.backward")
-            }
-        case .undoRefund:
-            Button {
-                setRefunded(false, forTask: task)
-            } label: {
-                Label("Undo Refund", systemImage: "arrow.uturn.forward")
             }
         case .none:
             EmptyView()
@@ -420,11 +419,10 @@ struct TasksView: View {
         )
     }
 
-    private func setRefunded(_ refunded: Bool, forTask task: TaskItem) {
-        guard let trade = tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: true) else { return }
+    private func refundTask(_ task: TaskItem) {
+        guard let trade = tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: false) else { return }
 
-        TradeRefundService.setRefunded(
-            refunded,
+        _ = TradeRefundService.refund(
             for: trade,
             tradeStore: tradeStore,
             taskStore: taskStore,

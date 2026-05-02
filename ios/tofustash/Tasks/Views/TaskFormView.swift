@@ -211,7 +211,7 @@ struct TaskFormView: View {
 
     private var showsRefundButton: Bool {
         switch taskTradeActionState {
-        case .refund, .undoRefund:
+        case .refund:
             return true
         case .none, .complete:
             return false
@@ -219,7 +219,7 @@ struct TaskFormView: View {
     }
 
     private var latestTaskTrade: Trade? {
-        tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: true)
+        tradeStore.latestTaskTrade(taskId: taskID, includeRefunded: false)
     }
 
     private var taskTradeActionState: TaskTradeActionState {
@@ -504,11 +504,6 @@ struct TaskFormView: View {
                     refundCompletedTaskFromForm()
                 }
                 .accessibilityIdentifier("task.refund")
-            case .undoRefund(let amount):
-                TofuActionButton(amount: amount, polarity: .earning, layout: .expanded(title: "Undo Refund")) {
-                    unrefundCompletedTaskFromForm()
-                }
-                .accessibilityIdentifier("task.undo-refund")
             case .none:
                 EmptyView()
             }
@@ -830,21 +825,7 @@ struct TaskFormView: View {
     private func refundCompletedTaskFromForm() {
         guard let trade = latestTaskTrade else { return }
 
-        TradeRefundService.setRefunded(
-            true,
-            for: trade,
-            tradeStore: tradeStore,
-            taskStore: taskStore,
-            balanceStore: balanceStore
-        )
-        completedAt = taskStore.tasks.first(where: { $0.id == taskID })?.completedAt
-    }
-
-    private func unrefundCompletedTaskFromForm() {
-        guard let trade = latestTaskTrade else { return }
-
-        TradeRefundService.setRefunded(
-            false,
+        _ = TradeRefundService.refund(
             for: trade,
             tradeStore: tradeStore,
             taskStore: taskStore,

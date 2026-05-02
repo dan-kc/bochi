@@ -98,7 +98,7 @@ pub struct SyncTradeInput {
     pub amount: i32,
     pub created_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub refunded_at: Option<NaiveDateTime>,
+    pub refunds_trade_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -249,7 +249,7 @@ pub struct TradeOutput {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub deleted_at: Option<NaiveDateTime>,
-    pub refunded_at: Option<NaiveDateTime>,
+    pub refunds_trade_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -557,7 +557,7 @@ pub async fn get_sync(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
-            refunded_at: row.refunded_at,
+            refunds_trade_id: row.refunds_trade_id.map(|id| id.to_string()),
         })
         .collect();
 
@@ -701,7 +701,7 @@ pub async fn post_sync(
     let mut result_rewards = Vec::new();
     let mut result_reward_tags = Vec::new();
     let mut completed_task_ids = Vec::new();
-    let mut deleted_task_ids = Vec::new();
+    let mut deleted_tasks = Vec::new();
     let mut deleted_habit_ids = Vec::new();
 
     // Process habits first (trades may reference these)
@@ -792,8 +792,8 @@ pub async fn post_sync(
                 completed_task_ids.push(task_id);
             }
 
-            if task_input.deleted_at.is_some() {
-                deleted_task_ids.push(task_id);
+            if let Some(deleted_at) = task_input.deleted_at {
+                deleted_tasks.push((task_id, deleted_at));
             }
 
             let task_row = Database::upsert_task_tx(&mut tx, user.user_id, &upsert_opts)
@@ -1024,7 +1024,15 @@ pub async fn post_sync(
                 amount: trade_input.amount,
                 created_at: trade_input.created_at,
                 deleted_at: trade_input.deleted_at,
-                refunded_at: trade_input.refunded_at,
+                refunds_trade_id: trade_input
+                    .refunds_trade_id
+                    .as_ref()
+                    .map(|id| {
+                        id.parse::<Uuid>().map_err(|_| {
+                            ApiError::Validation(format!("Invalid refunds_trade_id format: {}", id))
+                        })
+                    })
+                    .transpose()?,
             };
 
             let trade_row = Database::upsert_trade_tx(&mut tx, user.user_id, &upsert_opts)
@@ -1044,7 +1052,7 @@ pub async fn post_sync(
                 created_at: trade_row.created_at,
                 updated_at: trade_row.updated_at,
                 deleted_at: trade_row.deleted_at,
-                refunded_at: trade_row.refunded_at,
+                refunds_trade_id: trade_row.refunds_trade_id.map(|id| id.to_string()),
             });
         }
     }
@@ -1264,18 +1272,59 @@ pub async fn post_sync(
         ));
     }
 
-    for task_id in deleted_task_ids {
-        let has_dependents = Database::task_has_active_dependents_tx(&mut tx, user.user_id, task_id)
-            .await
-            .map_err(|e| {
-                error!("Database Error validating task dependents: {:?}", e);
-                ApiError::Internal
-            })?;
+    for (task_id, deleted_at) in deleted_tasks {
+        let deleted_task_dependencies = Database::soft_delete_task_task_dependencies_for_task_tx(
+            &mut tx,
+            user.user_id,
+            task_id,
+            deleted_at,
+        )
+        .await
+        .map_err(|e| {
+            error!("Database Error deleting task-task dependencies for deleted task: {:?}", e);
+            ApiError::Internal
+        })?;
 
-        if has_dependents {
-            return Err(ApiError::Validation(
-                "This item cannot be deleted while active tasks still depend on it.".to_string(),
-            ));
+        for dependency_row in deleted_task_dependencies {
+            result_task_task_dependencies.retain(|existing| {
+                existing.task_id != dependency_row.task_id.to_string()
+                    || existing.depends_on_task_id != dependency_row.depends_on_task_id.to_string()
+            });
+            result_task_task_dependencies.push(TaskTaskDependencyOutput {
+                task_id: dependency_row.task_id.to_string(),
+                depends_on_task_id: dependency_row.depends_on_task_id.to_string(),
+                created_at: dependency_row.created_at,
+                updated_at: dependency_row.updated_at,
+                deleted_at: dependency_row.deleted_at,
+            });
+        }
+
+        let deleted_habit_dependencies = Database::soft_delete_task_habit_dependencies_for_task_tx(
+            &mut tx,
+            user.user_id,
+            task_id,
+            deleted_at,
+        )
+        .await
+        .map_err(|e| {
+            error!("Database Error deleting task-habit dependencies for deleted task: {:?}", e);
+            ApiError::Internal
+        })?;
+
+        for dependency_row in deleted_habit_dependencies {
+            result_task_habit_dependencies.retain(|existing| {
+                existing.task_id != dependency_row.task_id.to_string()
+                    || existing.habit_id != dependency_row.habit_id.to_string()
+            });
+            result_task_habit_dependencies.push(TaskHabitDependencyOutput {
+                task_id: dependency_row.task_id.to_string(),
+                habit_id: dependency_row.habit_id.to_string(),
+                required_completions: dependency_row.required_completions,
+                baseline_completion_count: dependency_row.baseline_completion_count,
+                created_at: dependency_row.created_at,
+                updated_at: dependency_row.updated_at,
+                deleted_at: dependency_row.deleted_at,
+            });
         }
     }
 
@@ -1544,7 +1593,7 @@ async fn load_trades_for_sync(
     match cursor {
         Some(cursor) => {
             sqlx::query_as(
-                "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                  FROM trades
                  WHERE user_id = $1
                    AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
@@ -1559,7 +1608,7 @@ async fn load_trades_for_sync(
         None => match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                      FROM trades
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -1571,7 +1620,7 @@ async fn load_trades_for_sync(
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunded_at
+                    "SELECT id, task_id, habit_id, reward_id, source_name, amount, created_at, updated_at, deleted_at, refunds_trade_id
                      FROM trades
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -1947,7 +1996,7 @@ async fn load_balance_for_sync(
     let (total,): (Option<i64>,) = sqlx::query_as(
         "SELECT COALESCE(SUM(amount), 0)
          FROM trades
-         WHERE user_id = $1 AND deleted_at IS NULL AND refunded_at IS NULL",
+         WHERE user_id = $1 AND deleted_at IS NULL",
     )
     .bind(user_id)
     .fetch_one(&mut **tx)
