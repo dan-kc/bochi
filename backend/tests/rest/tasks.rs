@@ -19,7 +19,7 @@ async fn test_create_task_success() {
         "description": "Send the April invoice"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/tasks", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -58,7 +58,7 @@ async fn test_create_task_with_optional_fields() {
         "dueDate": "2026-05-01T09:30:00"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/tasks", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("difficultyTier").unwrap(), "hard");
@@ -81,7 +81,7 @@ async fn test_create_task_validation_skip_consequence_too_high() {
         "skipConsequence": 6
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/tasks", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -102,6 +102,6 @@ async fn test_create_task_without_authentication() {
         "description": "Send the April invoice"
     });
 
-    let (status, _) = make_unauthenticated_post_request("/api/tasks", body).await;
+    let (status, _) = make_unauthenticated_post_request("/api/v1/tasks", body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

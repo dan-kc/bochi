@@ -230,7 +230,7 @@ The snapshot guarantees the push uses the user’s original local edit.
 
 The app calls:
 
-- `GET /api/sync`
+- `GET /api/v1/sync`
 - with `?cursor=<lastSyncCursor>` when incremental
 - with no `cursor` when full
 
@@ -248,7 +248,7 @@ That means passive refresh will not stomp an unsynced local edit.
 
 If any dirty records or dirty settings exist, the app sends one unified request:
 
-- `POST /api/sync`
+- `POST /api/v1/sync`
 
 The payload may include:
 
@@ -376,7 +376,7 @@ Those tests are meant to protect the actual workflows a user can hit, not implem
 
 The current implementation is correct for the existing product direction, but there are a few worthwhile follow-ups:
 
-- remove auth/profile duplication from `/api/sync`
+- remove auth/profile duplication from `/api/v1/sync`
   - `email` and `isPremium` do not need to live in both sync and auth flows
 
 - revisit the 5-second polling interval after launch

@@ -19,7 +19,7 @@ async fn test_create_reward_success() {
         "description": "A test reward description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -47,7 +47,7 @@ async fn test_create_reward_with_max_daily_frequency() {
         "maxDailyFrequency": 5.5
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("maxDailyFrequency").unwrap(), 5.5);
@@ -67,7 +67,7 @@ async fn test_create_reward_with_optional_fields() {
         "maxDailyFrequency": 10.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("maxDailyFrequency").unwrap(), 10.0);
@@ -87,7 +87,7 @@ async fn test_create_reward_with_damage_tier() {
         "damageTier": "heavy"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("damageTier").unwrap(), "heavy");
@@ -107,7 +107,7 @@ async fn test_create_reward_validation_name_too_long() {
         "description": "Test description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -142,7 +142,7 @@ async fn test_create_reward_validation_description_too_long() {
         "description": long_description
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -170,7 +170,7 @@ async fn test_create_reward_without_authentication() {
         "description": "Test description"
     });
 
-    let (status, _) = make_unauthenticated_post_request("/api/rewards", body).await;
+    let (status, _) = make_unauthenticated_post_request("/api/v1/rewards", body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
@@ -187,7 +187,7 @@ async fn test_create_reward_minimum_valid_input() {
         "description": ""
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("name").unwrap().as_str().unwrap(), "T");
@@ -211,7 +211,7 @@ async fn test_create_reward_maximum_valid_input() {
         "maxDailyFrequency": 100.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("name").unwrap(), &Value::String(max_name));
@@ -236,7 +236,7 @@ async fn test_create_reward_max_daily_frequency_negative() {
         "maxDailyFrequency": -1.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -270,7 +270,7 @@ async fn test_create_reward_max_daily_frequency_too_large() {
         "maxDailyFrequency": 101.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -303,7 +303,7 @@ async fn test_create_reward_name_empty_string() {
         "description": "Test description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -336,7 +336,7 @@ async fn test_create_reward_max_daily_frequency_zero() {
         "maxDailyFrequency": 0.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -367,7 +367,7 @@ async fn test_create_reward_max_daily_frequency_one_per_month_boundary() {
         "maxDailyFrequency": 1.0 / 30.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(
@@ -390,7 +390,7 @@ async fn test_create_reward_max_daily_frequency_boundary() {
         "maxDailyFrequency": 100.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/rewards", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/rewards", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("maxDailyFrequency").unwrap(), 100.0);

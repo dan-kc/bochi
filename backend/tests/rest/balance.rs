@@ -14,7 +14,7 @@ async fn test_get_balance_success() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/balance").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/balance").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("tofuBalance").unwrap(), 0.0);
@@ -33,7 +33,7 @@ async fn test_get_balance_sums_active_trade_history() {
         "description": "API balance should follow trades"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
     let deleted_at = "2025-01-01T10:10:00";
@@ -55,10 +55,10 @@ async fn test_get_balance_sums_active_trade_history() {
         ]
     });
     let (push_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
     assert_eq!(push_status, StatusCode::OK);
 
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/balance").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/balance").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("tofuBalance").unwrap(), 282.0);
@@ -77,7 +77,7 @@ async fn test_get_balance_counts_refund_trades_in_the_ledger_total() {
         "description": "Refund trades should offset the original ledger entry"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
     let original_trade_id = uuid::Uuid::new_v4().to_string();
     let latest_trade_id = uuid::Uuid::new_v4().to_string();
@@ -109,10 +109,10 @@ async fn test_get_balance_counts_refund_trades_in_the_ledger_total() {
         ]
     });
     let (push_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
     assert_eq!(push_status, StatusCode::OK);
 
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/balance").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/balance").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("tofuBalance").unwrap(), 282.0);
@@ -120,6 +120,6 @@ async fn test_get_balance_counts_refund_trades_in_the_ledger_total() {
 
 #[tokio::test]
 async fn test_get_balance_without_authentication() {
-    let (status, _) = make_unauthenticated_get_request("/api/balance").await;
+    let (status, _) = make_unauthenticated_get_request("/api/v1/balance").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

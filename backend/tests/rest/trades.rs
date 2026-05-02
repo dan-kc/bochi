@@ -21,7 +21,7 @@ async fn test_create_trade_with_task_success() {
     });
 
     let (status, task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/tasks", task_body).await;
     assert_eq!(status, StatusCode::CREATED);
     let task_id = task_json.get("id").unwrap().as_str().unwrap();
 
@@ -30,7 +30,7 @@ async fn test_create_trade_with_task_success() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -59,7 +59,7 @@ async fn test_create_trade_with_habit_success() {
     });
 
     let (status, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     assert_eq!(status, StatusCode::CREATED);
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
@@ -69,7 +69,7 @@ async fn test_create_trade_with_habit_success() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -102,7 +102,7 @@ async fn test_create_trade_with_reward_success() {
     });
 
     let (status, reward_json) =
-        make_authenticated_post_request(&access_token, "/api/rewards", reward_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/rewards", reward_body).await;
     assert_eq!(status, StatusCode::CREATED);
     let reward_id = reward_json.get("id").unwrap().as_str().unwrap();
 
@@ -112,7 +112,7 @@ async fn test_create_trade_with_reward_success() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -143,7 +143,7 @@ async fn test_create_trade_with_multiple_sources() {
         "description": "A test task"
     });
     let (_, task_json) =
-        make_authenticated_post_request(&access_token, "/api/tasks", task_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/tasks", task_body).await;
     let task_id = task_json.get("id").unwrap().as_str().unwrap();
 
     // Create a habit
@@ -152,7 +152,7 @@ async fn test_create_trade_with_multiple_sources() {
         "description": "A test habit"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
     // Create a reward
@@ -161,7 +161,7 @@ async fn test_create_trade_with_multiple_sources() {
         "description": "A test reward"
     });
     let (_, reward_json) =
-        make_authenticated_post_request(&access_token, "/api/rewards", reward_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/rewards", reward_body).await;
     let reward_id = reward_json.get("id").unwrap().as_str().unwrap();
 
     // Try to create a trade with multiple sources
@@ -172,7 +172,7 @@ async fn test_create_trade_with_multiple_sources() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -206,7 +206,7 @@ async fn test_create_trade_with_neither_habit_nor_reward() {
     let trade_body = json!({});
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -234,7 +234,7 @@ async fn test_create_trade_without_authentication() {
         "habitId": "079d9887-79f9-4bdf-a341-2d5990a694e1"
     });
 
-    let (status, _) = make_unauthenticated_post_request("/api/trades", trade_body).await;
+    let (status, _) = make_unauthenticated_post_request("/api/v1/trades", trade_body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
@@ -251,7 +251,7 @@ async fn test_create_trade_with_nonexistent_task() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -297,7 +297,7 @@ async fn test_create_trade_with_task_rejects_incomplete_dependencies() {
     });
 
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let trade_body = json!({
@@ -305,7 +305,7 @@ async fn test_create_trade_with_task_rejects_incomplete_dependencies() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -333,7 +333,7 @@ async fn test_create_trade_with_nonexistent_habit() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(json.get("errors").is_some());
@@ -366,7 +366,7 @@ async fn test_create_trade_with_nonexistent_reward() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/trades", trade_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/trades", trade_body).await;
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(json.get("errors").is_some());

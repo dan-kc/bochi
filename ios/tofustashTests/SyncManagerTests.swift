@@ -2,6 +2,36 @@ import Foundation
 import Testing
 @testable import tofustash
 
+private final class MockSyncURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requestHandler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let handler = Self.requestHandler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        do {
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
 @MainActor
 struct SyncManagerTests {
     private final class MockSyncAPIClient: SyncAPIClient, @unchecked Sendable {
@@ -642,5 +672,122 @@ struct SyncManagerTests {
         #expect(updatedHabit.name == "Second Edit")
 
         context.syncManager.updateSession(userID: nil)
+    }
+}
+
+@MainActor
+struct LiveSyncAPIClientTests {
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockSyncURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    private func makeSyncResponseData() throws -> Data {
+        try JSONSerialization.data(
+            withJSONObject: [
+                "tasks": [],
+                "habits": [],
+                "trades": [],
+                "tags": [],
+                "taskTags": [],
+                "taskTaskDependencies": [],
+                "taskHabitDependencies": [],
+                "habitTags": [],
+                "rewards": [],
+                "rewardTags": [],
+                "specialOffers": [],
+                "balance": ["tofuBalance": 0],
+                "serverCursor": "cursor-123",
+                "serverTime": "2026-04-18T12:00:00.000000",
+                "email": NSNull(),
+                "isPremium": false,
+                "generalDifficulty": 5.0
+            ]
+        )
+    }
+
+    // Behaviour: when the app pulls sync data, the live HTTP client must target
+    // the versioned sync endpoint so the installed build stays on its contract.
+    @Test func pullSyncUsesVersionedEndpoint() async throws {
+        let session = makeSession()
+        let client = LiveSyncAPIClient(
+            baseURL: try #require(URL(string: "https://example.com")),
+            session: session
+        )
+        let responseData = try makeSyncResponseData()
+
+        MockSyncURLProtocol.requestHandler = { request in
+            #expect(request.url?.path == "/api/v1/sync")
+            #expect(request.url?.query == "cursor=cursor-123")
+            #expect(request.httpMethod == "GET")
+            let url = try #require(request.url)
+
+            return (
+                try #require(
+                    HTTPURLResponse(
+                        url: url,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "application/json"]
+                    )
+                ),
+                responseData
+            )
+        }
+        defer { MockSyncURLProtocol.requestHandler = nil }
+
+        let response = try await client.pullSync(cursor: "cursor-123", accessToken: "token-123")
+
+        #expect(response.serverCursor == "cursor-123")
+    }
+
+    // Behaviour: when the app pushes local changes, the live HTTP client must
+    // post them to the same versioned sync contract as pull.
+    @Test func pushSyncUsesVersionedEndpoint() async throws {
+        let session = makeSession()
+        let client = LiveSyncAPIClient(
+            baseURL: try #require(URL(string: "https://example.com")),
+            session: session
+        )
+        let responseData = try makeSyncResponseData()
+
+        MockSyncURLProtocol.requestHandler = { request in
+            #expect(request.url?.path == "/api/v1/sync")
+            #expect(request.httpMethod == "POST")
+            let url = try #require(request.url)
+
+            return (
+                try #require(
+                    HTTPURLResponse(
+                        url: url,
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "application/json"]
+                    )
+                ),
+                responseData
+            )
+        }
+        defer { MockSyncURLProtocol.requestHandler = nil }
+
+        let response = try await client.pushSync(
+            SyncPushRequest(
+                tasks: nil,
+                habits: nil,
+                trades: nil,
+                tags: nil,
+                taskTags: nil,
+                taskTaskDependencies: nil,
+                taskHabitDependencies: nil,
+                habitTags: nil,
+                rewards: nil,
+                rewardTags: nil,
+                generalDifficulty: nil
+            ),
+            accessToken: "token-123"
+        )
+
+        #expect(response.serverCursor == "cursor-123")
     }
 }

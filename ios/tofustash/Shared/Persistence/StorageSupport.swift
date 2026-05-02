@@ -78,7 +78,7 @@ enum AppDateCoding {
     }
 
     // The Rust backend uses `NaiveDateTime`, so Swift must serialize UTC values
-    // without a timezone suffix when talking to `/api/sync`.
+    // without a timezone suffix when talking to `/api/v1/sync`.
     static func backendTimestamp(from date: Date) -> String {
         backendFormatter.string(from: date)
     }

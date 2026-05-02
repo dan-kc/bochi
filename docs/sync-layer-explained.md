@@ -89,7 +89,7 @@ The important pieces are:
 - `SyncMutationCenter`
 - domain stores such as `HabitStore`, `TradeStore`, `RewardStore`, `TagStore`
 - projection stores such as `BalanceStore`
-- backend `/api/sync`
+- backend `/api/v1/sync`
 
 Here is the simplified division of responsibility.
 
@@ -160,12 +160,12 @@ Balance is shown locally and persisted locally, but the canonical synced truth i
 
 This distinction matters a lot later.
 
-### Backend `/api/sync`
+### Backend `/api/v1/sync`
 
 The backend exposes two sync operations:
 
-- `GET /api/sync`
-- `POST /api/sync`
+- `GET /api/v1/sync`
+- `POST /api/v1/sync`
 
 The backend handles:
 
@@ -616,7 +616,7 @@ The sync surface area is intentionally narrow:
 
 That keeps the client logic concentrated and makes the backend responsible for transactional consistency.
 
-## 8.1 `GET /api/sync`
+## 8.1 `GET /api/v1/sync`
 
 This is the pull endpoint.
 
@@ -631,7 +631,7 @@ If `cursor` is omitted, the backend returns the full current dataset for that us
 ### Example request
 
 ```http
-GET /api/sync?cursor=eyJ1cHBlcl9ib3VuZF90eF9pZCI6MTIzLCJpbl9wcm9ncmVzc190eF9pZHMiOltdfQ
+GET /api/v1/sync?cursor=eyJ1cHBlcl9ib3VuZF90eF9pZCI6MTIzLCJpbl9wcm9ncmVzc190eF9pZHMiOltdfQ
 Authorization: Bearer <access-token>
 ```
 
@@ -692,7 +692,7 @@ But on iOS, not all of that is treated the same way.
 
 `email` and `isPremium` are not used as the primary account truth in the sync layer. `AuthManager` and `/auth/me` remain the main source for auth/account state.
 
-## 8.2 `POST /api/sync`
+## 8.2 `POST /api/v1/sync`
 
 This is the push endpoint.
 
@@ -837,8 +837,8 @@ So the snapshot preserves the exact local values intended for push and the exact
 
 The app calls:
 
-- full: `GET /api/sync`
-- incremental: `GET /api/sync?cursor=<lastSyncCursor>`
+- full: `GET /api/v1/sync`
+- incremental: `GET /api/v1/sync?cursor=<lastSyncCursor>`
 
 ### 9.4 Step 4: merge pulled data
 
@@ -861,7 +861,7 @@ This is stronger than a normal incremental merge because it can replace stale lo
 
 ### 9.5 Step 5: push dirty local state
 
-If the dirty snapshot contains anything, the app builds one `SyncPushRequest` and sends it to `POST /api/sync`.
+If the dirty snapshot contains anything, the app builds one `SyncPushRequest` and sends it to `POST /api/v1/sync`.
 
 It does **not** push every local row. It pushes the dirty subset.
 
@@ -913,11 +913,11 @@ The app applies the trade and balance locally first, then syncs afterward.
 
 9. It snapshots the dirty trade rows.
 
-10. It pulls remote changes from `GET /api/sync`.
+10. It pulls remote changes from `GET /api/v1/sync`.
 
 11. It merges remote rows, skipping any dirty local trade ids.
 
-12. It sends the dirty local trade rows to `POST /api/sync`.
+12. It sends the dirty local trade rows to `POST /api/v1/sync`.
 
 13. The backend validates the trade references and upserts the trades in a transaction.
 
@@ -1105,7 +1105,7 @@ Background pull is allowed to refresh local state, but not for record ids that a
 
 1. Device A already has `habit-1` marked dirty.
 
-2. Background pull requests `GET /api/sync?cursor=<lastSyncCursor>`.
+2. Background pull requests `GET /api/v1/sync?cursor=<lastSyncCursor>`.
 
 3. The backend returns all changed rows since that checkpoint cursor.
 
@@ -1135,7 +1135,7 @@ The backend takes a unified push payload and processes it transactionally in dep
 
 ## 14.1 Pull behavior
 
-For `GET /api/sync`, the backend:
+For `GET /api/v1/sync`, the backend:
 
 1. opens one repeatable-read read-only transaction
 2. captures a backend snapshot cursor from the current Postgres transaction snapshot
@@ -1145,7 +1145,7 @@ For `GET /api/sync`, the backend:
 
 ## 14.2 Push behavior
 
-For `POST /api/sync`, the backend:
+For `POST /api/v1/sync`, the backend:
 
 1. begins a database transaction
 2. validates and upserts habits

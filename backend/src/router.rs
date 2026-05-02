@@ -45,8 +45,8 @@ pub async fn router() -> axum::Router {
         .route("/change-password", post(routes::change_password))
         .route("/change-email", post(routes::change_email));
 
-    // REST API routes (require authentication)
-    let api_router = axum::Router::new()
+    // Versioned REST API routes (require authentication)
+    let api_v1_router = axum::Router::new()
         .route("/balance", get(api::balance::get_balance))
         .route("/habits", post(api::habits::create_habit))
         .route("/tasks", post(api::tasks::create_task))
@@ -85,7 +85,7 @@ pub async fn router() -> axum::Router {
     axum::Router::new()
         .route("/health", get(routes::health))
         .nest("/auth", auth_router)
-        .nest("/api", api_router)
+        .nest("/api/v1", api_v1_router)
         .layer(cors)
         .layer(
             // This will make all routes implicitly have a:

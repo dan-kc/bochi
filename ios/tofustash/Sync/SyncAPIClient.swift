@@ -17,7 +17,7 @@ struct LiveSyncAPIClient: SyncAPIClient {
     }
 
     func pullSync(cursor: String?, accessToken: String) async throws -> SyncResponse {
-        var components = URLComponents(url: baseURL.appendingPathComponent("/api/sync"), resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/sync"), resolvingAgainstBaseURL: false)
         if let cursor {
             components?.queryItems = [
                 URLQueryItem(name: "cursor", value: cursor)
@@ -32,7 +32,7 @@ struct LiveSyncAPIClient: SyncAPIClient {
     }
 
     func pushSync(_ requestBody: SyncPushRequest, accessToken: String) async throws -> SyncResponse {
-        let url = baseURL.appendingPathComponent("/api/sync")
+        let url = baseURL.appendingPathComponent("/api/v1/sync")
         return try await request(url: url, method: "POST", body: requestBody, accessToken: accessToken)
     }
 

@@ -572,7 +572,7 @@ fn active_special_offer_target_is_current_sql() -> String {
 // Handlers
 // ============================================================================
 
-/// GET /api/sync - Pull changes since timestamp
+/// GET /api/v1/sync - Pull changes since timestamp
 pub async fn get_sync(
     State(app): State<App>,
     Extension(user): Extension<AuthenticatedUser>,
@@ -900,7 +900,7 @@ pub async fn get_sync(
     }))
 }
 
-/// POST /api/sync - Push changes (atomic batch upsert)
+/// POST /api/v1/sync - Push changes (atomic batch upsert)
 pub async fn post_sync(
     State(app): State<App>,
     Extension(user): Extension<AuthenticatedUser>,

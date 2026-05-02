@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use serde_json::{json, Value};
 
 // ============================================================================
-// Sync Pull (GET /api/sync) Tests
+// Sync Pull (GET /api/v1/sync) Tests
 // ============================================================================
 
 #[tokio::test]
@@ -31,10 +31,10 @@ async fn test_sync_pull_returns_all_entity_types() {
         "description": "A test habit"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
-    // Create a trade for that habit using POST /api/sync
+    // Create a trade for that habit using POST /api/v1/sync
     let trade_id = uuid::Uuid::new_v4().to_string();
     let sync_body = json!({
         "tasks": [{
@@ -94,10 +94,10 @@ async fn test_sync_pull_returns_all_entity_types() {
             "createdAt": "2025-01-01T11:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    // Now test GET /api/sync
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    // Now test GET /api/v1/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -232,10 +232,10 @@ async fn test_sync_pull_generates_stable_special_offers_for_same_window() {
         "habits": habits,
         "rewards": rewards
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    let (_, first_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
-    let (_, second_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, first_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
+    let (_, second_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     let first_offers = first_pull
         .get("specialOffers")
@@ -287,12 +287,12 @@ async fn test_sync_pull_caps_special_offers_at_five() {
 
     make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         json!({ "tasks": tasks }),
     )
     .await;
 
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let offers = pull_json
         .get("specialOffers")
         .unwrap()
@@ -324,12 +324,12 @@ async fn test_sync_pull_replaces_special_offer_for_completed_task() {
 
     make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         json!({ "tasks": tasks }),
     )
     .await;
 
-    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let initial_offers = initial_pull
         .get("specialOffers")
         .unwrap()
@@ -351,7 +351,7 @@ async fn test_sync_pull_replaces_special_offer_for_completed_task() {
 
     make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         json!({
             "tasks": [{
                 "id": offered_task_id,
@@ -371,7 +371,7 @@ async fn test_sync_pull_replaces_special_offer_for_completed_task() {
     )
     .await;
 
-    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let refreshed_offers = refreshed_pull
         .get("specialOffers")
         .unwrap()
@@ -410,12 +410,12 @@ async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
 
     make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         json!({ "rewards": rewards }),
     )
     .await;
 
-    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let initial_offers = initial_pull
         .get("specialOffers")
         .unwrap()
@@ -436,7 +436,7 @@ async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
 
     make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         json!({
             "rewards": [{
                 "id": offered_reward_id,
@@ -450,7 +450,7 @@ async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
     )
     .await;
 
-    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, refreshed_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let refreshed_offers = refreshed_pull
         .get("specialOffers")
         .unwrap()
@@ -480,10 +480,10 @@ async fn test_sync_pull_with_since_filters_all_entities() {
         "name": "Old Habit",
         "description": "Created before timestamp"
     });
-    make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
 
     // Get current sync cursor
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let server_cursor = pull_json
         .get("serverCursor")
         .unwrap()
@@ -497,11 +497,11 @@ async fn test_sync_pull_with_since_filters_all_entities() {
         "description": "Created after timestamp"
     });
     let (_, new_habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body_2).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body_2).await;
     let new_habit_id = new_habit_json.get("id").unwrap().as_str().unwrap();
 
     // Pull since the cursor - should only get the new habit
-    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -529,7 +529,7 @@ async fn test_sync_pull_balance_sums_only_active_trade_history() {
         "description": "Trade history should be authoritative"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap();
 
     let sync_body = json!({
@@ -550,7 +550,7 @@ async fn test_sync_pull_balance_sums_only_active_trade_history() {
         ]
     });
     let (push_status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
     assert_eq!(push_status, StatusCode::OK);
     assert_eq!(
         push_json
@@ -561,7 +561,7 @@ async fn test_sync_pull_balance_sums_only_active_trade_history() {
         282.0
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
     assert_eq!(
@@ -586,7 +586,7 @@ async fn test_sync_pull_empty_for_new_user() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("tasks").unwrap().as_array().unwrap().len(), 0);
@@ -622,12 +622,12 @@ async fn test_sync_pull_empty_for_new_user() {
 
 #[tokio::test]
 async fn test_sync_pull_requires_authentication() {
-    let (status, _) = make_unauthenticated_get_request("/api/sync").await;
+    let (status, _) = make_unauthenticated_get_request("/api/v1/sync").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 // ============================================================================
-// Sync Push (POST /api/sync) Tests
+// Sync Push (POST /api/v1/sync) Tests
 // ============================================================================
 
 #[tokio::test]
@@ -657,7 +657,7 @@ async fn test_sync_push_creates_habit_and_trade_atomically() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -694,7 +694,7 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
         "description": "Refund trades should sync"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
 
     let active_trade_id = uuid::Uuid::new_v4().to_string();
@@ -717,7 +717,7 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
     });
 
     let (push_status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", push_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", push_body).await;
 
     assert_eq!(push_status, StatusCode::OK);
 
@@ -756,7 +756,7 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
         0.0
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
 
@@ -811,7 +811,7 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
         "description": "Refunded completions should not satisfy task dependencies"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
 
     let task_id = uuid::Uuid::new_v4().to_string();
@@ -851,7 +851,7 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
@@ -859,7 +859,7 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
         "Validation Error: Task dependencies must be complete before this task can be completed."
     );
 
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert!(pull_json
         .get("tasks")
         .unwrap()
@@ -900,7 +900,7 @@ async fn test_sync_push_refund_trade_reopens_task_without_task_row_update() {
         }]
     });
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let refund_body = json!({
@@ -914,12 +914,12 @@ async fn test_sync_push_refund_trade_reopens_task_without_task_row_update() {
         }]
     });
     let (refund_status, refund_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", refund_body).await;
 
     assert_eq!(refund_status, StatusCode::OK);
     assert_eq!(refund_json["balance"]["tofuBalance"], 0.0);
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_status, StatusCode::OK);
 
     let task = pull_json["tasks"]
@@ -976,7 +976,7 @@ async fn test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependenc
         }]
     });
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let refund_body = json!({
@@ -990,7 +990,7 @@ async fn test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependenc
         }]
     });
     let (refund_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", refund_body).await;
     assert_eq!(refund_status, StatusCode::OK);
 
     let complete_body = json!({
@@ -1004,7 +1004,7 @@ async fn test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependenc
         }]
     });
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", complete_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", complete_body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
@@ -1027,7 +1027,7 @@ async fn test_sync_push_rejects_refund_trade_before_original_trade_time() {
         "description": "Refund trades should follow the original event"
     });
     let (_, habit_json) =
-        make_authenticated_post_request(&access_token, "/api/habits", habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/habits", habit_body).await;
     let habit_id = habit_json.get("id").unwrap().as_str().unwrap().to_string();
 
     let trade_id = uuid::Uuid::new_v4().to_string();
@@ -1041,7 +1041,7 @@ async fn test_sync_push_rejects_refund_trade_before_original_trade_time() {
         }]
     });
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let refund_body = json!({
@@ -1055,7 +1055,7 @@ async fn test_sync_push_rejects_refund_trade_before_original_trade_time() {
         }]
     });
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", refund_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", refund_body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
@@ -1100,7 +1100,7 @@ async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
     });
 
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let completion_body = json!({
@@ -1128,7 +1128,7 @@ async fn test_sync_push_allows_task_completion_after_dependency_is_removed() {
     });
 
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", completion_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", completion_body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -1186,7 +1186,7 @@ async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -1235,7 +1235,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
     });
 
     let (initial_status, initial_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", initial_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", initial_body).await;
     assert_eq!(initial_status, StatusCode::OK);
     assert_eq!(
         initial_json.get("tasks").unwrap().as_array().unwrap()[0]
@@ -1259,7 +1259,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
     });
 
     let (update_status, update_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", update_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", update_body).await;
 
     assert_eq!(update_status, StatusCode::OK);
     assert_eq!(
@@ -1269,7 +1269,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
         "2025-02-01T10:00:00"
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_status, StatusCode::OK);
     assert_eq!(
         pull_json.get("tasks").unwrap().as_array().unwrap()[0]
@@ -1353,7 +1353,7 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
     });
 
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let blocked_completion_body = json!({
@@ -1375,7 +1375,7 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
 
     let (blocked_status, blocked_json) = make_authenticated_post_request(
         &access_token,
-        "/api/sync",
+        "/api/v1/sync",
         blocked_completion_body.clone(),
     )
     .await;
@@ -1401,11 +1401,11 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
         }]
     });
     let (habit_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", satisfy_habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", satisfy_habit_body).await;
     assert_eq!(habit_status, StatusCode::OK);
 
     let (completion_status, completion_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", blocked_completion_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", blocked_completion_body).await;
     assert_eq!(completion_status, StatusCode::OK);
     assert_eq!(
         completion_json["tasks"].as_array().unwrap()[0]
@@ -1455,7 +1455,7 @@ async fn test_sync_push_rejects_dependency_cycles() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
@@ -1530,7 +1530,7 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
     });
 
     let (setup_status, _) =
-        make_authenticated_post_request(&access_token, "/api/sync", setup_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", setup_body).await;
     assert_eq!(setup_status, StatusCode::OK);
 
     let delete_task_body = json!({
@@ -1545,7 +1545,7 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
     });
 
     let (delete_task_status, delete_task_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", delete_task_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", delete_task_body).await;
     assert_eq!(delete_task_status, StatusCode::OK);
     assert_eq!(
         delete_task_json["tasks"].as_array().unwrap()[0]
@@ -1591,7 +1591,7 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
         }]
     });
     let (complete_blocked_task_status, complete_blocked_task_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", complete_blocked_task_body)
+        make_authenticated_post_request(&access_token, "/api/v1/sync", complete_blocked_task_body)
             .await;
     assert_eq!(complete_blocked_task_status, StatusCode::OK);
     assert_eq!(
@@ -1615,7 +1615,7 @@ async fn test_sync_push_deleting_task_soft_deletes_links_to_that_task() {
     });
 
     let (delete_habit_status, delete_habit_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", delete_habit_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", delete_habit_body).await;
     assert_eq!(delete_habit_status, StatusCode::BAD_REQUEST);
     assert_eq!(
         delete_habit_json["errors"][0]["message"],
@@ -1651,7 +1651,7 @@ async fn test_sync_push_ordering_habit_before_trade() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(
@@ -1697,7 +1697,7 @@ async fn test_sync_push_partial_failure_rolls_back() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     // Should have an error
     assert!(
@@ -1708,7 +1708,7 @@ async fn test_sync_push_partial_failure_rolls_back() {
     );
 
     // Now verify the habit was NOT saved by pulling
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let habits = pull_json.get("habits").unwrap().as_array().unwrap();
     assert_eq!(
         habits.len(),
@@ -1728,7 +1728,7 @@ async fn test_sync_push_empty_input_succeeds() {
     // Push with empty input
     let body = json!({});
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(
@@ -1779,7 +1779,7 @@ async fn test_sync_push_updates_balance_correctly() {
         ]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none(), "Response: {:?}", json);
@@ -1804,7 +1804,7 @@ async fn test_sync_push_requires_authentication() {
         }]
     });
 
-    let (status, _) = make_unauthenticated_post_request("/api/sync", body).await;
+    let (status, _) = make_unauthenticated_post_request("/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
@@ -1828,7 +1828,7 @@ async fn test_sync_push_trade_invalid_habit_reference_fails() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -1862,7 +1862,7 @@ async fn test_sync_push_validates_habit_fields() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(
@@ -1907,7 +1907,7 @@ async fn test_sync_push_idempotent_same_ids() {
 
     // First push
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
     assert_eq!(
@@ -1916,7 +1916,7 @@ async fn test_sync_push_idempotent_same_ids() {
     );
 
     // Push same data again - should be idempotent
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
     // Balance should still be 500 (not 1000)
@@ -1926,7 +1926,7 @@ async fn test_sync_push_idempotent_same_ids() {
     );
 
     // Verify only one habit and one trade exist
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(
         pull_json.get("habits").unwrap().as_array().unwrap().len(),
         1
@@ -1969,11 +1969,11 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
         }]
     });
 
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", push_body).await;
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", push_body).await;
     assert_eq!(status, StatusCode::OK);
 
     // Pull and verify
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(status, StatusCode::OK);
 
     let habits = json.get("habits").unwrap().as_array().unwrap();
@@ -2014,7 +2014,7 @@ async fn test_sync_incremental_after_push() {
         }]
     });
 
-    let (_, json1) = make_authenticated_post_request(&access_token, "/api/sync", push1_body).await;
+    let (_, json1) = make_authenticated_post_request(&access_token, "/api/v1/sync", push1_body).await;
     let server_cursor = json1
         .get("serverCursor")
         .unwrap()
@@ -2034,10 +2034,10 @@ async fn test_sync_incremental_after_push() {
         }]
     });
 
-    make_authenticated_post_request(&access_token, "/api/sync", push2_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", push2_body).await;
 
     // Incremental pull using the server cursor from first push
-    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
     assert_eq!(status, StatusCode::OK);
 
@@ -2083,11 +2083,11 @@ async fn test_sync_only_returns_own_data() {
         }]
     });
 
-    let (status, _) = make_authenticated_post_request(&token1, "/api/sync", push_body).await;
+    let (status, _) = make_authenticated_post_request(&token1, "/api/v1/sync", push_body).await;
     assert_eq!(status, StatusCode::OK);
 
     // User 2 tries to pull
-    let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&token2, "/api/v1/sync").await;
     assert_eq!(status, StatusCode::OK);
 
     // User 2 should see nothing
@@ -2122,10 +2122,10 @@ async fn test_sync_pull_includes_tags() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    // Now test GET /api/sync
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    // Now test GET /api/v1/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2171,10 +2171,10 @@ async fn test_sync_pull_includes_habit_tags() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    // Now test GET /api/sync
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    // Now test GET /api/v1/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2205,7 +2205,7 @@ async fn test_sync_pull_tags_filtered_by_since() {
         }]
     });
     let (_, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body1).await;
     let server_cursor = push_json
         .get("serverCursor")
         .unwrap()
@@ -2224,10 +2224,10 @@ async fn test_sync_pull_tags_filtered_by_since() {
             "updatedAt": "2025-01-01T11:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new tag
-    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2283,7 +2283,7 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
         }]
     });
     let (_, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body1).await;
     let server_cursor = push_json
         .get("serverCursor")
         .unwrap()
@@ -2300,10 +2300,10 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
             "updatedAt": "2025-01-01T11:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new association
-    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2336,7 +2336,7 @@ async fn test_sync_push_creates_tag() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2367,7 +2367,7 @@ async fn test_sync_push_updates_tag() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body1).await;
 
     // Update tag
     let body2 = json!({
@@ -2379,7 +2379,7 @@ async fn test_sync_push_updates_tag() {
             "updatedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2409,7 +2409,7 @@ async fn test_sync_push_soft_deletes_tag() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body1).await;
 
     // Soft delete tag
     let body2 = json!({
@@ -2422,7 +2422,7 @@ async fn test_sync_push_soft_deletes_tag() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2466,7 +2466,7 @@ async fn test_sync_push_creates_habit_tag_association() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2510,7 +2510,7 @@ async fn test_sync_push_soft_deletes_habit_tag_association() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body1).await;
 
     // Soft delete association
     let body2 = json!({
@@ -2522,7 +2522,7 @@ async fn test_sync_push_soft_deletes_habit_tag_association() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2553,7 +2553,7 @@ async fn test_sync_push_tag_validates_name_length() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -2579,7 +2579,7 @@ async fn test_sync_push_tag_validates_color_hex_format() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -2612,7 +2612,7 @@ async fn test_sync_push_habit_tag_validates_habit_exists() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -2648,7 +2648,7 @@ async fn test_sync_push_habit_tag_validates_tag_exists() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -2678,17 +2678,17 @@ async fn test_sync_push_tag_idempotent() {
 
     // First push
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Second push with same data
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Verify only one tag exists
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_json.get("tags").unwrap().as_array().unwrap().len(), 1);
 }
 
@@ -2728,17 +2728,17 @@ async fn test_sync_push_habit_tag_idempotent() {
 
     // First push
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Second push with same data
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Verify only one association exists
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(
         pull_json
             .get("habitTags")
@@ -2772,10 +2772,10 @@ async fn test_sync_tags_data_isolation() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&token1, "/api/sync", body).await;
+    make_authenticated_post_request(&token1, "/api/v1/sync", body).await;
 
     // User 2 tries to pull
-    let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&token2, "/api/v1/sync").await;
     dbg!(json.clone());
     assert_eq!(status, StatusCode::OK);
 
@@ -2808,10 +2808,10 @@ async fn test_sync_pull_includes_rewards() {
             "damageTier": "light"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    // Now test GET /api/sync
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    // Now test GET /api/v1/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2858,10 +2858,10 @@ async fn test_sync_pull_includes_reward_tags() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body).await;
 
-    // Now test GET /api/sync
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    // Now test GET /api/v1/sync
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2892,7 +2892,7 @@ async fn test_sync_pull_rewards_filtered_by_since() {
         }]
     });
     let (_, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", sync_body1).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body1).await;
     let server_cursor = push_json
         .get("serverCursor")
         .unwrap()
@@ -2911,10 +2911,10 @@ async fn test_sync_pull_rewards_filtered_by_since() {
             "updatedAt": "2025-01-01T11:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", sync_body2).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new reward
-    let url = format!("/api/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2950,7 +2950,7 @@ async fn test_sync_push_creates_reward() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2983,7 +2983,7 @@ async fn test_sync_push_updates_reward() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body1).await;
 
     // Update reward
     let body2 = json!({
@@ -2996,7 +2996,7 @@ async fn test_sync_push_updates_reward() {
             "damageTier": "extreme"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -3030,7 +3030,7 @@ async fn test_sync_push_soft_deletes_reward() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body1).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body1).await;
 
     // Soft delete reward
     let body2 = json!({
@@ -3043,7 +3043,7 @@ async fn test_sync_push_soft_deletes_reward() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body2).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -3087,7 +3087,7 @@ async fn test_sync_push_creates_reward_tag_association() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -3124,7 +3124,7 @@ async fn test_sync_push_reward_tag_validates_reward_exists() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -3154,7 +3154,7 @@ async fn test_sync_push_reward_validates_name_length() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -3182,10 +3182,10 @@ async fn test_sync_rewards_data_isolation() {
             "updatedAt": "2025-01-01T10:00:00"
         }]
     });
-    make_authenticated_post_request(&token1, "/api/sync", body).await;
+    make_authenticated_post_request(&token1, "/api/v1/sync", body).await;
 
     // User 2 tries to pull
-    let (status, json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&token2, "/api/v1/sync").await;
     assert_eq!(status, StatusCode::OK);
 
     // User 2 should not see User 1's reward
@@ -3213,17 +3213,17 @@ async fn test_sync_push_reward_idempotent() {
 
     // First push
     let (status, json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body.clone()).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body.clone()).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Second push with same data
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert!(json.get("errors").is_none());
 
     // Verify only one reward exists
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(
         pull_json.get("rewards").unwrap().as_array().unwrap().len(),
         1
@@ -3273,7 +3273,7 @@ async fn test_sync_push_atomicity_with_tags() {
         }]
     });
 
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -3281,7 +3281,7 @@ async fn test_sync_push_atomicity_with_tags() {
     );
 
     // Verify everything was rolled back
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(
         pull_json.get("habits").unwrap().as_array().unwrap().len(),
         0,
@@ -3311,7 +3311,7 @@ async fn test_sync_pull_returns_default_general_difficulty() {
     register_user(&email, password).await;
     let access_token = get_access_token_for_user(&email, &password).await;
 
-    let (status, json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (status, json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("generalDifficulty").unwrap(), 5.0);
@@ -3330,13 +3330,13 @@ async fn test_sync_push_updates_general_difficulty() {
         "generalDifficulty": 8.5
     });
     let (status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(push_json.get("generalDifficulty").unwrap(), 8.5);
 
     // Verify it persists via pull
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_json.get("generalDifficulty").unwrap(), 8.5);
 }
 
@@ -3351,12 +3351,12 @@ async fn test_sync_push_general_difficulty_validation_zero() {
     let body = json!({
         "generalDifficulty": 0.0
     });
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
     // Verify default was not changed
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_json.get("generalDifficulty").unwrap(), 5.0);
 }
 
@@ -3371,7 +3371,7 @@ async fn test_sync_push_general_difficulty_validation_negative() {
     let body = json!({
         "generalDifficulty": -1.0
     });
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -3387,7 +3387,7 @@ async fn test_sync_push_general_difficulty_validation_too_high() {
     let body = json!({
         "generalDifficulty": 1000.0
     });
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -3404,7 +3404,7 @@ async fn test_sync_push_general_difficulty_boundary_values() {
     let body = json!({
         "generalDifficulty": 0.01
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("generalDifficulty").unwrap(), 0.01);
 
@@ -3412,7 +3412,7 @@ async fn test_sync_push_general_difficulty_boundary_values() {
     let body = json!({
         "generalDifficulty": 999.99
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json.get("generalDifficulty").unwrap(), 999.99);
 }
@@ -3438,13 +3438,13 @@ async fn test_sync_push_general_difficulty_with_other_entities() {
     });
 
     let (status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(push_json.get("generalDifficulty").unwrap(), 3.0);
 
     // Verify both the habit and difficulty persisted
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_json.get("generalDifficulty").unwrap(), 3.0);
     assert_eq!(
         pull_json.get("habits").unwrap().as_array().unwrap().len(),
@@ -3477,7 +3477,7 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
     });
 
     let (status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     let habit = push_json
@@ -3491,7 +3491,7 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
     assert_eq!(habit.get("lockoutDurationSeconds").unwrap(), 3600);
     assert_eq!(habit.get("skipConsequence").unwrap(), 5);
 
-    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let pulled_habit = pull_json
         .get("habits")
         .unwrap()
@@ -3524,7 +3524,7 @@ async fn test_sync_push_habit_validates_duration_range() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -3563,7 +3563,7 @@ async fn test_sync_push_habit_validates_lockout_duration_range() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -3602,7 +3602,7 @@ async fn test_sync_push_habit_validates_lockout_duration_maximum() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -3641,7 +3641,7 @@ async fn test_sync_push_habit_validates_skip_consequence_range() {
         }]
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -3673,12 +3673,12 @@ async fn test_sync_push_without_general_difficulty_preserves_existing() {
     let body = json!({
         "generalDifficulty": 7.0
     });
-    make_authenticated_post_request(&access_token, "/api/sync", body).await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     // Push without generalDifficulty
     let body = json!({});
     let (status, push_json) =
-        make_authenticated_post_request(&access_token, "/api/sync", body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
     assert_eq!(status, StatusCode::OK);
     // Should still return 7.0
@@ -3698,13 +3698,13 @@ async fn test_sync_general_difficulty_isolation_between_users() {
 
     // User 1 sets difficulty to 2.0
     let body = json!({ "generalDifficulty": 2.0 });
-    make_authenticated_post_request(&token1, "/api/sync", body).await;
+    make_authenticated_post_request(&token1, "/api/v1/sync", body).await;
 
     // User 2 should still have default 5.0
-    let (_, pull_json) = make_authenticated_get_request(&token2, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&token2, "/api/v1/sync").await;
     assert_eq!(pull_json.get("generalDifficulty").unwrap(), 5.0);
 
     // User 1 should still have 2.0
-    let (_, pull_json) = make_authenticated_get_request(&token1, "/api/sync").await;
+    let (_, pull_json) = make_authenticated_get_request(&token1, "/api/v1/sync").await;
     assert_eq!(pull_json.get("generalDifficulty").unwrap(), 2.0);
 }
