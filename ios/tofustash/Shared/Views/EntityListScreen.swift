@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Shared list shell for tasks, habits, and rewards. Each screen keeps its own
 // row content and pricing logic, but the list chrome should behave the same:
@@ -165,6 +166,10 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
             guard searchState.isPresented else { return }
 
             collapseSearchIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            guard searchState.isPresented else { return }
+            isSearchFieldFocused = false
         }
     }
 

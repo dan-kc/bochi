@@ -292,9 +292,9 @@ final class tofustashUITests: XCTestCase {
     }
 
     // Behaviour: opening list search from the floating button should narrow
-    // the current list live, keep the search bar visible after the keyboard
-    // collapses, and collapse immediately if the user clears an unfocused
-    // search with the clear button.
+    // the current list live, keep the search bar visible after search submit
+    // dismisses the keyboard, and collapse immediately if the user clears an
+    // unfocused search with the clear button.
     func testTaskListSearchClearButtonClosesUnfocusedSearch() {
         let app = launchApp()
 
@@ -307,11 +307,10 @@ final class tofustashUITests: XCTestCase {
         XCTAssertTrue(searchField.waitForExistence(timeout: 2))
         searchField.tap()
         searchField.typeText("bravo")
+        searchField.typeText("\n")
 
         XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.staticTexts["Alpha Task"].waitForExistence(timeout: 1))
-
-        app.navigationBars["Tasks"].tap()
 
         XCTAssertTrue(searchField.waitForExistence(timeout: 1))
         XCTAssertTrue(app.staticTexts["Bravo Task"].waitForExistence(timeout: 2))
@@ -347,7 +346,7 @@ final class tofustashUITests: XCTestCase {
         let searchField = app.textFields["entity.searchField"]
         XCTAssertTrue(searchField.waitForExistence(timeout: 2))
         searchField.tap()
-        app.keyboards.buttons["Done"].tap()
+        searchField.typeText("\n")
 
         XCTAssertFalse(searchField.waitForExistence(timeout: 1))
         XCTAssertTrue(app.buttons["entity.search"].waitForExistence(timeout: 1))
