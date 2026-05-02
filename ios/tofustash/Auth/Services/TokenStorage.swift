@@ -65,7 +65,11 @@ final class KeychainTokenStorage: TokenStorage {
         var result: AnyObject?
         // &result = inout parameter (like a pointer in Go/Rust). The function writes into `result` through this reference.
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess else { return nil }
+        guard status == errSecSuccess else {
+            guard status != errSecItemNotFound else { return nil }
+            reportKeychainFailure(operation: "read", status: status)
+            return nil
+        }
         return result as? Data
     }
 
@@ -78,7 +82,11 @@ final class KeychainTokenStorage: TokenStorage {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            reportKeychainFailure(operation: "write", status: status)
+            return
+        }
     }
 
     private func deleteKeychain(key: String) {
@@ -87,6 +95,17 @@ final class KeychainTokenStorage: TokenStorage {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            reportKeychainFailure(operation: "delete", status: status)
+            return
+        }
+    }
+
+    private func reportKeychainFailure(operation: String, status: OSStatus) {
+        let fallbackMessage = "OSStatus \(status)"
+        let platformMessage = SecCopyErrorMessageString(status, nil) as String?
+        let detail = platformMessage ?? fallbackMessage
+        assertionFailure("Keychain \(operation) failed: \(detail)")
     }
 }

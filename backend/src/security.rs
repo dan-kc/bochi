@@ -5,6 +5,9 @@ pub enum Error {
     FailedToParseRefreshToken,
 }
 
+pub const ACCESS_TOKEN_LIFETIME_SECONDS: i64 = 60 * 30;
+pub const REFRESH_TOKEN_LIFETIME_SECONDS: i64 = 60 * 60 * 24 * 30;
+
 pub mod jwt {
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
     use rand::Rng;
@@ -60,7 +63,8 @@ pub mod jwt {
 
         /// Returns the access token, refresh token, and the hashed uuid part of the refresh token
         pub fn create(&self, user_id: Uuid, name: &str) -> (String, String, String) {
-            let time_in_half_an_hour = chrono::Utc::now().timestamp() + 60 * 30;
+            let time_in_half_an_hour =
+                chrono::Utc::now().timestamp() + super::ACCESS_TOKEN_LIFETIME_SECONDS;
             let claims = Claims {
                 exp: time_in_half_an_hour,
                 sub: user_id.to_string(),

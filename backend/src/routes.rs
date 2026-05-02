@@ -3,7 +3,10 @@ use std::sync::OnceLock;
 
 use crate::{
     router::App,
-    security::{self, jwt::create_random_string, parse_refresh_token},
+    security::{
+        self, jwt::create_random_string, parse_refresh_token, ACCESS_TOKEN_LIFETIME_SECONDS,
+        REFRESH_TOKEN_LIFETIME_SECONDS,
+    },
 };
 use axum::{
     debug_handler,
@@ -36,15 +39,15 @@ fn create_clear_cookie(name: &str) -> HeaderValue {
 /// Build headers with auth cookies set
 fn auth_cookie_headers(access_token: &str, refresh_token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    // Access token expires in 15 minutes (900 seconds)
+    // Keep cookie expiry aligned with the backend JWT lifetime.
     headers.append(
         SET_COOKIE,
-        create_auth_cookie("access_token", access_token, 900),
+        create_auth_cookie("access_token", access_token, ACCESS_TOKEN_LIFETIME_SECONDS),
     );
-    // Refresh token expires in 7 days (604800 seconds)
+    // Keep cookie expiry aligned with the database-backed refresh token lifetime.
     headers.append(
         SET_COOKIE,
-        create_auth_cookie("refresh_token", refresh_token, 604800),
+        create_auth_cookie("refresh_token", refresh_token, REFRESH_TOKEN_LIFETIME_SECONDS),
     );
     headers
 }

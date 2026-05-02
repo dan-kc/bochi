@@ -33,6 +33,11 @@ fn cookie_has_attribute(cookie: &str, attr: &str) -> bool {
         .any(|s| s == attr.to_lowercase() || s.starts_with(&format!("{}=", attr.to_lowercase())))
 }
 
+/// Helper to assert a cookie's Max-Age matches the server token lifetime.
+fn cookie_has_max_age(cookie: &str, seconds: i64) -> bool {
+    cookie_has_attribute(cookie, &format!("Max-Age={seconds}"))
+}
+
 // ============ Register Cookie Tests ============
 
 #[tokio::test]
@@ -128,6 +133,46 @@ async fn test_register_sets_refresh_token_cookie() {
         cookie_has_attribute(refresh_cookie, "SameSite=Strict")
             || cookie_has_attribute(refresh_cookie, "SameSite=Lax"),
         "refresh_token cookie should have SameSite attribute"
+    );
+}
+
+#[tokio::test]
+async fn test_register_cookie_max_age_matches_token_lifetime() {
+    let router = router::router().await;
+
+    let request_body = json!({
+        "email": generate_email_from_fn!(test_register_cookie_max_age_matches_token_lifetime),
+        "password": "password123"
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/register")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let cookies = get_set_cookie_headers(&response);
+    let access_cookie = find_cookie(&cookies, "access_token").expect("Register should set access_token");
+    let refresh_cookie =
+        find_cookie(&cookies, "refresh_token").expect("Register should set refresh_token");
+
+    assert!(
+        cookie_has_max_age(access_cookie, 1800),
+        "access_token cookie should match the 30 minute JWT lifetime. Got: {}",
+        access_cookie
+    );
+    assert!(
+        cookie_has_max_age(refresh_cookie, 2_592_000),
+        "refresh_token cookie should match the 30 day refresh token lifetime. Got: {}",
+        refresh_cookie
     );
 }
 
