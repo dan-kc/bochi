@@ -184,6 +184,125 @@ async fn test_sync_pull_returns_all_entity_types() {
 }
 
 #[tokio::test]
+async fn test_sync_pull_generates_stable_special_offers_for_same_window() {
+    let email = generate_email_from_fn!(test_sync_pull_generates_stable_special_offers_for_same_window);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tasks: Vec<Value> = (0..4)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Task {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T09:0{index}:00"),
+                "updatedAt": format!("2025-01-01T09:0{index}:00")
+            })
+        })
+        .collect();
+
+    let habits: Vec<Value> = (0..3)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Habit {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T10:0{index}:00"),
+                "updatedAt": format!("2025-01-01T10:0{index}:00")
+            })
+        })
+        .collect();
+
+    let rewards: Vec<Value> = (0..3)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Reward {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T11:0{index}:00"),
+                "updatedAt": format!("2025-01-01T11:0{index}:00")
+            })
+        })
+        .collect();
+
+    let sync_body = json!({
+        "tasks": tasks,
+        "habits": habits,
+        "rewards": rewards
+    });
+    make_authenticated_post_request(&access_token, "/api/sync", sync_body).await;
+
+    let (_, first_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let (_, second_pull) = make_authenticated_get_request(&access_token, "/api/sync").await;
+
+    let first_offers = first_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    let second_offers = second_pull
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+
+    assert_eq!(first_offers.len(), 1);
+    assert_eq!(first_offers, second_offers);
+
+    let offer = &first_offers[0];
+    let entity_kind = offer.get("entityKind").unwrap().as_str().unwrap();
+    let modifier_percent = offer.get("modifierPercent").unwrap().as_i64().unwrap();
+
+    assert!(matches!(entity_kind, "task" | "habit" | "reward"));
+    assert!(matches!(modifier_percent.abs(), 30 | 40 | 50));
+
+    match entity_kind {
+        "task" | "habit" => assert!(modifier_percent > 0),
+        "reward" => assert!(modifier_percent < 0),
+        _ => unreachable!(),
+    }
+}
+
+#[tokio::test]
+async fn test_sync_pull_caps_special_offers_at_five() {
+    let email = generate_email_from_fn!(test_sync_pull_caps_special_offers_at_five);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let tasks: Vec<Value> = (0..55)
+        .map(|index| {
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "name": format!("Task {index}"),
+                "description": "",
+                "createdAt": format!("2025-01-01T09:{:02}:00", index % 60),
+                "updatedAt": format!("2025-01-01T09:{:02}:00", index % 60)
+            })
+        })
+        .collect();
+
+    make_authenticated_post_request(
+        &access_token,
+        "/api/sync",
+        json!({ "tasks": tasks }),
+    )
+    .await;
+
+    let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/sync").await;
+    let offers = pull_json
+        .get("specialOffers")
+        .unwrap()
+        .as_array()
+        .unwrap();
+
+    assert_eq!(offers.len(), 5);
+}
+
+#[tokio::test]
 async fn test_sync_pull_with_since_filters_all_entities() {
     let email = generate_email_from_fn!(test_sync_pull_with_since_filters_all_entities);
     let password = "password123";

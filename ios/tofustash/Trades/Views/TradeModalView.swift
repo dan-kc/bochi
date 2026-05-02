@@ -21,6 +21,7 @@ struct TradeModalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(HabitStore.self) private var habitStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
 
     // How many times the user wants to claim this habit. Starts at 1.
@@ -47,8 +48,13 @@ struct TradeModalView: View {
             habit: habit,
             allHabits: habitStore.activeHabits,
             completionDates: completionDates,
-            quantity: quantity
+            quantity: quantity,
+            specialOfferModifierPercent: specialOffer?.modifierPercent
         )
+    }
+
+    private var specialOffer: SpecialOffer? {
+        specialOfferStore.activeOffer(for: .habit, entityID: habit.id)
     }
 
     private var isLocked: Bool {
@@ -115,6 +121,12 @@ struct TradeModalView: View {
                         .animation(.snappy, value: totalPrice)
                     Image(systemName: "cube.fill")
                         .font(.body)
+                }
+
+                if let specialOffer {
+                    Text(SpecialOfferSupport.badgeText(modifierPercent: specialOffer.modifierPercent))
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
                 }
             }
             .padding(.top, 8)
@@ -194,7 +206,8 @@ struct TradeModalView: View {
                 habit: habit,
                 allHabits: habitStore.activeHabits,
                 completionDates: projectedCompletionDates,
-                now: claimDate
+                now: claimDate,
+                specialOfferModifierPercent: specialOffer?.modifierPercent
             )
             entries.append((id: RecordID(), amount: price))
             projectedCompletionDates.append(claimDate)

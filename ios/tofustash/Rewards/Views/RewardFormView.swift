@@ -36,6 +36,7 @@ struct RewardFormView: View {
     @Environment(RewardStore.self) private var rewardStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
     @State private var name = ""
@@ -131,7 +132,8 @@ struct RewardFormView: View {
             reward: reward,
             allRewards: allRewards,
             purchaseDates: purchaseDates,
-            generalDifficulty: userSettingsStore.generalDifficulty
+            generalDifficulty: userSettingsStore.generalDifficulty,
+            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .reward, entityID: reward.id)?.modifierPercent
         )
     }
 

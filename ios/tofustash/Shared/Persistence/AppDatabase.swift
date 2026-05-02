@@ -587,6 +587,28 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v12_special_offers") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS special_offers (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    entity_kind TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    modifier_percent INTEGER NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    deleted_at REAL,
+                    expires_at REAL NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_special_offers_owner_updated
+                ON special_offers(owner_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_special_offers_owner_entity
+                ON special_offers(owner_id, entity_kind, entity_id);
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

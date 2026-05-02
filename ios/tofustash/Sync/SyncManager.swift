@@ -10,6 +10,7 @@ final class SyncManager {
     private let taskDependencyStore: TaskDependencyStore
     private let habitStore: HabitStore
     private let rewardStore: RewardStore
+    private let specialOfferStore: SpecialOfferStore
     private let tradeStore: TradeStore
     private let tagStore: TagStore
     private let balanceStore: BalanceStore
@@ -43,6 +44,7 @@ final class SyncManager {
         let habitTags: [HabitTag]
         let rewards: [Reward]
         let rewardTags: [RewardTag]
+        let specialOffers: [SpecialOffer]
     }
 
     init(
@@ -53,6 +55,7 @@ final class SyncManager {
         taskDependencyStore: TaskDependencyStore,
         habitStore: HabitStore,
         rewardStore: RewardStore,
+        specialOfferStore: SpecialOfferStore,
         tradeStore: TradeStore,
         tagStore: TagStore,
         balanceStore: BalanceStore,
@@ -70,6 +73,7 @@ final class SyncManager {
         self.taskDependencyStore = taskDependencyStore
         self.habitStore = habitStore
         self.rewardStore = rewardStore
+        self.specialOfferStore = specialOfferStore
         self.tradeStore = tradeStore
         self.tagStore = tagStore
         self.balanceStore = balanceStore
@@ -178,6 +182,7 @@ final class SyncManager {
         taskDependencyStore.setCurrentOwner(ownerID)
         habitStore.setCurrentOwner(ownerID)
         rewardStore.setCurrentOwner(ownerID)
+        specialOfferStore.setCurrentOwner(ownerID)
         tradeStore.setCurrentOwner(ownerID)
         tagStore.setCurrentOwner(ownerID)
         balanceStore.setCurrentOwner(ownerID)
@@ -449,6 +454,7 @@ final class SyncManager {
                     on: db
                 )
                 try self.rewardStore.purgeDeletedRewards(excluding: Set(remainingDirty.dirty.rewards.map(\.id)), on: db)
+                try self.specialOfferStore.purgeDeletedOffers(on: db)
             }
             lastSyncTime = serverTime
             setOwnerAcrossStores(currentUserID)
@@ -497,7 +503,8 @@ final class SyncManager {
             taskTags: OwnerScopedRecordSupport.mergeRecords(local: payload.taskTags, remote: dirtyTaskTags),
             habitTags: OwnerScopedRecordSupport.mergeRecords(local: payload.habitTags, remote: dirtyHabitTags),
             rewards: OwnerScopedRecordSupport.mergeRecords(local: payload.rewards, remote: dirtyRewards),
-            rewardTags: OwnerScopedRecordSupport.mergeRecords(local: payload.rewardTags, remote: dirtyRewardTags)
+            rewardTags: OwnerScopedRecordSupport.mergeRecords(local: payload.rewardTags, remote: dirtyRewardTags),
+            specialOffers: payload.specialOffers
         )
 
         try persistSyncPayload(authoritativePayload)
@@ -610,7 +617,8 @@ final class SyncManager {
                 guard let model = record.toModel() else { return nil }
                 guard dirtyIDs?.rewardTags[model.id] == nil else { return nil }
                 return model
-            }
+            },
+            specialOffers: response.specialOffers.compactMap { $0.toModel() }
         )
     }
 
@@ -651,7 +659,10 @@ final class SyncManager {
                 : OwnerScopedRecordSupport.mergeRecords(local: rewardStore.rewards, remote: incoming.rewards),
             rewardTags: incoming.rewardTags.isEmpty
                 ? tagStore.rewardTags
-                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: incoming.rewardTags)
+                : OwnerScopedRecordSupport.mergeRecords(local: tagStore.rewardTags, remote: incoming.rewardTags),
+            specialOffers: incoming.specialOffers.isEmpty
+                ? specialOfferStore.offers
+                : OwnerScopedRecordSupport.mergeRecords(local: specialOfferStore.offers, remote: incoming.specialOffers)
         )
     }
 
@@ -670,19 +681,9 @@ final class SyncManager {
             rewardTags: payload.rewardTags
         )
         try rewardStore.persistReplacedRewards(payload.rewards)
+        try specialOfferStore.persistReplacedOffers(payload.specialOffers)
         sanitizeListPreferencesForCurrentOwner()
         reminderStore.reconcileNotifications()
-    }
-
-    private func sanitizeListPreferencesForCurrentOwner() {
-        // User behaviour: when account switching, sync, or local migration changes
-        // which tags exist for the current owner, any saved filter chips for
-        // deleted tags should disappear instead of silently hiding all rows.
-        listPreferencesStore.sanitizeSelectedTags(
-            validTaskTagIDs: tagStore.activeTagIDs,
-            validHabitTagIDs: tagStore.activeTagIDs,
-            validRewardTagIDs: tagStore.activeTagIDs
-        )
     }
 
     private struct DirtyIDSnapshot {
@@ -710,6 +711,16 @@ final class SyncManager {
             habitTags: Dictionary(uniqueKeysWithValues: state.dirty.habitTags.map { ($0.id, $0.generation) }),
             rewards: Dictionary(uniqueKeysWithValues: state.dirty.rewards.map { ($0.id, $0.generation) }),
             rewardTags: Dictionary(uniqueKeysWithValues: state.dirty.rewardTags.map { ($0.id, $0.generation) })
+        )
+    }
+    private func sanitizeListPreferencesForCurrentOwner() {
+        // User behaviour: when account switching, sync, or local migration changes
+        // which tags exist for the current owner, any saved filter chips for
+        // deleted tags should disappear instead of silently hiding all rows.
+        listPreferencesStore.sanitizeSelectedTags(
+            validTaskTagIDs: tagStore.activeTagIDs,
+            validHabitTagIDs: tagStore.activeTagIDs,
+            validRewardTagIDs: tagStore.activeTagIDs
         )
     }
 }

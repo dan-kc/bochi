@@ -52,6 +52,7 @@ struct HabitFormView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(ReminderStore.self) private var reminderStore
     @State private var name = ""
     @State private var description = ""
@@ -172,7 +173,8 @@ struct HabitFormView: View {
         return RewardCalculation.calculateReward(
             habit: draftHabit,
             allHabits: habitStore.activeHabits,
-            completionDates: completionDates
+            completionDates: completionDates,
+            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .habit, entityID: draftHabit.id)?.modifierPercent
         )
     }
 

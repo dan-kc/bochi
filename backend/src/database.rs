@@ -1950,6 +1950,19 @@ pub struct RewardTagRow {
 }
 
 #[derive(sqlx::FromRow)]
+pub struct SpecialOfferRow {
+    pub id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub habit_id: Option<Uuid>,
+    pub reward_id: Option<Uuid>,
+    pub modifier_percent: i16,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub expires_at: NaiveDateTime,
+}
+
+#[derive(sqlx::FromRow)]
 pub struct TradeWithTaskRow {
     pub id: Uuid,
     pub created_at: NaiveDateTime,

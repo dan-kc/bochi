@@ -33,6 +33,7 @@ struct tofustashApp: App {
 
     // RewardStore holds the spendable reward catalog.
     @State private var rewardStore: RewardStore
+    @State private var specialOfferStore: SpecialOfferStore
 
     // UserSettingsStore holds gameplay settings like general difficulty.
     @State private var userSettingsStore: UserSettingsStore
@@ -62,6 +63,7 @@ struct tofustashApp: App {
         let tradeStore = TradeStore()
         let balanceStore = BalanceStore()
         let rewardStore = RewardStore()
+        let specialOfferStore = SpecialOfferStore()
         let userSettingsStore = UserSettingsStore()
         let appNavigationStore = AppNavigationStore()
         let reminderScheduler: ReminderNotificationScheduling = AppRuntimeEnvironment.isUITesting
@@ -86,6 +88,7 @@ struct tofustashApp: App {
             taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
+            specialOfferStore: specialOfferStore,
             tradeStore: tradeStore,
             tagStore: tagStore,
             balanceStore: balanceStore,
@@ -103,6 +106,7 @@ struct tofustashApp: App {
         _tradeStore = State(initialValue: tradeStore)
         _balanceStore = State(initialValue: balanceStore)
         _rewardStore = State(initialValue: rewardStore)
+        _specialOfferStore = State(initialValue: specialOfferStore)
         _userSettingsStore = State(initialValue: userSettingsStore)
         _reminderStore = State(initialValue: reminderStore)
         _appNavigationStore = State(initialValue: appNavigationStore)
@@ -128,6 +132,7 @@ struct tofustashApp: App {
                 .environment(tradeStore)
                 .environment(balanceStore)
                 .environment(rewardStore)
+                .environment(specialOfferStore)
                 .environment(userSettingsStore)
                 .environment(reminderStore)
                 .environment(appNavigationStore)

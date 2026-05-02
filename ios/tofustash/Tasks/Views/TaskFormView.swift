@@ -70,6 +70,7 @@ struct TaskFormView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(ReminderStore.self) private var reminderStore
 
@@ -174,7 +175,10 @@ struct TaskFormView: View {
     }
 
     private var rewardPreview: Int {
-        TaskRewardCalculation.calculateReward(task: draftTask)
+        TaskRewardCalculation.calculateReward(
+            task: draftTask,
+            specialOfferModifierPercent: specialOfferStore.activeOffer(for: .task, entityID: draftTask.id)?.modifierPercent
+        )
     }
 
     private var activeTaskDependencies: [TaskTaskDependency] {
@@ -853,7 +857,10 @@ struct TaskFormView: View {
         _ = TaskCompletionSupport.completeTask(
             taskID: task.id,
             sourceName: task.name,
-            reward: TaskRewardCalculation.calculateReward(task: task),
+            reward: TaskRewardCalculation.calculateReward(
+                task: task,
+                specialOfferModifierPercent: specialOfferStore.activeOffer(for: .task, entityID: task.id)?.modifierPercent
+            ),
             tradeStore: tradeStore,
             taskStore: taskStore,
             balanceStore: balanceStore

@@ -11,6 +11,7 @@ struct RewardsView: View {
     @Environment(RewardStore.self) private var rewardStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
     @Environment(AppNavigationStore.self) private var appNavigationStore
@@ -78,7 +79,8 @@ struct RewardsView: View {
                 ForEach(Array(visibleRewards.enumerated()), id: \.element.id) { index, reward in
                     EntityListRowSurface(
                         showsDivider: index < visibleRewards.count - 1,
-                        isHighlighted: highlightedRewardID == reward.id
+                        isHighlighted: highlightedRewardID == reward.id,
+                        isSpecialOffer: specialOffer(for: reward) != nil
                     ) {
                         rewardRow(reward)
                     }
@@ -191,7 +193,8 @@ struct RewardsView: View {
             reward: reward,
             allRewards: rewardStore.activeRewards,
             purchaseDates: purchaseDates,
-            generalDifficulty: userSettingsStore.generalDifficulty
+            generalDifficulty: userSettingsStore.generalDifficulty,
+            specialOfferModifierPercent: specialOffer(for: reward)?.modifierPercent
         )
     }
 
@@ -206,6 +209,7 @@ struct RewardsView: View {
         let canPurchase = reward.canPurchase
         let price = priceForReward(reward)
         let canAfford = canPurchase && balanceStore.balance >= price
+        let offer = specialOffer(for: reward)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -231,6 +235,13 @@ struct RewardsView: View {
                         text: reward.damageTier?.displayName ?? "Damage",
                         isSet: reward.damageTier != nil
                     )
+
+                    if let offer {
+                        EntityListMetaPill(
+                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
+                            isSet: true
+                        )
+                    }
                 }
 
                 if !tags.isEmpty {
@@ -264,6 +275,10 @@ struct RewardsView: View {
         .onTapGesture {
             openChangeForm(reward, focus: nil)
         }
+    }
+
+    private func specialOffer(for reward: Reward) -> SpecialOffer? {
+        specialOfferStore.activeOffer(for: .reward, entityID: reward.id)
     }
 
     @ViewBuilder

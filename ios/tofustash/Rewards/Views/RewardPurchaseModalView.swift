@@ -9,6 +9,7 @@ struct RewardPurchaseModalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RewardStore.self) private var rewardStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(UserSettingsStore.self) private var userSettingsStore
 
@@ -28,8 +29,13 @@ struct RewardPurchaseModalView: View {
             allRewards: rewardStore.activeRewards,
             purchaseDates: purchaseDates,
             quantity: quantity,
-            generalDifficulty: userSettingsStore.generalDifficulty
+            generalDifficulty: userSettingsStore.generalDifficulty,
+            specialOfferModifierPercent: specialOffer?.modifierPercent
         )
+    }
+
+    private var specialOffer: SpecialOffer? {
+        specialOfferStore.activeOffer(for: .reward, entityID: reward.id)
     }
 
     private var canAfford: Bool {
@@ -93,6 +99,12 @@ struct RewardPurchaseModalView: View {
                     Image(systemName: "cube.fill")
                 }
                 .foregroundStyle(canAfford ? Color.primary : Color.red)
+
+                if let specialOffer {
+                    Text(SpecialOfferSupport.badgeText(modifierPercent: specialOffer.modifierPercent))
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             }
             .padding(.top, 8)
 
@@ -161,6 +173,7 @@ struct RewardPurchaseModalView: View {
                 tradeStore: tradeStore,
                 balanceStore: balanceStore,
                 generalDifficulty: userSettingsStore.generalDifficulty,
+                specialOfferModifierPercent: specialOffer?.modifierPercent,
                 quantity: quantity
             )
             purchased = true

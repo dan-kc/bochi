@@ -304,6 +304,7 @@ struct SettingsView: View {
     let previewHabitStore = HabitStore()
     let previewSettingsStore = UserSettingsStore()
     let previewBalanceStore = BalanceStore()
+    let previewSpecialOfferStore = SpecialOfferStore()
     let previewReminderStore = ReminderStore(
         taskStore: previewTaskStore,
         habitStore: previewHabitStore,
@@ -315,6 +316,7 @@ struct SettingsView: View {
         .environment(previewAuthManager)
         .environment(previewSettingsStore)
         .environment(previewBalanceStore)
+        .environment(previewSpecialOfferStore)
         .environment(previewListPreferencesStore)
         .environment(
             SyncManager(
@@ -325,6 +327,7 @@ struct SettingsView: View {
                 taskDependencyStore: previewTaskDependencyStore,
                 habitStore: previewHabitStore,
                 rewardStore: RewardStore(),
+                specialOfferStore: previewSpecialOfferStore,
                 tradeStore: TradeStore(),
                 tagStore: TagStore(),
                 balanceStore: previewBalanceStore,

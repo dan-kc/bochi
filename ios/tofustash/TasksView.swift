@@ -12,6 +12,7 @@ struct TasksView: View {
     @Environment(TaskDependencyStore.self) private var taskDependencyStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(BalanceStore.self) private var balanceStore
     @Environment(ReminderStore.self) private var reminderStore
     @Environment(AppNavigationStore.self) private var appNavigationStore
@@ -86,7 +87,8 @@ struct TasksView: View {
                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
                     EntityListRowSurface(
                         showsDivider: index < visibleTasks.count - 1,
-                        isHighlighted: highlightedTaskID == task.id
+                        isHighlighted: highlightedTaskID == task.id,
+                        isSpecialOffer: specialOffer(for: task) != nil
                     ) {
                         taskRow(task)
                     }
@@ -193,7 +195,10 @@ struct TasksView: View {
 
     private func taskRow(_ task: TaskItem) -> some View {
         let tags = tagStore.tagsForTask(taskId: task.id)
-        let reward = TaskRewardCalculation.calculateReward(task: task)
+        let reward = TaskRewardCalculation.calculateReward(
+            task: task,
+            specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+        )
         let taskActionState = TaskTradeActionSupport.state(
             isNewMode: false,
             isCompleted: task.completedAt != nil,
@@ -203,6 +208,7 @@ struct TasksView: View {
         )
         let canComplete = canCompleteTask(task)
         let isBlocked = canComplete && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
+        let offer = specialOffer(for: task)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -232,6 +238,13 @@ struct TasksView: View {
                     if let dueDate = task.dueDate {
                         EntityListMetaPill(
                             text: dueDate.formatted(.dateTime.month(.abbreviated).day()),
+                            isSet: true
+                        )
+                    }
+
+                    if let offer {
+                        EntityListMetaPill(
+                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
                             isSet: true
                         )
                     }
@@ -277,7 +290,10 @@ struct TasksView: View {
 
     private func priceSortValue(for task: TaskItem) -> Int? {
         EntityActionSupport.sortableAmount(isActionable: canCompleteTask(task)) {
-            TaskRewardCalculation.calculateReward(task: task)
+            TaskRewardCalculation.calculateReward(
+                task: task,
+                specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+            )
         }
     }
 
@@ -303,7 +319,10 @@ struct TasksView: View {
 
     @ViewBuilder
     private func taskRowMenu(_ task: TaskItem) -> some View {
-        let reward = TaskRewardCalculation.calculateReward(task: task)
+        let reward = TaskRewardCalculation.calculateReward(
+            task: task,
+            specialOfferModifierPercent: specialOffer(for: task)?.modifierPercent
+        )
         let taskActionState = TaskTradeActionSupport.state(
             isNewMode: false,
             isCompleted: task.completedAt != nil,
@@ -340,6 +359,10 @@ struct TasksView: View {
                 taskToDelete = task
             }
         )
+    }
+
+    private func specialOffer(for task: TaskItem) -> SpecialOffer? {
+        specialOfferStore.activeOffer(for: .task, entityID: task.id)
     }
 
     private func queueScrollToTaskIfVisible(_ taskID: RecordID) {

@@ -68,7 +68,8 @@ enum RewardCalculation {
         habit: Habit,
         allHabits: [Habit],
         completionDates: [Date] = [],
-        now: Date = Date()
+        now: Date = Date(),
+        specialOfferModifierPercent: Int? = nil
     ) -> Int {
         let difficultyMultiplier = calculateDifficultyMultiplier(habit: habit)
         let frequencyMultiplier = calculateFrequencyMultiplier(
@@ -84,7 +85,10 @@ enum RewardCalculation {
             * frequencyMultiplier
             * durationMultiplier
             * skipConsequenceMultiplier
-        return Int(reward.rounded())
+        return SpecialOfferSupport.adjustedAmount(
+            baseAmount: Int(reward.rounded()),
+            specialOfferModifierPercent: specialOfferModifierPercent
+        )
     }
 
     nonisolated static func calculateMultiPurchaseTotal(
@@ -92,7 +96,8 @@ enum RewardCalculation {
         allHabits: [Habit],
         completionDates: [Date],
         quantity: Int,
-        now: Date = Date()
+        now: Date = Date(),
+        specialOfferModifierPercent: Int? = nil
     ) -> Int {
         var total = 0
         var projectedCompletionDates = completionDates
@@ -102,7 +107,8 @@ enum RewardCalculation {
                 habit: habit,
                 allHabits: allHabits,
                 completionDates: projectedCompletionDates,
-                now: now
+                now: now,
+                specialOfferModifierPercent: specialOfferModifierPercent
             )
             projectedCompletionDates.append(now)
         }

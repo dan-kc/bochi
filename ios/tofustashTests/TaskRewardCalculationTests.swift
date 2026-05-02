@@ -68,4 +68,22 @@ struct TaskRewardCalculationTests {
 
         #expect(TaskRewardCalculation.calculateReward(task: baseline) == TaskRewardCalculation.calculateReward(task: rescheduled))
     }
+
+    // Behaviour: task special offers should boost the one-shot reward by the
+    // same percentage shown in the task list.
+    @Test func specialOfferRaisesTaskReward() {
+        let task = makeTask(
+            difficultyTier: .hard,
+            durationSeconds: 1_800,
+            skipConsequence: 4
+        )
+
+        let baseReward = TaskRewardCalculation.calculateReward(task: task)
+        let boostedReward = TaskRewardCalculation.calculateReward(
+            task: task,
+            specialOfferModifierPercent: 40
+        )
+
+        #expect(boostedReward == Int((Double(baseReward) * 1.4).rounded()))
+    }
 }

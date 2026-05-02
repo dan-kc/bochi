@@ -4,7 +4,8 @@ use axum::{
     Extension, Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use chrono::{NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
+use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
 use std::collections::BTreeSet;
@@ -198,6 +199,7 @@ pub struct SyncResponse {
     pub habit_tags: Vec<HabitTagOutput>,
     pub rewards: Vec<RewardOutput>,
     pub reward_tags: Vec<RewardTagOutput>,
+    pub special_offers: Vec<SpecialOfferOutput>,
     pub balance: BalanceOutput,
     pub server_cursor: String,
     pub server_time: NaiveDateTime,
@@ -329,6 +331,27 @@ pub struct RewardTagOutput {
     pub deleted_at: Option<NaiveDateTime>,
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecialOfferEntityKind {
+    Task,
+    Habit,
+    Reward,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecialOfferOutput {
+    pub id: String,
+    pub entity_kind: SpecialOfferEntityKind,
+    pub entity_id: String,
+    pub modifier_percent: i16,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub expires_at: NaiveDateTime,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceOutput {
@@ -431,6 +454,75 @@ fn profile_is_entitled(profile_row: &database::UserProfileRow) -> bool {
     }
 }
 
+#[derive(Clone)]
+struct SpecialOfferTarget {
+    entity_kind: SpecialOfferEntityKind,
+    entity_id: Uuid,
+}
+
+#[derive(sqlx::FromRow)]
+struct SpecialOfferTargetRow {
+    entity_kind: String,
+    entity_id: Uuid,
+}
+
+fn special_offer_output_from_row(row: database::SpecialOfferRow) -> SpecialOfferOutput {
+    let (entity_kind, entity_id) = if let Some(task_id) = row.task_id {
+        (SpecialOfferEntityKind::Task, task_id)
+    } else if let Some(habit_id) = row.habit_id {
+        (SpecialOfferEntityKind::Habit, habit_id)
+    } else if let Some(reward_id) = row.reward_id {
+        (SpecialOfferEntityKind::Reward, reward_id)
+    } else {
+        unreachable!("special offers must reference exactly one entity")
+    };
+
+    SpecialOfferOutput {
+        id: row.id.to_string(),
+        entity_kind,
+        entity_id: entity_id.to_string(),
+        modifier_percent: row.modifier_percent,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted_at: row.deleted_at,
+        expires_at: row.expires_at,
+    }
+}
+
+fn desired_special_offer_count(total_active_entities: usize) -> usize {
+    (total_active_entities / 10).min(5)
+}
+
+fn active_unresolved_task_trade_exists_sql(task_id_expr: &str, user_id_expr: &str) -> String {
+    format!(
+        "EXISTS (
+            SELECT 1
+            FROM trades task_trade
+            WHERE task_trade.user_id = {user_id_expr}
+              AND task_trade.task_id = {task_id_expr}
+              AND task_trade.deleted_at IS NULL
+              AND task_trade.refunds_trade_id IS NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM trades refund
+                WHERE refund.refunds_trade_id = task_trade.id
+                  AND refund.deleted_at IS NULL
+              )
+        )"
+    )
+}
+
+fn random_offer_modifier_percent(entity_kind: SpecialOfferEntityKind) -> i16 {
+    let base_values = [30_i16, 40, 50];
+    let mut rng = rand::thread_rng();
+    let base_value = base_values[rng.gen_range(0..base_values.len())];
+
+    match entity_kind {
+        SpecialOfferEntityKind::Task | SpecialOfferEntityKind::Habit => base_value,
+        SpecialOfferEntityKind::Reward => -base_value,
+    }
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
@@ -441,6 +533,13 @@ pub async fn get_sync(
     Extension(user): Extension<AuthenticatedUser>,
     Query(params): Query<SyncQueryParams>,
 ) -> Result<impl IntoResponse, ApiError> {
+    ensure_special_offers_current(&app.database, user.user_id, Utc::now().naive_utc())
+        .await
+        .map_err(|e| {
+            error!("Failed to refresh special offers before sync pull: {:?}", e);
+            ApiError::Internal
+        })?;
+
     let requested_cursor = params
         .cursor
         .as_deref()
@@ -600,6 +699,18 @@ pub async fn get_sync(
         ApiError::Internal
     })?;
 
+    let special_offer_rows = load_special_offers_for_sync(
+        &mut tx,
+        user.user_id,
+        params.since,
+        requested_cursor.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        error!("Database Error: {:?}", e);
+        ApiError::Internal
+    })?;
+
     let habits: Vec<HabitOutput> = habit_rows
         .into_iter()
         .map(|row| HabitOutput {
@@ -704,6 +815,11 @@ pub async fn get_sync(
         })
         .collect();
 
+    let special_offers: Vec<SpecialOfferOutput> = special_offer_rows
+        .into_iter()
+        .map(special_offer_output_from_row)
+        .collect();
+
     let server_time = Utc::now().naive_utc();
     let is_premium = profile_is_entitled(&profile_row);
     let server_cursor = response_cursor.encode().map_err(|e| {
@@ -727,6 +843,7 @@ pub async fn get_sync(
         habit_tags,
         rewards,
         reward_tags,
+        special_offers,
         balance: BalanceOutput {
             tofu_balance: trade_balance,
         },
@@ -1400,6 +1517,18 @@ pub async fn post_sync(
         .collect();
     }
 
+    let special_offer_changes =
+        ensure_special_offers_current_tx(&mut tx, user.user_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| {
+                error!("Database Error refreshing special offers during sync push: {:?}", e);
+                ApiError::Internal
+            })?;
+    let result_special_offers = special_offer_changes
+        .into_iter()
+        .map(special_offer_output_from_row)
+        .collect();
+
     // Return a balance derived from the just-written trade history instead of
     // relying on a separate cached column.
     let new_balance = Database::calculate_balance_from_trades_tx(&mut tx, user.user_id)
@@ -1468,6 +1597,7 @@ pub async fn post_sync(
         habit_tags: result_habit_tags,
         rewards: result_rewards,
         reward_tags: result_reward_tags,
+        special_offers: result_special_offers,
         balance: BalanceOutput {
             tofu_balance: new_balance,
         },
@@ -2053,6 +2183,198 @@ async fn load_reward_tags_for_sync(
             }
         }
     }
+}
+
+async fn load_special_offers_for_sync(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    since: Option<NaiveDateTime>,
+    cursor: Option<&SyncCursor>,
+) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
+    match cursor {
+        Some(cursor) => {
+            sqlx::query_as(
+                "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
+                 FROM special_offers
+                 WHERE user_id = $1
+                   AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
+                 ORDER BY updated_at ASC",
+            )
+            .bind(user_id)
+            .bind(cursor.upper_bound_tx_id)
+            .bind(&cursor.in_progress_tx_ids)
+            .fetch_all(&mut **tx)
+            .await
+        }
+        None => match since {
+            Some(since_time) => {
+                sqlx::query_as(
+                    "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
+                     FROM special_offers
+                     WHERE user_id = $1 AND updated_at > $2
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .bind(since_time)
+                .fetch_all(&mut **tx)
+                .await
+            }
+            None => {
+                sqlx::query_as(
+                    "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
+                     FROM special_offers
+                     WHERE user_id = $1
+                     ORDER BY updated_at ASC",
+                )
+                .bind(user_id)
+                .fetch_all(&mut **tx)
+                .await
+            }
+        },
+    }
+}
+
+async fn ensure_special_offers_current(
+    database: &Database,
+    user_id: Uuid,
+    now: NaiveDateTime,
+) -> Result<(), sqlx::Error> {
+    let mut tx = database.begin_transaction().await?;
+    ensure_special_offers_current_tx(&mut tx, user_id, now).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn ensure_special_offers_current_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    now: NaiveDateTime,
+) -> Result<Vec<database::SpecialOfferRow>, sqlx::Error> {
+    let active_rows: Vec<database::SpecialOfferRow> = sqlx::query_as(
+        "SELECT id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at
+         FROM special_offers
+         WHERE user_id = $1
+           AND deleted_at IS NULL
+           AND expires_at > $2
+         ORDER BY updated_at ASC, id ASC",
+    )
+    .bind(user_id)
+    .bind(now)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    if !active_rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut changed_rows: Vec<database::SpecialOfferRow> = sqlx::query_as(
+        "UPDATE special_offers
+         SET deleted_at = $2
+         WHERE user_id = $1
+           AND deleted_at IS NULL
+         RETURNING id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at",
+    )
+    .bind(user_id)
+    .bind(now)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    let eligible_targets = load_special_offer_targets(tx, user_id).await?;
+    let desired_count = desired_special_offer_count(eligible_targets.len());
+    if desired_count == 0 {
+        return Ok(changed_rows);
+    }
+
+    let expires_at = now + Duration::hours(24);
+    let selected_targets = {
+        let mut rng = rand::thread_rng();
+        eligible_targets
+            .choose_multiple(&mut rng, desired_count)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    for target in selected_targets {
+        let row = sqlx::query_as(
+            "INSERT INTO special_offers (
+                id, user_id, task_id, habit_id, reward_id, modifier_percent, created_at, expires_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, task_id, habit_id, reward_id, modifier_percent, created_at, updated_at, deleted_at, expires_at",
+        )
+        .bind(Uuid::new_v4())
+        .bind(user_id)
+        .bind(
+            (target.entity_kind == SpecialOfferEntityKind::Task).then_some(target.entity_id),
+        )
+        .bind(
+            (target.entity_kind == SpecialOfferEntityKind::Habit).then_some(target.entity_id),
+        )
+        .bind(
+            (target.entity_kind == SpecialOfferEntityKind::Reward).then_some(target.entity_id),
+        )
+        .bind(random_offer_modifier_percent(target.entity_kind))
+        .bind(now)
+        .bind(expires_at)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        changed_rows.push(row);
+    }
+
+    Ok(changed_rows)
+}
+
+async fn load_special_offer_targets(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<SpecialOfferTarget>, sqlx::Error> {
+    let active_task_trade_exists = active_unresolved_task_trade_exists_sql("tasks.id", "tasks.user_id");
+    let rows: Vec<SpecialOfferTargetRow> = sqlx::query_as(&format!(
+        "SELECT entity_kind, entity_id
+         FROM (
+            SELECT 'task'::text AS entity_kind, tasks.id AS entity_id
+            FROM tasks
+            WHERE tasks.user_id = $1
+              AND tasks.deleted_at IS NULL
+              AND NOT {}
+
+            UNION ALL
+
+            SELECT 'habit'::text AS entity_kind, habits.id AS entity_id
+            FROM habits
+            WHERE habits.user_id = $1
+              AND habits.deleted_at IS NULL
+
+            UNION ALL
+
+            SELECT 'reward'::text AS entity_kind, rewards.id AS entity_id
+            FROM rewards
+            WHERE rewards.user_id = $1
+              AND rewards.deleted_at IS NULL
+         ) eligible_targets",
+        active_task_trade_exists
+    ))
+    .bind(user_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let entity_kind = match row.entity_kind.as_str() {
+                "task" => SpecialOfferEntityKind::Task,
+                "habit" => SpecialOfferEntityKind::Habit,
+                "reward" => SpecialOfferEntityKind::Reward,
+                _ => return None,
+            };
+
+            Some(SpecialOfferTarget {
+                entity_kind,
+                entity_id: row.entity_id,
+            })
+        })
+        .collect())
 }
 
 async fn load_balance_for_sync(

@@ -22,6 +22,7 @@ enum RewardPurchaseService {
         tradeStore: TradeStore,
         balanceStore: BalanceStore,
         generalDifficulty: Double,
+        specialOfferModifierPercent: Int? = nil,
         quantity: Int = 1
     ) throws -> Int {
         let purchaseDate = Date()
@@ -32,7 +33,8 @@ enum RewardPurchaseService {
             purchaseDates: purchaseDates,
             quantity: quantity,
             now: purchaseDate,
-            generalDifficulty: generalDifficulty
+            generalDifficulty: generalDifficulty,
+            specialOfferModifierPercent: specialOfferModifierPercent
         )
 
         guard balanceStore.balance >= totalPrice else {
@@ -46,7 +48,8 @@ enum RewardPurchaseService {
                 allRewards: rewardStore.activeRewards,
                 purchaseDates: purchaseDates,
                 now: purchaseDate,
-                generalDifficulty: generalDifficulty
+                generalDifficulty: generalDifficulty,
+                specialOfferModifierPercent: specialOfferModifierPercent
             )
             entries.append((id: RecordID(), amount: -price))
             purchaseDates.append(purchaseDate)

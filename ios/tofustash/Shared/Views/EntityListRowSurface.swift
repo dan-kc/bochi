@@ -9,15 +9,18 @@ struct EntityListRowSurface<Content: View>: View {
 
     let showsDivider: Bool
     let isHighlighted: Bool
+    let isSpecialOffer: Bool
     let content: Content
 
     init(
         showsDivider: Bool,
         isHighlighted: Bool = false,
+        isSpecialOffer: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.showsDivider = showsDivider
         self.isHighlighted = isHighlighted
+        self.isSpecialOffer = isSpecialOffer
         self.content = content()
     }
 
@@ -49,7 +52,19 @@ struct EntityListRowSurface<Content: View>: View {
             Rectangle()
                 // Behaviour: a freshly created row briefly glows warm across
                 // the full row so the destination stands out immediately.
-                .fill(Color.orange.opacity(isHighlighted ? 0.22 : 0))
+                .fill(backgroundTint)
         }
+    }
+
+    private var backgroundTint: Color {
+        if isHighlighted {
+            return Color.orange.opacity(0.22)
+        }
+
+        if isSpecialOffer {
+            return Color.yellow.opacity(0.12)
+        }
+
+        return Color.clear
     }
 }

@@ -27,11 +27,17 @@ enum TaskRewardCalculation {
         SkipConsequenceTier.from(task.skipConsequence)?.multiplier ?? 1.0
     }
 
-    nonisolated static func calculateReward(task: TaskItem) -> Int {
+    nonisolated static func calculateReward(
+        task: TaskItem,
+        specialOfferModifierPercent: Int? = nil
+    ) -> Int {
         let reward = 100.0
             * calculateDifficultyMultiplier(task: task)
             * calculateDurationMultiplier(task: task)
             * calculateSkipConsequenceMultiplier(task: task)
-        return Int(reward.rounded())
+        return SpecialOfferSupport.adjustedAmount(
+            baseAmount: Int(reward.rounded()),
+            specialOfferModifierPercent: specialOfferModifierPercent
+        )
     }
 }

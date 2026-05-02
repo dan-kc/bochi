@@ -60,7 +60,8 @@ enum RewardPriceCalculation {
         allRewards: [Reward],
         purchaseDates: [Date] = [],
         now: Date = Date(),
-        generalDifficulty: Double = 5.0
+        generalDifficulty: Double = 5.0,
+        specialOfferModifierPercent: Int? = nil
     ) -> Int {
         let damageMultiplier = calculateDamageMultiplier(reward: reward, allRewards: allRewards)
         let frequencyMultiplier = calculateFrequencyMultiplier(
@@ -70,7 +71,10 @@ enum RewardPriceCalculation {
         )
 
         let price = 100.0 * generalDifficulty * damageMultiplier * frequencyMultiplier
-        return Int(price.rounded())
+        return SpecialOfferSupport.adjustedAmount(
+            baseAmount: Int(price.rounded()),
+            specialOfferModifierPercent: specialOfferModifierPercent
+        )
     }
 
     nonisolated static func calculateMultiPurchaseTotal(
@@ -79,7 +83,8 @@ enum RewardPriceCalculation {
         purchaseDates: [Date],
         quantity: Int,
         now: Date = Date(),
-        generalDifficulty: Double = 5.0
+        generalDifficulty: Double = 5.0,
+        specialOfferModifierPercent: Int? = nil
     ) -> Int {
         var total = 0
         var projectedPurchaseDates = purchaseDates
@@ -90,7 +95,8 @@ enum RewardPriceCalculation {
                 allRewards: allRewards,
                 purchaseDates: projectedPurchaseDates,
                 now: now,
-                generalDifficulty: generalDifficulty
+                generalDifficulty: generalDifficulty,
+                specialOfferModifierPercent: specialOfferModifierPercent
             )
             projectedPurchaseDates.append(now)
         }

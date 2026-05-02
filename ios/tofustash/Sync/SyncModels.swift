@@ -18,6 +18,7 @@ struct SyncResponse: Decodable {
     let habitTags: [SyncHabitTagRecord]
     let rewards: [SyncRewardRecord]
     let rewardTags: [SyncRewardTagRecord]
+    let specialOffers: [SyncSpecialOfferRecord]
     let balance: SyncBalanceRecord
     let serverCursor: String
     let serverTime: String
@@ -28,6 +29,51 @@ struct SyncResponse: Decodable {
 
 struct SyncBalanceRecord: Decodable {
     let tofuBalance: Double
+}
+
+struct SyncSpecialOfferRecord: Codable {
+    let id: String
+    let entityKind: SpecialOfferEntityKind
+    let entityId: String
+    let modifierPercent: Int
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+    let expiresAt: String
+
+    func toModel() -> SpecialOffer? {
+        guard
+            let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),
+            let updatedAt = AppDateCoding.parseBackendTimestamp(updatedAt),
+            let expiresAt = AppDateCoding.parseBackendTimestamp(expiresAt)
+        else {
+            return nil
+        }
+
+        return SpecialOffer(
+            id: RecordID(id),
+            entityKind: entityKind,
+            entityID: RecordID(entityId),
+            modifierPercent: modifierPercent,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
+            expiresAt: expiresAt
+        )
+    }
+
+    static func from(_ offer: SpecialOffer) -> SyncSpecialOfferRecord {
+        SyncSpecialOfferRecord(
+            id: offer.id.rawValue,
+            entityKind: offer.entityKind,
+            entityId: offer.entityID.rawValue,
+            modifierPercent: offer.modifierPercent,
+            createdAt: AppDateCoding.backendTimestamp(from: offer.createdAt),
+            updatedAt: AppDateCoding.backendTimestamp(from: offer.updatedAt),
+            deletedAt: offer.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
+            expiresAt: AppDateCoding.backendTimestamp(from: offer.expiresAt)
+        )
+    }
 }
 
 struct SyncTaskRecord: Codable {

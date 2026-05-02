@@ -54,6 +54,7 @@ struct ContentView: View {
     let previewTradeStore = TradeStore()
     let previewBalanceStore = BalanceStore()
     let previewRewardStore = RewardStore()
+    let previewSpecialOfferStore = SpecialOfferStore()
     let previewSettingsStore = UserSettingsStore()
     let previewReminderStore = ReminderStore(
         taskStore: previewTaskStore,
@@ -73,6 +74,7 @@ struct ContentView: View {
         .environment(previewTradeStore)
         .environment(previewBalanceStore)
         .environment(previewRewardStore)
+        .environment(previewSpecialOfferStore)
         .environment(previewSettingsStore)
         .environment(previewReminderStore)
         .environment(previewNavigationStore)
@@ -86,6 +88,7 @@ struct ContentView: View {
                 taskDependencyStore: previewTaskDependencyStore,
                 habitStore: previewHabitStore,
                 rewardStore: previewRewardStore,
+                specialOfferStore: previewSpecialOfferStore,
                 tradeStore: previewTradeStore,
                 tagStore: previewTagStore,
                 balanceStore: previewBalanceStore,

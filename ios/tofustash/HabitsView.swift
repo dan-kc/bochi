@@ -11,6 +11,7 @@ struct HabitsView: View {
     @Environment(HabitStore.self) private var habitStore
     @Environment(TagStore.self) private var tagStore
     @Environment(TradeStore.self) private var tradeStore
+    @Environment(SpecialOfferStore.self) private var specialOfferStore
     @Environment(ReminderStore.self) private var reminderStore
     @Environment(AppNavigationStore.self) private var appNavigationStore
     @Environment(ListPreferencesStore.self) private var listPreferencesStore
@@ -77,7 +78,8 @@ struct HabitsView: View {
                 ForEach(Array(visibleHabits.enumerated()), id: \.element.id) { index, habit in
                     EntityListRowSurface(
                         showsDivider: index < visibleHabits.count - 1,
-                        isHighlighted: highlightedHabitID == habit.id
+                        isHighlighted: highlightedHabitID == habit.id,
+                        isSpecialOffer: specialOffer(for: habit) != nil
                     ) {
                         habitRow(habit)
                     }
@@ -196,7 +198,8 @@ struct HabitsView: View {
         return RewardCalculation.calculateReward(
             habit: habit,
             allHabits: habitStore.activeHabits,
-            completionDates: completionDates
+            completionDates: completionDates,
+            specialOfferModifierPercent: specialOffer(for: habit)?.modifierPercent
         )
     }
 
@@ -210,6 +213,7 @@ struct HabitsView: View {
     private func habitRow(_ habit: Habit) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
         let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
+        let offer = specialOffer(for: habit)
 
         return HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
@@ -235,6 +239,13 @@ struct HabitsView: View {
                         text: habit.difficultyTier?.displayName ?? "Difficulty",
                         isSet: habit.difficultyTier != nil
                     )
+
+                    if let offer {
+                        EntityListMetaPill(
+                            text: SpecialOfferSupport.badgeText(modifierPercent: offer.modifierPercent),
+                            isSet: true
+                        )
+                    }
                 }
 
                 if !tags.isEmpty {
@@ -269,6 +280,10 @@ struct HabitsView: View {
         .onTapGesture {
             openChangeForm(habit, focus: nil)
         }
+    }
+
+    private func specialOffer(for habit: Habit) -> SpecialOffer? {
+        specialOfferStore.activeOffer(for: .habit, entityID: habit.id)
     }
 
     @ViewBuilder

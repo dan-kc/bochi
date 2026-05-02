@@ -342,4 +342,26 @@ struct RewardPriceTests {
 
         #expect(blankPrice == configuredPrice)
     }
+
+    // Behaviour: reward special offers should discount the spend amount by the
+    // displayed percentage instead of changing the base formula itself.
+    @Test func specialOfferDiscountLowersRewardPrice() {
+        let reward = makeReward(maxFrequency: 3.0, damageTier: .heavy)
+
+        let basePrice = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [],
+            generalDifficulty: 5
+        )
+        let discountedPrice = RewardPriceCalculation.calculatePrice(
+            reward: reward,
+            allRewards: [reward],
+            purchaseDates: [],
+            generalDifficulty: 5,
+            specialOfferModifierPercent: -30
+        )
+
+        #expect(discountedPrice == Int((Double(basePrice) * 0.7).rounded()))
+    }
 }

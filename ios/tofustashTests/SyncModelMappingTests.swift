@@ -4,6 +4,32 @@ import Testing
 
 @MainActor
 struct SyncModelMappingTests {
+    // Behaviour: special offers must round-trip through sync so every device
+    // applies the same modifier to the same entity until the offer expires.
+    @Test func syncSpecialOfferRecordRoundTripsFields() throws {
+        let record = SyncSpecialOfferRecord(
+            id: "offer-1",
+            entityKind: .reward,
+            entityId: "reward-1",
+            modifierPercent: -40,
+            createdAt: "2026-04-23T12:00:00.000000",
+            updatedAt: "2026-04-23T12:30:00.000000",
+            deletedAt: nil,
+            expiresAt: "2026-04-24T12:00:00.000000"
+        )
+
+        let model = try #require(record.toModel())
+        #expect(model.entityKind == .reward)
+        #expect(model.entityID == RecordID("reward-1"))
+        #expect(model.modifierPercent == -40)
+
+        let encoded = SyncSpecialOfferRecord.from(model)
+        #expect(encoded.entityKind == .reward)
+        #expect(encoded.entityId == "reward-1")
+        #expect(encoded.modifierPercent == -40)
+        #expect(encoded.expiresAt == "2026-04-24T12:00:00.000000")
+    }
+
     // Behaviour: task sync payloads should preserve due date and completion
     // state exactly so the local task list matches the server snapshot.
     @Test func syncTaskRecordRoundTripsTaskFields() throws {
@@ -271,6 +297,7 @@ struct SyncModelMappingTests {
             }
           ],
           "rewardTags": [],
+          "specialOffers": [],
           "balance": {
             "tofuBalance": 0
           },

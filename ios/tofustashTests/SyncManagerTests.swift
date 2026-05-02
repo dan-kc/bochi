@@ -38,6 +38,7 @@ struct SyncManagerTests {
         let taskDependencyStore: TaskDependencyStore
         let habitStore: HabitStore
         let rewardStore: RewardStore
+        let specialOfferStore: SpecialOfferStore
         let tradeStore: TradeStore
         let tagStore: TagStore
         let balanceStore: BalanceStore
@@ -81,6 +82,7 @@ struct SyncManagerTests {
         let taskDependencyStore = TaskDependencyStore(storageURL: storageURL)
         let habitStore = HabitStore(storageURL: storageURL)
         let rewardStore = RewardStore(storageURL: storageURL)
+        let specialOfferStore = SpecialOfferStore(storageURL: storageURL)
         let tradeStore = TradeStore(storageURL: storageURL)
         let tagStore = TagStore(storageURL: storageURL)
         let balanceStore = BalanceStore(storageURL: storageURL)
@@ -107,6 +109,7 @@ struct SyncManagerTests {
             taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
+            specialOfferStore: specialOfferStore,
             tradeStore: tradeStore,
             tagStore: tagStore,
             balanceStore: balanceStore,
@@ -126,6 +129,7 @@ struct SyncManagerTests {
             taskDependencyStore: taskDependencyStore,
             habitStore: habitStore,
             rewardStore: rewardStore,
+            specialOfferStore: specialOfferStore,
             tradeStore: tradeStore,
             tagStore: tagStore,
             balanceStore: balanceStore,
@@ -147,6 +151,7 @@ struct SyncManagerTests {
         habitTags: [SyncHabitTagRecord] = [],
         rewards: [SyncRewardRecord] = [],
         rewardTags: [SyncRewardTagRecord] = [],
+        specialOffers: [SyncSpecialOfferRecord] = [],
         generalDifficulty: Double = 5.0
     ) -> SyncResponse {
         SyncResponse(
@@ -160,6 +165,7 @@ struct SyncManagerTests {
             habitTags: habitTags,
             rewards: rewards,
             rewardTags: rewardTags,
+            specialOffers: specialOffers,
             balance: SyncBalanceRecord(tofuBalance: 0),
             serverCursor: "cursor-123",
             serverTime: "2026-04-18T12:00:00.000000",
@@ -182,6 +188,33 @@ struct SyncManagerTests {
         #expect(context.habitStore.currentOwnerID == "user-123")
         #expect(context.syncAPIClient.pushCalls.count == 1)
         #expect(context.syncAPIClient.pushCalls[0].0.habits?.first?.name == "Offline Habit")
+
+        context.syncManager.updateSession(userID: nil)
+    }
+
+    // Behaviour: when the backend sync payload includes special offers, the
+    // current owner should see the same offer locally after the pull finishes.
+    @Test func pullPersistsSpecialOffersForCurrentOwner() async throws {
+        let response = makeResponse(
+            specialOffers: [
+                SyncSpecialOfferRecord(
+                    id: "offer-1",
+                    entityKind: .task,
+                    entityId: "task-1",
+                    modifierPercent: 40,
+                    createdAt: "2030-04-18T12:00:00.000000",
+                    updatedAt: "2030-04-18T12:00:00.000000",
+                    deletedAt: nil,
+                    expiresAt: "2030-04-19T12:00:00.000000"
+                )
+            ]
+        )
+        let context = try await makeContext(pullResponse: response)
+
+        context.syncManager.updateSession(userID: "user-123")
+        await context.syncManager.syncNow()
+
+        #expect(context.specialOfferStore.activeOffer(for: .task, entityID: "task-1")?.modifierPercent == 40)
 
         context.syncManager.updateSession(userID: nil)
     }
@@ -344,6 +377,7 @@ struct SyncManagerTests {
                 habitTags: [],
                 rewards: [],
                 rewardTags: [],
+                specialOffers: [],
                 balance: SyncBalanceRecord(tofuBalance: 0),
                 serverCursor: "cursor-456",
                 serverTime: "2026-04-18T12:00:00.000000",
@@ -365,6 +399,7 @@ struct SyncManagerTests {
                 habitTags: [],
                 rewards: [],
                 rewardTags: [],
+                specialOffers: [],
                 balance: SyncBalanceRecord(tofuBalance: 0),
                 serverCursor: "cursor-789",
                 serverTime: "2026-04-18T12:05:00.000000",

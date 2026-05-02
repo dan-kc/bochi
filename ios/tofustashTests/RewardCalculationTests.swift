@@ -190,6 +190,31 @@ struct CalculateRewardTests {
 
         #expect(cheapReward < richerReward)
     }
+
+    // Behaviour: when a habit has an active special offer, the visible payout
+    // and the recorded trade amount should both use the boosted percentage.
+    @Test func specialOfferRaisesHabitReward() {
+        let habit = makeHabit(
+            frequency: 1.0,
+            difficultyTier: .medium,
+            durationSeconds: 900,
+            skipConsequence: 3
+        )
+
+        let baseReward = RewardCalculation.calculateReward(
+            habit: habit,
+            allHabits: [habit],
+            completionDates: []
+        )
+        let boostedReward = RewardCalculation.calculateReward(
+            habit: habit,
+            allHabits: [habit],
+            completionDates: [],
+            specialOfferModifierPercent: 50
+        )
+
+        #expect(boostedReward == Int((Double(baseReward) * 1.5).rounded()))
+    }
 }
 
 struct MultiPurchaseTotalTests {
