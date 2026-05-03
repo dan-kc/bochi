@@ -430,7 +430,7 @@ Suppose the device has this signed-out row in `habits`:
     "difficulty_tier": "light",
     "duration_seconds": null,
     "lockout_duration_seconds": null,
-    "commitment": null
+    "benefit": null
   }
 ]
 ```

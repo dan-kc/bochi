@@ -16,7 +16,7 @@ pub(crate) const MIN_LOCKOUT_DURATION_SECONDS: i32 = 60;
 pub(crate) const MAX_LOCKOUT_DURATION_SECONDS: i32 = 2_592_000;
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateHabitRequest {
     pub name: String,
     pub description: String,

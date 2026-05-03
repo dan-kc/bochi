@@ -11,7 +11,7 @@ use crate::{
 use super::{habits::validate_habit_fields, ApiError};
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateTaskRequest {
     pub name: String,
     pub description: String,

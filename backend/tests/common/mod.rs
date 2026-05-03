@@ -174,6 +174,23 @@ pub async fn make_authenticated_post_request(
     path: &str,
     body: serde_json::Value,
 ) -> (StatusCode, serde_json::Value) {
+    let (status, response_body) =
+        make_authenticated_post_request_raw(access_token, path, body).await;
+
+    let json: serde_json::Value = if response_body.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_authenticated_post_request_raw(
+    access_token: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> (StatusCode, Vec<u8>) {
     let router = router::router().await;
 
     let response = router
@@ -200,13 +217,7 @@ pub async fn make_authenticated_post_request(
         .expect("Failed to read response body")
         .to_bytes();
 
-    let json: serde_json::Value = if response_body_bytes.is_empty() {
-        serde_json::Value::Null
-    } else {
-        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
-    };
-
-    (status, json)
+    (status, response_body_bytes.to_vec())
 }
 
 pub async fn make_unauthenticated_get_request(path: &str) -> (StatusCode, serde_json::Value) {

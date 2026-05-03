@@ -1,6 +1,6 @@
 use crate::common::{
-    get_access_token_for_user, make_authenticated_post_request, make_unauthenticated_post_request,
-    register_user,
+    get_access_token_for_user, make_authenticated_post_request,
+    make_authenticated_post_request_raw, make_unauthenticated_post_request, register_user,
 };
 use crate::generate_email_from_fn;
 use axum::http::StatusCode;
@@ -67,6 +67,46 @@ async fn test_create_task_with_optional_fields() {
     assert_eq!(json.get("durationSeconds").unwrap(), 3600);
     assert_eq!(json.get("commitment").unwrap(), 4);
     assert_eq!(json.get("dueDate").unwrap(), "2026-05-01T09:30:00");
+}
+
+#[tokio::test]
+async fn test_create_task_rejects_legacy_skip_consequence_field() {
+    let email = generate_email_from_fn!(test_create_task_rejects_legacy_skip_consequence_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "name": "Legacy task",
+        "description": "",
+        "skipConsequence": 4
+    });
+
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/tasks", body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn test_create_task_rejects_unknown_habit_benefit_field() {
+    let email = generate_email_from_fn!(test_create_task_rejects_unknown_habit_benefit_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let body = json!({
+        "name": "Bad task",
+        "description": "",
+        "benefit": 4
+    });
+
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/tasks", body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

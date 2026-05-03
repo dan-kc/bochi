@@ -89,6 +89,32 @@ struct SyncTaskRecord: Codable {
     let commitment: Int?
     let dueDate: String?
 
+    init(
+        id: String,
+        name: String,
+        description: String,
+        createdAt: String,
+        updatedAt: String,
+        deletedAt: String?,
+        completedAt: String?,
+        difficultyTier: HabitDifficultyTier?,
+        durationSeconds: Int?,
+        commitment: Int?,
+        dueDate: String?
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.completedAt = completedAt
+        self.difficultyTier = difficultyTier
+        self.durationSeconds = durationSeconds
+        self.commitment = commitment
+        self.dueDate = dueDate
+    }
+
     func toModel() -> TaskItem? {
         guard
             let createdAt = AppDateCoding.parseBackendTimestamp(createdAt),

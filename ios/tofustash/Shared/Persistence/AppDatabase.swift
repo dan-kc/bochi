@@ -375,6 +375,16 @@ final class AppDatabase {
             """)
         }
 
+        // This shipped as `v4_benefit_commitment`, so keep the identifier stable
+        // for already-migrated devices while registering it near its real place
+        // in history for fresh installs.
+        migrator.registerMigration("v4_benefit_commitment") { db in
+            try db.execute(sql: """
+                ALTER TABLE habits RENAME COLUMN skip_consequence TO benefit;
+                ALTER TABLE tasks RENAME COLUMN skip_consequence TO commitment;
+            """)
+        }
+
         migrator.registerMigration("v4_reminders") { db in
             try db.execute(sql: """
                 CREATE TABLE IF NOT EXISTS reminders (
@@ -444,13 +454,6 @@ final class AppDatabase {
                 CREATE INDEX IF NOT EXISTS idx_task_habit_dependencies_owner_updated
                 ON task_habit_dependencies(owner_id, updated_at);
                 """)
-        }
-
-        migrator.registerMigration("v4_benefit_commitment") { db in
-            try db.execute(sql: """
-                ALTER TABLE habits RENAME COLUMN skip_consequence TO benefit;
-                ALTER TABLE tasks RENAME COLUMN skip_consequence TO commitment;
-            """)
         }
 
         migrator.registerMigration("v8_trade_refunds") { db in

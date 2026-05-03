@@ -1,6 +1,7 @@
 use crate::common::{
     get_access_token_for_user, make_authenticated_get_request, make_authenticated_post_request,
-    make_unauthenticated_get_request, make_unauthenticated_post_request, register_user,
+    make_authenticated_post_request_raw, make_unauthenticated_get_request,
+    make_unauthenticated_post_request, register_user,
 };
 use crate::generate_email_from_fn;
 use axum::http::StatusCode;
@@ -837,7 +838,7 @@ async fn test_sync_push_rejects_completed_task_when_habit_dependency_trade_is_re
 
     let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
         json["errors"][0]["message"],
         "Validation Error: Task dependencies must be complete before this task can be completed."
@@ -991,7 +992,7 @@ async fn test_sync_push_refunded_prerequisite_task_no_longer_satisfies_dependenc
     let (status, json) =
         make_authenticated_post_request(&access_token, "/api/v1/sync", complete_body).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
         json["errors"][0]["message"],
         "Validation Error: Task dependencies must be complete before this task can be completed."
@@ -1042,7 +1043,7 @@ async fn test_sync_push_rejects_refund_trade_before_original_trade_time() {
     let (status, json) =
         make_authenticated_post_request(&access_token, "/api/v1/sync", refund_body).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
         json["errors"][0]["message"],
         "Validation Error: Refund trades cannot be created before the original trade."
@@ -1197,6 +1198,58 @@ async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
 }
 
 #[tokio::test]
+async fn test_sync_push_task_rejects_legacy_skip_consequence_field() {
+    let email = generate_email_from_fn!(test_sync_push_task_rejects_legacy_skip_consequence_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Legacy task",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "skipConsequence": 4
+        }]
+    });
+
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn test_sync_push_task_rejects_unknown_habit_benefit_field() {
+    let email = generate_email_from_fn!(test_sync_push_task_rejects_unknown_habit_benefit_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "tasks": [{
+            "id": task_id,
+            "name": "Bad task",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "benefit": 4
+        }]
+    });
+
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn test_sync_push_updates_existing_task_due_date() {
     let email = generate_email_from_fn!(test_sync_push_updates_existing_task_due_date);
     let password = "password123";
@@ -1215,7 +1268,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
             "updatedAt": "2025-01-01T10:00:00",
             "difficultyTier": "medium",
             "durationSeconds": 1200,
-            "benefit": 3
+            "commitment": 3
         }]
     });
 
@@ -3279,7 +3332,8 @@ async fn test_sync_push_atomicity_with_tags() {
         }]
     });
 
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
 
     assert!(
         status == StatusCode::BAD_REQUEST || status == StatusCode::INTERNAL_SERVER_ERROR,
@@ -3357,9 +3411,10 @@ async fn test_sync_push_general_difficulty_validation_zero() {
     let body = json!({
         "generalDifficulty": 0.0
     });
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
     // Verify default was not changed
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
@@ -3377,9 +3432,10 @@ async fn test_sync_push_general_difficulty_validation_negative() {
     let body = json!({
         "generalDifficulty": -1.0
     });
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
@@ -3507,6 +3563,57 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_benefit() {
     assert_eq!(pulled_habit.get("durationSeconds").unwrap(), 600);
     assert_eq!(pulled_habit.get("lockoutDurationSeconds").unwrap(), 3600);
     assert_eq!(pulled_habit.get("benefit").unwrap(), 5);
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_rejects_legacy_skip_consequence_field() {
+    let email = generate_email_from_fn!(test_sync_push_habit_rejects_legacy_skip_consequence_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Legacy habit",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "skipConsequence": 5
+        }]
+    });
+
+    let (status, _) =
+        make_authenticated_post_request_raw(&access_token, "/api/v1/sync", body).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn test_sync_push_habit_rejects_unknown_task_commitment_field() {
+    let email = generate_email_from_fn!(test_sync_push_habit_rejects_unknown_task_commitment_field);
+    let password = "password123";
+
+    register_user(&email, password).await;
+    let access_token = get_access_token_for_user(&email, &password).await;
+
+    let habit_id = uuid::Uuid::new_v4().to_string();
+    let body = json!({
+        "habits": [{
+            "id": habit_id,
+            "name": "Bad habit",
+            "description": "",
+            "createdAt": "2025-01-01T10:00:00",
+            "updatedAt": "2025-01-01T10:00:00",
+            "commitment": 5
+        }]
+    });
+
+    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", body).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

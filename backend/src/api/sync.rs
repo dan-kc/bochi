@@ -56,7 +56,7 @@ pub struct SyncPushRequest {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SyncTaskInput {
     pub id: String,
     pub name: String,
@@ -73,7 +73,7 @@ pub struct SyncTaskInput {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SyncHabitInput {
     pub id: String,
     pub name: String,
