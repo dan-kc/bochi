@@ -627,6 +627,12 @@ final class AppDatabase {
             """)
         }
 
+        migrator.registerMigration("v14_reward_lockout") { db in
+            try db.execute(sql: """
+                ALTER TABLE rewards ADD COLUMN lockout_duration_seconds INTEGER;
+            """)
+        }
+
         try migrator.migrate(writer)
     }
 }

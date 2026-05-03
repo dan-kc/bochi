@@ -88,10 +88,59 @@ struct RewardPurchaseServiceTests {
             case let .insufficientBalance(required, available):
                 #expect(required > 0)
                 #expect(available == 0)
+            case .locked:
+                Issue.record("Expected insufficient balance error instead of reward lockout")
             }
         }
 
         #expect(tradeStore.trades.isEmpty)
         #expect(balanceStore.balance == 0)
+    }
+
+    // Behaviour: Reward lockout should block new purchases until the cooldown
+    // expires, even when the user can afford the reward.
+    @Test("purchase blocks while the reward is locked")
+    func purchaseBlocksWhileRewardIsLocked() throws {
+        let storageURL = TestHelpers.makeTemporaryFileURL("reward-locked-purchase")
+        let rewardStore = RewardStore(storageURL: storageURL)
+        _ = rewardStore.addReward(
+            id: "reward-1",
+            name: "Chocolate",
+            maxFrequency: 1.0,
+            damageTier: .medium,
+            lockoutDurationSeconds: 3_600
+        )
+        let tradeStore = TradeStore(storageURL: storageURL)
+        let balanceStore = BalanceStore(storageURL: storageURL)
+        tradeStore.addHabitTrade(habitId: "seed-habit", amount: 2_000, shouldNotifySync: false)
+        tradeStore.addRewardPurchase(
+            rewardId: "reward-1",
+            amount: -100,
+            createdAt: Date().addingTimeInterval(-300),
+            shouldNotifySync: false
+        )
+        balanceStore.refresh()
+
+        let reward = try #require(rewardStore.activeRewards.first)
+
+        do {
+            _ = try RewardPurchaseService.purchase(
+                reward: reward,
+                rewardStore: rewardStore,
+                tradeStore: tradeStore,
+                balanceStore: balanceStore,
+                generalDifficulty: 5
+            )
+            Issue.record("Expected reward lockout error")
+        } catch let error as RewardPurchaseError {
+            switch error {
+            case .insufficientBalance:
+                Issue.record("Expected reward lockout error instead of insufficient balance")
+            case .locked:
+                break
+            }
+        }
+
+        #expect(tradeStore.trades.filter { $0.rewardId == reward.id }.count == 1)
     }
 }

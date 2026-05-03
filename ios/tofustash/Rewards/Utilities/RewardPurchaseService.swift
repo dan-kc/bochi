@@ -2,11 +2,14 @@ import Foundation
 
 enum RewardPurchaseError: Error, Equatable {
     case insufficientBalance(required: Int, available: Int)
+    case locked(secondsRemaining: Int)
 
     var message: String {
         switch self {
         case let .insufficientBalance(required, available):
             return "Need \(required) tofu but only have \(available)."
+        case let .locked(secondsRemaining):
+            return "This reward is locked for \(DurationFormatting.countdown(secondsRemaining: secondsRemaining))."
         }
     }
 }
@@ -26,6 +29,14 @@ enum RewardPurchaseService {
         quantity: Int = 1
     ) throws -> Int {
         let purchaseDate = Date()
+        if let remainingSeconds = RewardLockout.remainingSeconds(
+            reward: reward,
+            tradeStore: tradeStore,
+            now: purchaseDate
+        ) {
+            throw RewardPurchaseError.locked(secondsRemaining: remainingSeconds)
+        }
+
         var purchaseDates = tradeStore.rewardPurchaseDates(rewardId: reward.id)
         let totalPrice = RewardPriceCalculation.calculateMultiPurchaseTotal(
             reward: reward,

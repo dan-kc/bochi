@@ -474,6 +474,7 @@ struct SyncRewardRecord: Codable {
     let deletedAt: String?
     let maxDailyFrequency: Double?
     let damageTier: RewardDamageTier?
+    let lockoutDurationSeconds: Int?
 
     func toModel() -> Reward? {
         guard
@@ -491,7 +492,8 @@ struct SyncRewardRecord: Codable {
             updatedAt: updatedAt,
             deletedAt: AppDateCoding.parseBackendTimestamp(deletedAt),
             maxFrequency: maxDailyFrequency,
-            damageTier: damageTier
+            damageTier: damageTier,
+            lockoutDurationSeconds: lockoutDurationSeconds
         )
     }
 
@@ -504,7 +506,8 @@ struct SyncRewardRecord: Codable {
             updatedAt: AppDateCoding.backendTimestamp(from: reward.updatedAt),
             deletedAt: reward.deletedAt.map { AppDateCoding.backendTimestamp(from: $0) },
             maxDailyFrequency: reward.maxFrequency,
-            damageTier: reward.damageTier
+            damageTier: reward.damageTier,
+            lockoutDurationSeconds: reward.lockoutDurationSeconds
         )
     }
 }

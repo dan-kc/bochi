@@ -59,6 +59,12 @@ struct TasksView: View {
     var body: some View {
         let offerSnapshot = specialOfferStore.makeSnapshot()
         let visibleTasks = visibleTasks(offerSnapshot: offerSnapshot)
+        let taskSections = EntityListSectionSupport.taskSections(
+            tasks: visibleTasks,
+            taskStore: taskStore,
+            tradeStore: tradeStore,
+            taskDependencyStore: taskDependencyStore
+        )
 
         NavigationStack {
             EntityListScreen(
@@ -87,28 +93,39 @@ struct TasksView: View {
                     scheduleNewTaskHighlightFade(for: taskID)
                 }
             ) {
-                ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                    EntityListRowSurface(
-                        showsDivider: index < visibleTasks.count - 1,
-                        isHighlighted: highlightedTaskID == task.id,
-                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .task, entityID: task.id)
-                    ) {
-                        taskRow(task, offerSnapshot: offerSnapshot)
-                    }
-                        .id(task.id)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                // Behaviour: align task deletion with the existing
-                                // habits/rewards confirmation flow.
-                                confirmDelete(task)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                ForEach(taskSections) { section in
+                    Section {
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, task in
+                            EntityListRowSurface(
+                                showsDivider: index < section.items.count - 1,
+                                isHighlighted: highlightedTaskID == task.id,
+                                isSpecialOffer: offerSnapshot.hasActiveOffer(for: .task, entityID: task.id)
+                            ) {
+                                taskRow(task, offerSnapshot: offerSnapshot, isDimmed: section.isDimmed)
                             }
-                            .tint(.red)
+                            .id(task.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    // Behaviour: align task deletion with the existing
+                                    // habits/rewards confirmation flow.
+                                    confirmDelete(task)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
+                            .contextMenu {
+                                taskRowMenu(task, offerSnapshot: offerSnapshot)
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
-                        .contextMenu {
-                            taskRowMenu(task, offerSnapshot: offerSnapshot)
+                    } header: {
+                        if let title = section.title {
+                            EntityListSectionHeader(title: title)
                         }
+                    }
                 }
             }
             .navigationTitle("Tasks")
@@ -206,21 +223,17 @@ struct TasksView: View {
         }
     }
 
-    private func taskRow(_ task: TaskItem, offerSnapshot: SpecialOfferSnapshot) -> some View {
+    private func taskRow(
+        _ task: TaskItem,
+        offerSnapshot: SpecialOfferSnapshot,
+        isDimmed: Bool
+    ) -> some View {
         let tags = tagStore.tagsForTask(taskId: task.id)
         let reward = TaskRewardCalculation.calculateReward(
             task: task,
             specialOfferModifierPercent: offerSnapshot.activeModifierPercent(for: .task, entityID: task.id)
         )
-        let taskActionState = TaskTradeActionSupport.state(
-            isNewMode: false,
-            isCompleted: task.completedAt != nil,
-            claimed: false,
-            taskTrade: tradeStore.latestTaskTrade(taskId: task.id, includeRefunded: false),
-            rewardPreview: reward
-        )
         let canComplete = canCompleteTask(task)
-        let isBlocked = canComplete && taskDependencyStore.isTaskBlocked(task, taskStore: taskStore, tradeStore: tradeStore)
         let offer = offerSnapshot.activeOffer(for: .task, entityID: task.id)
 
         return HStack(alignment: .bottom) {
@@ -278,11 +291,6 @@ struct TasksView: View {
                     completeTask(task, reward: reward)
                 }
                 .accessibilityIdentifier("task.claim")
-            } else if case .refund(let amount) = taskActionState {
-                TofuActionButton(amount: amount, polarity: .spending, layout: .compact) {
-                    refundTask(task)
-                }
-                .accessibilityIdentifier("task.refund")
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
@@ -291,7 +299,7 @@ struct TasksView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(isBlocked ? 0.55 : 1)
+        .opacity(isDimmed ? 0.55 : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             openChangeForm(task, focus: nil)

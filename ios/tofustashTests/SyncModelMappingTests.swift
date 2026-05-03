@@ -111,11 +111,13 @@ struct SyncModelMappingTests {
             updatedAt: "2026-04-23T12:00:00.000000",
             deletedAt: nil,
             maxDailyFrequency: rate,
-            damageTier: .medium
+            damageTier: .medium,
+            lockoutDurationSeconds: 7_200
         )
 
         let model = try #require(record.toModel())
         #expect(model.maxFrequency == rate)
+        #expect(model.lockoutDurationSeconds == 7_200)
     }
 
     // Behaviour: when a locally edited habit is queued for sync, encoding back
@@ -177,11 +179,13 @@ struct SyncModelMappingTests {
             updatedAt: now,
             deletedAt: nil,
             maxFrequency: rate,
-            damageTier: .medium
+            damageTier: .medium,
+            lockoutDurationSeconds: 7_200
         )
 
         let record = SyncRewardRecord.from(reward)
         #expect(record.maxDailyFrequency == rate)
+        #expect(record.lockoutDurationSeconds == 7_200)
     }
 
     // Behaviour: task dependency rows must round-trip through sync unchanged so

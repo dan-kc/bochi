@@ -50,6 +50,10 @@ struct HabitsView: View {
     var body: some View {
         let offerSnapshot = specialOfferStore.makeSnapshot()
         let visibleHabits = visibleHabits(offerSnapshot: offerSnapshot)
+        let habitSections = EntityListSectionSupport.habitSections(
+            habits: visibleHabits,
+            tradeStore: tradeStore
+        )
 
         NavigationStack {
             EntityListScreen(
@@ -78,30 +82,41 @@ struct HabitsView: View {
                     scheduleNewHabitHighlightFade(for: habitID)
                 }
             ) {
-                ForEach(Array(visibleHabits.enumerated()), id: \.element.id) { index, habit in
-                    EntityListRowSurface(
-                        showsDivider: index < visibleHabits.count - 1,
-                        isHighlighted: highlightedHabitID == habit.id,
-                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .habit, entityID: habit.id)
-                    ) {
-                        habitRow(habit, offerSnapshot: offerSnapshot)
-                    }
-                        .id(habit.id)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                // Behaviour: Swiping a row should only stage the delete
-                                // confirmation. SwiftUI animates `.destructive` swipe
-                                // buttons as if the row is already gone, which causes the
-                                // brief disappear/reappear glitch before the user confirms.
-                                confirmDelete(habit)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                ForEach(habitSections) { section in
+                    Section {
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, habit in
+                            EntityListRowSurface(
+                                showsDivider: index < section.items.count - 1,
+                                isHighlighted: highlightedHabitID == habit.id,
+                                isSpecialOffer: offerSnapshot.hasActiveOffer(for: .habit, entityID: habit.id)
+                            ) {
+                                habitRow(habit, offerSnapshot: offerSnapshot, isDimmed: section.isDimmed)
                             }
-                            .tint(.red)
+                            .id(habit.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    // Behaviour: Swiping a row should only stage the delete
+                                    // confirmation. SwiftUI animates `.destructive` swipe
+                                    // buttons as if the row is already gone, which causes the
+                                    // brief disappear/reappear glitch before the user confirms.
+                                    confirmDelete(habit)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
+                            .contextMenu {
+                                habitRowMenu(habit, offerSnapshot: offerSnapshot)
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
-                        .contextMenu {
-                            habitRowMenu(habit, offerSnapshot: offerSnapshot)
+                    } header: {
+                        if let title = section.title {
+                            EntityListSectionHeader(title: title)
                         }
+                    }
                 }
             }
             .navigationTitle("Habits")
@@ -226,7 +241,11 @@ struct HabitsView: View {
         }
     }
 
-    private func habitRow(_ habit: Habit, offerSnapshot: SpecialOfferSnapshot) -> some View {
+    private func habitRow(
+        _ habit: Habit,
+        offerSnapshot: SpecialOfferSnapshot,
+        isDimmed: Bool
+    ) -> some View {
         let tags = tagStore.tagsForHabit(habitId: habit.id)
         let isLocked = HabitLockout.isLocked(habit: habit, tradeStore: tradeStore)
         let offer = offerSnapshot.activeOffer(for: .habit, entityID: habit.id)
@@ -289,6 +308,7 @@ struct HabitsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(isDimmed ? 0.55 : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             openChangeForm(habit, focus: nil)

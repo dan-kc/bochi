@@ -51,6 +51,10 @@ struct RewardsView: View {
     var body: some View {
         let offerSnapshot = specialOfferStore.makeSnapshot()
         let visibleRewards = visibleRewards(offerSnapshot: offerSnapshot)
+        let rewardSections = EntityListSectionSupport.rewardSections(
+            rewards: visibleRewards,
+            tradeStore: tradeStore
+        )
 
         NavigationStack {
             EntityListScreen(
@@ -79,30 +83,41 @@ struct RewardsView: View {
                     scheduleNewRewardHighlightFade(for: rewardID)
                 }
             ) {
-                ForEach(Array(visibleRewards.enumerated()), id: \.element.id) { index, reward in
-                    EntityListRowSurface(
-                        showsDivider: index < visibleRewards.count - 1,
-                        isHighlighted: highlightedRewardID == reward.id,
-                        isSpecialOffer: offerSnapshot.hasActiveOffer(for: .reward, entityID: reward.id)
-                    ) {
-                        rewardRow(reward, offerSnapshot: offerSnapshot)
-                    }
-                        .id(reward.id)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                // Behaviour: Swiping a row should only open the
-                                // confirmation alert. Using a `.destructive` swipe button
-                                // makes SwiftUI preview the removal before the user confirms,
-                                // which causes the row to flicker out and then back in.
-                                confirmDelete(reward)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                ForEach(rewardSections) { section in
+                    Section {
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, reward in
+                            EntityListRowSurface(
+                                showsDivider: index < section.items.count - 1,
+                                isHighlighted: highlightedRewardID == reward.id,
+                                isSpecialOffer: offerSnapshot.hasActiveOffer(for: .reward, entityID: reward.id)
+                            ) {
+                                rewardRow(reward, offerSnapshot: offerSnapshot, isDimmed: section.isDimmed)
                             }
-                            .tint(.red)
+                            .id(reward.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    // Behaviour: Swiping a row should only open the
+                                    // confirmation alert. Using a `.destructive` swipe button
+                                    // makes SwiftUI preview the removal before the user confirms,
+                                    // which causes the row to flicker out and then back in.
+                                    confirmDelete(reward)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
+                            .contextMenu {
+                                rewardRowMenu(reward, offerSnapshot: offerSnapshot)
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
-                        .contextMenu {
-                            rewardRowMenu(reward, offerSnapshot: offerSnapshot)
+                    } header: {
+                        if let title = section.title {
+                            EntityListSectionHeader(title: title)
                         }
+                    }
                 }
             }
             .navigationTitle("Rewards")
@@ -215,16 +230,22 @@ struct RewardsView: View {
     }
 
     private func priceSortValue(for reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> Int? {
-        EntityActionSupport.sortableAmount(isActionable: reward.canPurchase) {
+        let isLocked = RewardLockout.isLocked(reward: reward, tradeStore: tradeStore)
+        return EntityActionSupport.sortableAmount(isActionable: reward.canPurchase && !isLocked) {
             priceForReward(reward, offerSnapshot: offerSnapshot)
         }
     }
 
-    private func rewardRow(_ reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> some View {
+    private func rewardRow(
+        _ reward: Reward,
+        offerSnapshot: SpecialOfferSnapshot,
+        isDimmed: Bool
+    ) -> some View {
         let tags = tagStore.tagsForReward(rewardId: reward.id)
         let canPurchase = reward.canPurchase
+        let isLocked = RewardLockout.isLocked(reward: reward, tradeStore: tradeStore)
         let price = priceForReward(reward, offerSnapshot: offerSnapshot)
-        let canAfford = canPurchase && balanceStore.balance >= price
+        let canAfford = canPurchase && !isLocked && balanceStore.balance >= price
         let offer = offerSnapshot.activeOffer(for: .reward, entityID: reward.id)
 
         return HStack(alignment: .bottom) {
@@ -271,19 +292,27 @@ struct RewardsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if canPurchase {
-                TofuActionButton(
-                    amount: price,
-                    polarity: .spending,
-                    layout: .compact,
-                    isEnabled: canAfford
-                ) {
-                    if canAfford {
-                        openPurchaseModal(for: reward, offer: offer)
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44, alignment: .center)
+                } else {
+                    TofuActionButton(
+                        amount: price,
+                        polarity: .spending,
+                        layout: .compact,
+                        isEnabled: canAfford
+                    ) {
+                        if canAfford {
+                            openPurchaseModal(for: reward, offer: offer)
+                        }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(isDimmed ? 0.55 : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             openChangeForm(reward, focus: nil)
@@ -292,8 +321,9 @@ struct RewardsView: View {
 
     @ViewBuilder
     private func rewardRowMenu(_ reward: Reward, offerSnapshot: SpecialOfferSnapshot) -> some View {
+        let isLocked = RewardLockout.isLocked(reward: reward, tradeStore: tradeStore)
         let price = priceForReward(reward, offerSnapshot: offerSnapshot)
-        let canClaimReward = reward.canPurchase && balanceStore.balance >= price
+        let canClaimReward = reward.canPurchase && !isLocked && balanceStore.balance >= price
 
         if canClaimReward {
             let offer = offerSnapshot.activeOffer(for: .reward, entityID: reward.id)

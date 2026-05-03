@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Separate lockout editor for the cooldown after a claim. This is intentionally
-// a standalone view instead of a reused generic time picker so it can evolve
-// separately from expected duration.
-struct HabitLockoutDurationModal: View {
+// Shared lockout editor for the cooldown after a claim or purchase. This stays
+// separate from the duration picker because the user is configuring when an
+// action becomes available again, not how long the action itself takes.
+struct LockoutDurationModal: View {
     private enum DurationUnit: String, CaseIterable {
         case minutes
         case hours
@@ -33,7 +33,7 @@ struct HabitLockoutDurationModal: View {
                 Section {
                     TextField("Lockout", text: $valueText)
                         .keyboardType(.numberPad)
-                        .accessibilityIdentifier("habit-lockout.value")
+                        .accessibilityIdentifier("entity-lockout.value")
 
                     Picker("Unit", selection: $unit) {
                         ForEach(DurationUnit.allCases, id: \.self) { unit in
@@ -132,3 +132,5 @@ struct HabitLockoutDurationModal: View {
         dismiss()
     }
 }
+
+typealias HabitLockoutDurationModal = LockoutDurationModal

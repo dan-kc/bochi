@@ -14,6 +14,29 @@ struct Reward: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let deletedAt: Date?
     let maxFrequency: Double?
     let damageTier: RewardDamageTier?
+    let lockoutDurationSeconds: Int?
+
+    init(
+        id: RecordID,
+        name: String,
+        description: String,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        maxFrequency: Double?,
+        damageTier: RewardDamageTier?,
+        lockoutDurationSeconds: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.maxFrequency = maxFrequency
+        self.damageTier = damageTier
+        self.lockoutDurationSeconds = lockoutDurationSeconds
+    }
 
     // Buying is allowed even when optional pricing fields are blank. The
     // calculator now uses the most expensive fallback values by default so

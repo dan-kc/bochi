@@ -89,24 +89,11 @@ struct EntityListScreen<RowID: Hashable, RowContent: View>: View {
                     List {
                         controlsRow
 
-                        Section {
-                            if visibleItemCount == 0 {
-                                filteredEmptyStateRow
-                            } else {
-                                rowContent
-                                    // Behaviour: entity rows should line up with the
-                                    // control strip and navigation title. We set the insets
-                                    // ourselves so the list stays sharp-edged without the
-                                    // grouped container clipping the row content.
-                                    .listRowInsets(EdgeInsets())
-                                    .listRowSeparator(.hidden)
-                                    // Behaviour: once the user has items, every entity
-                                    // row should sit directly on the parent surface instead of
-                                    // getting the default opaque grouped-cell fill.
-                                    .listRowBackground(Color.clear)
-
-                                bottomPaddingRow
-                            }
+                        if visibleItemCount == 0 {
+                            filteredEmptyStateRow
+                        } else {
+                            rowContent
+                            bottomPaddingRow
                         }
                     }
                     .lockControlsUnlessScrolledToTop(isAtTop: $isListAtTop)

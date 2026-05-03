@@ -66,6 +66,7 @@ final class RewardStore {
         description: String = "",
         maxFrequency: Double? = nil,
         damageTier: RewardDamageTier? = nil,
+        lockoutDurationSeconds: Int? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -85,7 +86,8 @@ final class RewardStore {
             updatedAt: updatedAt ?? now,
             deletedAt: deletedAt,
             maxFrequency: maxFrequency,
-            damageTier: damageTier
+            damageTier: damageTier,
+            lockoutDurationSeconds: lockoutDurationSeconds
         )
 
         upsert(reward, markDirty: shouldNotifySync)
@@ -101,6 +103,7 @@ final class RewardStore {
         description: String? = nil,
         maxFrequency: Double?? = nil,
         damageTier: RewardDamageTier?? = nil,
+        lockoutDurationSeconds: Int?? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
@@ -127,7 +130,8 @@ final class RewardStore {
             updatedAt: updatedAt,
             deletedAt: deletedAt ?? existing.deletedAt,
             maxFrequency: maxFrequency ?? existing.maxFrequency,
-            damageTier: damageTier ?? existing.damageTier
+            damageTier: damageTier ?? existing.damageTier,
+            lockoutDurationSeconds: lockoutDurationSeconds ?? existing.lockoutDurationSeconds
         )
 
         upsert(updated, markDirty: shouldNotifySync)
@@ -146,7 +150,8 @@ final class RewardStore {
             updatedAt: deletedAt,
             deletedAt: deletedAt,
             maxFrequency: existing.maxFrequency,
-            damageTier: existing.damageTier
+            damageTier: existing.damageTier,
+            lockoutDurationSeconds: existing.lockoutDurationSeconds
         )
         upsert(deleted, markDirty: shouldNotifySync)
         if shouldNotifySync {
@@ -272,9 +277,9 @@ final class RewardStore {
             """
             INSERT INTO rewards (
                 id, owner_id, name, description, created_at, updated_at, deleted_at,
-                max_daily_frequency, damage_tier
+                max_daily_frequency, damage_tier, lockout_duration_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 owner_id = excluded.owner_id,
                 name = excluded.name,
@@ -283,7 +288,8 @@ final class RewardStore {
                 updated_at = excluded.updated_at,
                 deleted_at = excluded.deleted_at,
                 max_daily_frequency = excluded.max_daily_frequency,
-                damage_tier = excluded.damage_tier
+                damage_tier = excluded.damage_tier,
+                lockout_duration_seconds = excluded.lockout_duration_seconds
             """,
             bindings: rewardBindings(reward, ownerID: currentOwnerID),
             on: databaseHandle
@@ -294,7 +300,7 @@ final class RewardStore {
         let fetched = (try? database.query(
             """
             SELECT id, name, description, created_at, updated_at, deleted_at,
-                   max_daily_frequency, damage_tier
+                   max_daily_frequency, damage_tier, lockout_duration_seconds
             FROM rewards
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -310,7 +316,8 @@ final class RewardStore {
                 updatedAt: SQLiteColumn.date(row, index: 4),
                 deletedAt: SQLiteColumn.optionalDate(row, index: 5),
                 maxFrequency: SQLiteColumn.optionalDouble(row, index: 6),
-                damageTier: SQLiteColumn.optionalText(row, index: 7).flatMap(RewardDamageTier.init(rawValue:))
+                damageTier: SQLiteColumn.optionalText(row, index: 7).flatMap(RewardDamageTier.init(rawValue:)),
+                lockoutDurationSeconds: SQLiteColumn.optionalInt(row, index: 8)
             )
         }) ?? []
 
@@ -333,9 +340,9 @@ final class RewardStore {
                 """
                 INSERT INTO rewards (
                     id, owner_id, name, description, created_at, updated_at, deleted_at,
-                    max_daily_frequency, damage_tier
+                    max_daily_frequency, damage_tier, lockout_duration_seconds
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bindings: rewardBindings(reward, ownerID: ownerID),
                 on: databaseHandle
@@ -353,7 +360,8 @@ final class RewardStore {
             .double(reward.updatedAt.timeIntervalSince1970),
             reward.deletedAt.map { .double($0.timeIntervalSince1970) } ?? .null,
             reward.maxFrequency.map(SQLiteValue.double) ?? .null,
-            reward.damageTier.map { .text($0.rawValue) } ?? .null
+            reward.damageTier.map { .text($0.rawValue) } ?? .null,
+            reward.lockoutDurationSeconds.map { .int(Int64($0)) } ?? .null
         ]
     }
 

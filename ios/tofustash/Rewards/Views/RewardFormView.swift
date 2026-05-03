@@ -13,6 +13,7 @@ enum RewardFormMode: Equatable {
 enum RewardFormFocus: Equatable {
     case maxFrequency
     case damage
+    case lockout
     case tags
 }
 
@@ -21,6 +22,7 @@ struct RewardFormSnapshot {
     let description: String
     let maxFrequency: Double?
     let damageTier: RewardDamageTier?
+    let lockoutDurationSeconds: Int?
     let rewardId: RecordID
 }
 
@@ -43,10 +45,12 @@ struct RewardFormView: View {
     @State private var description = ""
     @State private var maxFrequency: Double? = nil
     @State private var damageTier: RewardDamageTier? = nil
+    @State private var lockoutDurationSeconds: Int? = nil
     @State private var rewardId = RecordID()
 
     @State private var showingFrequency = false
     @State private var showingDamage = false
+    @State private var showingLockout = false
     @State private var showingTags = false
     @State private var purchasingRewardRoute: RewardPurchaseRoute? = nil
     @State private var showingHistory = false
@@ -96,6 +100,7 @@ struct RewardFormView: View {
             description: description,
             maxFrequency: maxFrequency,
             damageTier: damageTier,
+            lockoutDurationSeconds: lockoutDurationSeconds,
             tagCount: rewardTags.count,
             isFirstReward: false
         )
@@ -118,8 +123,22 @@ struct RewardFormView: View {
             updatedAt: existingReward.updatedAt,
             deletedAt: existingReward.deletedAt,
             maxFrequency: maxFrequency,
-            damageTier: damageTier
+            damageTier: damageTier,
+            lockoutDurationSeconds: lockoutDurationSeconds
         )
+    }
+
+    private var isLocked: Bool {
+        guard let reward = draftRewardForPurchase else { return false }
+        return RewardLockout.isLocked(reward: reward, tradeStore: tradeStore)
+    }
+
+    private var lockoutSummary: String? {
+        guard let reward = draftRewardForPurchase else { return nil }
+        guard let remainingSeconds = RewardLockout.remainingSeconds(reward: reward, tradeStore: tradeStore) else {
+            return nil
+        }
+        return DurationFormatting.countdown(secondsRemaining: remainingSeconds)
     }
 
     private var currentPrice: Int {
@@ -251,6 +270,9 @@ struct RewardFormView: View {
                 onUnset: damageTier != nil ? { damageTier = nil } : nil
             )
         }
+        .sheet(isPresented: $showingLockout) {
+            LockoutDurationModal(durationSeconds: $lockoutDurationSeconds)
+        }
         .sheet(isPresented: $showingTags) {
             TagsView(selectionMode: .assignment(.reward(rewardId)))
         }
@@ -294,6 +316,9 @@ struct RewardFormView: View {
         .onChange(of: damageTier) { _, _ in
             autoSaveIfNeeded()
         }
+        .onChange(of: lockoutDurationSeconds) { _, _ in
+            autoSaveIfNeeded()
+        }
         .onDisappear {
             if isNewMode && !didPersist && hasContent {
                 onDiscard?(RewardFormSnapshot(
@@ -301,6 +326,7 @@ struct RewardFormView: View {
                     description: description,
                     maxFrequency: maxFrequency,
                     damageTier: damageTier,
+                    lockoutDurationSeconds: lockoutDurationSeconds,
                     rewardId: rewardId
                 ))
             }
@@ -320,17 +346,41 @@ struct RewardFormView: View {
     private var floatingControls: some View {
         VStack(spacing: 10) {
             if !isNewMode {
-                TofuActionButton(amount: currentPrice, polarity: .spending, layout: .expanded(title: "Buy Reward")) {
-                    guard let persistedReward = persistReward() else { return }
-                    didPersist = true
-                    purchasingRewardRoute = RewardPurchaseRoute(
-                        reward: persistedReward,
-                        resolvedSpecialOffer: specialOfferStore.activeOffer(for: .reward, entityID: persistedReward.id)
-                    )
+                if isLocked {
+                    lockedPurchaseSummary
+                } else {
+                    purchaseButton
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var lockedPurchaseSummary: some View {
+        HStack {
+            Label("Locked", systemImage: "lock.fill")
+            Spacer()
+            if let lockoutSummary {
+                Text(lockoutSummary)
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.thinMaterial, in: Capsule())
+    }
+
+    private var purchaseButton: some View {
+        TofuActionButton(amount: currentPrice, polarity: .spending, layout: .expanded(title: "Buy Reward")) {
+            guard let persistedReward = persistReward() else { return }
+            didPersist = true
+            purchasingRewardRoute = RewardPurchaseRoute(
+                reward: persistedReward,
+                resolvedSpecialOffer: specialOfferStore.activeOffer(for: .reward, entityID: persistedReward.id)
+            )
+        }
     }
 
     static func hasContent(
@@ -338,6 +388,7 @@ struct RewardFormView: View {
         description: String,
         maxFrequency: Double?,
         damageTier: RewardDamageTier?,
+        lockoutDurationSeconds: Int?,
         tagCount: Int,
         isFirstReward: Bool = false
     ) -> Bool {
@@ -345,7 +396,7 @@ struct RewardFormView: View {
             name: name,
             description: description,
             primaryValueIsSet: maxFrequency != nil,
-            secondaryValueIsSet: damageTier != nil,
+            secondaryValueIsSet: damageTier != nil || lockoutDurationSeconds != nil,
             tagCount: tagCount,
             ignoreSecondaryValue: isFirstReward
         )
@@ -358,13 +409,16 @@ struct RewardFormView: View {
     static func buildPillData(
         hasTagsApplied: Bool,
         damageTier: RewardDamageTier?,
-        maxFrequency: Double?
+        maxFrequency: Double?,
+        lockoutDurationSeconds: Int?
     ) -> [EntityFormPillConfig] {
         let frequencyLabel = FrequencyConversion.formatSummary(maxFrequency).map { "Max \($0)" } ?? "Max Frequency"
+        let lockoutLabel = DurationFormatting.summary(seconds: lockoutDurationSeconds) ?? "Lockout"
         return [
             EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
             EntityFormPillConfig(id: "damage", label: damageTier?.displayName ?? "Damage", icon: "flame", isSet: damageTier != nil),
             EntityFormPillConfig(id: "frequency", label: frequencyLabel, icon: "clock", isSet: maxFrequency != nil),
+            EntityFormPillConfig(id: "lockout", label: lockoutLabel, icon: "lock", isSet: lockoutDurationSeconds != nil)
         ]
     }
 
@@ -372,12 +426,14 @@ struct RewardFormView: View {
         let configs = Self.buildPillData(
             hasTagsApplied: !rewardTags.isEmpty,
             damageTier: damageTier,
-            maxFrequency: maxFrequency
+            maxFrequency: maxFrequency,
+            lockoutDurationSeconds: lockoutDurationSeconds
         )
         let actions: [String: () -> Void] = [
             "tags": { showingTags = true },
             "damage": { showingDamage = true },
             "frequency": { showingFrequency = true },
+            "lockout": { showingLockout = true },
         ]
 
         return EntityFormSupport.buildPills(
@@ -395,12 +451,14 @@ struct RewardFormView: View {
             description = prefill.description
             maxFrequency = prefill.maxFrequency
             damageTier = prefill.damageTier
+            lockoutDurationSeconds = prefill.lockoutDurationSeconds
             rewardId = prefill.rewardId
         } else if case .change(let reward) = mode {
             name = reward.name
             description = reward.description
             maxFrequency = reward.maxFrequency
             damageTier = reward.damageTier
+            lockoutDurationSeconds = reward.lockoutDurationSeconds
             rewardId = reward.id
         }
 
@@ -414,6 +472,8 @@ struct RewardFormView: View {
                 showingFrequency = true
             case .damage:
                 showingDamage = true
+            case .lockout:
+                showingLockout = true
             case .tags:
                 showingTags = true
             }
@@ -433,7 +493,8 @@ struct RewardFormView: View {
                 name: name,
                 description: description,
                 maxFrequency: maxFrequency,
-                damageTier: damageTier
+                damageTier: damageTier,
+                lockoutDurationSeconds: lockoutDurationSeconds
             )
         }
 
@@ -442,7 +503,8 @@ struct RewardFormView: View {
             name: Self.nameForAutoSave(name),
             description: description,
             maxFrequency: .some(maxFrequency),
-            damageTier: .some(damageTier)
+            damageTier: .some(damageTier),
+            lockoutDurationSeconds: .some(lockoutDurationSeconds)
         )
 
         return draftRewardForPurchase

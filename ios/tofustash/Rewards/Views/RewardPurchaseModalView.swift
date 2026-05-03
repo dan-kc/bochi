@@ -38,6 +38,17 @@ struct RewardPurchaseModalView: View {
         balanceStore.balance >= totalPrice
     }
 
+    private var isLocked: Bool {
+        RewardLockout.isLocked(reward: reward, tradeStore: tradeStore)
+    }
+
+    private var lockoutSummary: String? {
+        guard let remainingSeconds = RewardLockout.remainingSeconds(reward: reward, tradeStore: tradeStore) else {
+            return nil
+        }
+        return DurationFormatting.countdown(secondsRemaining: remainingSeconds)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -129,12 +140,28 @@ struct RewardPurchaseModalView: View {
 
             // Behaviour: the buy action sits directly under the total so the
             // user confirms cost and purchase in one focused area of the sheet.
-            TofuActionButton(amount: totalPrice, polarity: .spending, layout: .expanded(title: "Buy")) {
-                purchaseReward()
+            if isLocked {
+                HStack {
+                    Label("Locked", systemImage: "lock.fill")
+                    Spacer()
+                    if let lockoutSummary {
+                        Text(lockoutSummary)
+                            .fontWeight(.semibold)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(.thinMaterial, in: Capsule())
+            } else {
+                TofuActionButton(amount: totalPrice, polarity: .spending, layout: .expanded(title: "Buy")) {
+                    purchaseReward()
+                }
+                .disabled(!canAfford)
             }
-            .disabled(!canAfford)
 
-            if !canAfford {
+            if !isLocked && !canAfford {
                 Text("You need \(totalPrice - balanceStore.balance) more tofu to buy this reward.")
                     .font(.footnote)
                     .foregroundStyle(.red)
@@ -148,6 +175,7 @@ struct RewardPurchaseModalView: View {
     }
 
     private func purchaseReward() {
+        guard !RewardLockout.isLocked(reward: reward, tradeStore: tradeStore) else { return }
         do {
             spentAmount = try RewardPurchaseService.purchase(
                 reward: reward,
