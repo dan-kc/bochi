@@ -55,7 +55,9 @@ pub struct TradableItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lockout_duration_seconds: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub benefit: Option<i16>,
     // Reward fields
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_daily_frequency: Option<f64>,
@@ -107,11 +109,8 @@ pub async fn create_trade(
             ));
         }
 
-        let amount = calculate_task_reward(
-            task.difficulty_tier,
-            task.duration_seconds,
-            task.skip_consequence,
-        );
+        let amount =
+            calculate_task_reward(task.difficulty_tier, task.duration_seconds, task.commitment);
 
         let opts = CreateTradeWithTaskOptions::new(user.user_id, task_id, amount);
         let trade_row = app
@@ -142,7 +141,8 @@ pub async fn create_trade(
                     difficulty_tier: trade_row.task_difficulty_tier,
                     duration_seconds: trade_row.task_duration_seconds,
                     lockout_duration_seconds: None,
-                    skip_consequence: trade_row.task_skip_consequence,
+                    commitment: trade_row.task_commitment,
+                    benefit: None,
                     max_daily_frequency: None,
                     damage_tier: None,
                     due_date: trade_row.task_due_date,
@@ -183,7 +183,8 @@ pub async fn create_trade(
                     difficulty_tier: trade_row.habit_difficulty_tier,
                     duration_seconds: trade_row.habit_duration_seconds,
                     lockout_duration_seconds: trade_row.habit_lockout_duration_seconds,
-                    skip_consequence: trade_row.habit_skip_consequence,
+                    commitment: None,
+                    benefit: trade_row.habit_benefit,
                     max_daily_frequency: None,
                     damage_tier: None,
                     due_date: None,
@@ -225,7 +226,8 @@ pub async fn create_trade(
                     difficulty_tier: None,
                     duration_seconds: None,
                     lockout_duration_seconds: None,
-                    skip_consequence: None,
+                    commitment: None,
+                    benefit: None,
                     max_daily_frequency: trade_row.reward_max_daily_frequency,
                     damage_tier: trade_row.reward_damage_tier,
                     due_date: None,

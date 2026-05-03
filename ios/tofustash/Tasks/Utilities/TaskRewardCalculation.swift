@@ -2,11 +2,12 @@ import Foundation
 
 // Pure functions for the static task reward formula.
 //
-// Formula: Reward = round(100 * T * D * S)
+// Formula: Reward = round(200 * T * D * C)
 //   T = difficulty tier multiplier
 //   D = duration multiplier
-//   S = skip-consequence multiplier
+//   C = commitment multiplier
 enum TaskRewardCalculation {
+    nonisolated private static let baseReward = 200.0
     nonisolated private static let maxDurationSeconds = 43_200.0
     nonisolated private static let durationInfluence = 0.35
 
@@ -23,18 +24,18 @@ enum TaskRewardCalculation {
         return 1.0 + (normalized * durationInfluence)
     }
 
-    nonisolated static func calculateSkipConsequenceMultiplier(task: TaskItem) -> Double {
-        SkipConsequenceTier.from(task.skipConsequence)?.multiplier ?? 1.0
+    nonisolated static func calculateCommitmentMultiplier(task: TaskItem) -> Double {
+        CommitmentTier.from(task.commitment)?.multiplier ?? 1.0
     }
 
     nonisolated static func calculateReward(
         task: TaskItem,
         specialOfferModifierPercent: Int? = nil
     ) -> Int {
-        let reward = 100.0
+        let reward = baseReward
             * calculateDifficultyMultiplier(task: task)
             * calculateDurationMultiplier(task: task)
-            * calculateSkipConsequenceMultiplier(task: task)
+            * calculateCommitmentMultiplier(task: task)
         return SpecialOfferSupport.adjustedRoundedAmount(
             reward,
             specialOfferModifierPercent: specialOfferModifierPercent

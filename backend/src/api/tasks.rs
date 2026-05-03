@@ -17,7 +17,7 @@ pub struct CreateTaskRequest {
     pub description: String,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -33,7 +33,7 @@ pub struct TaskResponse {
     pub completed_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -41,16 +41,20 @@ pub(crate) fn validate_task_fields(
     name: &str,
     description: &str,
     duration_seconds: Option<i32>,
-    skip_consequence: Option<i16>,
+    commitment: Option<i16>,
 ) -> Result<(), ApiError> {
-    validate_habit_fields(
-        name,
-        description,
-        None,
-        duration_seconds,
-        None,
-        skip_consequence,
-    )
+    validate_habit_fields(name, description, None, duration_seconds, None, None)?;
+
+    if let Some(commitment) = commitment {
+        if !(1..=5).contains(&commitment) {
+            return Err(ApiError::Validation(format!(
+                "The 'commitment' must be between 1 and 5. You sent {}.",
+                commitment
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn create_task(
@@ -62,7 +66,7 @@ pub async fn create_task(
         &input.name,
         &input.description,
         input.duration_seconds,
-        input.skip_consequence,
+        input.commitment,
     )?;
 
     let opts = CreateTaskOptions {
@@ -71,7 +75,7 @@ pub async fn create_task(
         description: input.description,
         difficulty_tier: input.difficulty_tier,
         duration_seconds: input.duration_seconds,
-        skip_consequence: input.skip_consequence,
+        commitment: input.commitment,
         due_date: input.due_date,
     };
 
@@ -92,7 +96,7 @@ pub async fn create_task(
             completed_at: task_row.completed_at,
             difficulty_tier: task_row.difficulty_tier,
             duration_seconds: task_row.duration_seconds,
-            skip_consequence: task_row.skip_consequence,
+            commitment: task_row.commitment,
             due_date: task_row.due_date,
         }),
     ))

@@ -30,7 +30,7 @@ struct TradeSourceNavigationSupportTests {
             completedAt: nil,
             difficultyTier: nil,
             durationSeconds: nil,
-            skipConsequence: nil,
+            commitment: nil,
             dueDate: nil
         )
 

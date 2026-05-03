@@ -9,7 +9,7 @@ enum TaskFormPersistenceSupport {
         description: String,
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int?,
-        skipConsequence: Int?,
+        commitment: Int?,
         dueDate: Date?,
         completedAt: Date?,
         reminderDrafts: [ReminderDraft],
@@ -28,7 +28,7 @@ enum TaskFormPersistenceSupport {
                 description: description,
                 difficultyTier: difficultyTier,
                 durationSeconds: durationSeconds,
-                skipConsequence: skipConsequence,
+                commitment: commitment,
                 dueDate: dueDate,
                 completedAt: completedAt
             ) else {
@@ -42,7 +42,7 @@ enum TaskFormPersistenceSupport {
                 description: description,
                 difficultyTier: .some(difficultyTier),
                 durationSeconds: .some(durationSeconds),
-                skipConsequence: .some(skipConsequence),
+                commitment: .some(commitment),
                 dueDate: .some(dueDate),
                 completedAt: .some(completedAt)
             )

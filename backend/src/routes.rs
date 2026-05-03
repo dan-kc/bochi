@@ -47,7 +47,11 @@ fn auth_cookie_headers(access_token: &str, refresh_token: &str) -> HeaderMap {
     // Keep cookie expiry aligned with the database-backed refresh token lifetime.
     headers.append(
         SET_COOKIE,
-        create_auth_cookie("refresh_token", refresh_token, REFRESH_TOKEN_LIFETIME_SECONDS),
+        create_auth_cookie(
+            "refresh_token",
+            refresh_token,
+            REFRESH_TOKEN_LIFETIME_SECONDS,
+        ),
     );
     headers
 }

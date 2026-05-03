@@ -26,7 +26,7 @@ struct TaskStoreTests {
             description: "Finish the draft",
             difficultyTier: .medium,
             durationSeconds: 900,
-            skipConsequence: 3,
+            commitment: 3,
             dueDate: dueDate
         )
 

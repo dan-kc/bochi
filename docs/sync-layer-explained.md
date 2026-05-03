@@ -245,7 +245,7 @@ That distinction is important:
     "difficulty_tier": "medium",
     "duration_seconds": 900,
     "lockout_duration_seconds": null,
-    "skip_consequence": null
+    "benefit": null
   },
   {
     "id": "habit-1",
@@ -259,7 +259,7 @@ That distinction is important:
     "difficulty_tier": "hard",
     "duration_seconds": 2700,
     "lockout_duration_seconds": 3600,
-    "skip_consequence": 1
+    "benefit": 1
   }
 ]
 ```
@@ -430,7 +430,7 @@ Suppose the device has this signed-out row in `habits`:
     "difficulty_tier": "light",
     "duration_seconds": null,
     "lockout_duration_seconds": null,
-    "skip_consequence": null
+    "commitment": null
   }
 ]
 ```
@@ -451,7 +451,7 @@ After sign-in, the store migrates it by changing the owner to the backend user:
     "difficulty_tier": "light",
     "duration_seconds": null,
     "lockout_duration_seconds": null,
-    "skip_consequence": null
+    "benefit": null
   }
 ]
 ```
@@ -523,7 +523,7 @@ The local store immediately writes the updated habit:
   "difficultyTier": "hard",
   "durationSeconds": 2700,
   "lockoutDurationSeconds": 3600,
-  "skipConsequence": 1
+  "benefit": 1
 }
 ```
 
@@ -651,7 +651,7 @@ Authorization: Bearer <access-token>
       "difficultyTier": "hard",
       "durationSeconds": 2700,
       "lockoutDurationSeconds": 3600,
-      "skipConsequence": 1
+      "benefit": 1
     }
   ],
   "trades": [
@@ -714,7 +714,7 @@ The client sends only dirty local entities and settings.
       "difficultyTier": "hard",
       "durationSeconds": 2700,
       "lockoutDurationSeconds": 3600,
-      "skipConsequence": 1
+      "benefit": 1
     }
   ],
   "trades": [
@@ -747,7 +747,7 @@ The client sends only dirty local entities and settings.
       "difficultyTier": "hard",
       "durationSeconds": 2700,
       "lockoutDurationSeconds": 3600,
-      "skipConsequence": 1
+      "benefit": 1
     }
   ],
   "trades": [

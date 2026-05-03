@@ -20,7 +20,7 @@ enum TaskFormFocus: Equatable {
     case duration
     case dueDate
     case reminders
-    case skipConsequence
+    case commitment
     case tags
 }
 
@@ -29,7 +29,7 @@ struct TaskFormSnapshot {
     let description: String
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
-    let skipConsequence: Int?
+    let commitment: Int?
     let dueDate: Date?
     let reminderDrafts: [ReminderDraft]
     let taskId: RecordID
@@ -79,7 +79,7 @@ struct TaskFormView: View {
     @State private var description = ""
     @State private var difficultyTier: HabitDifficultyTier? = nil
     @State private var durationSeconds: Int? = nil
-    @State private var skipConsequence: Int? = nil
+    @State private var commitment: Int? = nil
     @State private var dueDate: Date? = nil
     @State private var completedAt: Date? = nil
     @State private var reminderDrafts: [ReminderDraft] = []
@@ -90,7 +90,7 @@ struct TaskFormView: View {
     @State private var showingReminders = false
     @State private var showingDifficulty = false
     @State private var showingDuration = false
-    @State private var showingSkipConsequence = false
+    @State private var showingCommitment = false
     @State private var showingDueDate = false
     @State private var showingDependencyPicker = false
     @State private var showingDeleteConfirmation = false
@@ -169,7 +169,7 @@ struct TaskFormView: View {
             completedAt: completedAt,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: dueDate
         )
     }
@@ -199,7 +199,7 @@ struct TaskFormView: View {
             description: trimmedDescription,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: dueDate,
             reminderCount: activeReminderDrafts.count,
             tagCount: taskTags.count
@@ -309,12 +309,12 @@ struct TaskFormView: View {
         .sheet(isPresented: $showingDuration) {
             HabitDurationModal(durationSeconds: $durationSeconds)
         }
-        .sheet(isPresented: $showingSkipConsequence) {
+        .sheet(isPresented: $showingCommitment) {
             TierSelectionSheet(
-                title: "Set Skip Consequence",
-                currentSelection: SkipConsequenceTier.from(skipConsequence),
-                onSave: { skipConsequence = $0?.rawValue },
-                onUnset: skipConsequence != nil ? { skipConsequence = nil } : nil
+                title: "Set Commitment",
+                currentSelection: CommitmentTier.from(commitment),
+                onSave: { commitment = $0?.rawValue },
+                onUnset: commitment != nil ? { commitment = nil } : nil
             )
         }
         .sheet(isPresented: $showingDueDate) {
@@ -403,7 +403,7 @@ struct TaskFormView: View {
         .onChange(of: durationSeconds) { _, _ in
             autoSaveIfNeeded()
         }
-        .onChange(of: skipConsequence) { _, _ in
+        .onChange(of: commitment) { _, _ in
             autoSaveIfNeeded()
         }
         .onChange(of: dueDate) { _, _ in
@@ -425,7 +425,7 @@ struct TaskFormView: View {
                     description: description,
                     difficultyTier: difficultyTier,
                     durationSeconds: durationSeconds,
-                    skipConsequence: skipConsequence,
+                    commitment: commitment,
                     dueDate: dueDate,
                     reminderDrafts: reminderDrafts,
                     taskId: taskID
@@ -679,7 +679,7 @@ struct TaskFormView: View {
         description: String,
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int?,
-        skipConsequence: Int?,
+        commitment: Int?,
         dueDate: Date?,
         reminderCount: Int,
         tagCount: Int
@@ -688,7 +688,7 @@ struct TaskFormView: View {
             || !description.isEmpty
             || difficultyTier != nil
             || durationSeconds != nil
-            || skipConsequence != nil
+            || commitment != nil
             || dueDate != nil
             || reminderCount > 0
             || tagCount > 0
@@ -698,7 +698,7 @@ struct TaskFormView: View {
         hasTagsApplied: Bool,
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int?,
-        skipConsequence: Int?,
+        commitment: Int?,
         dueDate: Date?,
         reminderSummary: String,
         hasReminders: Bool
@@ -709,7 +709,7 @@ struct TaskFormView: View {
             EntityFormPillConfig(id: "reminders", label: reminderSummary, icon: "bell", isSet: hasReminders),
             EntityFormPillConfig(id: "duration", label: DurationFormatting.summary(seconds: durationSeconds) ?? "Duration", icon: "timer", isSet: durationSeconds != nil),
             EntityFormPillConfig(id: "dueDate", label: dueDate.map(Self.dueDateSummary) ?? "Due Date", icon: "calendar", isSet: dueDate != nil),
-            EntityFormPillConfig(id: "skip", label: SkipConsequenceTier.from(skipConsequence)?.displayName ?? "Skip", icon: "exclamationmark.triangle", isSet: skipConsequence != nil)
+            EntityFormPillConfig(id: "commitment", label: CommitmentTier.from(commitment)?.displayName ?? "Commitment", icon: "exclamationmark.triangle", isSet: commitment != nil)
         ]
     }
 
@@ -718,7 +718,7 @@ struct TaskFormView: View {
             hasTagsApplied: !taskTags.isEmpty,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: dueDate,
             reminderSummary: ReminderDraftSupport.summary(for: reminderDrafts, now: reminderStore.referenceDate),
             hasReminders: !activeReminderDrafts.isEmpty
@@ -728,7 +728,7 @@ struct TaskFormView: View {
             "difficulty": { showingDifficulty = true },
             "duration": { showingDuration = true },
             "dueDate": { showingDueDate = true },
-            "skip": { showingSkipConsequence = true },
+            "commitment": { showingCommitment = true },
             "reminders": { showingReminders = true }
         ]
 
@@ -745,7 +745,7 @@ struct TaskFormView: View {
             description = prefill.description
             difficultyTier = prefill.difficultyTier
             durationSeconds = prefill.durationSeconds
-            skipConsequence = prefill.skipConsequence
+            commitment = prefill.commitment
             dueDate = prefill.dueDate
             reminderDrafts = prefill.reminderDrafts
         } else if let task = mode.task {
@@ -754,7 +754,7 @@ struct TaskFormView: View {
             description = task.description
             difficultyTier = task.difficultyTier
             durationSeconds = task.durationSeconds
-            skipConsequence = task.skipConsequence
+            commitment = task.commitment
             dueDate = task.dueDate
             completedAt = task.completedAt
             reminderDrafts = reminderStore.reminderDrafts(for: .task(task.id))
@@ -776,8 +776,8 @@ struct TaskFormView: View {
                 showingDueDate = true
             case .reminders:
                 showingReminders = true
-            case .skipConsequence:
-                showingSkipConsequence = true
+            case .commitment:
+                showingCommitment = true
             case .tags:
                 showingTags = true
             }
@@ -798,7 +798,7 @@ struct TaskFormView: View {
             description: description,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: dueDate,
             completedAt: completedAt,
             reminderDrafts: reminderDrafts,

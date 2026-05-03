@@ -86,7 +86,7 @@ struct SyncTaskRecord: Codable {
     let completedAt: String?
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
-    let skipConsequence: Int?
+    let commitment: Int?
     let dueDate: String?
 
     func toModel() -> TaskItem? {
@@ -107,7 +107,7 @@ struct SyncTaskRecord: Codable {
             completedAt: AppDateCoding.parseBackendTimestamp(completedAt),
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: AppDateCoding.parseBackendTimestamp(dueDate)
         )
     }
@@ -123,7 +123,7 @@ struct SyncTaskRecord: Codable {
             completedAt: task.completedAt.map { AppDateCoding.backendTimestamp(from: $0) },
             difficultyTier: task.difficultyTier,
             durationSeconds: task.durationSeconds,
-            skipConsequence: task.skipConsequence,
+            commitment: task.commitment,
             dueDate: task.dueDate.map { AppDateCoding.backendTimestamp(from: $0) }
         )
     }
@@ -140,7 +140,7 @@ struct SyncHabitRecord: Codable {
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
     let lockoutDurationSeconds: Int?
-    let skipConsequence: Int?
+    let benefit: Int?
 
     init(
         id: String,
@@ -153,7 +153,7 @@ struct SyncHabitRecord: Codable {
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int? = nil,
         lockoutDurationSeconds: Int? = nil,
-        skipConsequence: Int? = nil
+        benefit: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -165,7 +165,7 @@ struct SyncHabitRecord: Codable {
         self.difficultyTier = difficultyTier
         self.durationSeconds = durationSeconds
         self.lockoutDurationSeconds = lockoutDurationSeconds
-        self.skipConsequence = skipConsequence
+        self.benefit = benefit
     }
 
     func toModel() -> Habit? {
@@ -187,7 +187,7 @@ struct SyncHabitRecord: Codable {
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
             lockoutDurationSeconds: lockoutDurationSeconds,
-            skipConsequence: skipConsequence
+            benefit: benefit
         )
     }
 
@@ -203,7 +203,7 @@ struct SyncHabitRecord: Codable {
             difficultyTier: habit.difficultyTier,
             durationSeconds: habit.durationSeconds,
             lockoutDurationSeconds: habit.lockoutDurationSeconds,
-            skipConsequence: habit.skipConsequence
+            benefit: habit.benefit
         )
     }
 }

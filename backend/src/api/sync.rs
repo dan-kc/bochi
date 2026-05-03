@@ -68,7 +68,7 @@ pub struct SyncTaskInput {
     pub completed_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -86,7 +86,7 @@ pub struct SyncHabitInput {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 #[derive(Deserialize)]
@@ -221,7 +221,7 @@ pub struct HabitOutput {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 #[derive(Serialize)]
@@ -236,7 +236,7 @@ pub struct TaskOutput {
     pub completed_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -369,7 +369,7 @@ fn task_output_from_row(row: database::TaskRow) -> TaskOutput {
         completed_at: row.completed_at,
         difficulty_tier: row.difficulty_tier,
         duration_seconds: row.duration_seconds,
-        skip_consequence: row.skip_consequence,
+        commitment: row.commitment,
         due_date: row.due_date,
     }
 }
@@ -769,7 +769,7 @@ pub async fn get_sync(
             difficulty_tier: row.difficulty_tier,
             duration_seconds: row.duration_seconds,
             lockout_duration_seconds: row.lockout_duration_seconds,
-            skip_consequence: row.skip_consequence,
+            benefit: row.benefit,
         })
         .collect();
 
@@ -941,7 +941,7 @@ pub async fn post_sync(
                 habit_input.min_daily_frequency,
                 habit_input.duration_seconds,
                 habit_input.lockout_duration_seconds,
-                habit_input.skip_consequence,
+                habit_input.benefit,
             )?;
 
             let upsert_opts = database::UpsertHabitOptions {
@@ -954,7 +954,7 @@ pub async fn post_sync(
                 difficulty_tier: habit_input.difficulty_tier,
                 duration_seconds: habit_input.duration_seconds,
                 lockout_duration_seconds: habit_input.lockout_duration_seconds,
-                skip_consequence: habit_input.skip_consequence,
+                benefit: habit_input.benefit,
             };
 
             if habit_input.deleted_at.is_some() {
@@ -979,7 +979,7 @@ pub async fn post_sync(
                 difficulty_tier: habit_row.difficulty_tier,
                 duration_seconds: habit_row.duration_seconds,
                 lockout_duration_seconds: habit_row.lockout_duration_seconds,
-                skip_consequence: habit_row.skip_consequence,
+                benefit: habit_row.benefit,
             });
         }
     }
@@ -996,7 +996,7 @@ pub async fn post_sync(
                 &task_input.name,
                 &task_input.description,
                 task_input.duration_seconds,
-                task_input.skip_consequence,
+                task_input.commitment,
             )?;
 
             let upsert_opts = database::UpsertTaskOptions {
@@ -1007,7 +1007,7 @@ pub async fn post_sync(
                 deleted_at: task_input.deleted_at,
                 difficulty_tier: task_input.difficulty_tier,
                 duration_seconds: task_input.duration_seconds,
-                skip_consequence: task_input.skip_consequence,
+                commitment: task_input.commitment,
                 due_date: task_input.due_date,
             };
 
@@ -1566,7 +1566,10 @@ pub async fn post_sync(
         ensure_special_offers_current_tx(&mut tx, user.user_id, Utc::now().naive_utc())
             .await
             .map_err(|e| {
-                error!("Database Error refreshing special offers during sync push: {:?}", e);
+                error!(
+                    "Database Error refreshing special offers during sync push: {:?}",
+                    e
+                );
                 ApiError::Internal
             })?;
     let result_special_offers = special_offer_changes
@@ -1785,7 +1788,7 @@ async fn load_habits_for_sync(
     match cursor {
         Some(cursor) => {
             sqlx::query_as(
-                "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit
                  FROM habits
                  WHERE user_id = $1
                    AND ((xmin::text)::bigint >= $2 OR (xmin::text)::bigint = ANY($3))
@@ -1800,7 +1803,7 @@ async fn load_habits_for_sync(
         None => match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit
                      FROM habits
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -1812,7 +1815,7 @@ async fn load_habits_for_sync(
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit
                      FROM habits
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -2248,11 +2251,11 @@ async fn load_special_offers_for_sync(
                  ORDER BY updated_at ASC",
             );
             sqlx::query_as(&query)
-            .bind(user_id)
-            .bind(cursor.upper_bound_tx_id)
-            .bind(&cursor.in_progress_tx_ids)
-            .fetch_all(&mut **tx)
-            .await
+                .bind(user_id)
+                .bind(cursor.upper_bound_tx_id)
+                .bind(&cursor.in_progress_tx_ids)
+                .fetch_all(&mut **tx)
+                .await
         }
         None => match since {
             Some(since_time) => {
@@ -2262,15 +2265,17 @@ async fn load_special_offers_for_sync(
                      ORDER BY updated_at ASC",
                 );
                 sqlx::query_as(&query)
-                .bind(user_id)
-                .bind(since_time)
-                .fetch_all(&mut **tx)
-                .await
+                    .bind(user_id)
+                    .bind(since_time)
+                    .fetch_all(&mut **tx)
+                    .await
             }
-            None => sqlx::query_as(&base_query)
-                .bind(user_id)
-                .fetch_all(&mut **tx)
-                .await,
+            None => {
+                sqlx::query_as(&base_query)
+                    .bind(user_id)
+                    .fetch_all(&mut **tx)
+                    .await
+            }
         },
     }
 }
@@ -2388,10 +2393,10 @@ async fn retire_invalid_special_offers(
     );
 
     sqlx::query_as(&query)
-    .bind(user_id)
-    .bind(now)
-    .fetch_all(&mut **tx)
-    .await
+        .bind(user_id)
+        .bind(now)
+        .fetch_all(&mut **tx)
+        .await
 }
 
 async fn load_current_special_offers(
@@ -2410,10 +2415,10 @@ async fn load_current_special_offers(
     ));
 
     sqlx::query_as(&query)
-    .bind(user_id)
-    .bind(now)
-    .fetch_all(&mut **tx)
-    .await
+        .bind(user_id)
+        .bind(now)
+        .fetch_all(&mut **tx)
+        .await
 }
 
 fn special_offer_target_from_row(row: &database::SpecialOfferRow) -> Option<SpecialOfferTarget> {
@@ -2441,7 +2446,8 @@ async fn load_special_offer_targets(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
 ) -> Result<Vec<SpecialOfferTarget>, sqlx::Error> {
-    let active_task_trade_exists = active_unresolved_task_trade_exists_sql("tasks.id", "tasks.user_id");
+    let active_task_trade_exists =
+        active_unresolved_task_trade_exists_sql("tasks.id", "tasks.user_id");
     let rows: Vec<SpecialOfferTargetRow> = sqlx::query_as(&format!(
         "SELECT entity_kind, entity_id
          FROM (

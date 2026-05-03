@@ -24,7 +24,7 @@ pub struct CreateHabitRequest {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 #[derive(Serialize)]
@@ -40,7 +40,7 @@ pub struct HabitResponse {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 pub(crate) fn validate_habit_fields(
@@ -49,7 +49,7 @@ pub(crate) fn validate_habit_fields(
     min_daily_frequency: Option<f64>,
     duration_seconds: Option<i32>,
     lockout_duration_seconds: Option<i32>,
-    skip_consequence: Option<i16>,
+    benefit: Option<i16>,
 ) -> Result<(), ApiError> {
     let name_len = name.chars().count();
     if name_len > 100 || name_len < 1 {
@@ -103,11 +103,11 @@ pub(crate) fn validate_habit_fields(
         }
     }
 
-    if let Some(skip_consequence) = skip_consequence {
-        if !(1..=5).contains(&skip_consequence) {
+    if let Some(benefit) = benefit {
+        if !(1..=5).contains(&benefit) {
             let msg = format!(
-                "The 'skip_consequence' must be between 1 and 5. You sent {}.",
-                skip_consequence
+                "The 'benefit' must be between 1 and 5. You sent {}.",
+                benefit
             );
             return Err(ApiError::Validation(msg));
         }
@@ -127,7 +127,7 @@ pub async fn create_habit(
         input.min_daily_frequency,
         input.duration_seconds,
         input.lockout_duration_seconds,
-        input.skip_consequence,
+        input.benefit,
     )?;
 
     let opts = CreateHabitOptions {
@@ -138,7 +138,7 @@ pub async fn create_habit(
         difficulty_tier: input.difficulty_tier,
         duration_seconds: input.duration_seconds,
         lockout_duration_seconds: input.lockout_duration_seconds,
-        skip_consequence: input.skip_consequence,
+        benefit: input.benefit,
     };
 
     let habit_row = app.database.create_habit(opts).await.map_err(|e| {
@@ -159,7 +159,7 @@ pub async fn create_habit(
             difficulty_tier: habit_row.difficulty_tier,
             duration_seconds: habit_row.duration_seconds,
             lockout_duration_seconds: habit_row.lockout_duration_seconds,
-            skip_consequence: habit_row.skip_consequence,
+            benefit: habit_row.benefit,
         }),
     ))
 }

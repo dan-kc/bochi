@@ -310,7 +310,7 @@ struct TradeHistoryBuilderTests {
             completedAt: newDate,
             difficultyTier: .medium,
             durationSeconds: 900,
-            skipConsequence: 3,
+            commitment: 3,
             dueDate: nil
         )
 

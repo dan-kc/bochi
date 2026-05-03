@@ -24,7 +24,7 @@ struct HabitLockoutTests {
             difficultyTier: nil,
             durationSeconds: nil,
             lockoutDurationSeconds: lockoutDurationSeconds,
-            skipConsequence: nil
+            benefit: nil
         )
     }
 

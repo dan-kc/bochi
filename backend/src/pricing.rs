@@ -1,18 +1,18 @@
 use crate::database::HabitDifficultyTier;
 
-const TASK_BASE_REWARD: f64 = 100.0;
+const TASK_BASE_REWARD: f64 = 200.0;
 const MAX_DURATION_SECONDS: f64 = 43_200.0;
 const DURATION_INFLUENCE: f64 = 0.35;
 
 pub fn calculate_task_reward(
     difficulty_tier: Option<HabitDifficultyTier>,
     duration_seconds: Option<i32>,
-    skip_consequence: Option<i16>,
+    commitment: Option<i16>,
 ) -> i32 {
     let reward = TASK_BASE_REWARD
         * difficulty_multiplier(difficulty_tier)
         * duration_multiplier(duration_seconds)
-        * skip_consequence_multiplier(skip_consequence);
+        * commitment_multiplier(commitment);
 
     reward.round() as i32
 }
@@ -39,13 +39,13 @@ fn duration_multiplier(duration_seconds: Option<i32>) -> f64 {
     1.0 + (normalized * DURATION_INFLUENCE)
 }
 
-fn skip_consequence_multiplier(skip_consequence: Option<i16>) -> f64 {
-    match skip_consequence.unwrap_or(1) {
+fn commitment_multiplier(commitment: Option<i16>) -> f64 {
+    match commitment.unwrap_or(1) {
         1 => 1.0,
-        2 => 1.15,
-        3 => 1.3,
-        4 => 1.5,
-        5 => 1.75,
+        2 => 1.3,
+        3 => 1.6,
+        4 => 2.0,
+        5 => 2.5,
         _ => 1.0,
     }
 }

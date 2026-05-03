@@ -55,7 +55,7 @@ final class TaskStore {
         description: String = "",
         difficultyTier: HabitDifficultyTier? = nil,
         durationSeconds: Int? = nil,
-        skipConsequence: Int? = nil,
+        commitment: Int? = nil,
         dueDate: Date? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
@@ -80,7 +80,7 @@ final class TaskStore {
             completedAt: completedAt,
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
-            skipConsequence: skipConsequence,
+            commitment: commitment,
             dueDate: dueDate
         )
 
@@ -97,7 +97,7 @@ final class TaskStore {
         description: String? = nil,
         difficultyTier: HabitDifficultyTier?? = nil,
         durationSeconds: Int?? = nil,
-        skipConsequence: Int?? = nil,
+        commitment: Int?? = nil,
         dueDate: Date?? = nil,
         completedAt: Date?? = nil,
         updatedAt: Date = Date(),
@@ -128,7 +128,7 @@ final class TaskStore {
             completedAt: completedAt ?? existing.completedAt,
             difficultyTier: difficultyTier ?? existing.difficultyTier,
             durationSeconds: durationSeconds ?? existing.durationSeconds,
-            skipConsequence: skipConsequence ?? existing.skipConsequence,
+            commitment: commitment ?? existing.commitment,
             dueDate: dueDate ?? existing.dueDate
         )
 
@@ -273,7 +273,7 @@ final class TaskStore {
             """
             INSERT INTO tasks (
                 id, owner_id, name, description, created_at, updated_at, deleted_at, completed_at,
-                difficulty_tier, duration_seconds, skip_consequence, due_date
+                difficulty_tier, duration_seconds, commitment, due_date
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
@@ -286,7 +286,7 @@ final class TaskStore {
                 completed_at = excluded.completed_at,
                 difficulty_tier = excluded.difficulty_tier,
                 duration_seconds = excluded.duration_seconds,
-                skip_consequence = excluded.skip_consequence,
+                commitment = excluded.commitment,
                 due_date = excluded.due_date
             """,
             bindings: taskBindings(task, ownerID: currentOwnerID),
@@ -299,7 +299,7 @@ final class TaskStore {
             """
             SELECT
                 id, name, description, created_at, updated_at, deleted_at, completed_at,
-                difficulty_tier, duration_seconds, skip_consequence, due_date
+                difficulty_tier, duration_seconds, commitment, due_date
             FROM tasks
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -317,7 +317,7 @@ final class TaskStore {
                 completedAt: SQLiteColumn.optionalDate(row, index: 6),
                 difficultyTier: SQLiteColumn.optionalText(row, index: 7).flatMap(HabitDifficultyTier.init(rawValue:)),
                 durationSeconds: SQLiteColumn.optionalInt(row, index: 8),
-                skipConsequence: SQLiteColumn.optionalInt(row, index: 9),
+                commitment: SQLiteColumn.optionalInt(row, index: 9),
                 dueDate: SQLiteColumn.optionalDate(row, index: 10)
             )
         }) ?? []
@@ -344,7 +344,7 @@ final class TaskStore {
                 """
                 INSERT INTO tasks (
                     id, owner_id, name, description, created_at, updated_at, deleted_at, completed_at,
-                    difficulty_tier, duration_seconds, skip_consequence, due_date
+                    difficulty_tier, duration_seconds, commitment, due_date
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -366,7 +366,7 @@ final class TaskStore {
             task.completedAt.map { .double($0.timeIntervalSince1970) } ?? .null,
             task.difficultyTier.map { .text($0.rawValue) } ?? .null,
             task.durationSeconds.map { .int(Int64($0)) } ?? .null,
-            task.skipConsequence.map { .int(Int64($0)) } ?? .null,
+            task.commitment.map { .int(Int64($0)) } ?? .null,
             task.dueDate.map { .double($0.timeIntervalSince1970) } ?? .null
         ]
     }

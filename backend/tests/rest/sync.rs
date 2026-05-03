@@ -45,7 +45,7 @@ async fn test_sync_pull_returns_all_entity_types() {
             "updatedAt": "2025-01-01T09:00:00",
             "difficultyTier": "light",
             "durationSeconds": 600,
-            "skipConsequence": 2,
+            "commitment": 2,
             "dueDate": "2025-01-02T09:00:00"
         }, {
             "id": dependent_task_id,
@@ -185,7 +185,8 @@ async fn test_sync_pull_returns_all_entity_types() {
 
 #[tokio::test]
 async fn test_sync_pull_generates_stable_special_offers_for_same_window() {
-    let email = generate_email_from_fn!(test_sync_pull_generates_stable_special_offers_for_same_window);
+    let email =
+        generate_email_from_fn!(test_sync_pull_generates_stable_special_offers_for_same_window);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -237,11 +238,7 @@ async fn test_sync_pull_generates_stable_special_offers_for_same_window() {
     let (_, first_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let (_, second_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
-    let first_offers = first_pull
-        .get("specialOffers")
-        .unwrap()
-        .as_array()
-        .unwrap();
+    let first_offers = first_pull.get("specialOffers").unwrap().as_array().unwrap();
     let second_offers = second_pull
         .get("specialOffers")
         .unwrap()
@@ -285,19 +282,10 @@ async fn test_sync_pull_caps_special_offers_at_five() {
         })
         .collect();
 
-    make_authenticated_post_request(
-        &access_token,
-        "/api/v1/sync",
-        json!({ "tasks": tasks }),
-    )
-    .await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", json!({ "tasks": tasks })).await;
 
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
-    let offers = pull_json
-        .get("specialOffers")
-        .unwrap()
-        .as_array()
-        .unwrap();
+    let offers = pull_json.get("specialOffers").unwrap().as_array().unwrap();
 
     assert_eq!(offers.len(), 5);
 }
@@ -322,12 +310,7 @@ async fn test_sync_pull_replaces_special_offer_for_completed_task() {
         })
         .collect();
 
-    make_authenticated_post_request(
-        &access_token,
-        "/api/v1/sync",
-        json!({ "tasks": tasks }),
-    )
-    .await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", json!({ "tasks": tasks })).await;
 
     let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let initial_offers = initial_pull
@@ -383,9 +366,9 @@ async fn test_sync_pull_replaces_special_offer_for_completed_task() {
         .collect();
 
     assert_eq!(active_refreshed_offers.len(), 2);
-    assert!(!active_refreshed_offers.iter().any(|offer| {
-        offer.get("entityId").unwrap().as_str().unwrap() == offered_task_id
-    }));
+    assert!(!active_refreshed_offers
+        .iter()
+        .any(|offer| { offer.get("entityId").unwrap().as_str().unwrap() == offered_task_id }));
 }
 
 #[tokio::test]
@@ -408,12 +391,8 @@ async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
         })
         .collect();
 
-    make_authenticated_post_request(
-        &access_token,
-        "/api/v1/sync",
-        json!({ "rewards": rewards }),
-    )
-    .await;
+    make_authenticated_post_request(&access_token, "/api/v1/sync", json!({ "rewards": rewards }))
+        .await;
 
     let (_, initial_pull) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let initial_offers = initial_pull
@@ -462,9 +441,9 @@ async fn test_sync_pull_replaces_special_offer_for_deleted_reward() {
         .collect();
 
     assert_eq!(active_refreshed_offers.len(), 2);
-    assert!(!active_refreshed_offers.iter().any(|offer| {
-        offer.get("entityId").unwrap().as_str().unwrap() == offered_reward_id
-    }));
+    assert!(!active_refreshed_offers
+        .iter()
+        .any(|offer| { offer.get("entityId").unwrap().as_str().unwrap() == offered_reward_id }));
 }
 
 #[tokio::test]
@@ -501,7 +480,10 @@ async fn test_sync_pull_with_since_filters_all_entities() {
     let new_habit_id = new_habit_json.get("id").unwrap().as_str().unwrap();
 
     // Pull since the cursor - should only get the new habit
-    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!(
+        "/api/v1/sync?cursor={}",
+        urlencoding::encode(&server_cursor)
+    );
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -561,7 +543,8 @@ async fn test_sync_pull_balance_sums_only_active_trade_history() {
         282.0
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
+    let (pull_status, pull_json) =
+        make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
     assert_eq!(
@@ -756,7 +739,8 @@ async fn test_sync_push_and_pull_round_trip_refund_trades() {
         0.0
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
+    let (pull_status, pull_json) =
+        make_authenticated_get_request(&access_token, "/api/v1/sync").await;
 
     assert_eq!(pull_status, StatusCode::OK);
 
@@ -919,7 +903,8 @@ async fn test_sync_push_refund_trade_reopens_task_without_task_row_update() {
     assert_eq!(refund_status, StatusCode::OK);
     assert_eq!(refund_json["balance"]["tofuBalance"], 0.0);
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
+    let (pull_status, pull_json) =
+        make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_status, StatusCode::OK);
 
     let task = pull_json["tasks"]
@@ -1162,7 +1147,7 @@ async fn test_sync_push_creates_task_task_tag_and_trade_atomically() {
             "updatedAt": "2025-01-01T10:00:00",
             "difficultyTier": "medium",
             "durationSeconds": 1200,
-            "skipConsequence": 3,
+            "commitment": 3,
             "dueDate": "2025-02-01T10:00:00"
         }],
         "tags": [{
@@ -1230,7 +1215,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
             "updatedAt": "2025-01-01T10:00:00",
             "difficultyTier": "medium",
             "durationSeconds": 1200,
-            "skipConsequence": 3
+            "benefit": 3
         }]
     });
 
@@ -1253,7 +1238,7 @@ async fn test_sync_push_updates_existing_task_due_date() {
             "updatedAt": "2025-01-02T10:00:00",
             "difficultyTier": "medium",
             "durationSeconds": 1200,
-            "skipConsequence": 3,
+            "commitment": 3,
             "dueDate": "2025-02-01T10:00:00"
         }]
     });
@@ -1269,7 +1254,8 @@ async fn test_sync_push_updates_existing_task_due_date() {
         "2025-02-01T10:00:00"
     );
 
-    let (pull_status, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
+    let (pull_status, pull_json) =
+        make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     assert_eq!(pull_status, StatusCode::OK);
     assert_eq!(
         pull_json.get("tasks").unwrap().as_array().unwrap()[0]
@@ -1405,7 +1391,8 @@ async fn test_sync_push_rejects_task_completion_until_dependencies_are_satisfied
     assert_eq!(habit_status, StatusCode::OK);
 
     let (completion_status, completion_json) =
-        make_authenticated_post_request(&access_token, "/api/v1/sync", blocked_completion_body).await;
+        make_authenticated_post_request(&access_token, "/api/v1/sync", blocked_completion_body)
+            .await;
     assert_eq!(completion_status, StatusCode::OK);
     assert_eq!(
         completion_json["tasks"].as_array().unwrap()[0]
@@ -1969,7 +1956,8 @@ async fn test_unified_sync_roundtrip_push_then_pull() {
         }]
     });
 
-    let (status, _) = make_authenticated_post_request(&access_token, "/api/v1/sync", push_body).await;
+    let (status, _) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", push_body).await;
     assert_eq!(status, StatusCode::OK);
 
     // Pull and verify
@@ -2014,7 +2002,8 @@ async fn test_sync_incremental_after_push() {
         }]
     });
 
-    let (_, json1) = make_authenticated_post_request(&access_token, "/api/v1/sync", push1_body).await;
+    let (_, json1) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", push1_body).await;
     let server_cursor = json1
         .get("serverCursor")
         .unwrap()
@@ -2037,7 +2026,10 @@ async fn test_sync_incremental_after_push() {
     make_authenticated_post_request(&access_token, "/api/v1/sync", push2_body).await;
 
     // Incremental pull using the server cursor from first push
-    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!(
+        "/api/v1/sync?cursor={}",
+        urlencoding::encode(&server_cursor)
+    );
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
     assert_eq!(status, StatusCode::OK);
 
@@ -2227,7 +2219,10 @@ async fn test_sync_pull_tags_filtered_by_since() {
     make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new tag
-    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!(
+        "/api/v1/sync?cursor={}",
+        urlencoding::encode(&server_cursor)
+    );
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2303,7 +2298,10 @@ async fn test_sync_pull_habit_tags_filtered_by_since() {
     make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new association
-    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!(
+        "/api/v1/sync?cursor={}",
+        urlencoding::encode(&server_cursor)
+    );
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2379,7 +2377,8 @@ async fn test_sync_push_updates_tag() {
             "updatedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2422,7 +2421,8 @@ async fn test_sync_push_soft_deletes_tag() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2522,7 +2522,8 @@ async fn test_sync_push_soft_deletes_habit_tag_association() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -2914,7 +2915,10 @@ async fn test_sync_pull_rewards_filtered_by_since() {
     make_authenticated_post_request(&access_token, "/api/v1/sync", sync_body2).await;
 
     // Pull since cursor - should only get new reward
-    let url = format!("/api/v1/sync?cursor={}", urlencoding::encode(&server_cursor));
+    let url = format!(
+        "/api/v1/sync?cursor={}",
+        urlencoding::encode(&server_cursor)
+    );
     let (status, json) = make_authenticated_get_request(&access_token, &url).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -2996,7 +3000,8 @@ async fn test_sync_push_updates_reward() {
             "damageTier": "extreme"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -3043,7 +3048,8 @@ async fn test_sync_push_soft_deletes_reward() {
             "deletedAt": "2025-01-01T11:00:00"
         }]
     });
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/sync", body2).await;
 
     assert_eq!(status, StatusCode::OK);
 
@@ -3453,10 +3459,9 @@ async fn test_sync_push_general_difficulty_with_other_entities() {
 }
 
 #[tokio::test]
-async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence() {
-    let email = generate_email_from_fn!(
-        test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence
-    );
+async fn test_sync_push_habit_round_trips_duration_lockout_and_benefit() {
+    let email =
+        generate_email_from_fn!(test_sync_push_habit_round_trips_duration_lockout_and_benefit);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -3472,7 +3477,7 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
             "updatedAt": "2025-01-01T10:00:00",
             "durationSeconds": 600,
             "lockoutDurationSeconds": 3600,
-            "skipConsequence": 5
+            "benefit": 5
         }]
     });
 
@@ -3489,7 +3494,7 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
         .unwrap();
     assert_eq!(habit.get("durationSeconds").unwrap(), 600);
     assert_eq!(habit.get("lockoutDurationSeconds").unwrap(), 3600);
-    assert_eq!(habit.get("skipConsequence").unwrap(), 5);
+    assert_eq!(habit.get("benefit").unwrap(), 5);
 
     let (_, pull_json) = make_authenticated_get_request(&access_token, "/api/v1/sync").await;
     let pulled_habit = pull_json
@@ -3501,7 +3506,7 @@ async fn test_sync_push_habit_round_trips_duration_lockout_and_skip_consequence(
         .unwrap();
     assert_eq!(pulled_habit.get("durationSeconds").unwrap(), 600);
     assert_eq!(pulled_habit.get("lockoutDurationSeconds").unwrap(), 3600);
-    assert_eq!(pulled_habit.get("skipConsequence").unwrap(), 5);
+    assert_eq!(pulled_habit.get("benefit").unwrap(), 5);
 }
 
 #[tokio::test]
@@ -3622,8 +3627,8 @@ async fn test_sync_push_habit_validates_lockout_duration_maximum() {
 }
 
 #[tokio::test]
-async fn test_sync_push_habit_validates_skip_consequence_range() {
-    let email = generate_email_from_fn!(test_sync_push_habit_validates_skip_consequence_range);
+async fn test_sync_push_habit_validates_benefit_range() {
+    let email = generate_email_from_fn!(test_sync_push_habit_validates_benefit_range);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -3637,7 +3642,7 @@ async fn test_sync_push_habit_validates_skip_consequence_range() {
             "description": "Morning stretch",
             "createdAt": "2025-01-01T10:00:00",
             "updatedAt": "2025-01-01T10:00:00",
-            "skipConsequence": 0
+            "benefit": 0
         }]
     });
 
@@ -3654,8 +3659,7 @@ async fn test_sync_push_habit_validates_skip_consequence_range() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'skip_consequence' must be between 1 and 5. You sent 0."
-                .to_string()
+            "Validation Error: The 'benefit' must be between 1 and 5. You sent 0.".to_string()
         )
     );
 }

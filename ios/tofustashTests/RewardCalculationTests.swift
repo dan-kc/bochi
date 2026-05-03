@@ -8,7 +8,7 @@ private func makeHabit(
     difficultyTier: HabitDifficultyTier? = nil,
     durationSeconds: Int? = nil,
     lockoutDurationSeconds: Int? = nil,
-    skipConsequence: Int? = nil,
+    benefit: Int? = nil,
     createdAt: Date = Date(timeIntervalSince1970: 1_577_836_800),
     deletedAt: Date? = nil
 ) -> Habit {
@@ -23,7 +23,7 @@ private func makeHabit(
         difficultyTier: difficultyTier,
         durationSeconds: durationSeconds,
         lockoutDurationSeconds: lockoutDurationSeconds,
-        skipConsequence: skipConsequence
+        benefit: benefit
     )
 }
 
@@ -114,7 +114,7 @@ struct FrequencyMultiplierTests {
     }
 }
 
-struct DurationAndSkipMultiplierTests {
+struct DurationAndBenefitMultiplierTests {
     // Behaviour: Longer expected effort should pay more, while the duration
     // multiplier stays within a bounded band instead of exploding linearly.
     @Test func durationRaisesRewardWithinBoundedRange() {
@@ -133,18 +133,18 @@ struct DurationAndSkipMultiplierTests {
         #expect(RewardCalculation.calculateDurationMultiplier(habit: makeHabit(durationSeconds: nil)) == 1.0)
     }
 
-    // Behaviour: More serious skip consequence should make the same habit pay more.
-    @Test func skipConsequenceRaisesReward() {
-        let low = RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: 1))
-        let high = RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: 5))
+    // Behaviour: Higher benefit should use the doubled-impact multiplier curve.
+    @Test func benefitRaisesReward() {
+        let low = RewardCalculation.calculateBenefitMultiplier(habit: makeHabit(benefit: 1))
+        let high = RewardCalculation.calculateBenefitMultiplier(habit: makeHabit(benefit: 5))
 
         #expect(low == 1.0)
-        #expect(high > low)
+        #expect(high == 2.5)
     }
 
-    // Behaviour: Leaving skip consequence blank should keep the smallest modifier.
-    @Test func missingSkipConsequenceUsesNeutralMinimumMultiplier() {
-        #expect(RewardCalculation.calculateSkipConsequenceMultiplier(habit: makeHabit(skipConsequence: nil)) == 1.0)
+    // Behaviour: Leaving benefit blank should keep the smallest modifier.
+    @Test func missingBenefitUsesNeutralMinimumMultiplier() {
+        #expect(RewardCalculation.calculateBenefitMultiplier(habit: makeHabit(benefit: nil)) == 1.0)
     }
 }
 
@@ -157,7 +157,7 @@ struct CalculateRewardTests {
             frequency: 1.0,
             difficultyTier: .hard,
             durationSeconds: nil,
-            skipConsequence: 1
+            benefit: 1
         )
 
         let reward = RewardCalculation.calculateReward(
@@ -176,13 +176,13 @@ struct CalculateRewardTests {
             frequency: nil,
             difficultyTier: nil,
             durationSeconds: nil,
-            skipConsequence: nil
+            benefit: nil
         )
         let richer = makeHabit(
             frequency: 1.0,
             difficultyTier: .medium,
             durationSeconds: 900,
-            skipConsequence: 3
+            benefit: 3
         )
 
         let cheapReward = RewardCalculation.calculateReward(habit: cheapest, allHabits: [cheapest])
@@ -198,7 +198,7 @@ struct CalculateRewardTests {
             frequency: 1.0,
             difficultyTier: .medium,
             durationSeconds: 900,
-            skipConsequence: 3
+            benefit: 3
         )
 
         let baseReward = RewardCalculation.calculateReward(

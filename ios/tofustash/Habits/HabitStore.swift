@@ -53,7 +53,7 @@ final class HabitStore {
         difficultyTier: HabitDifficultyTier? = nil,
         durationSeconds: Int? = nil,
         lockoutDurationSeconds: Int? = nil,
-        skipConsequence: Int? = nil,
+        benefit: Int? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil,
         deletedAt: Date? = nil,
@@ -77,7 +77,7 @@ final class HabitStore {
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
             lockoutDurationSeconds: lockoutDurationSeconds,
-            skipConsequence: skipConsequence
+            benefit: benefit
         )
 
         upsert(habit, markDirty: shouldNotifySync)
@@ -100,7 +100,7 @@ final class HabitStore {
             difficultyTier: existing.difficultyTier,
             durationSeconds: existing.durationSeconds,
             lockoutDurationSeconds: existing.lockoutDurationSeconds,
-            skipConsequence: existing.skipConsequence
+            benefit: existing.benefit
         )
 
         upsert(deleted, markDirty: shouldNotifySync)
@@ -117,7 +117,7 @@ final class HabitStore {
         difficultyTier: HabitDifficultyTier?? = nil,
         durationSeconds: Int?? = nil,
         lockoutDurationSeconds: Int?? = nil,
-        skipConsequence: Int?? = nil,
+        benefit: Int?? = nil,
         updatedAt: Date = Date(),
         deletedAt: Date?? = nil,
         shouldNotifySync: Bool = true
@@ -147,7 +147,7 @@ final class HabitStore {
             difficultyTier: difficultyTier ?? existing.difficultyTier,
             durationSeconds: durationSeconds ?? existing.durationSeconds,
             lockoutDurationSeconds: lockoutDurationSeconds ?? existing.lockoutDurationSeconds,
-            skipConsequence: skipConsequence ?? existing.skipConsequence
+            benefit: benefit ?? existing.benefit
         )
 
         upsert(updated, markDirty: shouldNotifySync)
@@ -273,7 +273,7 @@ final class HabitStore {
             INSERT INTO habits (
                 id, owner_id, name, description, created_at, updated_at, deleted_at,
                 min_daily_frequency, difficulty_tier, duration_seconds,
-                lockout_duration_seconds, skip_consequence
+                lockout_duration_seconds, benefit
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
@@ -287,7 +287,7 @@ final class HabitStore {
                 difficulty_tier = excluded.difficulty_tier,
                 duration_seconds = excluded.duration_seconds,
                 lockout_duration_seconds = excluded.lockout_duration_seconds,
-                skip_consequence = excluded.skip_consequence
+                benefit = excluded.benefit
             """,
             bindings: habitBindings(habit, ownerID: currentOwnerID),
             on: databaseHandle
@@ -299,7 +299,7 @@ final class HabitStore {
             """
             SELECT id, name, description, created_at, updated_at, deleted_at,
                    min_daily_frequency, difficulty_tier, duration_seconds,
-                   lockout_duration_seconds, skip_consequence
+                   lockout_duration_seconds, benefit
             FROM habits
             WHERE owner_id = ?
             ORDER BY created_at ASC, id ASC
@@ -318,7 +318,7 @@ final class HabitStore {
                 difficultyTier: SQLiteColumn.optionalText(row, index: 7).flatMap(HabitDifficultyTier.init(rawValue:)),
                 durationSeconds: SQLiteColumn.optionalInt(row, index: 8),
                 lockoutDurationSeconds: SQLiteColumn.optionalInt(row, index: 9),
-                skipConsequence: SQLiteColumn.optionalInt(row, index: 10)
+                benefit: SQLiteColumn.optionalInt(row, index: 10)
             )
         }) ?? []
 
@@ -342,7 +342,7 @@ final class HabitStore {
                 INSERT INTO habits (
                     id, owner_id, name, description, created_at, updated_at, deleted_at,
                     min_daily_frequency, difficulty_tier, duration_seconds,
-                    lockout_duration_seconds, skip_consequence
+                    lockout_duration_seconds, benefit
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -365,7 +365,7 @@ final class HabitStore {
             habit.difficultyTier.map { .text($0.rawValue) } ?? .null,
             habit.durationSeconds.map { .int(Int64($0)) } ?? .null,
             habit.lockoutDurationSeconds.map { .int(Int64($0)) } ?? .null,
-            habit.skipConsequence.map { .int(Int64($0)) } ?? .null
+            habit.benefit.map { .int(Int64($0)) } ?? .null
         ]
     }
 

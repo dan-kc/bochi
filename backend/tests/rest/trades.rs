@@ -34,7 +34,7 @@ async fn test_create_trade_with_task_success() {
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
-    assert_eq!(json.get("amount").unwrap(), 20);
+    assert_eq!(json.get("amount").unwrap(), 40);
     assert!(json.get("createdAt").is_some());
 
     let tradable_item = json.get("tradableItem").unwrap();

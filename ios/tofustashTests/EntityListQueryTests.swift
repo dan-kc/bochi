@@ -303,7 +303,7 @@ struct EntityListQueryTests {
             completedAt: nil,
             difficultyTier: difficulty,
             durationSeconds: nil,
-            skipConsequence: nil,
+            commitment: nil,
             dueDate: nil
         )
     }

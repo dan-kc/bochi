@@ -81,7 +81,7 @@ pub(crate) fn task_select_columns(task_alias: &str, user_id_expr: &str) -> Strin
          {} AS completed_at,
          {task_alias}.difficulty_tier,
          {task_alias}.duration_seconds,
-         {task_alias}.skip_consequence,
+         {task_alias}.commitment,
          {task_alias}.due_date",
         derived_task_completed_at_sql(&task_id_expr, user_id_expr)
     )
@@ -137,9 +137,9 @@ impl Database {
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO habits
-            (user_id, name, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence)
+            (user_id, name, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence",
+            RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit",
         )
         .bind(create_habit_options.user_id)
         .bind(create_habit_options.name)
@@ -148,7 +148,7 @@ impl Database {
         .bind(create_habit_options.difficulty_tier)
         .bind(create_habit_options.duration_seconds)
         .bind(create_habit_options.lockout_duration_seconds)
-        .bind(create_habit_options.skip_consequence)
+        .bind(create_habit_options.benefit)
         .fetch_one(&self.pool)
         .await
     }
@@ -159,16 +159,16 @@ impl Database {
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
             "INSERT INTO tasks
-            (user_id, name, description, difficulty_tier, duration_seconds, skip_consequence, due_date)
+            (user_id, name, description, difficulty_tier, duration_seconds, commitment, due_date)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date",
+            RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, commitment, due_date",
         )
         .bind(create_task_options.user_id)
         .bind(create_task_options.name)
         .bind(create_task_options.description)
         .bind(create_task_options.difficulty_tier)
         .bind(create_task_options.duration_seconds)
-        .bind(create_task_options.skip_consequence)
+        .bind(create_task_options.commitment)
         .bind(create_task_options.due_date)
         .fetch_one(&self.pool)
         .await
@@ -239,7 +239,7 @@ impl Database {
             )
             SELECT
                 nt.*,
-                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_tier AS habit_difficulty_tier, h.duration_seconds AS habit_duration_seconds, h.lockout_duration_seconds AS habit_lockout_duration_seconds, h.skip_consequence AS habit_skip_consequence
+                h.name AS habit_name, h.created_at AS habit_created_at, h.updated_at AS habit_updated_at, h.deleted_at AS habit_deleted_at, h.description AS habit_description, h.min_daily_frequency AS habit_min_daily_frequency, h.difficulty_tier AS habit_difficulty_tier, h.duration_seconds AS habit_duration_seconds, h.lockout_duration_seconds AS habit_lockout_duration_seconds, h.benefit AS habit_benefit
             FROM new_trade nt
             JOIN habits h ON nt.habit_id = h.id",
         )
@@ -256,7 +256,7 @@ impl Database {
     ) -> Result<TradeWithTaskRow, sqlx::Error> {
         let query = format!(
             "WITH candidate_task AS (
-                SELECT id, name, description, created_at, updated_at, deleted_at, difficulty_tier, duration_seconds, skip_consequence, due_date
+                SELECT id, name, description, created_at, updated_at, deleted_at, difficulty_tier, duration_seconds, commitment, due_date
                 FROM tasks
                 WHERE tasks.id = $1
                   AND tasks.user_id = $3
@@ -282,7 +282,7 @@ impl Database {
                 nt.created_at AS task_completed_at,
                 t.difficulty_tier AS task_difficulty_tier,
                 t.duration_seconds AS task_duration_seconds,
-                t.skip_consequence AS task_skip_consequence,
+                t.commitment AS task_commitment,
                 t.due_date AS task_due_date
             FROM new_trade nt
             JOIN candidate_task t ON nt.task_id = t.id",
@@ -506,7 +506,7 @@ impl Database {
         match since {
             Some(since_time) => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit
                      FROM habits
                      WHERE user_id = $1 AND updated_at > $2
                      ORDER BY updated_at ASC",
@@ -518,7 +518,7 @@ impl Database {
             }
             None => {
                 sqlx::query_as(
-                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence
+                    "SELECT id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit
                      FROM habits
                      WHERE user_id = $1
                      ORDER BY updated_at ASC",
@@ -865,7 +865,7 @@ impl Database {
         habit: &UpsertHabitOptions,
     ) -> Result<HabitRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence)
+            "INSERT INTO habits (id, user_id, name, description, created_at, deleted_at, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (id) DO UPDATE SET
                 user_id = CASE
@@ -901,11 +901,11 @@ impl Database {
                     WHEN habits.user_id = $2 THEN EXCLUDED.lockout_duration_seconds
                     ELSE habits.lockout_duration_seconds
                 END,
-                skip_consequence = CASE
-                    WHEN habits.user_id = $2 THEN EXCLUDED.skip_consequence
-                    ELSE habits.skip_consequence
+                benefit = CASE
+                    WHEN habits.user_id = $2 THEN EXCLUDED.benefit
+                    ELSE habits.benefit
                 END
-             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, skip_consequence",
+             RETURNING id, name, created_at, updated_at, deleted_at, description, min_daily_frequency, difficulty_tier, duration_seconds, lockout_duration_seconds, benefit",
         )
         .bind(habit.id)
         .bind(user_id)
@@ -917,7 +917,7 @@ impl Database {
         .bind(habit.difficulty_tier)
         .bind(habit.duration_seconds)
         .bind(habit.lockout_duration_seconds)
-        .bind(habit.skip_consequence)
+        .bind(habit.benefit)
         .fetch_one(&mut **tx)
         .await
     }
@@ -929,7 +929,7 @@ impl Database {
         task: &UpsertTaskOptions,
     ) -> Result<TaskRow, sqlx::Error> {
         sqlx::query_as(
-            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date)
+            "INSERT INTO tasks (id, user_id, name, description, created_at, deleted_at, completed_at, difficulty_tier, duration_seconds, commitment, due_date)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (id) DO UPDATE SET
                 name = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.name ELSE tasks.name END,
@@ -937,9 +937,9 @@ impl Database {
                 deleted_at = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.deleted_at ELSE tasks.deleted_at END,
                 difficulty_tier = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.difficulty_tier ELSE tasks.difficulty_tier END,
                 duration_seconds = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.duration_seconds ELSE tasks.duration_seconds END,
-                skip_consequence = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.skip_consequence ELSE tasks.skip_consequence END,
+                commitment = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.commitment ELSE tasks.commitment END,
                 due_date = CASE WHEN tasks.user_id = $2 THEN EXCLUDED.due_date ELSE tasks.due_date END
-             RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, skip_consequence, due_date",
+             RETURNING id, name, description, created_at, updated_at, deleted_at, completed_at, difficulty_tier, duration_seconds, commitment, due_date",
         )
         .bind(task.id)
         .bind(user_id)
@@ -950,7 +950,7 @@ impl Database {
         .bind(Option::<NaiveDateTime>::None)
         .bind(task.difficulty_tier)
         .bind(task.duration_seconds)
-        .bind(task.skip_consequence)
+        .bind(task.commitment)
         .bind(task.due_date)
         .fetch_one(&mut **tx)
         .await
@@ -1665,7 +1665,7 @@ pub struct CreateTaskOptions {
     pub description: String,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -1677,7 +1677,7 @@ pub struct CreateHabitOptions {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 pub struct CreateTradeWithTaskOptions {
@@ -1741,7 +1741,7 @@ pub struct UpsertTaskOptions {
     pub deleted_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -1755,7 +1755,7 @@ pub struct UpsertHabitOptions {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 pub struct UpsertTradeOptions {
@@ -1880,7 +1880,7 @@ pub struct TaskRow {
     pub completed_at: Option<NaiveDateTime>,
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub commitment: Option<i16>,
     pub due_date: Option<NaiveDateTime>,
 }
 
@@ -1896,7 +1896,7 @@ pub struct HabitRow {
     pub difficulty_tier: Option<HabitDifficultyTier>,
     pub duration_seconds: Option<i32>,
     pub lockout_duration_seconds: Option<i32>,
-    pub skip_consequence: Option<i16>,
+    pub benefit: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -1977,7 +1977,7 @@ pub struct TradeWithTaskRow {
     pub task_description: String,
     pub task_difficulty_tier: Option<HabitDifficultyTier>,
     pub task_duration_seconds: Option<i32>,
-    pub task_skip_consequence: Option<i16>,
+    pub task_commitment: Option<i16>,
     pub task_due_date: Option<NaiveDateTime>,
 }
 
@@ -1998,7 +1998,7 @@ pub struct TradeWithHabitRow {
     pub habit_difficulty_tier: Option<HabitDifficultyTier>,
     pub habit_duration_seconds: Option<i32>,
     pub habit_lockout_duration_seconds: Option<i32>,
-    pub habit_skip_consequence: Option<i16>,
+    pub habit_benefit: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]

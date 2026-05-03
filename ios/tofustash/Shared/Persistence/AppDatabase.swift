@@ -443,6 +443,13 @@ final class AppDatabase {
 
                 CREATE INDEX IF NOT EXISTS idx_task_habit_dependencies_owner_updated
                 ON task_habit_dependencies(owner_id, updated_at);
+                """)
+        }
+
+        migrator.registerMigration("v4_benefit_commitment") { db in
+            try db.execute(sql: """
+                ALTER TABLE habits RENAME COLUMN skip_consequence TO benefit;
+                ALTER TABLE tasks RENAME COLUMN skip_consequence TO commitment;
             """)
         }
 

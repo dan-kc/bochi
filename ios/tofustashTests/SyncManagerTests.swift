@@ -264,7 +264,7 @@ struct SyncManagerTests {
             difficultyTier: nil,
             durationSeconds: nil,
             lockoutDurationSeconds: nil,
-            skipConsequence: nil
+            benefit: nil
         )
 
         let context = try await makeContext(
@@ -278,7 +278,7 @@ struct SyncManagerTests {
             difficultyTier: HabitDifficultyTier.trivial,
             durationSeconds: 900,
             lockoutDurationSeconds: 3600,
-            skipConsequence: 4,
+            benefit: 4,
             createdAt: Date(timeIntervalSince1970: 1_713_433_200),
             updatedAt: Date(timeIntervalSince1970: 1_713_433_200)
         )
@@ -292,7 +292,7 @@ struct SyncManagerTests {
                 && $0.difficultyTier == HabitDifficultyTier.trivial
                 && $0.durationSeconds == 900
                 && $0.lockoutDurationSeconds == 3600
-                && $0.skipConsequence == 4
+                && $0.benefit == 4
         })
 
         context.syncManager.updateSession(userID: String?.none)
@@ -313,7 +313,7 @@ struct SyncManagerTests {
             completedAt: nil,
             difficultyTier: .light,
             durationSeconds: 600,
-            skipConsequence: 2,
+            commitment: 2,
             dueDate: nil
         )
         let pullResponse = makeResponse(tasks: [initialTask])
@@ -327,7 +327,7 @@ struct SyncManagerTests {
             completedAt: nil,
             difficultyTier: .light,
             durationSeconds: 600,
-            skipConsequence: 2,
+            commitment: 2,
             dueDate: expectedDueDate
         )
         let pushResponse = makeResponse(tasks: [echoedTask])
@@ -379,7 +379,7 @@ struct SyncManagerTests {
             completedAt: nil,
             difficultyTier: .light,
             durationSeconds: 600,
-            skipConsequence: 2,
+            commitment: 2,
             dueDate: nil
         )
 
@@ -500,7 +500,7 @@ struct SyncManagerTests {
             difficultyTier: .light,
             durationSeconds: nil,
             lockoutDurationSeconds: nil,
-            skipConsequence: nil
+            benefit: nil
         )
         let serverFitnessTag = SyncTagRecord(
             id: fitnessTagID.rawValue,

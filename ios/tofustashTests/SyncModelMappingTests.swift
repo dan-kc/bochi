@@ -43,7 +43,7 @@ struct SyncModelMappingTests {
             completedAt: "2026-04-24T08:00:00.000000",
             difficultyTier: .hard,
             durationSeconds: 900,
-            skipConsequence: 4,
+            commitment: 4,
             dueDate: "2026-04-25T09:00:00.000000"
         )
 
@@ -69,7 +69,7 @@ struct SyncModelMappingTests {
             completedAt: nil,
             difficultyTier: .hard,
             durationSeconds: 900,
-            skipConsequence: 4,
+            commitment: 4,
             dueDate: "2026-04-25T09:00:00"
         )
 
@@ -92,7 +92,7 @@ struct SyncModelMappingTests {
             difficultyTier: .light,
             durationSeconds: nil,
             lockoutDurationSeconds: nil,
-            skipConsequence: nil
+            benefit: nil
         )
 
         let model = try #require(record.toModel())
@@ -233,7 +233,7 @@ struct SyncModelMappingTests {
               "completedAt": null,
               "difficultyTier": "light",
               "durationSeconds": 600,
-              "skipConsequence": 2,
+              "commitment": 2,
               "dueDate": "2026-04-24T09:00:00.000000"
             }
           ],
@@ -249,7 +249,7 @@ struct SyncModelMappingTests {
               "difficultyTier": "light",
               "durationSeconds": null,
               "lockoutDurationSeconds": null,
-              "skipConsequence": null
+              "benefit": null
             }
           ],
           "trades": [],

@@ -12,7 +12,7 @@ struct TaskItem: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let completedAt: Date?
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
-    let skipConsequence: Int?
+    let commitment: Int?
     let dueDate: Date?
 
     var canTrade: Bool {

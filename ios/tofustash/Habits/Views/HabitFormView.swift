@@ -21,7 +21,7 @@ enum HabitFormFocus: Equatable {
     case difficulty
     case duration
     case lockout
-    case skipConsequence
+    case benefit
     case reminders
     case tags
 }
@@ -35,7 +35,7 @@ struct HabitFormSnapshot {
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
     let lockoutDurationSeconds: Int?
-    let skipConsequence: Int?
+    let benefit: Int?
     let reminderDrafts: [ReminderDraft]
     let habitId: RecordID
 }
@@ -60,7 +60,7 @@ struct HabitFormView: View {
     @State private var difficultyTier: HabitDifficultyTier? = nil
     @State private var durationSeconds: Int? = nil
     @State private var lockoutDurationSeconds: Int? = nil
-    @State private var skipConsequence: Int? = nil
+    @State private var benefit: Int? = nil
     @State private var reminderDrafts: [ReminderDraft] = []
     @State private var habitId = RecordID()
 
@@ -68,7 +68,7 @@ struct HabitFormView: View {
     @State private var showingDifficulty = false
     @State private var showingDuration = false
     @State private var showingLockout = false
-    @State private var showingSkipConsequence = false
+    @State private var showingBenefit = false
     @State private var showingReminders = false
     @State private var showingTags = false
     @State private var tradingHabitRoute: HabitTradeRoute? = nil
@@ -123,7 +123,7 @@ struct HabitFormView: View {
                 difficultyTier: difficultyTier,
                 durationSeconds: durationSeconds,
                 lockoutDurationSeconds: lockoutDurationSeconds,
-                skipConsequence: skipConsequence
+                benefit: benefit
             )
         case .change(let existingHabit):
             return Habit(
@@ -137,7 +137,7 @@ struct HabitFormView: View {
                 difficultyTier: difficultyTier,
                 durationSeconds: durationSeconds,
                 lockoutDurationSeconds: lockoutDurationSeconds,
-                skipConsequence: skipConsequence
+                benefit: benefit
             )
         }
     }
@@ -161,7 +161,7 @@ struct HabitFormView: View {
             difficultyTier: difficultyTier,
             durationSeconds: durationSeconds,
             lockoutDurationSeconds: lockoutDurationSeconds,
-            skipConsequence: skipConsequence,
+            benefit: benefit,
             reminderCount: activeReminderDrafts.count,
             tagCount: habitTags.count,
             isFirstHabit: false
@@ -318,12 +318,12 @@ struct HabitFormView: View {
         .sheet(isPresented: $showingLockout) {
             HabitLockoutDurationModal(durationSeconds: $lockoutDurationSeconds)
         }
-        .sheet(isPresented: $showingSkipConsequence) {
+        .sheet(isPresented: $showingBenefit) {
             TierSelectionSheet(
-                title: "Set Skip Consequence",
-                currentSelection: SkipConsequenceTier.from(skipConsequence),
-                onSave: { skipConsequence = $0?.rawValue },
-                onUnset: skipConsequence != nil ? { skipConsequence = nil } : nil
+                title: "Set Benefit",
+                currentSelection: BenefitTier.from(benefit),
+                onSave: { benefit = $0?.rawValue },
+                onUnset: benefit != nil ? { benefit = nil } : nil
             )
         }
         .sheet(isPresented: $showingReminders) {
@@ -384,7 +384,7 @@ struct HabitFormView: View {
         .onChange(of: lockoutDurationSeconds) { _, _ in
             autoSaveIfNeeded()
         }
-        .onChange(of: skipConsequence) { _, _ in
+        .onChange(of: benefit) { _, _ in
             autoSaveIfNeeded()
         }
         .onChange(of: reminderDrafts) { _, _ in
@@ -401,7 +401,7 @@ struct HabitFormView: View {
                     difficultyTier: difficultyTier,
                     durationSeconds: durationSeconds,
                     lockoutDurationSeconds: lockoutDurationSeconds,
-                    skipConsequence: skipConsequence,
+                    benefit: benefit,
                     reminderDrafts: reminderDrafts,
                     habitId: habitId
                 ))
@@ -467,7 +467,7 @@ struct HabitFormView: View {
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int?,
         lockoutDurationSeconds: Int?,
-        skipConsequence: Int?,
+        benefit: Int?,
         reminderCount: Int,
         tagCount: Int,
         isFirstHabit: Bool = false
@@ -479,7 +479,7 @@ struct HabitFormView: View {
             secondaryValueIsSet: difficultyTier != nil,
             tagCount: tagCount,
             ignoreSecondaryValue: isFirstHabit
-        ) || durationSeconds != nil || lockoutDurationSeconds != nil || skipConsequence != nil || reminderCount > 0
+        ) || durationSeconds != nil || lockoutDurationSeconds != nil || benefit != nil || reminderCount > 0
     }
 
     static func nameForAutoSave(_ name: String) -> String {
@@ -492,14 +492,14 @@ struct HabitFormView: View {
         frequency: Double?,
         durationSeconds: Int?,
         lockoutDurationSeconds: Int?,
-        skipConsequence: Int?,
+        benefit: Int?,
         reminderSummary: String,
         hasReminders: Bool
     ) -> [EntityFormPillConfig] {
         let frequencyLabel = FrequencyConversion.formatSummary(frequency) ?? "Frequency"
         let durationLabel = DurationFormatting.summary(seconds: durationSeconds) ?? "Duration"
         let lockoutLabel = DurationFormatting.summary(seconds: lockoutDurationSeconds) ?? "Lockout"
-        let skipLabel = SkipConsequenceTier.from(skipConsequence)?.displayName ?? "Skip"
+        let benefitLabel = BenefitTier.from(benefit)?.displayName ?? "Benefit"
         return [
             EntityFormPillConfig(id: "tags", label: "Tags", icon: "tag", isSet: hasTagsApplied),
             EntityFormPillConfig(id: "difficulty", label: difficultyTier?.displayName ?? "Difficulty", icon: "chart.bar", isSet: difficultyTier != nil),
@@ -507,7 +507,7 @@ struct HabitFormView: View {
             EntityFormPillConfig(id: "reminders", label: reminderSummary, icon: "bell", isSet: hasReminders),
             EntityFormPillConfig(id: "duration", label: durationLabel, icon: "timer", isSet: durationSeconds != nil),
             EntityFormPillConfig(id: "lockout", label: lockoutLabel, icon: "lock", isSet: lockoutDurationSeconds != nil),
-            EntityFormPillConfig(id: "skip", label: skipLabel, icon: "exclamationmark.triangle", isSet: skipConsequence != nil),
+            EntityFormPillConfig(id: "benefit", label: benefitLabel, icon: "sparkles", isSet: benefit != nil),
         ]
     }
 
@@ -518,7 +518,7 @@ struct HabitFormView: View {
             frequency: frequency,
             durationSeconds: durationSeconds,
             lockoutDurationSeconds: lockoutDurationSeconds,
-            skipConsequence: skipConsequence,
+            benefit: benefit,
             reminderSummary: ReminderDraftSupport.summary(for: reminderDrafts, now: reminderStore.referenceDate),
             hasReminders: !activeReminderDrafts.isEmpty
         )
@@ -529,7 +529,7 @@ struct HabitFormView: View {
             "reminders": { showingReminders = true },
             "duration": { showingDuration = true },
             "lockout": { showingLockout = true },
-            "skip": { showingSkipConsequence = true },
+            "benefit": { showingBenefit = true },
         ]
 
         return EntityFormSupport.buildPills(
@@ -549,7 +549,7 @@ struct HabitFormView: View {
             difficultyTier = prefill.difficultyTier
             durationSeconds = prefill.durationSeconds
             lockoutDurationSeconds = prefill.lockoutDurationSeconds
-            skipConsequence = prefill.skipConsequence
+            benefit = prefill.benefit
             reminderDrafts = prefill.reminderDrafts
             habitId = prefill.habitId
         } else if case .change(let habit) = mode {
@@ -559,7 +559,7 @@ struct HabitFormView: View {
             difficultyTier = habit.difficultyTier
             durationSeconds = habit.durationSeconds
             lockoutDurationSeconds = habit.lockoutDurationSeconds
-            skipConsequence = habit.skipConsequence
+            benefit = habit.benefit
             reminderDrafts = reminderStore.reminderDrafts(for: .habit(habit.id))
             habitId = habit.id
         }
@@ -578,8 +578,8 @@ struct HabitFormView: View {
                 showingDuration = true
             case .lockout:
                 showingLockout = true
-            case .skipConsequence:
-                showingSkipConsequence = true
+            case .benefit:
+                showingBenefit = true
             case .reminders:
                 showingReminders = true
             case .tags:
@@ -604,7 +604,7 @@ struct HabitFormView: View {
                 difficultyTier: difficultyTier,
                 durationSeconds: durationSeconds,
                 lockoutDurationSeconds: lockoutDurationSeconds,
-                skipConsequence: skipConsequence
+                benefit: benefit
             )
             if habit != nil {
                 reminderStore.replaceReminders(for: .habit(habitId), with: reminderDrafts)
@@ -620,7 +620,7 @@ struct HabitFormView: View {
             difficultyTier: .some(difficultyTier),
             durationSeconds: .some(durationSeconds),
             lockoutDurationSeconds: .some(lockoutDurationSeconds),
-            skipConsequence: .some(skipConsequence)
+            benefit: .some(benefit)
         )
         reminderStore.replaceReminders(for: .habit(habitId), with: reminderDrafts)
 

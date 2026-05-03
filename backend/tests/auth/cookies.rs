@@ -160,7 +160,8 @@ async fn test_register_cookie_max_age_matches_token_lifetime() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let cookies = get_set_cookie_headers(&response);
-    let access_cookie = find_cookie(&cookies, "access_token").expect("Register should set access_token");
+    let access_cookie =
+        find_cookie(&cookies, "access_token").expect("Register should set access_token");
     let refresh_cookie =
         find_cookie(&cookies, "refresh_token").expect("Register should set refresh_token");
 

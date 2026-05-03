@@ -19,7 +19,8 @@ async fn test_create_habit_success() {
         "description": "A test habit description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -47,7 +48,8 @@ async fn test_create_habit_with_optional_fields() {
         "minDailyFrequency": 5.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("minDailyFrequency").unwrap(), 5.0);
@@ -67,16 +69,16 @@ async fn test_create_habit_with_difficulty_tier() {
         "difficultyTier": "hard"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("difficultyTier").unwrap(), "hard");
 }
 
 #[tokio::test]
-async fn test_create_habit_with_duration_lockout_and_skip_consequence() {
-    let email =
-        generate_email_from_fn!(test_create_habit_with_duration_lockout_and_skip_consequence);
+async fn test_create_habit_with_duration_lockout_and_benefit() {
+    let email = generate_email_from_fn!(test_create_habit_with_duration_lockout_and_benefit);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -87,15 +89,16 @@ async fn test_create_habit_with_duration_lockout_and_skip_consequence() {
         "description": "Do a set",
         "durationSeconds": 900,
         "lockoutDurationSeconds": 7200,
-        "skipConsequence": 4
+        "benefit": 4
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("durationSeconds").unwrap(), 900);
     assert_eq!(json.get("lockoutDurationSeconds").unwrap(), 7200);
-    assert_eq!(json.get("skipConsequence").unwrap(), 4);
+    assert_eq!(json.get("benefit").unwrap(), 4);
 }
 
 #[tokio::test]
@@ -112,7 +115,8 @@ async fn test_create_habit_validation_name_too_long() {
         "description": "Test description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -147,7 +151,8 @@ async fn test_create_habit_validation_description_too_long() {
         "description": long_description
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(json.get("errors").is_some());
@@ -192,7 +197,8 @@ async fn test_create_habit_minimum_valid_input() {
         "description": ""
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("name").unwrap().as_str().unwrap(), "T");
@@ -216,7 +222,8 @@ async fn test_create_habit_maximum_valid_input() {
         "minDailyFrequency": 100.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("name").unwrap(), &Value::String(max_name));
@@ -240,7 +247,8 @@ async fn test_create_habit_name_empty_string() {
         "description": "Test description"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -273,7 +281,8 @@ async fn test_create_habit_with_min_daily_frequency() {
         "minDailyFrequency": 5.5
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("minDailyFrequency").unwrap(), 5.5);
@@ -293,7 +302,8 @@ async fn test_create_habit_min_daily_frequency_negative() {
         "minDailyFrequency": -1.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -327,7 +337,8 @@ async fn test_create_habit_min_daily_frequency_too_large() {
         "minDailyFrequency": 101.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -361,7 +372,8 @@ async fn test_create_habit_min_daily_frequency_zero() {
         "minDailyFrequency": 0.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -392,7 +404,8 @@ async fn test_create_habit_min_daily_frequency_one_per_month_boundary() {
         "minDailyFrequency": 1.0 / 30.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(
@@ -415,7 +428,8 @@ async fn test_create_habit_min_daily_frequency_boundary() {
         "minDailyFrequency": 100.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("minDailyFrequency").unwrap(), 100.0);
@@ -435,7 +449,8 @@ async fn test_create_habit_with_frequency() {
         "minDailyFrequency": 8.0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("minDailyFrequency").unwrap(), 8.0);
@@ -455,7 +470,8 @@ async fn test_create_habit_duration_must_be_positive() {
         "durationSeconds": 0
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -488,7 +504,8 @@ async fn test_create_habit_duration_cannot_exceed_twelve_hours() {
         "durationSeconds": 43201
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -522,7 +539,8 @@ async fn test_create_habit_lockout_duration_must_be_at_least_one_minute() {
         "lockoutDurationSeconds": 59
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -556,7 +574,8 @@ async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
         "lockoutDurationSeconds": 2_592_001
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -576,9 +595,8 @@ async fn test_create_habit_lockout_duration_cannot_exceed_thirty_days() {
 }
 
 #[tokio::test]
-async fn test_create_habit_skip_consequence_must_be_between_one_and_five() {
-    let email =
-        generate_email_from_fn!(test_create_habit_skip_consequence_must_be_between_one_and_five);
+async fn test_create_habit_benefit_must_be_between_one_and_five() {
+    let email = generate_email_from_fn!(test_create_habit_benefit_must_be_between_one_and_five);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -587,10 +605,11 @@ async fn test_create_habit_skip_consequence_must_be_between_one_and_five() {
     let body = json!({
         "name": "Test Habit",
         "description": "Test description",
-        "skipConsequence": 6
+        "benefit": 6
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/habits", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let error = json
@@ -603,8 +622,7 @@ async fn test_create_habit_skip_consequence_must_be_between_one_and_five() {
     assert_eq!(
         error.get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'skip_consequence' must be between 1 and 5. You sent 6."
-                .to_string()
+            "Validation Error: The 'benefit' must be between 1 and 5. You sent 6.".to_string()
         )
     );
 }

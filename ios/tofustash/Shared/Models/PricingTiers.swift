@@ -196,7 +196,20 @@ enum RewardDamageTier: String, PricingTierOption {
     }
 }
 
-enum SkipConsequenceTier: Int, PricingTierOption {
+private enum ImpactTierMultiplier {
+    nonisolated static func multiplier(for rawValue: Int) -> Double {
+        switch rawValue {
+        case 1: 1.0
+        case 2: 1.3
+        case 3: 1.6
+        case 4: 2.0
+        case 5: 2.5
+        default: 1.0
+        }
+    }
+}
+
+enum BenefitTier: Int, PricingTierOption {
     case one = 1
     case two = 2
     case three = 3
@@ -207,38 +220,73 @@ enum SkipConsequenceTier: Int, PricingTierOption {
 
     nonisolated var shortDescription: String {
         switch self {
-        case .one: "Missing this habit is barely noticeable."
-        case .two: "Skipping it starts to matter, but recovery is easy."
-        case .three: "Missing the target meaningfully hurts momentum."
-        case .four: "Letting this slip has clear short-term consequences."
-        case .five: "Missing the target quickly creates a serious problem."
+        case .one: "This helps a little, but missing it does not change much."
+        case .two: "This gives a clear lift, though the effect stays modest."
+        case .three: "This meaningfully improves how you feel or function."
+        case .four: "This strongly supports an important part of your life."
+        case .five: "This creates major benefits that compound when you keep it up."
         }
     }
 
     nonisolated var example: String {
         switch self {
-        case .one: "Nice to have, but low stakes if missed."
-        case .two: "Helpful for consistency, but easy to catch up."
-        case .three: "A few missed days noticeably weaken the habit."
-        case .four: "Skipping this tends to derail an important area."
-        case .five: "Missing this target has strong real-world consequences."
+        case .one: "Helpful, but not a big deal if it slips."
+        case .two: "Worth doing because it makes the day go better."
+        case .three: "Noticeably improves energy, focus, or mood."
+        case .four: "A major driver of progress in an area you care about."
+        case .five: "One of the most beneficial things you can do for yourself."
         }
     }
 
     nonisolated var multiplier: Double {
-        switch self {
-        case .one: 1.0
-        case .two: 1.15
-        case .three: 1.3
-        case .four: 1.5
-        case .five: 1.75
-        }
+        ImpactTierMultiplier.multiplier(for: rawValue)
     }
 
     nonisolated var sortOrder: Int { rawValue - 1 }
 
-    nonisolated static func from(_ rawValue: Int?) -> SkipConsequenceTier? {
+    nonisolated static func from(_ rawValue: Int?) -> BenefitTier? {
         guard let rawValue else { return nil }
-        return SkipConsequenceTier(rawValue: rawValue)
+        return BenefitTier(rawValue: rawValue)
+    }
+}
+
+enum CommitmentTier: Int, PricingTierOption {
+    case one = 1
+    case two = 2
+    case three = 3
+    case four = 4
+    case five = 5
+
+    nonisolated var displayName: String { "\(rawValue)" }
+
+    nonisolated var shortDescription: String {
+        switch self {
+        case .one: "This is highly negotiable and easy to let go."
+        case .two: "You would prefer to do it, but skipping is acceptable."
+        case .three: "You want to follow through and would notice if you did not."
+        case .four: "This matters a lot and should usually happen."
+        case .five: "This is a must-do commitment, not something to bargain away."
+        }
+    }
+
+    nonisolated var example: String {
+        switch self {
+        case .one: "I do not mind that much if this slips."
+        case .two: "I should do it, but it is still flexible."
+        case .three: "I expect myself to get this done."
+        case .four: "This is important enough that skipping feels costly."
+        case .five: "I must do this task."
+        }
+    }
+
+    nonisolated var multiplier: Double {
+        ImpactTierMultiplier.multiplier(for: rawValue)
+    }
+
+    nonisolated var sortOrder: Int { rawValue - 1 }
+
+    nonisolated static func from(_ rawValue: Int?) -> CommitmentTier? {
+        guard let rawValue else { return nil }
+        return CommitmentTier(rawValue: rawValue)
     }
 }

@@ -23,7 +23,7 @@ struct Habit: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
     let difficultyTier: HabitDifficultyTier?
     let durationSeconds: Int?
     let lockoutDurationSeconds: Int?
-    let skipConsequence: Int?
+    let benefit: Int?
 
     init(
         id: RecordID,
@@ -36,7 +36,7 @@ struct Habit: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
         difficultyTier: HabitDifficultyTier?,
         durationSeconds: Int? = nil,
         lockoutDurationSeconds: Int? = nil,
-        skipConsequence: Int? = nil
+        benefit: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -48,7 +48,7 @@ struct Habit: Identifiable, Equatable, Sendable, Codable, OwnerScopedRecord {
         self.difficultyTier = difficultyTier
         self.durationSeconds = durationSeconds
         self.lockoutDurationSeconds = lockoutDurationSeconds
-        self.skipConsequence = skipConsequence
+        self.benefit = benefit
     }
 
     // Claiming is no longer blocked by missing pricing fields. Optional inputs

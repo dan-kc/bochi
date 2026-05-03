@@ -202,25 +202,25 @@ A habit reward should combine four effects:
 - harder habits should pay more
 - under-done habits should pay more
 - longer habits should pay more, but with diminishing returns
-- higher skip consequence should pay more
+- higher benefit should pay more
 
 Hence:
 
-`habitReward = round(100 · T_h · F_h · D_h · S_h)`
+`habitReward = round(100 · T_h · F_h · D_h · B_h)`
 
 with:
 
 - `T_h ∈ {0.2, 0.6, 1.0, 1.4, 2.0}`
 - `F_h ∈ (0, 2]`
 - `D_h ∈ [1, 1.35]`
-- `S_h ∈ {1.0, 1.15, 1.3, 1.5, 1.75}`
+- `B_h ∈ {1.0, 1.3, 1.6, 2.0, 2.5}`
 
 Fallbacks:
 
 - missing habit tier `⟹   T_h = 0.2`
 - missing habit frequency `⟹   f_h = 100/day`
 - missing duration `⟹   D_h = 1`
-- missing skip consequence `⟹   S_h = 1`
+- missing benefit `⟹   B_h = 1`
 
 ### 4.2 Habit Frequency Multiplier
 
@@ -275,19 +275,19 @@ Properties:
 
 So duration increases reward with diminishing marginal effect.
 
-### 4.4 Skip Consequence Multiplier
+### 4.4 Benefit Multiplier
 
 #### Goal
 
-Skipping a more consequential habit should make each completion worth more.
+Completing a more beneficial habit should make each completion worth more.
 
 The map is:
 
 - `1 ↦ 1.0`
-- `2 ↦ 1.15`
-- `3 ↦ 1.3`
-- `4 ↦ 1.5`
-- `5 ↦ 1.75`
+- `2 ↦ 1.3`
+- `3 ↦ 1.6`
+- `4 ↦ 2.0`
+- `5 ↦ 2.5`
 
 This is strictly increasing.
 

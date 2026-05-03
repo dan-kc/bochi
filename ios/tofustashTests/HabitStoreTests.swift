@@ -53,7 +53,7 @@ struct HabitStoreTests {
             frequency: 1.0,
             durationSeconds: 900,
             lockoutDurationSeconds: 3600,
-            skipConsequence: 4
+            benefit: 4
         )
 
         #expect(habit?.name == "Exercise")
@@ -61,7 +61,7 @@ struct HabitStoreTests {
         #expect(habit?.frequency == 1.0)
         #expect(habit?.durationSeconds == 900)
         #expect(habit?.lockoutDurationSeconds == 3600)
-        #expect(habit?.skipConsequence == 4)
+        #expect(habit?.benefit == 4)
     }
 
     // Behaviour: When a user types a habit name with leading/trailing spaces,
@@ -195,7 +195,7 @@ struct HabitStoreTests {
             difficultyTier: .medium,
             durationSeconds: 300,
             lockoutDurationSeconds: 1800,
-            skipConsequence: 2,
+            benefit: 2,
             createdAt: createdAt,
             updatedAt: createdAt
         )!
@@ -210,13 +210,13 @@ struct HabitStoreTests {
         #expect(updated.difficultyTier == .medium)
         #expect(updated.durationSeconds == 300)
         #expect(updated.lockoutDurationSeconds == 1800)
-        #expect(updated.skipConsequence == 2)
+        #expect(updated.benefit == 2)
         #expect(updated.createdAt == habit.createdAt)
     }
 
-    // Behaviour: When a user edits duration, lockout, and skip consequence,
+    // Behaviour: When a user edits duration, lockout, and benefit,
     // those values should persist with the habit.
-    @Test func updateHabitChangesDurationLockoutAndSkipConsequence() {
+    @Test func updateHabitChangesDurationLockoutAndBenefit() {
         let sut = makeSUT()
         let habit = sut.addHabit(name: "Exercise")!
 
@@ -224,13 +224,13 @@ struct HabitStoreTests {
             id: habit.id,
             durationSeconds: .some(900),
             lockoutDurationSeconds: .some(7200),
-            skipConsequence: .some(5)
+            benefit: .some(5)
         )
 
         let updated = sut.habits.first!
         #expect(updated.durationSeconds == 900)
         #expect(updated.lockoutDurationSeconds == 7200)
-        #expect(updated.skipConsequence == 5)
+        #expect(updated.benefit == 5)
     }
 
     // Behaviour: When a user renames a habit with leading/trailing spaces,

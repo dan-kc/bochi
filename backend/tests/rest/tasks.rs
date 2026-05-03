@@ -19,7 +19,8 @@ async fn test_create_task_success() {
         "description": "Send the April invoice"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert!(json.get("id").is_some());
@@ -37,7 +38,7 @@ async fn test_create_task_success() {
     assert_eq!(json.get("completedAt").unwrap(), &Value::Null);
     assert_eq!(json.get("difficultyTier").unwrap(), &Value::Null);
     assert_eq!(json.get("durationSeconds").unwrap(), &Value::Null);
-    assert_eq!(json.get("skipConsequence").unwrap(), &Value::Null);
+    assert_eq!(json.get("commitment").unwrap(), &Value::Null);
     assert_eq!(json.get("dueDate").unwrap(), &Value::Null);
 }
 
@@ -54,22 +55,23 @@ async fn test_create_task_with_optional_fields() {
         "description": "Finish everything in one pass",
         "difficultyTier": "hard",
         "durationSeconds": 3600,
-        "skipConsequence": 4,
+        "commitment": 4,
         "dueDate": "2026-05-01T09:30:00"
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json.get("difficultyTier").unwrap(), "hard");
     assert_eq!(json.get("durationSeconds").unwrap(), 3600);
-    assert_eq!(json.get("skipConsequence").unwrap(), 4);
+    assert_eq!(json.get("commitment").unwrap(), 4);
     assert_eq!(json.get("dueDate").unwrap(), "2026-05-01T09:30:00");
 }
 
 #[tokio::test]
-async fn test_create_task_validation_skip_consequence_too_high() {
-    let email = generate_email_from_fn!(test_create_task_validation_skip_consequence_too_high);
+async fn test_create_task_validation_commitment_too_high() {
+    let email = generate_email_from_fn!(test_create_task_validation_commitment_too_high);
     let password = "password123";
 
     register_user(&email, password).await;
@@ -78,10 +80,11 @@ async fn test_create_task_validation_skip_consequence_too_high() {
     let body = json!({
         "name": "Bad task",
         "description": "",
-        "skipConsequence": 6
+        "commitment": 6
     });
 
-    let (status, json) = make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
+    let (status, json) =
+        make_authenticated_post_request(&access_token, "/api/v1/tasks", body).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let errors = json.get("errors").unwrap().as_array().unwrap();
@@ -89,8 +92,7 @@ async fn test_create_task_validation_skip_consequence_too_high() {
     assert_eq!(
         errors[0].get("message").unwrap(),
         &Value::String(
-            "Validation Error: The 'skip_consequence' must be between 1 and 5. You sent 6."
-                .to_string()
+            "Validation Error: The 'commitment' must be between 1 and 5. You sent 6.".to_string()
         )
     );
 }

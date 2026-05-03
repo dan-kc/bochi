@@ -3,11 +3,11 @@ import Foundation
 // Pure functions for calculating the tofu reward a user sees when completing a
 // habit.
 //
-// Formula: Reward = round(100 * T * F * D * S)
+// Formula: Reward = round(100 * T * F * D * B)
 //   T = fixed difficulty-tier multiplier
 //   F = frequency multiplier based on completion rate, range (0, 2)
 //   D = expected-effort duration multiplier
-//   S = skip-consequence multiplier
+//   B = benefit multiplier
 enum RewardCalculation {
 
     // Higher values make payouts react more strongly when the user drifts away
@@ -60,8 +60,8 @@ enum RewardCalculation {
         return 1.0 + (normalized * durationInfluence)
     }
 
-    nonisolated static func calculateSkipConsequenceMultiplier(habit: Habit) -> Double {
-        SkipConsequenceTier.from(habit.skipConsequence)?.multiplier ?? 1.0
+    nonisolated static func calculateBenefitMultiplier(habit: Habit) -> Double {
+        BenefitTier.from(habit.benefit)?.multiplier ?? 1.0
     }
 
     nonisolated static func calculateReward(
@@ -78,13 +78,13 @@ enum RewardCalculation {
             now: now
         )
         let durationMultiplier = calculateDurationMultiplier(habit: habit)
-        let skipConsequenceMultiplier = calculateSkipConsequenceMultiplier(habit: habit)
+        let benefitMultiplier = calculateBenefitMultiplier(habit: habit)
 
         let reward = 100.0
             * difficultyMultiplier
             * frequencyMultiplier
             * durationMultiplier
-            * skipConsequenceMultiplier
+            * benefitMultiplier
         return SpecialOfferSupport.adjustedRoundedAmount(
             reward,
             specialOfferModifierPercent: specialOfferModifierPercent
