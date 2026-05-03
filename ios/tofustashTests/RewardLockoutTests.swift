@@ -60,8 +60,8 @@ struct RewardLockoutTests {
         #expect(RewardLockout.isLocked(reward: reward, tradeStore: tradeStore, now: purchaseDate.addingTimeInterval(3_601)) == false)
     }
 
-    // Behaviour: Refunded purchases should stop influencing lockout so the row
-    // does not stay stuck in the locked section after a reversal.
+    // Behaviour: Soft-deleted purchase history should stop influencing
+    // lockout so stale tombstones do not keep the reward unavailable.
     @Test func deletedTradesDoNotKeepRewardLocked() {
         let tradeStore = makeStore()
         let reward = makeReward(lockoutDurationSeconds: 3_600)
@@ -76,5 +76,33 @@ struct RewardLockoutTests {
         )
 
         #expect(RewardLockout.isLocked(reward: reward, tradeStore: tradeStore, now: now) == false)
+    }
+
+    // Behaviour: A real refund trade should remove the original purchase from
+    // lockout calculations so the reward unlocks immediately after reversal.
+    @Test func refundedTradesDoNotKeepRewardLocked() throws {
+        let tradeStore = makeStore()
+        let reward = makeReward(lockoutDurationSeconds: 3_600)
+        let purchaseDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let refundedAt = purchaseDate.addingTimeInterval(300)
+
+        tradeStore.addRewardPurchase(
+            id: "reward-trade-1",
+            rewardId: reward.id,
+            amount: -100,
+            createdAt: purchaseDate,
+            shouldNotifySync: false
+        )
+
+        let refundTrade = try #require(
+            tradeStore.refundTrade(
+                id: "reward-trade-1",
+                refundedAt: refundedAt,
+                shouldNotifySync: false
+            )
+        )
+
+        #expect(refundTrade.refundsTradeId == "reward-trade-1")
+        #expect(RewardLockout.isLocked(reward: reward, tradeStore: tradeStore, now: refundedAt) == false)
     }
 }
