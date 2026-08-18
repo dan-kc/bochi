@@ -1,0 +1,335 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@5.4.1
+
+parameters:
+  server-change:
+    type: boolean
+    default: false
+  migration:
+    type: boolean
+    default: false
+
+commands:
+  install_nix:
+    description: "Installs and configures nix"
+    steps:
+      - run:
+          name: Install & Configure Nix
+          command: |
+            sh <(curl -L https://nixos.org/nix/install) --no-daemon
+            mkdir -p ~/.config/nix
+            echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+            echo 'export USER=${USER:-circleci}' >> $BASH_ENV
+            echo '. $HOME/.nix-profile/etc/profile.d/nix.sh' >> $BASH_ENV
+
+jobs:
+  check:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Format | Lint | Test
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command bash -eo pipefail -c "
+              set -e
+              # Scan every reachable commit so publication cannot silently
+              # expose a secret that was deleted only from the current tree.
+              gitleaks git . --redact=100 --no-banner
+              # SQLx keeps its disabled MySQL/RSA dependency in Cargo.lock even
+              # though it is absent from Bochi's compiled dependency graph.
+              cargo audit --file backend/Cargo.lock --ignore RUSTSEC-2023-0071
+              cargo fmt --manifest-path backend/Cargo.toml --all --check
+              cargo check --manifest-path backend/Cargo.toml
+              mkdir -p logs
+              start-postgres
+              fw bochi_test migrate
+              t
+            "
+
+  build_upload_server_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Build | Upload
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command nix build .#server-docker
+            ACTUAL_IMAGE_PATH=$(readlink -f result)
+            cp "${ACTUAL_IMAGE_PATH}" server-image.tar.gz
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - run:
+          name: Login ECR server
+          command: |
+            #!/bin/bash -eo pipefail
+            echo "Logging in to ECR..."
+            ECR_BACKEND_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bochi-backend-server"
+            echo "Backend ECR repository: ${ECR_BACKEND_REPOSITORY_URI}"
+            aws ecr get-login-password --region "${AWS_REGION}" \
+              | docker login \
+                  --username AWS \
+                  --password-stdin "${ECR_BACKEND_REPOSITORY_URI}" 2>&1 || {
+              echo "Error: ECR login failed!"
+              exit 1
+            }
+            echo "ECR login successful."
+
+      - run:
+          name: Upload Image
+          command: |
+            #!/bin/bash -eo pipefail
+            docker load --input server-image.tar.gz
+
+            SOURCE_IMAGE="bochi-backend:latest" # As defined in flake.nix
+            ECR_BACKEND_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bochi-backend-server"
+            IMAGE_TAG="latest"
+            VERSION_TAG="${CIRCLE_SHA1::7}"
+
+            docker tag "${SOURCE_IMAGE}" "${ECR_BACKEND_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker tag "${SOURCE_IMAGE}" "${ECR_BACKEND_REPOSITORY_URI}:${VERSION_TAG}"
+            docker push "${ECR_BACKEND_REPOSITORY_URI}:${IMAGE_TAG}"
+            docker push "${ECR_BACKEND_REPOSITORY_URI}:${VERSION_TAG}"
+
+  build_upload_migration_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - checkout
+      - install_nix
+      - run:
+          name: Build Flyway Docker Image
+          no_output_timeout: 30m
+          command: |
+            export USER=${USER:-circleci}
+            . /home/circleci/.nix-profile/etc/profile.d/nix.sh
+            nix develop --command nix build .#flyway-docker
+            ACTUAL_IMAGE_PATH=$(readlink -f result)
+            cp "${ACTUAL_IMAGE_PATH}" flyway-image.tar.gz
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - run:
+          name: Login ECR migration
+          command: |
+            #!/bin/bash -eo pipefail
+            echo "Logging in to ECR..."
+            ECR_MIGRATION_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bochi-migration-runner"
+            echo "Migration ECR repository: ${ECR_MIGRATION_REPOSITORY_URI}"
+            aws ecr get-login-password --region "${AWS_REGION}" \
+              | docker login \
+                  --username AWS \
+                  --password-stdin "${ECR_MIGRATION_REPOSITORY_URI}" 2>&1 || {
+              echo "Error: ECR login failed!"
+              exit 1
+            }
+            echo "ECR login successful."
+      - run:
+          name: Upload Flyway Image to ECR
+          command: |
+            #!/bin/bash -eo pipefail
+            docker load --input flyway-image.tar.gz
+
+            FLYWAY_IMAGE_NAME="bochi-migrations:latest" # As defined in flake.nix
+            ECR_MIGRATION_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bochi-migration-runner"
+
+            docker tag ${FLYWAY_IMAGE_NAME} "${ECR_MIGRATION_REPOSITORY_URI}:latest"
+            docker tag ${FLYWAY_IMAGE_NAME} "${ECR_MIGRATION_REPOSITORY_URI}:${CIRCLE_SHA1::7}"
+
+            # Push to ECR
+            docker push "${ECR_MIGRATION_REPOSITORY_URI}:latest"
+            docker push "${ECR_MIGRATION_REPOSITORY_URI}:${CIRCLE_SHA1::7}"
+
+  deploy_migration_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - run:
+          name: Run Database Migrations via ECS Fargate
+          command: |
+            #!/bin/bash -eo pipefail
+
+            # Define ECS cluster and task definition
+            CLUSTER_NAME="bochi_cluster"
+            TASK_DEFINITION="bochi-migrations"
+
+            # Get subnet IDs from AWS (you could also hardcode or use parameter store)
+            SUBNET_IDS=$(aws ec2 describe-subnets \
+              --region ${AWS_REGION} \
+              --filters "Name=tag:Name,Values=bochi-private-subnet-*" \
+              --query "Subnets[*].SubnetId" \
+              --output text | tr '\t' ',')
+            if [ -z "${SUBNET_IDS}" ]; then
+              echo "No private subnets found for bochi migration task"
+              exit 1
+            fi
+
+            # Get security group for migration tasks
+            SECURITY_GROUP=$(aws ec2 describe-security-groups \
+              --region ${AWS_REGION} \
+              --filters "Name=group-name,Values=bochi-migration-task-sg" \
+              --query "SecurityGroups[0].GroupId" \
+              --output text)
+            if [ -z "${SECURITY_GROUP}" ] || [ "${SECURITY_GROUP}" = "None" ]; then
+              echo "No migration task security group found"
+              exit 1
+            fi
+
+            echo "Running migration task in ECS..."
+            TASK_ARN=$(aws ecs run-task \
+              --cluster ${CLUSTER_NAME} \
+              --task-definition ${TASK_DEFINITION} \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_IDS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=DISABLED}" \
+              --region ${AWS_REGION} \
+              --query "tasks[0].taskArn" \
+              --output text)
+            if [ -z "${TASK_ARN}" ] || [ "${TASK_ARN}" = "None" ]; then
+              echo "Failed to start migration task"
+              exit 1
+            fi
+
+            echo "Task started: ${TASK_ARN}"
+
+            # Wait for task to complete
+            echo "Waiting for migration task to complete..."
+            aws ecs wait tasks-stopped \
+              --cluster ${CLUSTER_NAME} \
+              --tasks ${TASK_ARN} \
+              --region ${AWS_REGION}
+
+            # Check if task succeeded
+            EXIT_CODE=$(aws ecs describe-tasks \
+              --cluster ${CLUSTER_NAME} \
+              --tasks ${TASK_ARN} \
+              --region ${AWS_REGION} \
+              --query "tasks[0].containers[0].exitCode" \
+              --output text)
+
+            if [ "${EXIT_CODE}" != "0" ]; then
+              echo "Migration failed with exit code: ${EXIT_CODE}"
+              
+              # Get logs
+              LOG_GROUP="/ecs/bochi-migrations"
+              TASK_ID=$(echo ${TASK_ARN} | awk -F/ '{print $NF}')
+              LOG_STREAM="flyway/flyway/${TASK_ID}"
+              
+              echo "Fetching logs from CloudWatch..."
+              aws logs get-log-events \
+                --log-group-name ${LOG_GROUP} \
+                --log-stream-name ${LOG_STREAM} \
+                --region ${AWS_REGION} \
+                --query "events[*].message" \
+                --output text
+              
+              exit 1
+            fi
+
+            echo "Migration completed successfully!"
+
+  deploy_server_image:
+    docker:
+      - image: cimg/base:2025.10
+    steps:
+      - aws-cli/setup:
+          role_arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/circleci-uploader-deployer
+      - run:
+          name: Update ECS Service with New Image
+          no_output_timeout: 15m
+          command: |
+            CLUSTER_NAME="bochi_cluster"
+            SERVICE_NAME="bochi-server"
+
+            echo "Triggering ECS rolling update with new image..."
+            
+            # Force a new deployment with the latest image
+            # ECS will pull the :latest tag which we just pushed in the build job
+            aws ecs update-service \
+              --cluster ${CLUSTER_NAME} \
+              --service ${SERVICE_NAME} \
+              --force-new-deployment \
+              --region ${AWS_REGION}
+            
+            echo "Rolling update initiated. Waiting for service to stabilize..."
+            
+            # Wait for the service to become stable (all tasks running and healthy)
+            # This will timeout after 10 minutes by default
+            aws ecs wait services-stable \
+              --cluster ${CLUSTER_NAME} \
+              --services ${SERVICE_NAME} \
+              --region ${AWS_REGION}
+            
+            echo "Deployment completed successfully!"
+            
+            # Get the current service status
+            aws ecs describe-services \
+              --cluster ${CLUSTER_NAME} \
+              --services ${SERVICE_NAME} \
+              --region ${AWS_REGION} \
+              --query "services[0].{DesiredCount:desiredCount,RunningCount:runningCount,PendingCount:pendingCount}" \
+              --output table
+
+workflows:
+  server-only-workflow:
+    when:
+      and:
+        - << pipeline.parameters.server-change >>
+        - not: << pipeline.parameters.migration >>
+    jobs:
+      - check
+      - build_upload_server_image:
+          requires:
+            - check
+      - deploy_server_image:
+          requires:
+            - build_upload_server_image
+
+  migration-only-workflow:
+    when:
+      and:
+        - << pipeline.parameters.migration >>
+        - not: << pipeline.parameters.server-change >>
+    jobs:
+      - check
+      - build_upload_migration_image:
+          requires:
+            - check
+      - deploy_migration_image:
+          requires:
+            - build_upload_migration_image
+
+  both-workflow:
+    when:
+      and:
+        - << pipeline.parameters.server-change >>
+        - << pipeline.parameters.migration >>
+    jobs:
+      - check
+      - build_upload_server_image:
+          requires:
+            - check
+      - build_upload_migration_image:
+          requires:
+            - check
+      - deploy_migration_image:
+          requires:
+            - build_upload_migration_image
+            - build_upload_server_image
+      - deploy_server_image:
+          requires:
+            - build_upload_server_image
+            - deploy_migration_image

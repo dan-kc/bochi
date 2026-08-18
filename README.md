@@ -1,0 +1,1 @@
+Bochi is a gamified productivity tool for one-off and recurring tasks. It is themed on personal finance and the stock exchange. You earn "points", the in-game currency, by completing tasks and spend it on rewards like "eat a chocolate bar".

@@ -1,0 +1,3 @@
+DROP TABLE api_keys;
+ALTER TABLE refresh_tokens
+ADD COLUMN api_key BOOLEAN DEFAULT FALSE;

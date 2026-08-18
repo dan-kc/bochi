@@ -1,0 +1,2 @@
+ALTER TABLE refresh_tokens
+ALTER COLUMN key TYPE VARCHAR(255);

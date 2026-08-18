@@ -1,0 +1,26 @@
+version: 2.1
+
+setup: true
+
+orbs:
+  path-filtering: circleci/path-filtering@2.1.0
+
+workflows:
+  setup-workflow:
+    jobs:
+      - path-filtering/filter:
+          base-revision: main
+          config-path: .circleci/continue-config.yml
+          mapping: |
+            .circleci/.* server-change true
+            .circleci/.* migration true
+            backend/src/.* server-change true
+            backend/tests/.* server-change true
+            backend/Cargo\..* server-change true
+            flake\..* server-change true
+            flake\..* migration true
+            flyway-entrypoint\.sh migration true
+            migrations/.* migration true
+          filters:
+            branches:
+              only: main

@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "D1BE55F4-CA9A-45F9-B800-BAD6E0E45E4B",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:bochi.xcodeproj",
+      "identifier" : "820441C62F7FDED200952DFF",
+      "name" : "bochi"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:bochi.xcodeproj",
+        "identifier" : "820441D52F7FDED400952DFF",
+        "name" : "bochiTests"
+      }
+    }
+  ],
+  "version" : 1
+}

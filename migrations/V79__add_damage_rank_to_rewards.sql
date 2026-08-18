@@ -1,0 +1,1 @@
+ALTER TABLE rewards ADD COLUMN damage_rank VARCHAR(255);

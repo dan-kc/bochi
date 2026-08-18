@@ -1,0 +1,41 @@
+[package]
+name = "bochi-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+argon2 = { version = "0.5.3", features = ["password-hash"] }
+aws-config = "1.5.10"
+aws-sdk-secretsmanager = { version = "1.52.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+axum = { version = "0.8.1", features = ["macros"] }
+axum-extra = { version = "0.9.6" }
+base64 = "0.22.1"
+chrono = { version = "0.4.38", features = ["serde"] }
+convert_case = "0.6.0"
+http = "1.3.1"
+http-body-util = "0.1.3"
+hex = "0.4.3"
+jsonwebtoken = "9.3.0"
+rand = "0.8.5"
+regex = "1.11.1"
+rustls-pki-types = "1.12.0"
+rustls-webpki = { version = "0.103.13", features = ["ring"] }
+serde = { version = "1.0.214", features = ["derive"] }
+serde_json = "1.0.134"
+sha2 = "0.10.9"
+sqlx = { version = "0.8.2", default-features = false, features = ["chrono", "macros", "runtime-tokio", "postgres", "tls-rustls", "uuid"] }
+thiserror = "2.0.16"
+tokio = { version = "1.41.1", features = ["full"] }
+tower = "0.5.1"
+tower-http = { version = "0.6.2", features = ["trace", "cors", "normalize-path"] }
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+ureq = "2.12.1"
+url = "2.5.7"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+ureq = "2.10"
+serde_json = "1.0"
+urlencoding = "2.1"

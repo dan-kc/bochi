@@ -1,0 +1,343 @@
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use bochi_backend::router;
+use http::Method;
+use http_body_util::BodyExt;
+use serde_json::json;
+use tower::ServiceExt;
+
+pub async fn register_and_get_refresh_token(email: &str, password: &str) -> Result<String, String> {
+    let _ = password;
+    std::env::set_var("ALLOW_INSECURE_APPLE_SIGN_IN_TEST_TOKENS", "true");
+    let router = router::router().await;
+
+    let request_body = json!({
+        "identityToken": format!("test-apple-subject:{}", email),
+        "email": email
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/sign-in-with-apple")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| format!("Failed to register: {}", e))?;
+
+    if response.status() != StatusCode::OK {
+        return Err(format!(
+            "Apple sign-in failed with status: {}",
+            response.status()
+        ));
+    }
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?
+        .to_bytes();
+
+    let json: serde_json::Value = serde_json::from_slice(&response_body_bytes)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+    json.get("refreshToken")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "No refreshToken in response".to_string())
+}
+
+#[allow(dead_code)]
+pub fn create_password_of_length(len: usize) -> String {
+    "a".repeat(len)
+}
+
+#[macro_export]
+macro_rules! generate_email_from_fn {
+    ($fn_name:path) => {{
+        // $fn_name will be parsed as a path (e.g., `my_module::my_function`)
+        // stringify! will convert that path into a string literal.
+        let full_name = stringify!($fn_name);
+        format!("{}@test.com", full_name)
+    }};
+    ($fn_name:ident) => {{
+        // This variant handles simple identifiers (functions in the current scope)
+        let full_name = stringify!($fn_name);
+        format!("{}@test.com", full_name)
+    }};
+}
+
+pub async fn register_user(email: &str, password: &str) {
+    let _ = register_and_get_refresh_token(email, password).await;
+}
+
+pub async fn get_access_token_for_user(email: &str, password: &str) -> String {
+    let _ = password;
+    std::env::set_var("ALLOW_INSECURE_APPLE_SIGN_IN_TEST_TOKENS", "true");
+    let router = router::router().await;
+
+    let request_body = json!({
+        "identityToken": format!("test-apple-subject:{}", email),
+        "email": email
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/auth/sign-in-with-apple")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body");
+
+    json.get("accessToken")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| {
+            eprintln!(
+                "Login response body: {}",
+                serde_json::to_string_pretty(&json).unwrap()
+            );
+            panic!("Login response should contain accessToken");
+        })
+        .to_string()
+}
+
+pub async fn make_authenticated_get_request(
+    access_token: &str,
+    path: &str,
+) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .header(
+                    http::header::AUTHORIZATION,
+                    format!("Bearer {}", access_token),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    let json: serde_json::Value = if response_body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_authenticated_post_request(
+    access_token: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let (status, response_body) =
+        make_authenticated_post_request_raw(access_token, path, body).await;
+
+    let json: serde_json::Value = if response_body.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_authenticated_post_request_raw(
+    access_token: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> (StatusCode, Vec<u8>) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(
+                    http::header::AUTHORIZATION,
+                    format!("Bearer {}", access_token),
+                )
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    (status, response_body_bytes.to_vec())
+}
+
+pub async fn make_authenticated_delete_request(
+    access_token: &str,
+    path: &str,
+) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(path)
+                .header(
+                    http::header::AUTHORIZATION,
+                    format!("Bearer {}", access_token),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    let json: serde_json::Value = if response_body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_unauthenticated_delete_request(path: &str) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(path)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    let json: serde_json::Value = if response_body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_unauthenticated_get_request(path: &str) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    let json: serde_json::Value = if response_body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}
+
+pub async fn make_unauthenticated_post_request(
+    path: &str,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let router = router::router().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let response_body_bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("Failed to read response body")
+        .to_bytes();
+
+    let json: serde_json::Value = if response_body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&response_body_bytes).expect("Failed to parse JSON response body")
+    };
+
+    (status, json)
+}

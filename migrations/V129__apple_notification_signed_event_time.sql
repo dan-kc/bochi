@@ -1,0 +1,6 @@
+ALTER TABLE apple_server_notifications
+ADD COLUMN event_signed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+CREATE INDEX apple_server_notifications_original_transaction_event_signed_idx
+ON apple_server_notifications (original_transaction_id, event_signed_at DESC, processed_at DESC)
+WHERE original_transaction_id IS NOT NULL;

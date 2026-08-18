@@ -1,0 +1,58 @@
+.direnv
+target
+node_modules/
+result
+.claude
+.local/
+logs
+.git
+.terraform
+.pgdata
+.backend.pid
+
+# Native
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env.*
+!.env.example
+.env*.local
+
+# local infrastructure state and variable values
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# builds
+ios/build/
+ios/.derived/
+ios/build-direct/
+ios/build-ui-search*
+.codex
+android
