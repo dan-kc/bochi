@@ -28,6 +28,17 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+        rustToolchain = fenix.packages.${system}.complete.withComponents [
+          "cargo"
+          "clippy"
+          "rust-analyzer"
+          "rustc"
+          "rustfmt"
+        ];
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
         env = {
           # Database
           DB_NAME = "bochi";
@@ -64,14 +75,8 @@
           buildInputs =
             with pkgs;
             [
-              (fenix.packages.${system}.complete.withComponents [
-                "cargo"
-                "clippy"
-                "rustc"
-                "rustfmt"
-              ])
+              rustToolchain
               prettier
-              rust-analyzer
               terraform-ls
               adminer
               php83Extensions.pgsql
@@ -101,7 +106,7 @@
           '';
         };
 
-        packages.server = pkgs.rustPlatform.buildRustPackage {
+        packages.server = rustPlatform.buildRustPackage {
           pname = "bochi-backend";
           version = "0.1.0";
           src = backend/.;
