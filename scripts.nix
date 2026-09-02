@@ -52,6 +52,75 @@ let
     export JWT_PUBLIC_KEY="$(<"$LOCAL_JWT_PUBLIC_KEY")"
   '';
 
+  loadLocalDevelopmentConfiguration = ''
+    LOCAL_DEVELOPMENT_CONFIG="$ROOT/config/local-development.xcconfig"
+    if [ ! -f "$LOCAL_DEVELOPMENT_CONFIG" ]; then
+      echo "Error: Missing local development config: $LOCAL_DEVELOPMENT_CONFIG"
+      exit 1
+    fi
+
+    set -a
+    . "$LOCAL_DEVELOPMENT_CONFIG"
+    set +a
+
+    if [ -z "$BOCHI_DEV_AUTH_SUBJECT" ] || [ -z "$BOCHI_DEV_AUTH_EMAIL" ]; then
+      echo "Error: Local development auth subject and email must be configured"
+      exit 1
+    fi
+  '';
+
+  loadLocalDevelopmentNetwork = ''
+    ${loadLocalDevelopmentConfiguration}
+
+    is_tailscale_ipv4() {
+      printf '%s\n' "$1" | awk -F. '
+        NF == 4 && $1 == 100 && $2 >= 64 && $2 <= 127 {
+          for (i = 1; i <= 4; i++) {
+            if ($i !~ /^[0-9]+$/ || $i > 255) exit 1
+          }
+          exit 0
+        }
+        { exit 1 }
+      '
+    }
+
+    if ! is_tailscale_ipv4 "$BOCHI_DEV_MAC_TAILSCALE_IP"; then
+      echo "Error: BOCHI_DEV_MAC_TAILSCALE_IP is not a valid Tailscale IPv4 address"
+      exit 1
+    fi
+    if ! is_tailscale_ipv4 "$BOCHI_DEV_IPHONE_TAILSCALE_IP"; then
+      echo "Error: BOCHI_DEV_IPHONE_TAILSCALE_IP is not a valid Tailscale IPv4 address"
+      exit 1
+    fi
+
+    if command -v tailscale >/dev/null 2>&1; then
+      TAILSCALE_CLI=$(command -v tailscale)
+    elif [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]; then
+      TAILSCALE_CLI=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+    else
+      echo "Error: Tailscale CLI is unavailable. Enable CLI integration in Tailscale settings."
+      exit 1
+    fi
+
+    if ! DETECTED_TAILSCALE_IP=$(TAILSCALE_BE_CLI=1 "$TAILSCALE_CLI" ip -4 2>/dev/null); then
+      echo "Error: Tailscale is not connected on this Mac"
+      exit 1
+    fi
+    if [ "$DETECTED_TAILSCALE_IP" != "$BOCHI_DEV_MAC_TAILSCALE_IP" ]; then
+      echo "Error: Configured Mac Tailscale IP is $BOCHI_DEV_MAC_TAILSCALE_IP, but this Mac is $DETECTED_TAILSCALE_IP"
+      exit 1
+    fi
+
+    TAILSCALE_STATUS=$(TAILSCALE_BE_CLI=1 "$TAILSCALE_CLI" status 2>/dev/null || true)
+    if ! printf '%s\n' "$TAILSCALE_STATUS" | awk '{ print $1 }' | grep -Fxq "$BOCHI_DEV_IPHONE_TAILSCALE_IP"; then
+      echo "Error: Configured iPhone $BOCHI_DEV_IPHONE_TAILSCALE_IP is not present in this tailnet"
+      exit 1
+    fi
+
+    export SERVER_BIND_HOST="$BOCHI_DEV_MAC_TAILSCALE_IP"
+    export SERVER_ALLOWED_CLIENT_IPS="$BOCHI_DEV_MAC_TAILSCALE_IP,$BOCHI_DEV_IPHONE_TAILSCALE_IP"
+  '';
+
   ensureLocalPostgresDatabases = ''
     export PGHOST=${env.DB_HOST}
 
@@ -94,9 +163,17 @@ let
     # Truncates all tables and loads fixture data into bochi database
     seed = pkgs.writeShellScriptBin "seed" ''
       set -e
+      ROOT="$PWD"
+      ${loadLocalDevelopmentConfiguration}
       ${clean}/bin/clean ${env.DB_NAME} || true
       echo "Loading fixture data..."
-      PGPASSWORD=${env.DB_PASSWORD} psql -h ${env.DB_HOST} -U ${env.DB_USER} -d ${env.DB_NAME} -f ./dev-seed.sql
+      PGPASSWORD=${env.DB_PASSWORD} psql \
+        -h ${env.DB_HOST} \
+        -U ${env.DB_USER} \
+        -d ${env.DB_NAME} \
+        -v bochi_dev_auth_subject="$BOCHI_DEV_AUTH_SUBJECT" \
+        -v bochi_dev_auth_email="$BOCHI_DEV_AUTH_EMAIL" \
+        -f ./dev-seed.sql
       echo "Fixtures loaded successfully!"
     '';
 
@@ -125,8 +202,14 @@ let
       set -e
       ROOT="$PWD"
 
-      # Handle --force flag
-      if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+      if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != "--force" ] && [ "$1" != "-f" ]; }; then
+        echo "Usage: start [--force|-f]"
+        exit 1
+      fi
+
+      ${loadLocalDevelopmentNetwork}
+
+      if [ "$#" -eq 1 ]; then
         echo "Force restarting all services..."
         ${stop}/bin/stop
         echo ""
@@ -147,13 +230,20 @@ let
           echo "    Initializing PostgreSQL database..."
           initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
         fi
-        pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp" start
+        pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp -h ${env.LOCAL_SERVICE_HOST}" start
         sleep 2
         ${ensureLocalPostgresDatabases}
         echo "  ✓ PostgreSQL started"
       fi
 
       # Backend
+      EXPECTED_NETWORK="$SERVER_BIND_HOST|$SERVER_ALLOWED_CLIENT_IPS|$BOCHI_DEV_AUTH_SUBJECT|$BOCHI_DEV_AUTH_EMAIL"
+      CURRENT_NETWORK=$(cat "$ROOT/.backend.network" 2>/dev/null || true)
+      if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null && [ "$CURRENT_NETWORK" != "$EXPECTED_NETWORK" ]; then
+        echo "  → Restarting Backend with current Tailscale configuration..."
+        ${kp}/bin/kp
+      fi
+
       if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null; then
         echo "  ✓ Backend already running"
       else
@@ -174,6 +264,8 @@ let
         RUST_LOG="${env.RUST_LOG}" \
         cargo build
         PORT="${env.SERVER_PORT}" \
+        SERVER_BIND_HOST="$SERVER_BIND_HOST" \
+        SERVER_ALLOWED_CLIENT_IPS="$SERVER_ALLOWED_CLIENT_IPS" \
         DB_USER="${env.DB_USER}" \
         DB_PASSWORD="${env.DB_PASSWORD}" \
         DB_HOST="${env.DB_HOST}" \
@@ -182,28 +274,33 @@ let
         JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
         JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
         APPLE_SIGN_IN_AUDIENCE="${env.APPLE_SIGN_IN_AUDIENCE}" \
+        ALLOW_INSECURE_APPLE_SIGN_IN_TEST_TOKENS=true \
         ALLOW_INSECURE_APPLE_BILLING_TEST_TRANSACTIONS=true \
         LOG_DESTINATION=logs \
         RUST_LOG="${env.RUST_LOG}" \
         nohup "$ROOT/backend/target/debug/bochi-backend" &> "$ROOT/logs/backend.log" &
         echo $! > "$ROOT/.backend.pid"
+        printf '%s\n' "$EXPECTED_NETWORK" > "$ROOT/.backend.network"
         disown
         cd "$ROOT"
         echo "  ✓ Backend started"
       fi
 
       # Adminer
-      if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
+      if pgrep -f "php -S (localhost|${env.LOCAL_SERVICE_HOST}):${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
         echo "  ✓ Adminer already running"
       else
         echo "  → Starting Adminer..."
-        nohup ${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php &> "$ROOT/logs/adminer.log" & disown
+        nohup ${pkgs.php83}/bin/php -S ${env.LOCAL_SERVICE_HOST}:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php &> "$ROOT/logs/adminer.log" & disown
         echo "  ✓ Adminer started"
       fi
 
       # LSP Mux
-      echo "  → Checking LSP Mux..."
-      ra-start
+      if ! ra-start >/dev/null 2>&1; then
+        echo "  ✗ LSP Mux failed to start"
+        echo "    Run 'status --verbose' for details."
+        exit 1
+      fi
 
       ${status}/bin/status
       echo ""
@@ -213,13 +310,30 @@ let
     # Stop development environment
     stop = pkgs.writeShellScriptBin "stop" ''
       ROOT="$PWD"
+
+      if [ "$#" -ne 0 ]; then
+        echo "Usage: stop"
+        exit 1
+      fi
+
       echo "Stopping services..."
 
       # LSP Mux
-      ra-stop
+      if LSP_MUX_STOP_OUTPUT=$(ra-stop 2>&1); then
+        case "$LSP_MUX_STOP_OUTPUT" in
+          *"rust-analyzer mux: stopped"*)
+            echo "  ✓ LSP Mux stopped"
+            ;;
+          *)
+            echo "  ✗ LSP Mux not running"
+            ;;
+        esac
+      else
+        echo "  ✗ LSP Mux failed to stop"
+      fi
 
       # Adminer
-      if pkill -f "php -S localhost:${toString env.ADMINER_PORT}" 2>/dev/null; then
+      if pkill -f "php -S (localhost|${env.LOCAL_SERVICE_HOST}):${toString env.ADMINER_PORT}" 2>/dev/null; then
         echo "  ✓ Adminer stopped"
       else
         echo "  ✗ Adminer not running"
@@ -227,10 +341,10 @@ let
 
       # Backend
       if [ -f "$ROOT/.backend.pid" ] && kill $(cat "$ROOT/.backend.pid") 2>/dev/null; then
-        rm -f "$ROOT/.backend.pid"
+        rm -f "$ROOT/.backend.pid" "$ROOT/.backend.network"
         echo "  ✓ Backend stopped"
       else
-        rm -f "$ROOT/.backend.pid"
+        rm -f "$ROOT/.backend.pid" "$ROOT/.backend.network"
         echo "  ✗ Backend not running"
       fi
 
@@ -248,36 +362,70 @@ let
     # Show status of all services
     status = pkgs.writeShellScriptBin "status" ''
       ROOT="$PWD"
+
+      if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != "--verbose" ]; }; then
+        echo "Usage: status [--verbose]"
+        exit 1
+      fi
+
       echo "Service Status:"
       echo ""
 
       # PostgreSQL
       if pg_isready -h ${env.DB_HOST} -q 2>/dev/null; then
-        echo "  PostgreSQL   ✓ Running    localhost:5432"
+        echo "  PostgreSQL   ✓ Running    ${env.LOCAL_SERVICE_HOST}:5432"
       else
         echo "  PostgreSQL   ✗ Stopped"
       fi
 
       # Backend
       if [ -f "$ROOT/.backend.pid" ] && kill -0 $(cat "$ROOT/.backend.pid") 2>/dev/null; then
-        echo "  Backend      ✓ Running    localhost:${env.SERVER_PORT}"
+        BACKEND_HOST=$(cut -d '|' -f 1 "$ROOT/.backend.network" 2>/dev/null || printf 'unknown')
+        echo "  Backend      ✓ Running    $BACKEND_HOST:${env.SERVER_PORT}"
       else
         echo "  Backend      ✗ Stopped"
       fi
 
       # Adminer
-      if pgrep -f "php -S localhost:${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
-        echo "  Adminer      ✓ Running    localhost:${toString env.ADMINER_PORT}"
+      if pgrep -f "php -S (localhost|${env.LOCAL_SERVICE_HOST}):${toString env.ADMINER_PORT}" > /dev/null 2>&1; then
+        echo "  Adminer      ✓ Running    ${env.LOCAL_SERVICE_HOST}:${toString env.ADMINER_PORT}"
       else
         echo "  Adminer      ✗ Stopped"
       fi
 
       # LSP Mux
-      ra-status
+      if [ "$#" -eq 1 ]; then
+        ra-status
+      elif LSP_MUX_STATUS=$(ra-status --json 2>/dev/null); then
+        LSP_MUX_STATE=$(printf '%s\n' "$LSP_MUX_STATUS" | ${pkgs.jq}/bin/jq -r '
+          if .running then "running"
+          elif .pid_running then "stale"
+          else "stopped"
+          end
+        ' 2>/dev/null || printf 'unknown')
+        LSP_MUX_PID=$(printf '%s\n' "$LSP_MUX_STATUS" | ${pkgs.jq}/bin/jq -r '.pid // empty' 2>/dev/null || true)
+
+        case "$LSP_MUX_STATE" in
+          running)
+            echo "  LSP Mux      ✓ Running    PID ''${LSP_MUX_PID:-unknown}"
+            ;;
+          stale)
+            echo "  LSP Mux      ✗ Stale      PID ''${LSP_MUX_PID:-unknown}"
+            ;;
+          stopped)
+            echo "  LSP Mux      ✗ Stopped"
+            ;;
+          *)
+            echo "  LSP Mux      ✗ Unknown"
+            ;;
+        esac
+      else
+        echo "  LSP Mux      ✗ Unknown"
+      fi
     '';
 
     adminer = pkgs.writeShellScriptBin "adminer" ''
-      ${pkgs.php83}/bin/php -S localhost:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php
+      ${pkgs.php83}/bin/php -S ${env.LOCAL_SERVICE_HOST}:${toString env.ADMINER_PORT} ${pkgs.adminer}/adminer.php
     '';
 
     # Start PostgreSQL
@@ -291,7 +439,7 @@ let
         initdb -D "$PGDATA" --auth-local=trust --auth-host=trust
       fi
       echo "Starting PostgreSQL..."
-      pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp" start
+      pg_ctl -D "$PGDATA" -l "$ROOT/logs/postgres.log" -o "-k /tmp -h ${env.LOCAL_SERVICE_HOST}" start
       sleep 2
       ${ensureLocalPostgresDatabases}
       echo "PostgreSQL started successfully"
@@ -301,9 +449,12 @@ let
     run = pkgs.writeShellScriptBin "run" ''
       set -e
       ROOT="$PWD"
+      ${loadLocalDevelopmentNetwork}
       ${loadLocalJwtEnvironment}
       cd backend
       PORT="${env.SERVER_PORT}" \
+      SERVER_BIND_HOST="$SERVER_BIND_HOST" \
+      SERVER_ALLOWED_CLIENT_IPS="$SERVER_ALLOWED_CLIENT_IPS" \
       DB_USER="${env.DB_USER}" \
       DB_PASSWORD="${env.DB_PASSWORD}" \
       DB_HOST="${env.DB_HOST}" \
@@ -312,6 +463,7 @@ let
       JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
       JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
       APPLE_SIGN_IN_AUDIENCE="${env.APPLE_SIGN_IN_AUDIENCE}" \
+      ALLOW_INSECURE_APPLE_SIGN_IN_TEST_TOKENS=true \
       ALLOW_INSECURE_APPLE_BILLING_TEST_TRANSACTIONS=true \
       LOG_DESTINATION=logs \
       cargo run "$@"
@@ -341,7 +493,7 @@ let
       ROOT="$PWD"
       if [ -f "$ROOT/.backend.pid" ]; then
         kill $(cat "$ROOT/.backend.pid") 2>/dev/null && echo "Backend killed" || echo "Backend not running"
-        rm -f "$ROOT/.backend.pid"
+        rm -f "$ROOT/.backend.pid" "$ROOT/.backend.network"
       else
         echo "No backend PID file found"
       fi
@@ -383,91 +535,6 @@ let
 
     tf = pkgs.writeShellScriptBin "tf" ''
       tofu -chdir=./infra "$@"
-    '';
-
-    # Updates the Debug iOS local API host to this Mac's active IPv4 address.
-    update-ip = pkgs.writeShellScriptBin "update-ip" ''
-      set -euo pipefail
-
-      ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-      PROJECT_FILE="$ROOT/ios/bochi.xcodeproj/project.pbxproj"
-
-      detect_ip() {
-        if command -v ipconfig >/dev/null 2>&1; then
-          IP=$(ipconfig getifaddr en0 2>/dev/null || true)
-          if [ -n "$IP" ]; then
-            printf '%s\n' "$IP"
-            return 0
-          fi
-        fi
-
-        if ! command -v ifconfig >/dev/null 2>&1; then
-          return 1
-        fi
-
-        for IFACE in en0 en1 en2 en3 en4 en5; do
-          DETAILS=$(ifconfig "$IFACE" 2>/dev/null || true)
-          if ! printf '%s\n' "$DETAILS" | grep -q "status: active"; then
-            continue
-          fi
-
-          IP=$(printf '%s\n' "$DETAILS" | awk '$1 == "inet" && $2 !~ /^127\./ { print $2; exit }')
-          if [ -n "$IP" ]; then
-            printf '%s\n' "$IP"
-            return 0
-          fi
-        done
-
-        for IFACE in $(ifconfig -l 2>/dev/null || true); do
-          DETAILS=$(ifconfig "$IFACE" 2>/dev/null || true)
-          if ! printf '%s\n' "$DETAILS" | grep -q "status: active"; then
-            continue
-          fi
-
-          IP=$(printf '%s\n' "$DETAILS" | awk '$1 == "inet" && $2 !~ /^127\./ { print $2; exit }')
-          if [ -n "$IP" ]; then
-            printf '%s\n' "$IP"
-            return 0
-          fi
-        done
-
-        return 1
-      }
-
-      IP="''${1:-}"
-      if [ -z "$IP" ]; then
-        IP=$(detect_ip) || {
-          echo "Error: Could not detect an active IPv4 address. Pass one explicitly: update-ip 192.168.x.x"
-          exit 1
-        }
-      fi
-
-      if ! printf '%s\n' "$IP" | awk -F. 'NF == 4 { for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i > 255) exit 1; exit 0 } { exit 1 }'; then
-        echo "Error: Invalid IPv4 address: $IP"
-        exit 1
-      fi
-
-      if [ ! -f "$PROJECT_FILE" ]; then
-        echo "Error: Could not find Xcode project file: $PROJECT_FILE"
-        exit 1
-      fi
-
-      TMP_FILE=$(mktemp)
-      if ! awk -v ip="$IP" '
-        /BOCHI_LOCAL_API_HOST = [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;/ {
-          sub(/BOCHI_LOCAL_API_HOST = [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+;/, "BOCHI_LOCAL_API_HOST = " ip ";")
-          changed = 1
-        }
-        { print }
-        END { if (!changed) exit 2 }
-      ' "$PROJECT_FILE" > "$TMP_FILE"; then
-        rm -f "$TMP_FILE"
-        echo "Error: Could not find BOCHI_LOCAL_API_HOST in $PROJECT_FILE"
-        exit 1
-      fi
-
-      mv "$TMP_FILE" "$PROJECT_FILE"
-      echo "Updated BOCHI_LOCAL_API_HOST to $IP"
     '';
 
     # drops and recreates the provided database, then applies migrations.

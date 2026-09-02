@@ -26,6 +26,10 @@ resource "aws_ecs_task_definition" "bochi_server" {
           value = "bochi_backend=info,tower_http=info,axum=warn,hyper=warn,sqlx=warn"
         },
         {
+          name  = "SERVER_BIND_HOST"
+          value = "0.0.0.0"
+        },
+        {
           name  = "DB_NAME"
           value = "bochi"
         },

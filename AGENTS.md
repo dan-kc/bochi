@@ -18,6 +18,8 @@
 - Strongly prefer centralized SwiftUI lifecycle/effect modifiers for side effects keyed by state changes over scattered manual calls. Stores should mutate durable state or publish lightweight revisions; root/lifecycle hooks should reconcile outside-world effects such as sync sessions and notifications. Put custom lifecycle modifiers in `ios/bochi/Lifecycles`, one lifecycle per file.
 - Write iOS unit tests only when they cover user behavior; keep them BDD-style and add a behavior comment to each test.
 - Run unit tests with `ios-test`.
+- `ios-test` is the only iOS command agents may run. Do not run `xcodebuild`, `xcrun`, Xcode, Simulator, device builds, app installation, or the iOS app directly.
+- After making iOS changes, ask the user to build and test them manually, then wait for their result.
 
 ## Backend
 

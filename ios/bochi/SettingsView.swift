@@ -10,7 +10,7 @@ struct SettingsView: View {
     @State private var restoreMessage: String?
     @State private var authErrorMessage: String?
     @State private var accountDeletionErrorMessage: String?
-    @State private var isSigningInWithApple = false
+    @State private var isSigningIn = false
     @State private var isPremiumUpsellPresented = false
     @State private var isAccountDeletionSheetPresented = false
     @State private var accountDeletionFeedback = AccountDeletionFeedbackState()
@@ -202,10 +202,17 @@ struct SettingsView: View {
 
                 AppleSignInButtonView(
                     errorMessage: $authErrorMessage,
-                    isLoading: $isSigningInWithApple
+                    isLoading: $isSigningIn
                 )
 
-                if isSigningInWithApple {
+                #if BOCHI_LOCAL
+                LocalDevelopmentSignInButtonView(
+                    errorMessage: $authErrorMessage,
+                    isLoading: $isSigningIn
+                )
+                #endif
+
+                if isSigningIn {
                     ProgressView("Signing in...")
                 }
 

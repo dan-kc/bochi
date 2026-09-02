@@ -101,6 +101,35 @@ struct AuthManagerTests {
 
     // MARK: - Sign in with Apple
 
+    // Behaviour: a local build can enter Alice's seeded account while still
+    // using the normal token storage, account loading, and signed-in state flow.
+    @Test func localDevelopmentSignInUsesSeededAliceIdentity() async throws {
+        let (manager, api, storage, entitlementClient) = makeSUT()
+        entitlementClient.currentEntitlementResult = .inactive
+        await manager.bootstrap()
+
+        let tokens = TestHelpers.makeTokens(userId: "11111111-1111-1111-1111-111111111111")
+        api.signInWithAppleResult = .success(tokens)
+        api.currentAccountResult = .success(
+            TestHelpers.makeCurrentAccount(email: "alice@example.com")
+        )
+
+        try await manager.signInForLocalDevelopment(
+            account: LocalDevelopmentAccount(
+                subject: "bochi-development-alice",
+                email: "alice@example.com"
+            )
+        )
+
+        #expect(api.lastAppleIdentityToken == "test-apple-subject:bochi-development-alice")
+        #expect(api.lastAppleEmail == "alice@example.com")
+        #expect(api.lastAppleNonce == nil)
+        #expect(storage.storedTokens == tokens)
+        #expect(manager.user?.id == "11111111-1111-1111-1111-111111111111")
+        #expect(manager.user?.email == "alice@example.com")
+        #expect(manager.sessionState == .signedInFree)
+    }
+
     // Behaviour: when a user signs into an Apple-backed premium account, the
     // app uses `/auth/me` to render premium as account-owned rather than local-only.
     @Test func signInWithAppleLoadsAccountAndApplePremiumState() async throws {

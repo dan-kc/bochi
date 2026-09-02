@@ -1,5 +1,12 @@
 import Foundation
 
+#if BOCHI_LOCAL
+struct LocalDevelopmentAccount: Equatable, Sendable {
+    let subject: String
+    let email: String
+}
+#endif
+
 enum AppConfiguration {
     // Behaviour: Xcode injects these generated Info.plist keys from
     // per-configuration build settings, so changing schemes changes backend.
@@ -8,6 +15,13 @@ enum AppConfiguration {
         static let host = "BOCHI_API_HOST"
         static let port = "BOCHI_API_PORT"
     }
+
+    #if BOCHI_LOCAL
+    private enum LocalDevelopmentAccountSettingKey {
+        static let subject = "BOCHI_DEV_AUTH_SUBJECT"
+        static let email = "BOCHI_DEV_AUTH_EMAIL"
+    }
+    #endif
 
     private struct APISettings {
         let scheme: String
@@ -27,6 +41,34 @@ enum AppConfiguration {
     static let publicWebBaseURL = URL(string: "https://bochi.app")!
     static let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
     static let privacyPolicyURL = publicWebBaseURL.appending(path: "privacy-policy")
+
+    #if BOCHI_LOCAL
+    static var localDevelopmentAccount: LocalDevelopmentAccount {
+        guard let account = makeLocalDevelopmentAccount() else {
+            fatalError("Local development account settings are missing.")
+        }
+        return account
+    }
+
+    static func makeLocalDevelopmentAccount(
+        infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]
+    ) -> LocalDevelopmentAccount? {
+        guard
+            let subject = resolvedAPISetting(
+                LocalDevelopmentAccountSettingKey.subject,
+                infoDictionary: infoDictionary
+            ),
+            let email = resolvedAPISetting(
+                LocalDevelopmentAccountSettingKey.email,
+                infoDictionary: infoDictionary
+            )
+        else {
+            return nil
+        }
+
+        return LocalDevelopmentAccount(subject: subject, email: email)
+    }
+    #endif
 
     // Small factory so previews and the real app both build the API client the same way.
     static func makeAuthAPIClient(session: URLSession = .shared) -> LiveAuthAPIClient {

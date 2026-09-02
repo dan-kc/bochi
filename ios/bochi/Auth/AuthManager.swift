@@ -134,6 +134,18 @@ final class AuthManager {
         await applyAuthenticatedTokens(tokens)
     }
 
+    #if BOCHI_LOCAL
+    // Behaviour: local builds authenticate as the configured fixture account,
+    // then follow the same token and account bootstrap path as Apple sign-in.
+    func signInForLocalDevelopment(account: LocalDevelopmentAccount) async throws {
+        try await signInWithApple(
+            identityToken: "test-apple-subject:\(account.subject)",
+            email: account.email,
+            nonce: nil
+        )
+    }
+    #endif
+
     // Logging out should only clear the backend session. If this device still
     // owns an Apple premium entitlement, that local premium state stays visible.
     func logout() async {

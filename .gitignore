@@ -9,6 +9,7 @@ logs
 .terraform
 .pgdata
 .backend.pid
+.backend.network
 
 # Native
 xcuserdata/
@@ -54,5 +55,6 @@ ios/build/
 ios/.derived/
 ios/build-direct/
 ios/build-ui-search*
+ios/build-release-*
 .codex
 android

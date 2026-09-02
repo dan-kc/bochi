@@ -3,6 +3,7 @@ pub mod api;
 pub mod billing;
 pub mod database;
 pub mod error_context;
+pub mod network;
 pub mod observability;
 pub mod router;
 pub mod routes;

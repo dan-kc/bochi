@@ -28,12 +28,14 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+        localServiceHost = "127.0.0.1";
         rustToolchain = fenix.packages.${system}.complete.withComponents [
           "cargo"
           "clippy"
           "rust-analyzer"
           "rustc"
           "rustfmt"
+          "rust-src"
         ];
         rustPlatform = pkgs.makeRustPlatform {
           cargo = rustToolchain;
@@ -43,7 +45,7 @@
           # Database
           DB_NAME = "bochi";
           DB_NAME_TEST = "bochi_test";
-          DB_HOST = "localhost";
+          DB_HOST = localServiceHost;
           DB_PORT = "5432";
           DB_USER = "user";
           DB_PASSWORD = "password";
@@ -64,6 +66,7 @@
 
           # Adminer
           ADMINER_PORT = 8504;
+          LOCAL_SERVICE_HOST = localServiceHost;
         };
         scripts = import ./scripts.nix {
           inherit pkgs;
@@ -101,8 +104,6 @@
             ++ scripts;
           shellHook = ''
             # export RUST_BACKTRACE=1
-            export HOST="localhost"
-            status
           '';
         };
 

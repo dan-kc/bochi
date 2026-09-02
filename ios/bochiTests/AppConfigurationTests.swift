@@ -5,7 +5,7 @@ import Testing
 struct AppConfigurationTests {
 
     // Behaviour: the normal Bochi scheme uses the Debug project settings so a
-    // device build talks to the backend running on the Mac over Wi-Fi.
+    // device build talks to the backend through the Mac's Tailscale address.
     @Test func debugProjectSettingsBuildLocalAPIURL() throws {
         let url = AppConfiguration.makeAPIBaseURL(
             infoDictionary: [
@@ -40,15 +40,15 @@ struct AppConfigurationTests {
         #expect(AppConfiguration.termsOfUseURL == URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"))
     }
 
-    // Behaviour: the editable local IP setting is only an input to Debug build
-    // settings; if it leaks into the bundle, Release should still use the live host.
+    // Behaviour: development-only settings cannot override the generated Release
+    // host if they accidentally leak into the app's Info.plist.
     @Test func localProjectSettingDoesNotOverrideGeneratedAPIHost() throws {
         let url = AppConfiguration.makeAPIBaseURL(
             infoDictionary: [
                 "BOCHI_API_SCHEME": "https",
                 "BOCHI_API_HOST": "bochi.app",
                 "BOCHI_API_PORT": "",
-                "BOCHI_LOCAL_API_HOST": "dev-mac.local"
+                "BOCHI_DEV_MAC_TAILSCALE_IP": "dev-mac.local"
             ]
         )
         let expectedURL = try #require(URL(string: "https://bochi.app"))
@@ -56,13 +56,38 @@ struct AppConfigurationTests {
         #expect(url == expectedURL)
     }
 
-    // Behaviour: device Debug builds talk to a Mac on the local network, so iOS
-    // must have permission copy ready before the first local backend request.
+    // Behaviour: device Debug builds reach a private Mac address, so iOS must have
+    // permission copy ready before the first development backend request.
     @Test func debugBuildDeclaresLocalNetworkUsage() throws {
-        #if BOCHI_LOCAL
         let description = try #require(Bundle.main.object(forInfoDictionaryKey: "NSLocalNetworkUsageDescription") as? String)
 
         #expect(!description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        #endif
+    }
+
+    // Behaviour: a Debug device build can make its HTTP API request to the
+    // Mac's raw Tailscale IP without weakening transport policy in Release.
+    @Test func debugBuildAllowsDevelopmentHTTP() throws {
+        let transportSecurity = try #require(
+            Bundle.main.object(forInfoDictionaryKey: "NSAppTransportSecurity") as? [String: Any]
+        )
+
+        #expect(transportSecurity["NSAllowsArbitraryLoads"] as? Bool == true)
+        #expect(transportSecurity["NSAllowsLocalNetworking"] == nil)
+    }
+
+    // Behaviour: local builds resolve the seeded account identity from build
+    // configuration so the app and database fixture cannot silently drift apart.
+    @Test func localBuildResolvesSeededDevelopmentAccount() throws {
+        let account = try #require(
+            AppConfiguration.makeLocalDevelopmentAccount(
+                infoDictionary: [
+                    "BOCHI_DEV_AUTH_SUBJECT": "bochi-development-alice",
+                    "BOCHI_DEV_AUTH_EMAIL": "alice@example.com"
+                ]
+            )
+        )
+
+        #expect(account.subject == "bochi-development-alice")
+        #expect(account.email == "alice@example.com")
     }
 }

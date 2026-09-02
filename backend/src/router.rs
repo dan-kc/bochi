@@ -1,12 +1,12 @@
-use crate::{api, database, routes, security::jwt::JWTManager};
+use crate::{api, database, network::ClientIpPolicy, routes, security::jwt::JWTManager};
 use axum::{
-    extract::{MatchedPath, Request, State},
+    extract::{ConnectInfo, MatchedPath, Request, State},
     http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePath, trace::TraceLayer};
 use tracing::{error, info, warn, Level, Span};
 use uuid::Uuid;
@@ -34,6 +34,8 @@ async fn base_router() -> axum::Router {
     let database = database::Database::new().await;
     let jwt_manager = JWTManager::new();
     let app = App::new(jwt_manager, database);
+    let client_ip_policy = ClientIpPolicy::from_environment()
+        .unwrap_or_else(|message| panic!("invalid client IP policy: {message}"));
 
     info!("connected to db");
 
@@ -94,6 +96,10 @@ async fn base_router() -> axum::Router {
         .layer(axum::middleware::from_fn_with_state(
             app.clone(),
             attach_auth_context,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            client_ip_policy,
+            enforce_client_ip_policy,
         ))
         .layer(cors)
         .layer(
@@ -159,6 +165,33 @@ async fn base_router() -> axum::Router {
                 .on_failure(()),
         )
         .with_state(app)
+}
+
+async fn enforce_client_ip_policy(
+    State(policy): State<ClientIpPolicy>,
+    req: Request,
+    next: Next,
+) -> Response {
+    if !policy.is_restricted() {
+        return next.run(req).await;
+    }
+
+    let client_ip = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(address)| address.ip());
+
+    match client_ip {
+        Some(client_ip) if policy.allows(client_ip) => next.run(req).await,
+        Some(client_ip) => {
+            warn!(%client_ip, "request rejected by client IP policy");
+            StatusCode::FORBIDDEN.into_response()
+        }
+        None => {
+            warn!("request rejected because client IP is unavailable");
+            StatusCode::FORBIDDEN.into_response()
+        }
+    }
 }
 
 #[allow(dead_code)]

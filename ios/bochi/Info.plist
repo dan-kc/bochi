@@ -8,6 +8,10 @@
 	<string>$(BOCHI_API_PORT)</string>
 	<key>BOCHI_API_SCHEME</key>
 	<string>$(BOCHI_API_SCHEME)</string>
+	<key>BOCHI_DEV_AUTH_EMAIL</key>
+	<string>$(BOCHI_DEV_AUTH_EMAIL)</string>
+	<key>BOCHI_DEV_AUTH_SUBJECT</key>
+	<string>$(BOCHI_DEV_AUTH_SUBJECT)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -34,6 +38,13 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Bochi connects to your local development backend when running debug builds.</string>
+#if BOCHI_LOCAL
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+#endif
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

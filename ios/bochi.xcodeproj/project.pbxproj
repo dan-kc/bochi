@@ -26,6 +26,7 @@
 		820441C72F7FDED200952DFF /* bochi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bochi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		820441D62F7FDED400952DFF /* bochiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bochiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		826602A92F86CB2A000510C1 /* bochi.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = bochi.xctestplan; sourceTree = "<group>"; };
+		82C100012FB0000100952DFF /* ../config/local-development.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "../config/local-development.xcconfig"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -78,6 +79,7 @@
 		820441BE2F7FDED200952DFF = {
 			isa = PBXGroup;
 			children = (
+				82C100012FB0000100952DFF /* ../config/local-development.xcconfig */,
 				826602A92F86CB2A000510C1 /* bochi.xctestplan */,
 				820441C92F7FDED200952DFF /* bochi */,
 				820441D92F7FDED400952DFF /* bochiTests */,
@@ -236,7 +238,6 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				BOCHI_LOCAL_API_HOST = 127.0.0.1;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -355,10 +356,11 @@
 		};
 		820441EB2F7FDED400952DFF /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 82C100012FB0000100952DFF /* ../config/local-development.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				BOCHI_API_HOST = "$(BOCHI_LOCAL_API_HOST)";
+				BOCHI_API_HOST = "$(BOCHI_DEV_MAC_TAILSCALE_IP)";
 				BOCHI_API_PORT = 8501;
 				BOCHI_API_SCHEME = http;
 				CODE_SIGN_ENTITLEMENTS = bochi/bochi.entitlements;
@@ -368,6 +370,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = bochi/Info.plist;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional";
+				INFOPLIST_PREPROCESS = YES;
+				INFOPLIST_PREPROCESSOR_DEFINITIONS = "BOCHI_LOCAL=1";
 				INFOPLIST_KEY_CFBundleDisplayName = Bochi;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -407,6 +412,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = bochi/Info.plist;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional";
+				INFOPLIST_PREPROCESS = YES;
+				INFOPLIST_PREPROCESSOR_DEFINITIONS = "BOCHI_LOCAL=0";
 				INFOPLIST_KEY_CFBundleDisplayName = Bochi;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;

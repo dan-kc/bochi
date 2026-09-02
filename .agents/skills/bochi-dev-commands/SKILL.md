@@ -15,9 +15,9 @@ Regular shell inspection commands such as `rg`, `sed`, `git`, and `ls` do not ne
 
 ## Development Environment
 
-- `start` starts the local development stack: PostgreSQL, backend, Adminer, and LSP mux. Use `start --force` or `start -f` to stop and restart everything.
+- `start` verifies the configured Tailscale devices, then starts loopback-only PostgreSQL, the Tailscale-only backend, loopback-only Adminer, and LSP mux. Use `start --force` or `start -f` to stop and restart everything.
 - `stop` stops PostgreSQL, backend, Adminer, and LSP mux.
-- `status` prints the running state and ports for local services.
+- `status` prints compact running state and endpoint details for local services, including the LSP mux PID. Use `status --verbose` to include the LSP mux root, socket, and log details.
 - `start-postgres` starts only PostgreSQL and ensures the configured app and test databases exist.
 - `adminer` starts Adminer directly.
 - `kp` kills only the backend process tracked by this repo.
@@ -25,9 +25,9 @@ Regular shell inspection commands such as `rg`, `sed`, `git`, and `ls` do not ne
 ## Backend
 
 - `t [cargo-test-args...]` cleans the test database, switches the backend to the test database, and runs `cargo test`.
-- `run [cargo-run-args...]` runs the backend with the app database and required environment variables.
+- `run [cargo-run-args...]` verifies the configured Tailscale devices, then runs the Tailscale-only backend with the app database and required environment variables.
 - `clean <database_name>` truncates app tables in the chosen database.
-- `seed` cleans the development database and loads `dev-seed.sql`.
+- `seed` cleans the development database and loads `dev-seed.sql`, including the Alice account available from the Debug app's local sign-in button.
 - `reset-subscriptions` deletes local premium/subscription state from the development database without deleting users or app data. Use after clearing StoreKit transactions in Xcode.
 
 ## Database
@@ -42,7 +42,7 @@ Do not edit existing migration files. Add a new migration when schema changes ar
 ## iOS
 
 - `ios-test [test-name...]` runs Swift unit tests on `iPhone 17 Pro`. With test names, it runs only those tests.
-- `update-ip [ip_address]` updates the Debug iOS build setting for the local API host. With no argument, it detects the active Mac IPv4 address.
+- Debug iOS builds inherit the Mac API host from `config/local-development.xcconfig`; there is no IP update command.
 
 ## Infrastructure
 
